@@ -1,0 +1,5 @@
+# Exact findings from the independent public source root.
+# Previously audited public token fixtures and qualification SHA-256 digest only.
+713a2d43019139c18730157b9de01618a2314ad2:python-candidate/native-process-qualification.json:generic-api-key:33
+713a2d43019139c18730157b9de01618a2314ad2:python-candidate/tests/node-token-preview-reference.ts:generic-api-key:6
+713a2d43019139c18730157b9de01618a2314ad2:python-candidate/tests/node-token-preview-reference.ts:generic-api-key:7
