@@ -1,0 +1,68 @@
+[
+  {
+    "type": "function",
+    "name": "quoteExactInput",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "path",
+        "type": "bytes"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "name": "sqrtPriceX96After",
+        "type": "uint160[]"
+      },
+      {
+        "name": "initializedTicksCrossed",
+        "type": "uint32[]"
+      },
+      {
+        "name": "gasEstimate",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "quoteExactOutput",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "path",
+        "type": "bytes"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "name": "sqrtPriceX96After",
+        "type": "uint160[]"
+      },
+      {
+        "name": "initializedTicksCrossed",
+        "type": "uint32[]"
+      },
+      {
+        "name": "gasEstimate",
+        "type": "uint256"
+      }
+    ]
+  }
+]

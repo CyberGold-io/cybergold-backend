@@ -1,0 +1,389 @@
+{
+  "generatedAt": "2026-10-09T23:05:25.696339+00:00",
+  "chainId": 31338,
+  "scope": "Read-only configured-token metadata/context plus invalid/valid ERC2612 signatures and nonce/allowance effects within one discarded Multicall eth_call; no broadcasts, funding, user wallet requests, persisted keys/signatures or calldata.",
+  "helpersSpender": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+  "helpersFacts": {
+    "context": {
+      "chainId": 31338,
+      "blockNumber": "26156013",
+      "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+      "blockTimestamp": "1791563705",
+      "observedAt": "2026-10-09T23:05:25.696Z"
+    },
+    "helpers": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+    "configuration": {
+      "helperFeePpm": {
+        "status": "success",
+        "value": "0"
+      },
+      "permit2": {
+        "status": "success",
+        "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+      },
+      "wrappedNative": {
+        "status": "success",
+        "value": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      },
+      "owner": {
+        "status": "success",
+        "value": "0xFE203FfC4D734e32F24529496c4e647BB163d4B3"
+      },
+      "approvedAdapters": {
+        "status": "success",
+        "value": [
+          "0xE8e87763768125Ba02Dd30D932B86BBdd1af082c",
+          "0x4EDb8190232a47e45D861003672938Eb7Ee84A15"
+        ]
+      },
+      "paused": {
+        "status": "success",
+        "value": false
+      },
+      "tokenPermitIssuance": {
+        "status": "success",
+        "value": false
+      }
+    }
+  },
+  "observations": [
+    {
+      "symbol": "XAUT",
+      "metadata": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:17.858Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0x68749665FF8D2d112Fa859AA293F07A622782F38"
+        },
+        "metadata": {
+          "name": {
+            "status": "success",
+            "value": "Tether Gold"
+          },
+          "symbol": {
+            "status": "success",
+            "value": "XAUt"
+          },
+          "decimals": {
+            "status": "success",
+            "value": 6
+          }
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "Tether Gold",
+            "version": "1",
+            "chainId": 31338,
+            "verifyingContract": "0x68749665FF8D2d112Fa859AA293F07A622782F38"
+          },
+          "source": "seed"
+        },
+        "holder": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "balance": {
+          "status": "success",
+          "value": "0"
+        }
+      },
+      "permitContext": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:18.381Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0x68749665FF8D2d112Fa859AA293F07A622782F38"
+        },
+        "owner": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "spender": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+        "nonce": {
+          "status": "success",
+          "value": "0"
+        },
+        "allowance": {
+          "status": "success",
+          "value": "0"
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "Tether Gold",
+            "version": "1",
+            "chainId": 31338,
+            "verifyingContract": "0x68749665FF8D2d112Fa859AA293F07A622782F38"
+          },
+          "source": "seed"
+        }
+      }
+    },
+    {
+      "symbol": "PAXG",
+      "metadata": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:20.051Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78"
+        },
+        "metadata": {
+          "name": {
+            "status": "success",
+            "value": "Paxos Gold"
+          },
+          "symbol": {
+            "status": "success",
+            "value": "PAXG"
+          },
+          "decimals": {
+            "status": "success",
+            "value": 18
+          }
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "Paxos Gold",
+            "version": "1",
+            "chainId": 31338,
+            "verifyingContract": "0x45804880De22913dAFE09f4980848ECE6EcbAf78"
+          },
+          "source": "seed"
+        },
+        "holder": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "balance": {
+          "status": "success",
+          "value": "0"
+        }
+      },
+      "permitContext": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:20.656Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78"
+        },
+        "owner": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "spender": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+        "nonce": {
+          "status": "success",
+          "value": "0"
+        },
+        "allowance": {
+          "status": "success",
+          "value": "0"
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "Paxos Gold",
+            "version": "1",
+            "chainId": 31338,
+            "verifyingContract": "0x45804880De22913dAFE09f4980848ECE6EcbAf78"
+          },
+          "source": "seed"
+        }
+      }
+    },
+    {
+      "symbol": "USDT",
+      "metadata": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:21.692Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        },
+        "metadata": {
+          "name": {
+            "status": "success",
+            "value": "Tether USD"
+          },
+          "symbol": {
+            "status": "success",
+            "value": "USDT"
+          },
+          "decimals": {
+            "status": "success",
+            "value": 6
+          }
+        },
+        "authorization": {
+          "kind": "none",
+          "confidence": "observed",
+          "reason": "standard-interface-not-observed"
+        },
+        "holder": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "balance": {
+          "status": "success",
+          "value": "0"
+        }
+      },
+      "permitContext": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:22.638Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        },
+        "owner": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "spender": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+        "nonce": {
+          "status": "failure",
+          "error": "contract-read-failed"
+        },
+        "allowance": {
+          "status": "success",
+          "value": "0"
+        },
+        "authorization": {
+          "kind": "none",
+          "confidence": "observed",
+          "reason": "standard-interface-not-observed"
+        }
+      }
+    },
+    {
+      "symbol": "USDC",
+      "metadata": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:24.183Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        },
+        "metadata": {
+          "name": {
+            "status": "success",
+            "value": "USD Coin"
+          },
+          "symbol": {
+            "status": "success",
+            "value": "USDC"
+          },
+          "decimals": {
+            "status": "success",
+            "value": 6
+          }
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "USD Coin",
+            "version": "2",
+            "chainId": 31338,
+            "verifyingContract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+          },
+          "source": "seed"
+        },
+        "holder": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "balance": {
+          "status": "success",
+          "value": "0"
+        }
+      },
+      "permitContext": {
+        "context": {
+          "chainId": 31338,
+          "blockNumber": "26156013",
+          "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779",
+          "blockTimestamp": "1791563705",
+          "observedAt": "2026-10-09T23:05:24.735Z"
+        },
+        "token": {
+          "chainId": 31338,
+          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        },
+        "owner": "0x46cd622ddD500E25419FFb51F01DB4367B6ebcf5",
+        "spender": "0x30E9aFd21a30b2629bE33508a131aC890368F534",
+        "nonce": {
+          "status": "success",
+          "value": "0"
+        },
+        "allowance": {
+          "status": "success",
+          "value": "0"
+        },
+        "authorization": {
+          "kind": "erc2612",
+          "confidence": "qualified",
+          "reason": "standard-state-semantics-qualified",
+          "observation": {
+            "blockNumber": "26156013",
+            "blockHash": "0x20fd5a05188caf746553c403e49e3f2738f944cf00f7dbbf4fcef78adeb06779"
+          },
+          "domain": {
+            "name": "USD Coin",
+            "version": "2",
+            "chainId": 31338,
+            "verifyingContract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+          },
+          "source": "seed"
+        }
+      }
+    }
+  ]
+}

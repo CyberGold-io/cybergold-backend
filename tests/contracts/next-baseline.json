@@ -1,0 +1,1208 @@
+{
+  "source": {
+    "repository": "CyberGold-io/cybergold-app",
+    "commit": "b3f4d790801882b14509a2ec6a2ca770b6c93b53",
+    "next": "16.3.5",
+    "mode": "production",
+    "environment": "tests/fixtures/app.env"
+  },
+  "fixtures": [
+    {
+      "request": {
+        "path": "/api/dashboard/onchain-summary",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "GET, HEAD, OPTIONS"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/dashboard/onchain-summary",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/recovery/shares",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "GET, HEAD, OPTIONS"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/recovery/shares",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/gold",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "GET, HEAD, OPTIONS"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/gold",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/fx",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 405,
+        "headers": {
+          "allow": "GET, HEAD"
+        },
+        "body": "Method Not Allowed"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/fx",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {
+          "allow": "GET, HEAD"
+        },
+        "body": "Method Not Allowed"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "OPTIONS"
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "allow": "OPTIONS, POST"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "PUT"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "GET"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 405,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"Invalid JSON request body.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid JSON-RPC request.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid JSON payload.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/governance/owner-aliases",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Invalid JSON payload\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Invalid quote-pool-cache payload\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Unknown quote-pool-cache action\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Invalid quote-pool-cache payload\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Invalid quote-pool-cache payload\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Unknown quote-pool-cache action\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/quote-pool-cache",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"error\":\"Unknown quote-pool-cache action\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid JSON payload.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing action.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid JSON payload.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {},
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing safeAddress.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing safeAddress.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing safeAddress.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing safeAddress.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Missing safeAddress.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "{bad",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "null",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "[]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "1",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "\"text\"",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "{}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/faucet",
+        "method": "POST",
+        "body": "{}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Fork faucet is disabled.\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/dashboard/onchain-summary",
+        "method": "GET"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "public, max-age=10, stale-while-revalidate=20"
+        },
+        "body": "{\"enabled\":false,\"protocolLogicUpdate\":null,\"protocolParameterUpdate\":null,\"lastScannedBlock\":null}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/dashboard/onchain-summary",
+        "method": "HEAD"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "public, max-age=10, stale-while-revalidate=20"
+        },
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "path": "/api/recovery/shares",
+        "method": "GET"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"holder query parameter is required\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/recovery/shares?holder=bad",
+        "method": "GET"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"holder query parameter must be a valid address\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/rpc",
+        "method": "POST",
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"eth_sendRawTransaction\",\"params\":[]}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32601,\"message\":\"JSON-RPC method is not allowed.\"}}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe",
+        "method": "POST",
+        "body": "{\"action\":\"safe-info\",\"safeAddress\":\"0x00000000000000000000000000000000000000a1\"}"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Failed to fetch Safe info.\",\"correlationId\":\"<correlation-id>\"}"
+      }
+    },
+    {
+      "request": {
+        "path": "/api/safe/events",
+        "method": "POST",
+        "body": "{\"safeAddress\":\"0x00000000000000000000000000000000000000a1\",\"safeTxHashes\":[]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"results\":[]}"
+      }
+    }
+  ]
+}

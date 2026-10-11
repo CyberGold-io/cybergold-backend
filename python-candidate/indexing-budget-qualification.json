@@ -1,0 +1,123 @@
+{
+  "qualifiedAt": "2026-10-02T13:19:02.199482+00:00",
+  "scope": "Owner-selected larger historical Core/Helpers collection budget on Mainnet and Fork; accompanying Safe requests share the same transport allowance",
+  "parentDevCommit": "375f737b4827a3e9ba44fa194e98825be96d6569",
+  "policy": {
+    "hegRequestsPerHour": 40000,
+    "combinedClientAttemptsPerHour": 20000,
+    "clientAttemptsPerEnvironmentPerHour": 10000,
+    "spacingSeconds": 0.36,
+    "blocksPerStreamPerPass": 50000,
+    "environments": [
+      "mainnet",
+      "sandbox"
+    ],
+    "accounting": "Core, Helpers, Safe, headers, logs, retries and subdivisions share one background allowance per environment; HEG enforces actual upstream usage",
+    "freshBurstOnReplacement": false,
+    "liveApiTransportChanged": false,
+    "schemaChanged": false,
+    "newDeploymentGate": false,
+    "extraScheduler": false
+  },
+  "sourceSha256": {
+    "python-candidate/src/cybergold_candidate/indexing_budget.py": "6819286900ae242b08908b7ee605ee29c45f64eb7f3685bcd072ad3624aa35bf",
+    "python-candidate/src/cybergold_candidate/indexer_rpc.py": "eed9cdd1ad637780ba4fabb448cd8f9138aa89e7c4d787a7601adc648db03b44",
+    "python-candidate/src/cybergold_candidate/safe_collector.py": "95631be93e0339a1aaca503248a769996e07d21d58775b3a3310cf43d8518d3e",
+    "python-candidate/src/cybergold_candidate/worker_engine.py": "252d2823ea20a4d138190df45c5cea30c7040c06f7ed3e575d66d2c1255a45d8",
+    "python-candidate/tests/test_indexing_budget.py": "2f2dd7d57bb97bd58742080df16bbcbf6a17bb0cf9dfd6734248fa616c5dcb65",
+    "python-candidate/tests/native_helpers_activity.py": "c81413fde812731809f03ab5f7a1c9dd22e2cbdd42f0f55dd817b267d4930621"
+  },
+  "focusedPacing": {
+    "command": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python python-candidate/tests/test_indexing_budget.py",
+    "cases": 5,
+    "result": "pass"
+  },
+  "existingPythonNodeComparisons": {
+    "command": "bash python-candidate/tests/check-local.sh",
+    "result": "pass"
+  },
+  "canonicalBackend": {
+    "command": "npm run ci-check",
+    "tests": 217,
+    "result": "pass"
+  },
+  "nativeDatabase": {
+    "result": "pass",
+    "canonicalHelpersEventDecodersComparedWithViem": 16,
+    "initialIndependentBackfill": true,
+    "boundedContinueAndCanonicalNoOp": true,
+    "boundedReorgProgress": true,
+    "failedAndCancelledCallsPreserveCoverage": true,
+    "forkPrefixReuseAndDivergentReset": true,
+    "chainAndAddressIsolation": true,
+    "coreProjectionAndReceiptUnchanged": true,
+    "installedDatabaseUsed": false,
+    "nativeWorkerIntegrationAndFailureIsolation": true,
+    "nativeReadOnlyHttpNoStore": true,
+    "coreAndHelpers50000BlockPassOnBothChains": true,
+    "pacedActualHttpAttemptsIncludingHeaders": true,
+    "coreHelpersSafeShareOneEnvironmentAllowance": true,
+    "twoPassCatchupAndSettingsPreserved": true,
+    "installedActivation": false
+  },
+  "actualImageJournals": {
+    "result": "pass",
+    "canonicalHelpersEventDecodersComparedWithViem": 16,
+    "initialIndependentBackfill": true,
+    "boundedContinueAndCanonicalNoOp": true,
+    "boundedReorgProgress": true,
+    "failedAndCancelledCallsPreserveCoverage": true,
+    "forkPrefixReuseAndDivergentReset": true,
+    "chainAndAddressIsolation": true,
+    "coreProjectionAndReceiptUnchanged": true,
+    "installedDatabaseUsed": false,
+    "nativeWorkerIntegrationAndFailureIsolation": true,
+    "nativeReadOnlyHttpNoStore": true,
+    "coreAndHelpers50000BlockPassOnBothChains": true,
+    "pacedActualHttpAttemptsIncludingHeaders": true,
+    "coreHelpersSafeShareOneEnvironmentAllowance": true,
+    "twoPassCatchupAndSettingsPreserved": true,
+    "installedActivation": false
+  },
+  "wholeImageFork": {
+    "result": "pass",
+    "nativeWholeWorkerReplayMatchesActualNode": true,
+    "nativeWholeWorkerLegacyV2ModelsAndSafeHistoryMatch": true,
+    "nativeWholeWorkerForkDispositionMatchesNode": true,
+    "chainId": 31338,
+    "nativeWholeWorkerAuthenticatedControlAndNoRpcAtScrape": true,
+    "nativeWholeWorkerDirectModeDoesNotInventReceipt": true,
+    "nativeWholeWorkerRetainedNodeRollbackPreservesRowsAndModels": true,
+    "nativeInstalledRoleCommandsStartPythonApiAndWorker": true,
+    "nativeConfiguredApiReadsWorkerWrites": true,
+    "nativeWorkerSigtermDrainsInFlightReconciliation": true,
+    "nativeApiSigtermClosesPool": true,
+    "testedImageId": "sha256:9d9b94a49e8c8e06fcd848e167d92470c77944ab2ccbc99f8b2acf078993492e",
+    "installedEndpointsOrDatabaseUsed": false,
+    "coreRawRows": 2,
+    "snapshotModels": 2
+  },
+  "wholeImageMainnet": {
+    "result": "pass",
+    "nativeWholeWorkerReplayMatchesActualNode": true,
+    "nativeWholeWorkerLegacyV2ModelsAndSafeHistoryMatch": true,
+    "nativeWholeWorkerForkDispositionMatchesNode": true,
+    "chainId": 1,
+    "nativeWholeWorkerAuthenticatedControlAndNoRpcAtScrape": true,
+    "nativeWholeWorkerDirectModeDoesNotInventReceipt": true,
+    "nativeWholeWorkerRetainedNodeRollbackPreservesRowsAndModels": true,
+    "nativeInstalledRoleCommandsStartPythonApiAndWorker": true,
+    "nativeConfiguredApiReadsWorkerWrites": true,
+    "nativeWorkerSigtermDrainsInFlightReconciliation": true,
+    "nativeApiSigtermClosesPool": true,
+    "testedImageId": "sha256:9d9b94a49e8c8e06fcd848e167d92470c77944ab2ccbc99f8b2acf078993492e",
+    "installedEndpointsOrDatabaseUsed": false,
+    "coreRawRows": 2,
+    "snapshotModels": 2
+  },
+  "notClaimed": [
+    "installed source selection",
+    "complete deployed Mainnet Helpers historical coverage",
+    "exact HEG upstream accounting across broker internal retries"
+  ]
+}

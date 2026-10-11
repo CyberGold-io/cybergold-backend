@@ -1,0 +1,57 @@
+{
+  "feature": "HELPERS-TOKEN-NATIVE-PERMIT",
+  "baseline": "28bd5b0440483287d92255fd88ef91c82b9be6d6",
+  "branch": "feature/token-native-permit",
+  "qualifiedAt": "2026-10-09T23:07:06.098917+00:00",
+  "status": "source implementation and backend qualification complete; contract installation and wallet purchase qualification remain separate",
+  "checks": {
+    "runtime": "Node 26.10.0; repository frozen Python 3.13 environment",
+    "canonicalCi": "npm run ci-check: typecheck, 222 Node tests and generated-contract check passed",
+    "pythonLocalComparison": "bash python-candidate/tests/check-local.sh: 51 unittest suites / 394 tests passed; comparison assertions also passed",
+    "focusedSelectedToken": "21 tests passed on final source (generic ERC5267 salt/domain, large domain chainId, bytes32 metadata, seed version getter absence, state semantics, no-op fallbacks, DAI distinction, unavailable fields, owner isolation, fresh nonce/allowance, cache invalidation, cancellation, HTTP and exact/zero approval); balance-only refresh after cache expiry performs exactly balanceOf reads with zero discovery, while RPC failure and canonicality remain ordinary errors.",
+    "helpersExecution": "6 tests / 18 actual Viem payloads cover all existing operations plus allowance and standard token permit issuance",
+    "helpersFacts": "12 tests cover old workload, exact selector 0x462835d6, installed/absent/unavailable and opt-in HTTP",
+    "quoteEconomics": "31 quote intent tests passed without quote-intent/token-preview economic source changes"
+  },
+  "networkEvidence": {
+    "mainnet": {
+      "path": "native-token-permit-mainnet-qualification.json",
+      "chainId": 1,
+      "tokens": {
+        "XAUT": "erc2612",
+        "PAXG": "erc2612",
+        "USDT": "none",
+        "USDC": "erc2612"
+      },
+      "tokenPermitIssuance": {
+        "status": "success",
+        "value": false
+      }
+    },
+    "sandbox": {
+      "path": "native-token-permit-sandbox-qualification.json",
+      "chainId": 31338,
+      "tokens": {
+        "XAUT": "erc2612",
+        "PAXG": "erc2612",
+        "USDT": "none",
+        "USDC": "erc2612"
+      },
+      "tokenPermitIssuance": {
+        "status": "success",
+        "value": false
+      }
+    }
+  },
+  "scope": "Only read-only eth_call, chain/block observations and gas estimation; no broadcasts, wallet prompts, funding, deployment, B2B server commands, persisted disposable keys/signatures/calldata, new swap-admission or implementation/provenance gates.",
+  "limitations": [
+    "This qualifies Backend token behavior and discarded permit nonce/allowance semantics, not an installed Helpers executor or a real wallet purchase.",
+    "Ordinary authorization remains available while a target lacks the new shared selector."
+  ],
+  "ownerDecisions": [],
+  "followUp": {
+    "change": "purpose=balance reads only selected balance/context; other metadata fields and authorization explicitly not-requested. Import/default discovery and fresh permit context retain their behavior.",
+    "checks": "Final Node26 npm run ci-check passed222 Node tests and generated checks; 21 focused Python token tests passed.",
+    "networkEvidenceReuse": "Default/native-permit discovery path and ABI unchanged, so retained actual-token read-only qualification remains applicable."
+  }
+}

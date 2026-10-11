@@ -1,0 +1,32 @@
+{
+  "result": "pass",
+  "freshLosslessPendingNonce": true,
+  "receiptSuccessRevertAbsence": true,
+  "exactUnsignedSafePayloads": 3,
+  "configuredRoleSurfaces": 3,
+  "existingMemberDisplayLimit": 50,
+  "privateRpcAuthorization": true,
+  "canonicalityOutageAndRecovery": true,
+  "operationDeadlineSeconds": {
+    "nonce": 15.05,
+    "receipt": 15.05,
+    "safe": 15.05,
+    "roles": 15.05
+  },
+  "callerDisconnectSeconds": 0.09,
+  "imageId": "sha256:bbd04d091428a6c3430fb68adf49b40e3192b9e37bf4aae693bab22ce337c154",
+  "shutdownExitCode": 0,
+  "productEndpointOrDatabaseUsed": false,
+  "walletSignatureOrSubmission": false,
+  "testedSourceCommit": "a73ac03ad5ae29ade7950a6b0ea1095415df6dfb",
+  "focusedBackendCases": {
+    "pendingNonce": 7,
+    "receipt": 7,
+    "safeTransaction": 7,
+    "roleRosters": 7
+  },
+  "canonicalBackendCases": 217,
+  "completePythonComparisonSuite": "pass",
+  "qualification": "Local source and assembled Linux API; installed delivery remains separate",
+  "newGateOrRequiredCiJob": false
+}

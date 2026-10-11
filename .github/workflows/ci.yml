@@ -1,0 +1,136 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch_policy:
+    name: branch-policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout backend policy without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up policy Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+
+      - name: Validate pull-request branch topology
+        if: github.event_name == 'pull_request'
+        env:
+          BRANCH_POLICY_REPOSITORY: ${{ github.repository }}
+          BRANCH_POLICY_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BRANCH_POLICY_BASE_REF: ${{ github.base_ref }}
+          BRANCH_POLICY_HEAD_REF: ${{ github.head_ref }}
+        run: node scripts/check-branch-policy.mjs pull-request
+
+      - name: Authenticate protected-branch push as a pull-request merge
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_POLICY_REPOSITORY: ${{ github.repository }}
+          BRANCH_POLICY_REF_NAME: ${{ github.ref_name }}
+          BRANCH_POLICY_SHA: ${{ github.sha }}
+          BRANCH_POLICY_BEFORE_SHA: ${{ github.event.before }}
+          BRANCH_POLICY_FORCED: ${{ github.event.forced }}
+          BRANCH_POLICY_CREATED: ${{ github.event.created }}
+          BRANCH_POLICY_DELETED: ${{ github.event.deleted }}
+          BRANCH_POLICY_PULL_REQUESTS_FILE: ${{ runner.temp }}/associated-pull-requests.json
+          BRANCH_POLICY_COMMIT_FILE: ${{ runner.temp }}/pushed-commit.json
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if gh api \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+                > "$BRANCH_POLICY_COMMIT_FILE" \
+              && gh api \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls?per_page=100" \
+                > "$BRANCH_POLICY_PULL_REQUESTS_FILE" \
+              && jq -e --arg sha "$GITHUB_SHA" \
+                'any(.[]; .merge_commit_sha == $sha)' \
+                "$BRANCH_POLICY_PULL_REQUESTS_FILE" >/dev/null \
+              && node scripts/check-branch-policy.mjs push; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 5 ]]; then
+              node scripts/check-branch-policy.mjs push || true
+              exit 1
+            fi
+            sleep "$((attempt * 2))"
+          done
+
+  quality:
+    needs: branch_policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          cache: npm
+      - run: npm ci
+      - run: npm run ci-check
+      - run: npm audit --audit-level=high
+      - name: Publish versioned HTTP contract artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-contracts-${{ github.sha }}
+          path: |
+            contracts/openapi.json
+            contracts/http.d.ts
+            contracts/extraction-baseline.json
+          if-no-files-found: error
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: scripts/install-gitleaks.sh /tmp/gitleaks
+      - run: /tmp/gitleaks git . --redact --no-banner
+
+  dispatch_b2b_deployment:
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push'
+          && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+          && needs.quality.result == 'success' && needs['secret-scan'].result == 'success' }}
+    needs: [quality, secret-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the existing branch-mapped B2B publisher
+        env:
+          GH_TOKEN: ${{ secrets.CYBERGOLD_BACKEND_DISPATCH }}
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/dev) target=sandbox ;;
+            refs/heads/main) target=mainnet ;;
+          esac
+          gh workflow run publish-b2b-backend.yml \
+            --repo CyberGold-io/cybergold-ops --ref main \
+            -f "target=${target}" -f "backend_commit=${GITHUB_SHA}" \
+            -f "backend_ci_run_id=${GITHUB_RUN_ID}"

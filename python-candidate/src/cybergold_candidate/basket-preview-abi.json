@@ -1,0 +1,260 @@
+[
+  {
+    "type": "function",
+    "name": "previewIssueFromBasketExactIn",
+    "inputs": [
+      {
+        "name": "maximumAmountsIn",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "preview",
+        "type": "tuple",
+        "internalType": "struct IBasketRouterTypes.BasketIssueExactInPreview",
+        "components": [
+          {
+            "name": "netCygldOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "fees",
+            "type": "tuple",
+            "internalType": "struct IBasketRouterTypes.Fees",
+            "components": [
+              {
+                "name": "protocolFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "helperFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "amountsInExact",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "orderedCoreAssets",
+            "type": "address[]",
+            "internalType": "address[]"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "previewIssueFromBasketExactOut",
+    "inputs": [
+      {
+        "name": "netCygldOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "preview",
+        "type": "tuple",
+        "internalType": "struct IBasketRouterTypes.BasketIssueExactOutPreview",
+        "components": [
+          {
+            "name": "fees",
+            "type": "tuple",
+            "internalType": "struct IBasketRouterTypes.Fees",
+            "components": [
+              {
+                "name": "protocolFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "helperFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "amountsInExact",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "orderedCoreAssets",
+            "type": "address[]",
+            "internalType": "address[]"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "previewRedeemToBasketExactIn",
+    "inputs": [
+      {
+        "name": "grossCygldIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "preview",
+        "type": "tuple",
+        "internalType": "struct IBasketRouterTypes.BasketRedemptionExactInPreview",
+        "components": [
+          {
+            "name": "projectedCoreOutputs",
+            "type": "tuple[]",
+            "internalType": "struct ICoreRedemption.TokenAmount[]",
+            "components": [
+              {
+                "name": "kind",
+                "type": "uint8",
+                "internalType": "enum ICoreRedemption.TokenKind"
+              },
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "id",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "fees",
+            "type": "tuple",
+            "internalType": "struct IBasketRouterTypes.Fees",
+            "components": [
+              {
+                "name": "protocolFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "helperFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "previewRedeemToBasketExactOut",
+    "inputs": [
+      {
+        "name": "minimumOutputs",
+        "type": "tuple[]",
+        "internalType": "struct ICoreRedemption.TokenMinimum[]",
+        "components": [
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum ICoreRedemption.TokenKind"
+          },
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minimumAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "preview",
+        "type": "tuple",
+        "internalType": "struct IBasketRouterTypes.BasketRedemptionExactOutPreview",
+        "components": [
+          {
+            "name": "grossCygldIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "projectedCoreOutputs",
+            "type": "tuple[]",
+            "internalType": "struct ICoreRedemption.TokenAmount[]",
+            "components": [
+              {
+                "name": "kind",
+                "type": "uint8",
+                "internalType": "enum ICoreRedemption.TokenKind"
+              },
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "id",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "fees",
+            "type": "tuple",
+            "internalType": "struct IBasketRouterTypes.Fees",
+            "components": [
+              {
+                "name": "protocolFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "helperFeeCygld",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

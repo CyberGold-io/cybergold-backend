@@ -1,0 +1,363 @@
+{
+  "observedAt": "2026-10-01",
+  "scope": "U3/U5 B1 source; installed acceptance pending",
+  "native": {
+    "result": "pass",
+    "nativeWeb3ViemABIReadCount": 5,
+    "canonicalBlockIdentity": true,
+    "wideValuesLossless": true,
+    "configuredFactoryAndAuthorization": true,
+    "noUnrelatedCorePrerequisite": true,
+    "currentAndRetainedBrowserFabricationIgnored": true,
+    "nativePostgresCompleteReplacementAndNoWritesOnOutage": true,
+    "noSchemaChange": true,
+    "emptyFactoryAndReorgHandled": true,
+    "nativeCallerDisconnectSeconds": 0.08,
+    "nativeOperationDeadlineSeconds": 15.05,
+    "shutdownExitCode": 0,
+    "testedImageId": "sha256:42659a8de633b2c31e288a48e494d55f0eab5277d62583f0e95cca8d3ec65556",
+    "installedInputsUsed": false
+  },
+  "checks": {
+    "canonicalBackendCI": {
+      "tests": 217,
+      "failures": 0,
+      "typecheck": true,
+      "generatedContracts": true,
+      "build": true
+    },
+    "completeOptionalNodePythonComparison": true,
+    "focusedProducerFixtures": true
+  },
+  "notQualified": [
+    "Installed Sandbox/Mainnet behavior",
+    "Retained installed producer-capable pair",
+    "Quote arithmetic/Helpers previews",
+    "Cross-process on-chain caching",
+    "Database relocation"
+  ],
+  "sourceFileBindings": [
+    {
+      "path": "python-candidate/src/cybergold_candidate/__init__.py",
+      "sha256": "fb28eaf9bbf625facaf120b572f8e3b0a928d7bb8a4db503b2b781c159d23c97"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/adaptive_logs.py",
+      "sha256": "bf51af186dfd4d4977b8c136fc7b23b0488534602db325b9949af472efd6e921"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/alias_dates.py",
+      "sha256": "6b0b910e43b7ca5474620263864afc6819752d53b8d91c87ae7f6293c4723e2a"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/alias_http.py",
+      "sha256": "d03812aa5c44325e5a1f104fa50abb537e316b30ef833611aa8ea5d1265aef5d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/aliases.py",
+      "sha256": "bb4626a913202bc727347cb737bececafcd6b14159da4c1ccfa036cd0a64d23a"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/app.py",
+      "sha256": "abffe3da34ec98a8fea0280fcd5ceea4e79d03e49b82dc6535731eddde1c200c"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/authoritative_pool_cache.py",
+      "sha256": "cbf96b55e7e6d1cf885681d8f5ef8094eef7e23e6487a9946b21f253f0c0f4e2"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/cache.py",
+      "sha256": "b3908906815244c07c51ead0da277343fc10a8a3ba2dc9516b51251c966c79e0"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/completed_state.py",
+      "sha256": "524319ed9a2f2a300bfda761301a19e5f43d39564a1e68a009d77240a77c97d2"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/core_activity.py",
+      "sha256": "3e4906a402e979ddcf95f7f1ab7a9e0be093c2260799a70f5e8a1334b1912eca"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/core_collector.py",
+      "sha256": "0b22f2c96dca49059c1b4fd80b70e9772e02efce43576c31c414899376a8e05d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/dashboard_builder.py",
+      "sha256": "e184ffd16fc0df6b6bb2dffda8c9c44f931f54f8d9aeb493f6f3a1e831373278"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/database.py",
+      "sha256": "3e2150bc5d8ba50ea104abc4fb95861318349b01b042088d6b148be42074ca68"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/diagnostics.py",
+      "sha256": "4f49d018485a40fbf10c88e993b136bf38553e4b3817dfbec3cb667954582250"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/entrypoint.py",
+      "sha256": "d2b448ee7d88c7d7b4450cb7ba803b1944b78212c7b49fc679920d0cdc2be4e6"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/environment.py",
+      "sha256": "8e14a17cc14aa6aaab82aedab510fabc90bdedb509afdc39e0e7b1d769fcd8b8"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/event_projection.py",
+      "sha256": "3dff8d43b7cb780420dc2ad0bdfc9c79fd7d428622788303d41b11922f5ee3b0"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/faucet.py",
+      "sha256": "2e6632b51829b467e1f670120015f2d98580e58a9a99bf3e015bc3d42e96194d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/finalized_multicall.py",
+      "sha256": "e80fe2a10c7e9b7ed035d90c65157e012790d7d1f27c1f55c814ec51fae7237b"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/fork_control.py",
+      "sha256": "1119174de03e2d76048c76f90f69d74a7e8b0df58ea621167617ed5f06fbe2fc"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/fork_recovery.py",
+      "sha256": "4d4fff995c451917864c1b4b1d126f03973df6f62e669c9eeca303cfea9e0bd9"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/gateway_lease.py",
+      "sha256": "dbe7b6d77bf85ae16947f10d786e206c29ffdeaf29384484218c590bffc82afe"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/holder_projection.py",
+      "sha256": "03cb7dfbc2c64d8ab34846178a10c17061cb1cde2d041938b7a268c211539d96"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer_event_codec.py",
+      "sha256": "d78c6b2386b918430f367f61e6770fd6ac3c7d90aa0672cec58e4cde29a485ea"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer_policy.py",
+      "sha256": "812035534f1203de3ecbd030a8c1ebc036689d90d535196c6df04c9d1fbc10b8"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer_recovery_reads.py",
+      "sha256": "9bb799fb1475658ab7ed4066764d1872e35a9541360cb489a0ca380f99162e20"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer_rpc.py",
+      "sha256": "c4c4b17d7c82382078323984217185be5bfff2c3ec4ec8767316aebfbc0f1b9e"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer_state_reads.py",
+      "sha256": "f521d094ad3b57d877a5a5514046327b64423f7db61274817e73d9567155307e"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/main.py",
+      "sha256": "03e812a4c2e977b3f83aa2c31842963e976ca9d7edc9f71bc23932793f37324d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/market.py",
+      "sha256": "6323deb6109b7005079cfa63cc0cca9765e0788004a49ac66846fc32aff2d80c"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/pool_cache.py",
+      "sha256": "bfbe35f265a45e0efe6e932375af453baa6d1f42490d1b1e3ae06654a17ea2fd"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/pool_producer.py",
+      "sha256": "6ef59f75d5a5e21ab60a11304ed832fd9d0b9aa797249b24dcfb02377259ac2a"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/projection_identity.py",
+      "sha256": "ba83eacdb7f9bb9fbddd87ec814853f80d951292c8136b77b311771009c0cfd0"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/protocol_facts.py",
+      "sha256": "9cee09965f60d96815a5489552bd81c536eeff17724bd9945a93e97d958f8a70"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/protocol_metrics.py",
+      "sha256": "c3b4d558e46eed5d797512495beac7f01e2881b2d651bf13a0b37dc8b1d17a76"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/raw_ingestion.py",
+      "sha256": "4aeb7504d15b29acd9d03c970e48d70a989581ebe80bf95b57528aad7973f1e7"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/raw_journal.py",
+      "sha256": "fffc162e72235d835613bc1cc51dc0634a2873f9378f636c64f26cc0d09d50b2"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/reconciliation_receipt.py",
+      "sha256": "e3b61daa9d37b68938820938487b44ed41f6573cdd8a7085b69907fae1ccbac4"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery_http.py",
+      "sha256": "37d08238f24422518d85509aa18b8f68b4e006d76654144a9646ff794ef57d50"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery_lenses.py",
+      "sha256": "6c9afd27db158da3f4dfdb2a10463d533b976d2dc0936daf811f3da910a4bde9"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery_persistence.py",
+      "sha256": "d74de55f53e5462aa3baa5330e8b22d8356570cc759e31f95e706e1c257ada60"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery_reader.py",
+      "sha256": "bafd0ce1e279f4d237ac9d6410a655f2d72493a99a66068bd49a3ae31664a3ac"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery_rpc.py",
+      "sha256": "fa42dcd28b30a36545791ce7f1bada118a36df0c881e0499aebf76d7eb246ff3"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/retained_reads.py",
+      "sha256": "f1cf348778d861246acfdfd047cfe0cc610a721094d8235b5fb02846fc1046e9"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/rpc_http.py",
+      "sha256": "4698dd1b60c69777e6c376d96eadfb0187d4175088835e5025d5a2bf79852e54"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/rpc_policy.py",
+      "sha256": "c697fc17d8a99e1fcdb1e2f5a87ee92ce3d006850f050a92f9c7deb1f205d59d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/rpc_transport.py",
+      "sha256": "6f533bca531607a132044a69346ba8f2841763a343bf43e668501a36e05414cb"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/runtime.py",
+      "sha256": "3ae4b90bc4e1683000700c0ad939ae995dad627b1581ba846b86834b803d335d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_abi.py",
+      "sha256": "e903882098d04a9625ae46c970e2bba6d84edbc661f8d5836835421344d32f2d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_activity.py",
+      "sha256": "8850f14b995bc1ecf4b923b83f9616a1b784724ec882a89bdd1240da0c222886"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_collector.py",
+      "sha256": "de6b678d2ea7cb1fe4b93e5741cd7fd1356512e883b4ee9aed2aa5452cb620fc"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_projection.py",
+      "sha256": "acc304af8ac5a69144593128f8a96ea3f99216f9505afac662d4189f750c2219"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_service.py",
+      "sha256": "dc9f46b065375d9d3c75e390d648937fbefe9a636639cb960bdd569da37ab390"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/safe_status.py",
+      "sha256": "fe85d2488d992c1940f2a0070c195b09e3c7550c48ecd7888cab817c5936eb47"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/serve.py",
+      "sha256": "32e2bd2720393e97e4f8240c1e82af7e49aa72396fe082c1ec1c61ff1182114d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/shared_market.py",
+      "sha256": "caa12e8e86e1cebfc4dc8a1d27d4e10f3821bb5baedc25ad022fa658b6e19130"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/snapshot_persistence.py",
+      "sha256": "819ee262570ae920306752b7509bdf489fa8e70147de8d0540dd1d0b76ec5492"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/snapshot_refresh.py",
+      "sha256": "f8c2d1118fa136c63ab762ff3569b6b524f438b74a9820774049e412f9718708"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/telemetry.py",
+      "sha256": "25731fe6d0bac683001501855dc2d78aac121a2adc1693abd0f3580b4bab1a58"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/worker_contract.py",
+      "sha256": "d66cc4834decf0342e422bc726a09580002fdf466399d5e0c567925b9eaff210"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/worker_engine.py",
+      "sha256": "4df3a579cbeddfc4b3df0fffdde04a0cd44458f8c07641cf376b8d8e5e813f62"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/worker_http.py",
+      "sha256": "21a20d96a6461f407287fc828e4576ef0843aac9b4764043fc44f7df86039183"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/worker_main.py",
+      "sha256": "2c50f4a0610d9449537c02203c821f99ba96088f550bdbb55162a5919047aafe"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/worker_rpc.py",
+      "sha256": "9c42a415c366c90c27f39dd91c919529b5272f429f37b9f58e292c535322c404"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/core-activity-abi.json",
+      "sha256": "678922c2e9b7c96eab621a2d0273fcfb4564d2896d1f9c6d1b73ca23fa000c81"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/environment-catalog.json",
+      "sha256": "2734efba1cca3ac367a8f9c470c7defaca4edff7d759af910db890d37acf7155"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer-event-definitions.json",
+      "sha256": "f4849b41d95282cd153060054afc11d5196dfdc61ef8cc19818c8d8ee627fa14"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer-recovery-abi.json",
+      "sha256": "403a21a27aae4dad3a5b8b15ced602c4137a317d488f7dfe9f3ea44e6340189b"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/indexer-state-abi.json",
+      "sha256": "995de8ac090378d3ff38bfea2ecfd40b75005ce946db166b75fd3c5293ee6821"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/pool-producer-abi.json",
+      "sha256": "67a7a0545cb47a8576d4151260a2bb41d20f9c91a33233253e39d0d64c728b16"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/protocol-facts-abi.json",
+      "sha256": "b3c66b799ebf0f925415abf583987a7c44b66b541234c0a2e22bba819cbd9f8e"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/recovery-rpc-abi.json",
+      "sha256": "578ef9e83a3a3001d16f34a0fd7461c0af10ade1024997f9c6e445812e3600a3"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/retained-identity.json",
+      "sha256": "7d6820232fa953d2f0a21e4f24e1e4fcad47d9896b177b1643f47623bb386368"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/retained-schema.json",
+      "sha256": "77498479ad800b4cd99d1b13ecd5d1cb6f3e461c7b4d0e3727559f3fdf188d1b"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "22e817e623d09d12398b352cc24336ea431c1535f3a5a0f066c494580e5cab44"
+    },
+    {
+      "path": "python-candidate/requirements.txt",
+      "sha256": "53b1df5c14e44155738cd68d0eb3a1dd17b5bd56fb824a84ffd161ab3ae9d651"
+    },
+    {
+      "path": "scripts/generate-contracts.ts",
+      "sha256": "8630bed7d7183465299806a036f5f8c7b23e86034c1fd68ce1ec4d58a6ea9059"
+    },
+    {
+      "path": "src/contracts/dto.ts",
+      "sha256": "19f6d9580f8644e9fc553c67dfbe1890feca34553880b6eb6e88139cd12690a8"
+    },
+    {
+      "path": "contracts/openapi.json",
+      "sha256": "8d967e557e99e89a90684e8fbc5704eea48335d94e253980d096d54750481a21"
+    },
+    {
+      "path": "contracts/http.d.ts",
+      "sha256": "7a4b26630f6569468a04b8e7adcf0a7d14b3180f376d4bd3467af4f39d543be1"
+    }
+  ],
+  "testedMergeCommit": "4a23950a49a37d789d405ea028e017fc5dbba0f3",
+  "mergeValidation": "217 canonical cases, complete retained Node/Python comparisons and native pool SQL/wire/cancellation tests passed with Sandbox generation support and optional market cache code; later merge changed qualification/test-startup metadata only."
+}

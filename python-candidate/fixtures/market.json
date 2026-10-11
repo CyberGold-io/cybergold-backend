@@ -1,0 +1,1978 @@
+[
+  {
+    "name": "goldProvider valid",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    }
+  },
+  {
+    "name": "goldProvider null",
+    "kind": "goldProvider",
+    "value": null
+  },
+  {
+    "name": "goldProvider array",
+    "kind": "goldProvider",
+    "value": []
+  },
+  {
+    "name": "goldProvider string",
+    "kind": "goldProvider",
+    "value": "invalid"
+  },
+  {
+    "name": "goldProvider empty",
+    "kind": "goldProvider",
+    "value": {}
+  },
+  {
+    "name": "goldProvider extra",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25",
+      "extra": 1
+    }
+  },
+  {
+    "name": "goldProvider missing symbol",
+    "kind": "goldProvider",
+    "value": {
+      "price": "3800.25"
+    }
+  },
+  {
+    "name": "goldProvider missing price",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT"
+    }
+  },
+  {
+    "name": "fxProvider valid",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider null",
+    "kind": "fxProvider",
+    "value": null
+  },
+  {
+    "name": "fxProvider array",
+    "kind": "fxProvider",
+    "value": []
+  },
+  {
+    "name": "fxProvider string",
+    "kind": "fxProvider",
+    "value": "invalid"
+  },
+  {
+    "name": "fxProvider empty",
+    "kind": "fxProvider",
+    "value": {}
+  },
+  {
+    "name": "fxProvider extra",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "extra": 1
+    }
+  },
+  {
+    "name": "fxProvider missing amount",
+    "kind": "fxProvider",
+    "value": {
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider missing base",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider missing date",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider missing rates",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30"
+    }
+  },
+  {
+    "name": "goldPayload valid",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload null",
+    "kind": "goldPayload",
+    "value": null
+  },
+  {
+    "name": "goldPayload array",
+    "kind": "goldPayload",
+    "value": []
+  },
+  {
+    "name": "goldPayload string",
+    "kind": "goldPayload",
+    "value": "invalid"
+  },
+  {
+    "name": "goldPayload empty",
+    "kind": "goldPayload",
+    "value": {}
+  },
+  {
+    "name": "goldPayload extra",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false,
+      "extra": 1
+    }
+  },
+  {
+    "name": "goldPayload missing price",
+    "kind": "goldPayload",
+    "value": {
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload missing fetchedAt",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload missing stale",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z"
+    }
+  },
+  {
+    "name": "fxPayload valid",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload null",
+    "kind": "fxPayload",
+    "value": null
+  },
+  {
+    "name": "fxPayload array",
+    "kind": "fxPayload",
+    "value": []
+  },
+  {
+    "name": "fxPayload string",
+    "kind": "fxPayload",
+    "value": "invalid"
+  },
+  {
+    "name": "fxPayload empty",
+    "kind": "fxPayload",
+    "value": {}
+  },
+  {
+    "name": "fxPayload extra",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false,
+      "extra": 1
+    }
+  },
+  {
+    "name": "fxPayload missing base",
+    "kind": "fxPayload",
+    "value": {
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload missing rates",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload missing fetchedAt",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload missing stale",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z"
+    }
+  },
+  {
+    "name": "gold provider price True",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": true
+    }
+  },
+  {
+    "name": "gold provider price False",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": false
+    }
+  },
+  {
+    "name": "gold provider price 0",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": 0
+    }
+  },
+  {
+    "name": "gold provider price -1",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": -1
+    }
+  },
+  {
+    "name": "gold provider price 1000000000.0",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": 1000000000.0
+    }
+  },
+  {
+    "name": "gold provider price 1000000001.0",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": 1000000001.0
+    }
+  },
+  {
+    "name": "gold provider price '1e3'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "1e3"
+    }
+  },
+  {
+    "name": "gold provider price '+1'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "+1"
+    }
+  },
+  {
+    "name": "gold provider price '01'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "01"
+    }
+  },
+  {
+    "name": "gold provider price '.1'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": ".1"
+    }
+  },
+  {
+    "name": "gold provider price '1.'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "1."
+    }
+  },
+  {
+    "name": "gold provider price ' 1'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": " 1"
+    }
+  },
+  {
+    "name": "gold provider price '0.01'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "0.01"
+    }
+  },
+  {
+    "name": "gold provider price '0'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "0"
+    }
+  },
+  {
+    "name": "gold provider price 100",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": 100
+    }
+  },
+  {
+    "name": "gold provider price '1e999'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "1e999"
+    }
+  },
+  {
+    "name": "gold provider price '9999999999999999999",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  },
+  {
+    "name": "gold provider price '1\\n'",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "1\n"
+    }
+  },
+  {
+    "name": "gold wrong symbol",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "BTCUSDT",
+      "price": "3800.25"
+    }
+  },
+  {
+    "name": "gold wrong price",
+    "kind": "goldProvider",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": {}
+    }
+  },
+  {
+    "name": "fx provider amount True",
+    "kind": "fxProvider",
+    "value": {
+      "amount": true,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider amount 1",
+    "kind": "fxProvider",
+    "value": {
+      "amount": "1",
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider amount 2",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 2,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider base EUR",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "EUR",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider date 2026-2-3",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-2-3",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider date 2026-99-99",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-99-99",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider date \u0662\u0660\u0662\u0666-\u0660\u0669-\u0663\u0660",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "\u0662\u0660\u0662\u0666-\u0660\u0669-\u0663\u0660",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fx provider date 2026-09-30\n",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30\n",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR True",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": true,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR False",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": false,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR 0",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR -1",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": -1,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR '0.8'",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": "0.8",
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR 1000000.0",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 1000000.0,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider EUR 1000001.0",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 1000001.0,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    }
+  },
+  {
+    "name": "fxProvider extra rate",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82,
+        "GBP": 0.8
+      }
+    }
+  },
+  {
+    "name": "fxProvider array rates",
+    "kind": "fxProvider",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": []
+    }
+  },
+  {
+    "name": "fxPayload EUR True",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": true,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR False",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": false,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR 0",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR -1",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": -1,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR '0.8'",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": "0.8",
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR 1000000.0",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 1000000.0,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload EUR 1000001.0",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 1000001.0,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload extra rate",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82,
+        "GBP": 0.8
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload array rates",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": [],
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 0000-02-29T00:00:00.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "0000-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2000-02-29T00:00:00.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2000-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 1900-02-29T00:00:00.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "1900-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-02-30T00:00:00.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-02-30T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-09-30T24:00:00.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T24:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-09-30T00:00:60.000Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T00:00:60.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-09-30T00:00:00Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T00:00:00Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-09-30T00:00:00.000+00:00",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T00:00:00.000+00:00",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 9999-12-31T23:59:59.999Z",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "9999-12-31T23:59:59.999Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp 2026-09-30T10:00:00.000Z\n",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z\n",
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload timestamp None",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": null,
+      "stale": false
+    }
+  },
+  {
+    "name": "goldPayload stale True",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    }
+  },
+  {
+    "name": "goldPayload stale 0",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": 0
+    }
+  },
+  {
+    "name": "goldPayload stale false",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": "false"
+    }
+  },
+  {
+    "name": "goldPayload stale None",
+    "kind": "goldPayload",
+    "value": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": null
+    }
+  },
+  {
+    "name": "fxPayload timestamp 0000-02-29T00:00:00.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "0000-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2000-02-29T00:00:00.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2000-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 1900-02-29T00:00:00.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "1900-02-29T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-02-30T00:00:00.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-02-30T00:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-09-30T24:00:00.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T24:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-09-30T00:00:60.000Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T00:00:60.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-09-30T00:00:00Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T00:00:00Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-09-30T00:00:00.000+00:00",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T00:00:00.000+00:00",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 9999-12-31T23:59:59.999Z",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "9999-12-31T23:59:59.999Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp 2026-09-30T10:00:00.000Z\n",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z\n",
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload timestamp None",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": null,
+      "stale": false
+    }
+  },
+  {
+    "name": "fxPayload stale True",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    }
+  },
+  {
+    "name": "fxPayload stale 0",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": 0
+    }
+  },
+  {
+    "name": "fxPayload stale false",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": "false"
+    }
+  },
+  {
+    "name": "fxPayload stale None",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": null
+    }
+  },
+  {
+    "name": "fx USD True",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": true,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fx USD 1",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": "1",
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "fx USD 0",
+    "kind": "fxPayload",
+    "value": {
+      "base": "USD",
+      "rates": {
+        "USD": 0,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "gold payload price True",
+    "kind": "goldPayload",
+    "value": {
+      "price": true,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "gold payload price 3800",
+    "kind": "goldPayload",
+    "value": {
+      "price": "3800",
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "gold payload price 0",
+    "kind": "goldPayload",
+    "value": {
+      "price": 0,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "gold payload price 1000000001.0",
+    "kind": "goldPayload",
+    "value": {
+      "price": 1000000001.0,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    }
+  },
+  {
+    "name": "gold resolve fresh none",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve fresh False",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve fresh True",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve 201 none",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 201,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve 201 False",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 201,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve 201 True",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 201,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve http-failure none",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 503,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve http-failure False",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve http-failure True",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve invalid none",
+    "kind": "resolve",
+    "value": {},
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve invalid False",
+    "kind": "resolve",
+    "value": {},
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve invalid True",
+    "kind": "resolve",
+    "value": {},
+    "feed": "gold",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve transport none",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": true,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve transport False",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": true,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold resolve transport True",
+    "kind": "resolve",
+    "value": {
+      "symbol": "PAXGUSDT",
+      "price": "3800.25"
+    },
+    "feed": "gold",
+    "status": 200,
+    "error": true,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve fresh none",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve fresh False",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve fresh True",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve 201 none",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 201,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve 201 False",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 201,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve 201 True",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 201,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve http-failure none",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 503,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve http-failure False",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve http-failure True",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve invalid none",
+    "kind": "resolve",
+    "value": {},
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve invalid False",
+    "kind": "resolve",
+    "value": {},
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve invalid True",
+    "kind": "resolve",
+    "value": {},
+    "feed": "fx",
+    "status": 200,
+    "error": false,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve transport none",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": true,
+    "lastKnown": null,
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve transport False",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": true,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "fx resolve transport True",
+    "kind": "resolve",
+    "value": {
+      "amount": 1,
+      "base": "USD",
+      "date": "2026-09-30",
+      "rates": {
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      }
+    },
+    "feed": "fx",
+    "status": 200,
+    "error": true,
+    "lastKnown": {
+      "base": "USD",
+      "rates": {
+        "USD": 1,
+        "EUR": 0.86,
+        "CHF": 0.79,
+        "RUB": 82
+      },
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:00:00.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 1800 prior stale False",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:30:00.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 1800 prior stale True",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:30:00.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3599 prior stale False",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T10:59:59.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3599 prior stale True",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T10:59:59.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3600 prior stale False",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T11:00:00.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3600 prior stale True",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T11:00:00.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3601 prior stale False",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": false
+    },
+    "now": "2026-09-30T11:00:01.000Z"
+  },
+  {
+    "name": "gold failure acquisition age 3601 prior stale True",
+    "kind": "resolve",
+    "feed": "gold",
+    "value": {},
+    "status": 503,
+    "error": false,
+    "lastKnown": {
+      "price": 3800.25,
+      "fetchedAt": "2026-09-30T10:00:00.000Z",
+      "stale": true
+    },
+    "now": "2026-09-30T11:00:01.000Z"
+  }
+]

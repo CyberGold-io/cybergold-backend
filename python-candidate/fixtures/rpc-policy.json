@@ -1,0 +1,4125 @@
+[
+  {
+    "name": "allowed eth_blockNumber",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_blockNumber",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_call",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_chainId",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_chainId",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_estimateGas",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_estimateGas",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_feeHistory",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_feeHistory",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_gasPrice",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_gasPrice",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBalance",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBalance",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBlockByHash",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBlockByHash",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBlockByNumber",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBlockByNumber",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBlockReceipts",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBlockReceipts",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBlockTransactionCountByHash",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBlockTransactionCountByHash",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getBlockTransactionCountByNumber",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getBlockTransactionCountByNumber",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getCode",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getCode",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getLogs",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getLogs",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getProof",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getProof",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getStorageAt",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getStorageAt",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getTransactionByBlockHashAndIndex",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getTransactionByBlockHashAndIndex",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getTransactionByBlockNumberAndIndex",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getTransactionByBlockNumberAndIndex",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getTransactionByHash",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getTransactionByHash",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getTransactionCount",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getTransactionCount",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_getTransactionReceipt",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_getTransactionReceipt",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_maxPriorityFeePerGas",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_maxPriorityFeePerGas",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed eth_syncing",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_syncing",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed net_listening",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "net_listening",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed net_peerCount",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "net_peerCount",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed net_version",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "net_version",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "allowed web3_clientVersion",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "web3_clientVersion",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked eth_sendRawTransaction",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_sendRawTransaction",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked eth_sendTransaction",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_sendTransaction",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked personal_sign",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "personal_sign",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked eth_signTypedData_v4",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_signTypedData_v4",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked admin_peers",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "admin_peers",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "blocked debug_traceTransaction",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "debug_traceTransaction",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "request type None",
+    "kind": "request",
+    "value": null
+  },
+  {
+    "name": "request type False",
+    "kind": "request",
+    "value": false
+  },
+  {
+    "name": "request type []",
+    "kind": "request",
+    "value": []
+  },
+  {
+    "name": "request type {}",
+    "kind": "request",
+    "value": {}
+  },
+  {
+    "name": "request type 'request'",
+    "kind": "request",
+    "value": "request"
+  },
+  {
+    "name": "request type 1",
+    "kind": "request",
+    "value": 1
+  },
+  {
+    "name": "missing jsonrpc",
+    "kind": "request",
+    "value": {
+      "id": 1,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing id",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing method",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing params",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call"
+    }
+  },
+  {
+    "name": "id None",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": null,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "id 'request-1'",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": "request-1",
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "id True",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": true,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "id 1.5",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1.5,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "id {}",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": {},
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "method None",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": null,
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "jsonrpc 2",
+    "kind": "request",
+    "value": {
+      "jsonrpc": 2,
+      "id": 1,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "params None",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": null
+    }
+  },
+  {
+    "name": "params {}",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": {}
+    }
+  },
+  {
+    "name": "params []",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": []
+    }
+  },
+  {
+    "name": "params 1",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": 1
+    }
+  },
+  {
+    "name": "accepted request extension",
+    "kind": "request",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "data": "0x"
+        },
+        {
+          "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "requireCanonical": true
+        }
+      ],
+      "extension": "retained"
+    }
+  },
+  {
+    "name": "batch 1",
+    "kind": "request",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "batch 100",
+    "kind": "request",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "batch 101",
+    "kind": "request",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "batch first invalid",
+    "kind": "request",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_sendRawTransaction",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      },
+      {}
+    ]
+  },
+  {
+    "name": "batch first malformed",
+    "kind": "request",
+    "value": [
+      {},
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_sendRawTransaction",
+        "params": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "data": "0x"
+          },
+          {
+            "blockHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "requireCanonical": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "response 60",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": "0x01"
+    }
+  },
+  {
+    "name": "response 61",
+    "kind": "response",
+    "value": null
+  },
+  {
+    "name": "response 62",
+    "kind": "response",
+    "value": []
+  },
+  {
+    "name": "response 63",
+    "kind": "response",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x01"
+      }
+    ]
+  },
+  {
+    "name": "response 64",
+    "kind": "response",
+    "value": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x01"
+      },
+      {}
+    ]
+  },
+  {
+    "name": "response 65",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": "0x01",
+      "error": {
+        "code": -1,
+        "message": "error"
+      }
+    }
+  },
+  {
+    "name": "response 66",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": null,
+      "error": {
+        "code": -1,
+        "message": "ordinary provider error"
+      }
+    }
+  },
+  {
+    "name": "response 67",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": "named",
+      "error": {
+        "code": true,
+        "message": "bad"
+      }
+    }
+  },
+  {
+    "name": "response 68",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": true,
+      "result": null
+    }
+  },
+  {
+    "name": "response 69",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -1,
+        "message": false
+      }
+    }
+  },
+  {
+    "name": "response 70",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  {
+    "name": "response 71",
+    "kind": "response",
+    "value": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": "0x01",
+      "extra": true
+    }
+  }
+]

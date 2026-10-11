@@ -1,0 +1,47 @@
+{
+  "qualifiedAt": "2026-10-01",
+  "scope": "Independent configured Helpers raw-journal collection and bounded activity API; no installed data or endpoint used",
+  "parentDevCommit": "5c98e6d81bd4d5b54a8b4d8883c05be7c1c13586",
+  "canonicalHelpersAbiSha256": "a46da09fba6166b65c26897fa1514b0a3967020a05f4688c339274b80b9a4195",
+  "canonicalBackend": {
+    "command": "npm run ci-check",
+    "tests": 217,
+    "result": "pass"
+  },
+  "retainedPythonComparisons": {
+    "command": "bash python-candidate/tests/check-local.sh",
+    "result": "pass",
+    "firstAttempt": "Existing concurrent recovery fixture observed an unsettled request; isolated 16-case retry and complete second pass succeeded. No recovery production code changed."
+  },
+  "nativeRetainedDatabase": {
+    "command": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python python-candidate/tests/native_safe_db.py",
+    "result": "pass",
+    "nodePythonViewsCompared": 14,
+    "coreCollectorComparisons": 18,
+    "fixtureUpdate": "Configured Sandbox dashboard includes the already shipped nullable sandboxForkGeneration field."
+  },
+  "actualLinuxImage": {
+    "result": "pass",
+    "canonicalHelpersEventDecodersComparedWithViem": 16,
+    "initialIndependentBackfill": true,
+    "boundedContinueAndCanonicalNoOp": true,
+    "boundedReorgProgress": true,
+    "failedAndCancelledCallsPreserveCoverage": true,
+    "forkPrefixReuseAndDivergentReset": true,
+    "chainAndAddressIsolation": true,
+    "coreProjectionAndReceiptUnchanged": true,
+    "installedDatabaseUsed": false,
+    "nativeWorkerIntegrationAndFailureIsolation": true,
+    "nativeReadOnlyHttpNoStore": true,
+    "installedActivation": false,
+    "testedImageId": "sha256:619427b25a28331e868bed9720739ff9ab4c0ca9b897f343f51c646ef18b0039",
+    "platform": "linux/amd64"
+  },
+  "notClaimed": [
+    "installed collection or complete historical coverage",
+    "historical Helpers migration ABI layouts",
+    "Governance or Staking collection",
+    "new protocol invariants",
+    "Core supply or reserve projections from Helpers events"
+  ]
+}

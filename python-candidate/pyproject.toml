@@ -1,0 +1,22 @@
+[project]
+name = "cybergold-python-candidate"
+version = "0.0.1"
+license = "AGPL-3.0-only"
+description = "Serving Python API and worker with retained Node comparison tooling"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alembic==1.20.0",
+    "cachetools==7.2.0",
+    "fastapi==0.142.2",
+    "httpx==0.28.1",
+    "prometheus-client==0.26.0",
+    "psycopg[binary,pool]==3.3.6",
+    # Web3.py 8 ENS passes character lists; Unicode 18 rejects that input.
+    "pyunormalize==17.0.0",
+    "uvicorn==0.54.0",
+    "valkey==6.1.1",
+    "web3==8.0.0",
+]
+
+[tool.uv]
+package = false

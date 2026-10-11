@@ -1,0 +1,79 @@
+{
+  "observedAt": "2026-10-01",
+  "scope": "Routine Sandbox fork-generation release; installed acceptance pending",
+  "result": "pass",
+  "checks": {
+    "unitProfiles": [
+      "old Sandbox anchor",
+      "new Sandbox anchor",
+      "missing Sandbox anchor",
+      "Mainnet unchanged"
+    ],
+    "canonicalBackendTests": 217,
+    "pythonComparisonSuite": "passed",
+    "nativeLinuxPostgresql": {
+      "result": "pass",
+      "actualImageResponses": [
+        {
+          "enabled": true,
+          "metrics": {
+            "holderCount": 7
+          },
+          "snapshotBlock": "100",
+          "sandboxForkGeneration": "old-fork"
+        },
+        {
+          "enabled": true,
+          "metrics": {
+            "holderCount": 7
+          },
+          "snapshotBlock": "100",
+          "sandboxForkGeneration": "new-fork"
+        }
+      ],
+      "rpcAndSafeServiceNotUsed": true,
+      "schemaAndSnapshotUnchanged": true,
+      "shutdownExitCode": 0,
+      "testedImageId": "sha256:cd1222ebbc59702bd8f3814957db29e3e51c861d2a2d1ede8c119a2842415b14",
+      "installedInputsUsed": false
+    },
+    "schemaAndSnapshotsUnchanged": true,
+    "noRpcOrSafeEndpointUsed": true,
+    "shutdownExit": 0
+  },
+  "nativeImageId": "sha256:cd1222ebbc59702bd8f3814957db29e3e51c861d2a2d1ede8c119a2842415b14",
+  "files": [
+    {
+      "path": "python-candidate/src/cybergold_candidate/runtime.py",
+      "sha256": "57bf6f535aa982b1585813a05375d76ca57631b69e6c7e2a44c05dd6c696b5d4"
+    },
+    {
+      "path": "python-candidate/tests/test_dashboard_generation.py",
+      "sha256": "18af9b3d02ba6f347e4f66b06f238c899501b926cbde98ada995d4ef5000eeae"
+    },
+    {
+      "path": "python-candidate/tests/native_dashboard_generation.py",
+      "sha256": "af9d52a5cd8d187ab999d5fec14629b234a83fc5759fdd34d21c2f727c83f2b1"
+    },
+    {
+      "path": "python-candidate/tests/check-local.sh",
+      "sha256": "b05aa2180644f271c0f05d838c3e283908e35554c5b0a11e6decfa914bd5e73c"
+    },
+    {
+      "path": "src/contracts/dto.ts",
+      "sha256": "ff52ce7f1b716cb4f062f6c937cc2d2ff26d074c9397a796da118fb8f15bdee2"
+    },
+    {
+      "path": "scripts/generate-contracts.ts",
+      "sha256": "978c6642c80d0ceef165aa1213b6807450c21950bfd566421bc9b699055532cf"
+    },
+    {
+      "path": "contracts/openapi.json",
+      "sha256": "4e1a5debf89316b0ac339a103bfb0df503a16e35064cf8bd66143add42e09e0d"
+    },
+    {
+      "path": "contracts/http.d.ts",
+      "sha256": "5ae654e104e1bb4d4dd86578a068c38a74248546d14ea7d625b6f2ce709e13d4"
+    }
+  ]
+}

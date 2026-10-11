@@ -1,0 +1,372 @@
+{
+  "state": {
+    "assets": [
+      "basketAsset1",
+      "basketAsset2"
+    ],
+    "weights": [
+      600000,
+      400000
+    ],
+    "conversions": [
+      31103476800000000000,
+      31103476800000000000000000000000
+    ],
+    "issueFee": 1000,
+    "helperFee": 0,
+    "redeemFee": 1000,
+    "supply": 155517383999999999,
+    "maxSupply": 250000000000000000000,
+    "effectiveCap": 250000000000000000000,
+    "available": [
+      3000000000000000,
+      2000
+    ],
+    "recoveryShares": [],
+    "recoveryValues": [],
+    "descriptors": [
+      {
+        "kind": 0,
+        "token": "basketAsset1",
+        "id": "0"
+      },
+      {
+        "kind": 0,
+        "token": "basketAsset2",
+        "id": "0"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "request": {
+        "mode": "issue-exact-in",
+        "maximumAmountsIn": [
+          "30030030030031",
+          "21"
+        ]
+      },
+      "actual": {
+        "netCygldOut": "1555173840000050",
+        "fees": {
+          "protocolFeeCygld": "1556730570570",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030031",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "issue-exact-out",
+        "netCygldOut": "1555173839999999"
+      },
+      "actual": {
+        "fees": {
+          "protocolFeeCygld": "1556730570570",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030031",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-in",
+        "grossCygldIn": "1555173839999999"
+      },
+      "actual": {
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000000"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173839999",
+          "helperFeeCygld": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-out",
+        "minimumOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "minimumAmount": "29970000000000"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "minimumAmount": "19"
+          }
+        ]
+      },
+      "actual": {
+        "grossCygldIn": "1555173839999999",
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000000"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173839999",
+          "helperFeeCygld": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "mode": "issue-exact-in",
+        "maximumAmountsIn": [
+          "30030030030269",
+          "21"
+        ]
+      },
+      "actual": {
+        "netCygldOut": "1555173840012376",
+        "fees": {
+          "protocolFeeCygld": "1556730570582",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030269",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "issue-exact-out",
+        "netCygldOut": "1555173840012344"
+      },
+      "actual": {
+        "fees": {
+          "protocolFeeCygld": "1556730570582",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030269",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-in",
+        "grossCygldIn": "1555173840012344"
+      },
+      "actual": {
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000237"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173840012",
+          "helperFeeCygld": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-out",
+        "minimumOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "minimumAmount": "29970000000237"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "minimumAmount": "19"
+          }
+        ]
+      },
+      "actual": {
+        "grossCygldIn": "1555173840012298",
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000237"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173840012",
+          "helperFeeCygld": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "mode": "issue-exact-in",
+        "maximumAmountsIn": [
+          "30030030030507",
+          "21"
+        ]
+      },
+      "actual": {
+        "netCygldOut": "1555173840024700",
+        "fees": {
+          "protocolFeeCygld": "1556730570595",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030507",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "issue-exact-out",
+        "netCygldOut": "1555173840024689"
+      },
+      "actual": {
+        "fees": {
+          "protocolFeeCygld": "1556730570595",
+          "helperFeeCygld": "0"
+        },
+        "amountsInExact": [
+          "30030030030507",
+          "21"
+        ],
+        "orderedCoreAssets": [
+          "basketAsset1",
+          "basketAsset2"
+        ]
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-in",
+        "grossCygldIn": "1555173840024689"
+      },
+      "actual": {
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000475"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173840024",
+          "helperFeeCygld": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "mode": "redeem-exact-out",
+        "minimumOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "minimumAmount": "29970000000475"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "minimumAmount": "19"
+          }
+        ]
+      },
+      "actual": {
+        "grossCygldIn": "1555173840024648",
+        "projectedCoreOutputs": [
+          {
+            "kind": 0,
+            "token": "basketAsset1",
+            "id": "0",
+            "amount": "29970000000475"
+          },
+          {
+            "kind": 0,
+            "token": "basketAsset2",
+            "id": "0",
+            "amount": "19"
+          }
+        ],
+        "fees": {
+          "protocolFeeCygld": "1555173840024",
+          "helperFeeCygld": "0"
+        }
+      }
+    }
+  ]
+}

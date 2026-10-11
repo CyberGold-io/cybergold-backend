@@ -1,0 +1,7 @@
+{
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS quote_pool_identity_cache (\n    chain_id BIGINT NOT NULL,\n    dex TEXT NOT NULL,\n    identity TEXT NOT NULL,\n    token0 TEXT NOT NULL,\n    token1 TEXT NOT NULL,\n    fee INTEGER NOT NULL,\n    identifier JSONB NOT NULL,\n    legacy_payload JSONB,\n    last_checked_at TIMESTAMPTZ NOT NULL,\n    PRIMARY KEY(chain_id,dex,identity)\n)",
+    "CREATE INDEX IF NOT EXISTS quote_pool_identity_cache_pair_idx\n    ON quote_pool_identity_cache(chain_id,dex,token0,token1)",
+    "INSERT INTO quote_pool_identity_cache(chain_id,dex,identity,token0,token1,fee,identifier,legacy_payload,last_checked_at)\n    SELECT chain_id,dex,'legacy-v3:' || token0 || ':' || token1 || ':' || fee::text,token0,token1,fee,\n        jsonb_build_object('protocol','v3','tokenA',token0,'tokenB',token1,'fee',fee),\n        to_jsonb(quote_pool_cache),last_checked_at\n    FROM quote_pool_cache\n    ON CONFLICT(chain_id,dex,identity) DO NOTHING"
+  ]
+}

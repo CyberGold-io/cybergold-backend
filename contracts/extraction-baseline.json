@@ -1,0 +1,326 @@
+{
+  "sourceRepository": "CyberGold-io/cybergold-app",
+  "sourceCommit": "b3f4d790801882b14509a2ec6a2ca770b6c93b53",
+  "files": [
+    {
+      "source": "app/api/dashboard/onchain-summary/route.ts",
+      "destination": "src/api/dashboard/onchain-summary/route.ts",
+      "sourceSha256": "94b0aad147eb22f906c14eb917d23f57583c29b579b0998add9c3e0fa3f360a1"
+    },
+    {
+      "source": "app/api/faucet/route.ts",
+      "destination": "src/api/faucet/route.ts",
+      "sourceSha256": "5fe8298f56f18d81f56de6af70777f40c72026e6aad66938ea5882e530e6879c"
+    },
+    {
+      "source": "app/api/fx/route.ts",
+      "destination": "src/api/fx/route.ts",
+      "sourceSha256": "30a16df3902a9d72a8a70902729028fcbba0b04d915239a7fd00d74ee0e33c88"
+    },
+    {
+      "source": "app/api/gold/route.ts",
+      "destination": "src/api/gold/route.ts",
+      "sourceSha256": "65e6acdd5187de7ae2430ca5ed09d188c944a80575780f2d69fd7a0caadf56b0"
+    },
+    {
+      "source": "app/api/governance/owner-aliases/route.ts",
+      "destination": "src/api/governance/owner-aliases/route.ts",
+      "sourceSha256": "c6b6080a2b16c3d08229e14684273074287e0598cb85f0148f6f2de42c66ffac"
+    },
+    {
+      "source": "app/api/internal/onchain-indexer/fork-generation/route.ts",
+      "destination": "src/api/internal/onchain-indexer/fork-generation/route.ts",
+      "sourceSha256": "7e173e2b6689a14472bdc2a3a26db6216043760d357276ab562c5887fa627cc0"
+    },
+    {
+      "source": "app/api/internal/onchain-indexer/reconcile/route.ts",
+      "destination": "src/api/internal/onchain-indexer/reconcile/route.ts",
+      "sourceSha256": "ec067bb66adce443da3483741d5906f873b272ae1312dae274c3beca1a8a660e"
+    },
+    {
+      "source": "app/api/quote-pool-cache/route.ts",
+      "destination": "src/api/quote-pool-cache/route.ts",
+      "sourceSha256": "2056be3f10b646ed3aaf1d7576f98c8d9e625159daf4179b2ec9217de2ccfd0b"
+    },
+    {
+      "source": "app/api/recovery/shares/route.ts",
+      "destination": "src/api/recovery/shares/route.ts",
+      "sourceSha256": "dc3e511c6d0ee503814b810b38d33bd916550ea50d132e3689b2ff88943e3839"
+    },
+    {
+      "source": "app/api/rpc/route.ts",
+      "destination": "src/api/rpc/route.ts",
+      "sourceSha256": "e974e1c8a93f56dd554eb14b187b32a528722c1b135d6c411ed3552e2872ceb7"
+    },
+    {
+      "source": "app/api/safe/events/route.ts",
+      "destination": "src/api/safe/events/route.ts",
+      "sourceSha256": "a4e787741ac9a0a7a47261ed31693a1edaa0184868394111e23414e63e178bd4"
+    },
+    {
+      "source": "app/api/safe/route.ts",
+      "destination": "src/api/safe/route.ts",
+      "sourceSha256": "d8663827497dd2dd662847e11bc20cf0af051f3ec41af4a2c91593a46a53ee85"
+    },
+    {
+      "source": "app/config/chain.ts",
+      "destination": "src/config/chain.ts",
+      "sourceSha256": "bb8ef3c5d2a596d3670741404fbdc07e58916cc51468e2d7390832c77ffad792"
+    },
+    {
+      "source": "app/config/environmentValidation.ts",
+      "destination": "src/config/environmentValidation.ts",
+      "sourceSha256": "7b6c53acf2c253cbb5dbe1f7a644b5db0e44e9a821131c49b8c3485d593ac7b5"
+    },
+    {
+      "source": "app/config/publicEnvironment.ts",
+      "destination": "src/config/publicEnvironment.ts",
+      "sourceSha256": "2259cc7fd6d6c55f6e6b8c5682d414066e9b779c4418e223c553252751865f69"
+    },
+    {
+      "source": "app/config/tokens.ts",
+      "destination": "src/config/tokens.ts",
+      "sourceSha256": "b91b2d27d3285220dcb666c63c8c3e114610218358f41461df56b84f38455f57"
+    },
+    {
+      "source": "app/contracts/generated/coreDiamond.ts",
+      "destination": "src/contracts/generated/coreDiamond.ts",
+      "sourceSha256": "ccbe5b3dd333a2e048c8215c353725342d3509f687c36e3c614523b654b4820c"
+    },
+    {
+      "source": "app/contracts/generated/governanceDiamond.ts",
+      "destination": "src/contracts/generated/governanceDiamond.ts",
+      "sourceSha256": "aad5cf8e2fd7f7df3034681ec5b304be7ba42046ddf6b6f773296dde74cab818"
+    },
+    {
+      "source": "app/contracts/generated/helpersDiamond.ts",
+      "destination": "src/contracts/generated/helpersDiamond.ts",
+      "sourceSha256": "eb19b45081f38169a665baaa63cdceb05abf3983efb5428242f518af35b9669a"
+    },
+    {
+      "source": "app/contracts/generated/stakingDiamond.ts",
+      "destination": "src/contracts/generated/stakingDiamond.ts",
+      "sourceSha256": "323093beee9af56507725b635fbf493b0f750452ec02056e24b178e45b8173b1"
+    },
+    {
+      "source": "app/server/environment.ts",
+      "destination": "src/server/environment.ts",
+      "sourceSha256": "8705bfdd6358f0986ef171e07329de2a09f4e8bfe5887f1f53ce0c0938cc522a"
+    },
+    {
+      "source": "app/server/faucet/forkFaucet.ts",
+      "destination": "src/server/faucet/forkFaucet.ts",
+      "sourceSha256": "bbdc5013ac82362f9c235d18199d25c374eaf02f1c80de7a7ca2d1e7322e4f77"
+    },
+    {
+      "source": "app/server/governance-owner-aliases/auth.ts",
+      "destination": "src/server/governance-owner-aliases/auth.ts",
+      "sourceSha256": "20841621debb62ec2462286d181702fdbde2f7488aa2aae392dcb8d9a5003c4a"
+    },
+    {
+      "source": "app/server/governance-owner-aliases/repository.ts",
+      "destination": "src/server/governance-owner-aliases/repository.ts",
+      "sourceSha256": "f962506535e9c3f17cc930dfdf450a9713b3a4e2eeb0825a7eb63192db7cf865"
+    },
+    {
+      "source": "app/server/onchain-indexer/adaptiveLogPagination.ts",
+      "destination": "src/server/onchain-indexer/adaptiveLogPagination.ts",
+      "sourceSha256": "e3415889dc3163e6590832316a21ec4be7b5526a659f50c076b997af2c3dc160"
+    },
+    {
+      "source": "app/server/onchain-indexer/dashboardSnapshotRepository.ts",
+      "destination": "src/server/onchain-indexer/dashboardSnapshotRepository.ts",
+      "sourceSha256": "2b841d6f582a202fbea4b1262cb6c77ae36b396be184fc382932dce8129d92ca"
+    },
+    {
+      "source": "app/server/onchain-indexer/db.ts",
+      "destination": "src/server/onchain-indexer/db.ts",
+      "sourceSha256": "8c8188457fa87666acd1e887c655f954c367d3c7141a84e0095fb76038eb56cc"
+    },
+    {
+      "source": "app/server/onchain-indexer/finalizedReconciliation.ts",
+      "destination": "src/server/onchain-indexer/finalizedReconciliation.ts",
+      "sourceSha256": "6df506491a2af5937169238ad7d9652c6a6179c4a544fdfcf507ff0a51bb2bd5"
+    },
+    {
+      "source": "app/server/onchain-indexer/finalizedSnapshotMulticall.ts",
+      "destination": "src/server/onchain-indexer/finalizedSnapshotMulticall.ts",
+      "sourceSha256": "31201574114102166ea000b97745c6e0f50275fb38a7d9be8789eab681988cb6"
+    },
+    {
+      "source": "app/server/onchain-indexer/forkGenerationRecovery.ts",
+      "destination": "src/server/onchain-indexer/forkGenerationRecovery.ts",
+      "sourceSha256": "be21cd64b6a2135af8ea5a176e6e88b9756494fae5345da1d58e099e851c8836"
+    },
+    {
+      "source": "app/server/onchain-indexer/forkGenerationTransition.ts",
+      "destination": "src/server/onchain-indexer/forkGenerationTransition.ts",
+      "sourceSha256": "3c532a68dfeb05d66785cdaa7994f4fa4acdc58bfe94174d16ab5cb1c0212025"
+    },
+    {
+      "source": "app/server/onchain-indexer/gatewayLease.ts",
+      "destination": "src/server/onchain-indexer/gatewayLease.ts",
+      "sourceSha256": "032e5fdedff0b303170ce609f447d819ffec70dd273f9548f7e670bb2c22bc36"
+    },
+    {
+      "source": "app/server/onchain-indexer/indexer.ts",
+      "destination": "src/server/onchain-indexer/indexer.ts",
+      "sourceSha256": "dcc5154fb3230c208b4edfcd58a4fd4255a1e8bb00dded8985602c60a29e0564"
+    },
+    {
+      "source": "app/server/onchain-indexer/indexerIdentity.ts",
+      "destination": "src/server/onchain-indexer/indexerIdentity.ts",
+      "sourceSha256": "d3cfc0ad586365f9aef5dcc3f75937f74cdea4336b80ddbeea709a405419817b"
+    },
+    {
+      "source": "app/server/onchain-indexer/internalForkGenerationContract.ts",
+      "destination": "src/server/onchain-indexer/internalForkGenerationContract.ts",
+      "sourceSha256": "79132d72d6c541769cd706d24a46e393fec09a324467e08b7d02fc01b8003840"
+    },
+    {
+      "source": "app/server/onchain-indexer/internalIndexerDiagnostic.ts",
+      "destination": "src/server/onchain-indexer/internalIndexerDiagnostic.ts",
+      "sourceSha256": "b633e558707ed127adac9b8ca49df9b4ee4c1500c56465744e5478587609723c"
+    },
+    {
+      "source": "app/server/onchain-indexer/internalReconcileContract.ts",
+      "destination": "src/server/onchain-indexer/internalReconcileContract.ts",
+      "sourceSha256": "7c259652a2435ffbb3af766f6f740e40fee5cf9a48553704839af9b8940d5b50"
+    },
+    {
+      "source": "app/server/onchain-indexer/rawJournalCoverage.ts",
+      "destination": "src/server/onchain-indexer/rawJournalCoverage.ts",
+      "sourceSha256": "fa1a1b3ef369816cac61a17c6bf9c140d776da137e1d000ac60b7f35d1e4067f"
+    },
+    {
+      "source": "app/server/onchain-indexer/rawLogJournal.ts",
+      "destination": "src/server/onchain-indexer/rawLogJournal.ts",
+      "sourceSha256": "6ddb2efa129792ff6ea1ea60b8b69c0e2c9d4caf9c4fc7166239d5b7350a2958"
+    },
+    {
+      "source": "app/server/onchain-indexer/rawLogModel.ts",
+      "destination": "src/server/onchain-indexer/rawLogModel.ts",
+      "sourceSha256": "5da11fa6ab23717a7be54bbcd635d99a44418b67934ee65dc05123cd716658bc"
+    },
+    {
+      "source": "app/server/onchain-indexer/reconciliationReceipt.ts",
+      "destination": "src/server/onchain-indexer/reconciliationReceipt.ts",
+      "sourceSha256": "a4525feda14931d91ee574f8095f9a7f5938ec1c877d4c2191927c71451010e9"
+    },
+    {
+      "source": "app/server/onchain-indexer/recoveryFundSnapshot.ts",
+      "destination": "src/server/onchain-indexer/recoveryFundSnapshot.ts",
+      "sourceSha256": "735c1bfa28493c0158122bcd6e9639248ee0695e3e8c40af43aed8b56eb6ad5e"
+    },
+    {
+      "source": "app/server/onchain-indexer/recoveryPortfolioModel.ts",
+      "destination": "src/server/onchain-indexer/recoveryPortfolioModel.ts",
+      "sourceSha256": "481ab68737fb63ee7f849c5616bdf838f446f84c160ef71786bb69f922400325"
+    },
+    {
+      "source": "app/server/onchain-indexer/recoveryPortfolioRepository.ts",
+      "destination": "src/server/onchain-indexer/recoveryPortfolioRepository.ts",
+      "sourceSha256": "789d54f44988a2e694d2dc4b5d1e4b1e59a95cf96c41259c93db61e265fdb203"
+    },
+    {
+      "source": "app/server/onchain-indexer/recoverySharePersistence.ts",
+      "destination": "src/server/onchain-indexer/recoverySharePersistence.ts",
+      "sourceSha256": "ba152b9fed7deb9919b228c19c7457cd764487028cc8265f1431bfd104c0b377"
+    },
+    {
+      "source": "app/server/onchain-indexer/rpcRequestInstrumentation.ts",
+      "destination": "src/server/onchain-indexer/rpcRequestInstrumentation.ts",
+      "sourceSha256": "7617d66ac546eb494507a16ddfa10a4d80a4546a382b64c34eb76cc09837ac3d"
+    },
+    {
+      "source": "app/server/onchain-indexer/rpcTransport.ts",
+      "destination": "src/server/onchain-indexer/rpcTransport.ts",
+      "sourceSha256": "1071f1d18667dc70fa351b6aa224e7aa1e0564c29b3720af8eaa05270b2d5217"
+    },
+    {
+      "source": "app/server/onchain-indexer/snapshot-identity.json",
+      "destination": "src/server/onchain-indexer/snapshot-identity.json",
+      "sourceSha256": "78672511dc83a349cdbf75f7158a3285bd1a42d0ac2780bb20d4f3dad47b4cd4"
+    },
+    {
+      "source": "app/server/onchain-indexer/workerAuth.ts",
+      "destination": "src/server/onchain-indexer/workerAuth.ts",
+      "sourceSha256": "d96ce53772714814c7cea1831c91f6b4a27aedd38f16627de0269eb2ff8b18bf"
+    },
+    {
+      "source": "app/server/public-api-errors.ts",
+      "destination": "src/server/public-api-errors.ts",
+      "sourceSha256": "4f96636ce8c85cd22c5ca617a727c7452d0b74b6117fc09cb2c094a237a3fad6"
+    },
+    {
+      "source": "app/server/quote-pool-cache/repository.ts",
+      "destination": "src/server/quote-pool-cache/repository.ts",
+      "sourceSha256": "110766ab6876b681dcea616d9b97e3a80ca44ee78781fdbef6583b0a5b4a5f16"
+    },
+    {
+      "source": "app/server/recovery/portfolioReader.ts",
+      "destination": "src/server/recovery/portfolioReader.ts",
+      "sourceSha256": "4112d79a2dafbd539e9b22d8a0e99968e3707e04bd79be56211f531ceaef0487"
+    },
+    {
+      "source": "app/server/recovery/rpcPortfolio.ts",
+      "destination": "src/server/recovery/rpcPortfolio.ts",
+      "sourceSha256": "12e2cf5dc12a38737f8465b80750e230f3e01fb9d60d6fbcdfe23c68332037dd"
+    },
+    {
+      "source": "app/server/rpcProxyPolicy.ts",
+      "destination": "src/server/rpcProxyPolicy.ts",
+      "sourceSha256": "e8e52178d751ddf012f94f041e39c1a14258cedcd89f7c9c34a3ec29b4225fe5"
+    },
+    {
+      "source": "app/server/rpcReadPacer.ts",
+      "destination": "src/server/rpcReadPacer.ts",
+      "sourceSha256": "30491a6ca80b4da79d7725771434cec06f4267ea228620da25a4431698e9fde8"
+    },
+    {
+      "source": "app/server/safe-events/indexer.ts",
+      "destination": "src/server/safe-events/indexer.ts",
+      "sourceSha256": "27778e85c35e0d0aea06502b0611e5c6d78d84876f216358335c126685bcc2fa"
+    },
+    {
+      "source": "app/types.ts",
+      "destination": "src/types.ts",
+      "sourceSha256": "8d43d020d95f2c522d8c0990c1ce20baa31b802006b929bacf21a08792a9ce4f"
+    },
+    {
+      "source": "app/utils/governanceOwnerAliasesAuth.ts",
+      "destination": "src/utils/governanceOwnerAliasesAuth.ts",
+      "sourceSha256": "27880da2abae6c3285cc1a89af40927f92d6f2fbb1975e2002969c2b49094909"
+    },
+    {
+      "source": "app/utils/marketDataValidation.ts",
+      "destination": "src/utils/marketDataValidation.ts",
+      "sourceSha256": "86ba9da8ee6194137ce17227e5617ec515d25249b3f6b7dc6f92ff8e65c4cb47"
+    },
+    {
+      "source": "app/utils/poolCachePair.ts",
+      "destination": "src/utils/poolCachePair.ts",
+      "sourceSha256": "282e1caf179f5c384c0f0a29774c4d12197482081f8a70f2582b67846f90aecb"
+    },
+    {
+      "source": "app/utils/recovery.ts",
+      "destination": "src/utils/recovery.ts",
+      "sourceSha256": "ba87d1da058aa166dfff7c8b22c88dbcc321cba2adb912ce4e87d7f5030e50ae"
+    },
+    {
+      "source": "app/utils/recoveryFund.ts",
+      "destination": "src/utils/recoveryFund.ts",
+      "sourceSha256": "cf8bec6b1203c1f2c6104db84d05d40c6aaec8f37be26c0ba6cc31f7b1e21cde"
+    },
+    {
+      "source": "app/utils/recoveryPortfolio.ts",
+      "destination": "src/utils/recoveryPortfolio.ts",
+      "sourceSha256": "4d7c9df56df5a55d19ee3dd654b6a5f9c10f04ee46a887db77ecd23290e87c86"
+    },
+    {
+      "source": "app/utils/recoverySharesApi.ts",
+      "destination": "src/utils/recoverySharesApi.ts",
+      "sourceSha256": "9a130799612ae26a28f4c05ea69164a3dcf6d2b1b66d922520b3b4dc1c71d0dd"
+    }
+  ]
+}

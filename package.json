@@ -1,0 +1,55 @@
+{
+  "name": "cybergold-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26.10.0 <27"
+  },
+  "scripts": {
+    "dev:api": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python -m cybergold_candidate.main",
+    "dev:worker": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python -m cybergold_candidate.worker_main",
+    "start:api": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python -m cybergold_candidate.main",
+    "start:worker": "PYTHONPATH=python-candidate/src python-candidate/.venv/bin/python -m cybergold_candidate.worker_main",
+    "typecheck": "tsc --noEmit",
+    "test": "node --env-file=tests/fixture.env --import tsx --test tests/*.test.mts src/utils/*.test.mts",
+    "check:contracts": "node --import tsx scripts/generate-contracts.ts --check",
+    "generate:contracts": "node --import tsx scripts/generate-contracts.ts",
+    "ci-check": "npm run typecheck && npm test && npm run check:contracts",
+    "postinstall": "node scripts/patch-uniswap-sdk.mjs",
+    "test:sdk": "node --test tests/uniswap-sdk.test.mts"
+  },
+  "devDependencies": {
+    "@prometheus-io/client": "^0.16.1",
+    "@types/node": "26.6.3",
+    "@types/pg": "8.23.1",
+    "fastify": "^5.12.5",
+    "lru-cache": "^11.5.3",
+    "openapi-typescript": "7.13.0",
+    "pg": "^8.23.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-json-schema": "0.68.0",
+    "viem": "^2.52.2"
+  },
+  "overrides": {
+    "ws@>=8.0.0 <9.0.0": "8.21.0",
+    "@uniswap/swap-router-contracts": "$@uniswap/swap-router-contracts",
+    "@uniswap/v3-periphery": "$@uniswap/v3-periphery",
+    "@uniswap/v3-staker": "$@uniswap/v3-staker",
+    "@openzeppelin/contracts@>=4.0.0 <5.0.0": "4.9.6"
+  },
+  "dependencies": {
+    "@uniswap/router-sdk": "2.11.6",
+    "@uniswap/sdk-core": "7.19.4",
+    "@uniswap/universal-router-sdk": "5.15.0",
+    "@uniswap/v2-sdk": "4.21.5",
+    "@uniswap/v3-sdk": "3.31.5",
+    "@uniswap/v4-sdk": "2.4.1",
+    "jsbi": "3.2.5",
+    "@uniswap/swap-router-contracts": "file:vendor/uniswap-abi-packages/swap-router-contracts",
+    "@uniswap/v3-periphery": "file:vendor/uniswap-abi-packages/v3-periphery",
+    "@uniswap/v3-staker": "file:vendor/uniswap-abi-packages/v3-staker"
+  },
+  "license": "AGPL-3.0-only"
+}

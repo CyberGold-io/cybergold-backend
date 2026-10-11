@@ -1,0 +1,401 @@
+{
+  "core": [
+    {
+      "type": "function",
+      "name": "balanceOfBatch",
+      "inputs": [
+        {
+          "name": "accounts",
+          "type": "address[]",
+          "internalType": "address[]"
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]",
+          "internalType": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[]",
+          "internalType": "uint256[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "outstandingRecoveryAssetCount",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "count",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "outstandingRecoveryAssets",
+      "inputs": [
+        {
+          "name": "offset",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "limit",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "assets",
+          "type": "address[]",
+          "internalType": "address[]"
+        },
+        {
+          "name": "nextOffset",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "paused",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "previewRedeemRecoveryShares",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rawOut",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "recoveryPool",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "viewData",
+          "type": "tuple",
+          "internalType": "struct IRecoveryTypes.RecoveryPoolView",
+          "components": [
+            {
+              "name": "impaired",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "coreAttachedShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "externalShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "redeemableRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "cygldPerAssetRawFp18",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "cygldSupplyCap",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "referenceShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "referenceValueCygld",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "shareDecimals",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "reserveCustodyStatus",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "status",
+          "type": "tuple",
+          "internalType": "struct IRecoveryTypes.ReserveCustodyStatus",
+          "components": [
+            {
+              "name": "lifecycle",
+              "type": "uint8",
+              "internalType": "enum IRecoveryTypes.ReserveLifecycle"
+            },
+            {
+              "name": "poolImpaired",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "redeemablePoolRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "coreAttachedShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "externalShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "exitEntitlementRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "liveBalanceAvailable",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "liveRawCustody",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "activeAvailableRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "poolRawDeficit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "exitEntitlementDeficitRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "reserveLifecycle",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "viewData",
+          "type": "tuple",
+          "internalType": "struct IRecoveryTypes.ReserveLifecycleView",
+          "components": [
+            {
+              "name": "lifecycle",
+              "type": "uint8",
+              "internalType": "enum IRecoveryTypes.ReserveLifecycle"
+            },
+            {
+              "name": "exitEntitlementRaw",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    }
+  ],
+  "governance": [
+    {
+      "type": "function",
+      "name": "assetRecoveryFund",
+      "inputs": [
+        {
+          "name": "impairedAsset",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "viewData",
+          "type": "tuple",
+          "internalType": "struct IRecoveryFundTypes.AssetRecoveryFundView",
+          "components": [
+            {
+              "name": "generation",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "coverageShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "purchasedShares",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialCygldCommitment",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "paused",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "previewAssetRecoveryFundPurchase",
+      "inputs": [
+        {
+          "name": "impairedAsset",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "generation",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "cygldOut",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "recoveryFundTreasuryStatus",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "balance",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "allowanceExposure",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "committed",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "trustedRecoveryFundCore",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "core",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    }
+  ]
+}

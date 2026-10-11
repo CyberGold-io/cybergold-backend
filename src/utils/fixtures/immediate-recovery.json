@@ -1,0 +1,33 @@
+{
+  "schema": "cybergold.immediate-recovery.raw-fixtures",
+  "units": "All quantities are decimal strings in raw asset/share/CYGLD units as named; no floating point.",
+  "admission": [
+    {"name": "first", "B": "100", "E": "0", "L": "0", "R": "100", "C": "100"},
+    {"name": "old-payable-rate", "B": "90", "E": "20", "L": "10", "R": "80", "C": "160"},
+    {"name": "floor-new-core", "B": "4", "E": "4", "L": "3", "R": "1", "C": "1"},
+    {"name": "revival", "B": "80", "E": "20", "L": "0", "R": "80", "C": "80"},
+    {"name": "unchanged-cycle", "B": "67", "E": "67", "L": "2", "R": "65", "C": "2177"}
+  ],
+  "impairedBurn": [
+    {"name": "protect-core", "B": "45", "C": "80", "E": "10", "s": "10", "q": "5"},
+    {"name": "cap-excess", "B": "120", "C": "80", "E": "20", "s": "20", "q": "20"},
+    {"name": "last-external-cap", "B": "120", "C": "0", "E": "20", "s": "20", "q": "20"},
+    {"name": "subset-before-rehabilitation", "B": "2", "C": "1", "E": "3", "s": "2", "q": "1"}
+  ],
+  "rehabilitation": [
+    {"name": "external-only-surplus", "B": "120", "C": "0", "E": "20", "L": "20", "ordinaryBacking": "100"},
+    {"name": "core-remainder", "B": "2", "C": "1", "E": "3", "L": "1", "ordinaryBacking": "1"},
+    {"name": "unchanged-cycle", "B": "67", "C": "2177", "E": "67", "L": "2", "ordinaryBacking": "65"},
+    {"name": "empty-rights", "B": "120", "C": "0", "E": "0", "L": "0", "ordinaryBacking": "120"}
+  ],
+  "healthyBurn": [
+    {"name": "subset-zero-retains-shares", "B": "2", "L": "1", "E": "3", "s": "2", "q": "0", "released": "0", "settles": false},
+    {"name": "final-deficit", "B": "5", "L": "10", "E": "20", "s": "20", "q": "5", "released": "10", "settles": true},
+    {"name": "partial-nominal-release", "B": "5", "L": "10", "E": "20", "s": "10", "q": "2", "released": "5", "settles": true}
+  ],
+  "fundAdmission": [
+    {"name": "six-decimal-native-shares", "Q": "100000000", "M": "100000000000000000000", "referenceShares": "100000000", "referenceValueCygld": "100000000000000000000", "allowed": true},
+    {"name": "above-reference", "Q": "100", "M": "201", "referenceShares": "1", "referenceValueCygld": "2", "allowed": false},
+    {"name": "oversized-unstored-ceiling", "Q": "115792089237316195423570985008687907853269984665640564039457584007913129639935", "M": "1", "referenceShares": "1", "referenceValueCygld": "2", "allowed": true}
+  ]
+}

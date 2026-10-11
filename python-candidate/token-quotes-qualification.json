@@ -1,0 +1,28 @@
+{
+  "result": "pass",
+  "nativeDefaultRoleCommand": true,
+  "nativePrivateRpcAuthorization": true,
+  "actualViemFixtures": 10,
+  "tokenNativePreviewModes": 6,
+  "quoterModes": 2,
+  "oneCanonicalContractCallPerPreview": true,
+  "losslessAmountsAndOrder": true,
+  "invalidAbiInputWithoutRpc": true,
+  "reorgOutageRedactionRecovery": true,
+  "callerDisconnectSeconds": 0.0,
+  "operationDeadlineSeconds": {
+    "token-preview": 15.03,
+    "uniswap": 15.01
+  },
+  "shutdownExitCode": 0,
+  "testedImageId": "sha256:628d96f1397fe488bd152cecbec6c10c826c6ff456860717594e48dfd18bdea2",
+  "installedEndpointsOrDatabaseUsed": false,
+  "qualification": "Local source and assembled Linux image; installed rollout remains separate",
+  "focusedComparisons": {
+    "tokenPreview": 5,
+    "basketPreviewRegression": 5,
+    "uniswapQuote": 5,
+    "environment": 400
+  },
+  "existingCanonicalBackendSuite": 217
+}

@@ -1,0 +1,212 @@
+[
+  {
+    "name": "NEXT_PUBLIC_APP_ORIGIN",
+    "kind": "url",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_CHAIN_ID",
+    "kind": "positiveInteger",
+    "required": true
+  },
+  {
+    "name": "NEXT_PUBLIC_CORE_DIAMOND_ADDRESS",
+    "kind": "address",
+    "required": true
+  },
+  {
+    "name": "NEXT_PUBLIC_GOVERNANCE_DIAMOND_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_STAKING_DIAMOND_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_GOVERNANCE_SAFE_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "NEXT_PUBLIC_RPC_URL",
+    "kind": "url",
+    "required": true
+  },
+  {
+    "name": "CYBERGOLD_RUNTIME_CONFIG_ID",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "DATABASE_URL",
+    "kind": "database",
+    "required": false
+  },
+  {
+    "name": "FORK_FAUCET_ENABLED",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "FORK_FAUCET_HOME",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "FORK_FAUCET_SCRIPT_PATH",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "FORK_FAUCET_SERVICE_TOKEN",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "FORK_FAUCET_SERVICE_URL",
+    "kind": "url",
+    "required": false
+  },
+  {
+    "name": "FOUNDRY_BIN_DIR",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_CYGLD_REF_CACHE_TTL_MS",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_ADDRESS_SCOPED_RAW_LOGS",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_ARCHIVE_FREE_FINALIZED_MODE",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_CHUNK_SIZE",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_FINALIZED_MULTICALL_ENABLED",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_MAX_BLOCKS_PER_RUN",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RAW_JOURNAL_REPLAY_ENABLED",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RECONCILE_INTERVAL_MS",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RECOVERY_SHARE_V2_ENABLED",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_REORG_WINDOW",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RPC_AUTHORIZATION",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RPC_GATEWAY_ENABLED",
+    "kind": "flag",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RPC_GATEWAY_TOKEN",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_RPC_URL",
+    "kind": "url",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_START_BLOCK",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "ONCHAIN_INDEXER_WORKER_TOKEN",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "RPC_AUTHORIZATION",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "RPC_URL",
+    "kind": "url",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_CHUNK_BLOCKS",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_LOOKBACK_BLOCKS",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_MAX_BLOCKS_PER_RUN",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_REORG_WINDOW",
+    "kind": "integer",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_SAFE_ADDRESS",
+    "kind": "address",
+    "required": false
+  },
+  {
+    "name": "SAFE_EVENT_INDEXER_SAFE_ADDRESSES",
+    "kind": "addresses",
+    "required": false
+  },
+  {
+    "name": "SAFE_TX_SERVICE_URL",
+    "kind": "url",
+    "required": false
+  }
+]

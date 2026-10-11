@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-02",
+  "scope": "Native Python process commands and standard ENS NFT URI observation; local grouped batch",
+  "installed": false,
+  "nativeImage": "sha256:451836648379b32baa59b057f0ec191a92fe6deb5468f8a48d1becc89291ab6c",
+  "results": {
+    "backendCanonical": "217 reference tests, typecheck and generated HTTP contract checks pass",
+    "pythonComparisons": "complete existing local comparison suite passes",
+    "ensCases": "8 focused host and actual Linux-image cases pass",
+    "nativeProfiles": [
+      31338,
+      1
+    ],
+    "nativeApiDefaultCommand": true,
+    "nativeWorkerModuleCommand": true,
+    "replayAndLegacyV2Models": true,
+    "retainedNodeReadsCurrentData": true,
+    "apiAndWorkerSigtermExitZero": true
+  },
+  "retirement": "Translation launcher and Node production entries/build scaffolding removed; TypeScript packages are development-only reference and contract-generation tooling",
+  "retainedImages": "Ops preserves original commands for images without the new native runtime label",
+  "nft": "Standard ERC721 tokenURI/ERC1155 uri at ENS canonical block; browser Viem parses metadata/images; no server metadata fetch",
+  "sourceBindings": {
+    "Dockerfile": "0db060bcddb625d21a5c17faea2eee41ddfc2302b3444864d43a5fb5a1832fc3",
+    "package.json": "62af4071c6ea7d36bdf75244bacbeed217e9309c8aa0c7c5f46a4deece594abc",
+    "package-lock.json": "9808532458e1fd526b558bd4fc112be379f670d7c4fd3845108fe3752d129a3d",
+    "python-candidate/Dockerfile": "e34ae17aca8f2f7fa4ab5767b61a17acf9d989b7b1b7677c0402c680309f2d0b",
+    "python-candidate/src/cybergold_candidate/ens_records.py": "0f5ff0633669c3115549d8afd199800de559c9ca0b9661104d0df058a1105566",
+    "python-candidate/tests/native_whole_worker.py": "072dc4bfd906f9930787bb3a25a3123b676ab4988bb879f791071193378de3c4",
+    "python-candidate/tests/test_ens_records.py": "cd2393465db1a53003c2d27753b648e4d89ed82df8b18dff4980dd1410a60835",
+    "src/contracts/dto.ts": "7eef2b65dad85077f9f388a432227bdcc34f411aaa498f648b7195186a9f7cba",
+    "contracts/http.d.ts": "8427b6e28485d4aa7b7e82e74c2c4c5fa699a14a81bf145bbdee8526e2b32442",
+    "contracts/openapi.json": "df3796be3bfa69677481e7fe75b79450b7fe07096254a66df76fa40e97006b03"
+  },
+  "logs": [
+    "/tmp/cybergold-native-role-backend-final-ci.log",
+    "/tmp/cybergold-native-role-python-comparisons.log",
+    "/tmp/cybergold-nft-avatar-native.log",
+    "/tmp/cybergold-native-role-whole-worker.log",
+    "/tmp/cybergold-native-role-mainnet-whole-worker.log"
+  ],
+  "limits": [
+    "No deployed endpoint or database used",
+    "No B2B process launch, fork reset, wallet signature or submission performed",
+    "Local source will be published once with the final batch"
+  ]
+}

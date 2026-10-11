@@ -1,0 +1,95 @@
+{
+  "scope": "U5 A1 focused configured protocol facts; separate from U1 migration",
+  "baseCommit": "68d6b761b80a3667bcbd11a72d6f8d008c21eeb2",
+  "sourceFiles": [
+    {
+      "path": "src/contracts/dto.ts",
+      "sha256": "deae1c15fd028b8e66f3d4ad5b696da651a6e2c6b5978a5fc17788e2b4ee44c1"
+    },
+    {
+      "path": "scripts/generate-contracts.ts",
+      "sha256": "bb2c344599733cf270438098a111ad63b542b2dc0462e6e2b16cc555558704d8"
+    },
+    {
+      "path": "contracts/openapi.json",
+      "sha256": "2a5c342080e6dea81e1ea0aad9093f412a60550250afb002d1f83e2bd9ba2bcb"
+    },
+    {
+      "path": "contracts/http.d.ts",
+      "sha256": "bfe7d9d4cefb7d0c5bb7861d8d623fa5d9229fb95233f860f56d28513f49ba61"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/app.py",
+      "sha256": "92c791a47dab3a2e524c49aac1769d673e57bbc6fafb714b361da1dfbc541a1d"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/runtime.py",
+      "sha256": "e1af537e95d45324bcdeb42e296cfdfb98720b74dd5a4fb34fad37338f6965d8"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/telemetry.py",
+      "sha256": "90823ca63150b6b687bda41e795c0cc501ed144effcc9564566d5d59c67e5f00"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/protocol_facts.py",
+      "sha256": "9cee09965f60d96815a5489552bd81c536eeff17724bd9945a93e97d958f8a70"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/protocol-facts-abi.json",
+      "sha256": "b3c66b799ebf0f925415abf583987a7c44b66b541234c0a2e22bba819cbd9f8e"
+    },
+    {
+      "path": "python-candidate/tests/test_protocol_facts.py",
+      "sha256": "a61619dddb08f6760d05847932bbda0935975b2f6c5d82d2fe81f90b821fd3d3"
+    },
+    {
+      "path": "python-candidate/tests/native_protocol_facts.py",
+      "sha256": "2801e6a37ade99b0eee74f172adc1158caf31ad1ec053325baa978bf8863725d"
+    },
+    {
+      "path": "python-candidate/tests/node-protocol-facts-reference.ts",
+      "sha256": "0ebf706a06c3542a4147346049e1b3a0571cfc6d827dda300206d22a19f24d76"
+    }
+  ],
+  "qualifiedImage": {
+    "result": "pass",
+    "nativeDefaultRoleCommand": true,
+    "nativeConfiguredPrivateAuthorization": true,
+    "nativeCanonicalWireReadCount": 14,
+    "nativeLosslessAndPartialFacts": true,
+    "nativeCanonicalityOutageAndRecovery": true,
+    "nativeCallerDisconnectSeconds": 0.08,
+    "nativeOperationDeadlineSeconds": 15.03,
+    "shutdownExitCode": 0,
+    "testedImageId": "sha256:5ee1f497dafd8657aa8a5a0221b7d4cfbcaee5aad6c065b7b9444a3720048d02",
+    "installedEndpointsOrDatabaseUsed": false
+  },
+  "retainedApiCompatibility": {
+    "result": "pass",
+    "providerDeadlineSeconds": 10.05,
+    "fallbackNotCached": true,
+    "goldAndFxFresh": true,
+    "shutdownExitCode": 0,
+    "rpcRawRelay": true,
+    "rpcDeadlineSeconds": 15.04,
+    "rpcNoImplicitRetry": true,
+    "rpcRejectedBodiesNotForwarded": true,
+    "safeSixActionForwarding": true,
+    "safeDeadlineSeconds": 15.03,
+    "faucetLocalhostAndPrivateAdapter": true,
+    "faucetDeadlineSeconds": 20.04,
+    "recoveryNativeWeb3SnapshotAndRepeat": true,
+    "nativeProcessMetricsAndRedactedCorrelatedDiagnostics": true,
+    "nativeLegacyFaucetSyntheticScript": true,
+    "deployedEndpointsUsed": false,
+    "databaseUsed": false
+  },
+  "sourceChecks": {
+    "canonicalBackendCi": "passed (217 existing tests, generated contracts, typecheck/build)",
+    "actualViemCalldataAndAbiFunctions": 11,
+    "focusedPythonCases": 7,
+    "optionalRetainedComparisons": "passed; no changes to U1 worker"
+  },
+  "installedAcceptance": "pending H25 after H24",
+  "desiredImagePublished": false
+}

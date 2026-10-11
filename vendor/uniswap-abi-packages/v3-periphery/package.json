@@ -1,0 +1,31 @@
+{
+  "name": "@uniswap/v3-periphery",
+  "description": "\ud83c\udf9a Peripheral smart contracts for interacting with Uniswap V3",
+  "license": "GPL-2.0-or-later",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "1.4.4",
+  "homepage": "https://uniswap.org",
+  "keywords": [
+    "uniswap",
+    "periphery",
+    "v3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Uniswap/uniswap-v3-periphery"
+  },
+  "files": [
+    "contracts/base",
+    "contracts/interfaces",
+    "contracts/libraries",
+    "artifacts/contracts/**/*.json",
+    "!artifacts/contracts/**/*.dbg.json",
+    "!artifacts/contracts/test/**/*",
+    "!artifacts/contracts/base/**/*"
+  ],
+  "engines": {
+    "node": ">=10"
+  }
+}

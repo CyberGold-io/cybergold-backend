@@ -1,0 +1,85 @@
+{
+  "scope": "U5 B1 four existing Helpers basket previews; signing/submission remain frontend-owned",
+  "baseCommit": "dae037d5cf9090c0f059b6962b0f3b78c1927a59",
+  "sourceFiles": [
+    {
+      "path": "src/contracts/dto.ts",
+      "sha256": "9436a749d4df13b2d93b3169d62ed7570d5016d2d95736d0ee20e2f298ff1435"
+    },
+    {
+      "path": "scripts/generate-contracts.ts",
+      "sha256": "a656e1cb93c640db7e788adfc15817047ff8565fa0852577075635b1575373bd"
+    },
+    {
+      "path": "contracts/openapi.json",
+      "sha256": "4b6978715fbab7a432c8e0c778a7cca623d53915ca16901a6bdd5141680bb5d0"
+    },
+    {
+      "path": "contracts/http.d.ts",
+      "sha256": "bddfda8d4cdcd2b4c51b8ca482ec7f7886fde7153888af02b0c2037bc95d30d6"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/app.py",
+      "sha256": "2d3a52a5170341e61b1bcc27d4b03ea9164c1d09c66c2befddb43872b59560c2"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/runtime.py",
+      "sha256": "2a7582f92fccafddbbb37607cc17f3776b83ed859c134f712ba4d52dad87bbbc"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/telemetry.py",
+      "sha256": "4e021216231c5b713df307a074fb92eebfcfe78310ab34bd68b7b6a966f214c3"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/basket_preview.py",
+      "sha256": "0427c4f2609c6a357fe51409b97f0c1d9998ac2f853f14ff0876428d47b20da8"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/basket-preview-abi.json",
+      "sha256": "59903da41ff7f258653fd34742887e927f52e9f0aab2734dc9512abe715ab070"
+    },
+    {
+      "path": "python-candidate/tests/node-basket-preview-reference.ts",
+      "sha256": "83be0c85ede8cc4095c49d83a509d80c8311d66edbe354b6e2a5398d8223f3d9"
+    },
+    {
+      "path": "python-candidate/tests/test_basket_preview.py",
+      "sha256": "0f0a6072d75acefc72feef6bf74e330b1798e2d14b37480a5cd38cb5b834091d"
+    },
+    {
+      "path": "python-candidate/tests/native_basket_preview.py",
+      "sha256": "347c7ec4f6642edffda4012cfc64105e97a987aa078331783e94d2b7b3f53352"
+    },
+    {
+      "path": "python-candidate/tests/check-local.sh",
+      "sha256": "328964089e8448f36103be01f56c1d1b6e62cda62b4146e01f89e47611df8808"
+    }
+  ],
+  "nativeImage": {
+    "result": "pass",
+    "nativeDefaultRoleCommand": true,
+    "nativePrivateRpcAuthorization": true,
+    "actualViemPreviewModes": 4,
+    "oneCanonicalContractCallPerPreview": true,
+    "losslessAmountsAndOrder": true,
+    "invalidAbiInputWithoutRpc": true,
+    "reorgOutageRedactionRecovery": true,
+    "callerDisconnectSeconds": 0.08,
+    "operationDeadlineSeconds": 15.04,
+    "shutdownExitCode": 0,
+    "testedImageId": "sha256:80d4a7d58c52684ddeec9ef56b72d5a7628236428d736f067936dacd63434c97",
+    "installedEndpointsOrDatabaseUsed": false
+  },
+  "sourceChecks": {
+    "canonicalBackendCi": "passed (217 existing tests, generated contracts, typecheck/build)",
+    "focusedPythonCases": 5,
+    "actualViemAbiModes": 4,
+    "retainedOptionalComparisons": "passed; includes the new five preview cases"
+  },
+  "limits": [
+    "No installed API or browser observation in this source receipt",
+    "No wallet submission or installed database used",
+    "No cache, indexer, RPC compatibility-policy or worker cadence change"
+  ],
+  "desiredImagePublished": false
+}

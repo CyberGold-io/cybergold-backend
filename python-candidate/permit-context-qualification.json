@@ -1,0 +1,26 @@
+{
+  "result": "pass",
+  "nativeDefaultRoleCommand": true,
+  "privateRpcAuthorization": true,
+  "canonicalReads": 10,
+  "fullBitmapTraversal": true,
+  "concurrentOwnerIsolation": true,
+  "losslessNonceAndAllowances": true,
+  "canonicalityOutageAndRecovery": true,
+  "operationDeadlineSeconds": {
+    "core": 15.01,
+    "permit2": 15.01
+  },
+  "callerDisconnectSeconds": 0.01,
+  "imageId": "sha256:59f1d5c5e337c22f04e175e72c4a64e4aaca51cba77100e4f46ea6d6cfd1be52",
+  "productEndpointOrDatabaseUsed": false,
+  "walletSignatureOrSubmission": false,
+  "qualification": "Actual Linux API with synthetic authenticated RPC; installed source rollout follows separately",
+  "focusedBackendTests": {
+    "corePermit": 7,
+    "permit2Context": 9
+  },
+  "walletIntent": "App retains configured EIP-712 domain/spender, value/deadline, live wallet chain check, signing and submission",
+  "cache": "No nonce/domain/allowance cache or nonce reservation",
+  "newGateOrRequiredCiJob": false
+}

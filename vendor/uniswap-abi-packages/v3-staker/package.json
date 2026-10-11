@@ -1,0 +1,27 @@
+{
+  "name": "@uniswap/v3-staker",
+  "description": "Canonical liquidity mining contract for Uniswap V3",
+  "license": "GPL-3.0-or-later",
+  "version": "1.0.0",
+  "homepage": "https://uniswap.org",
+  "keywords": [
+    "uniswap",
+    "liquidity mining",
+    "v3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Uniswap/uniswap-v3-staker"
+  },
+  "files": [
+    "contracts",
+    "!contracts/test",
+    "artifacts/contracts/**/*.json",
+    "!artifacts/contracts/**/*.dbg.json",
+    "!artifacts/contracts/test/**/*",
+    "!artifacts/contracts/base/**/*"
+  ],
+  "engines": {
+    "node": ">=10"
+  }
+}

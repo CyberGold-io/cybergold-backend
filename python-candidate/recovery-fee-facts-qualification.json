@@ -1,0 +1,27 @@
+{
+  "result": "pass",
+  "nativeDefaultRoleCommand": true,
+  "privateRpcAuthorization": true,
+  "actualViemFeeComparisons": 9,
+  "canonicalRecoveryRead": true,
+  "orderedAssetsAndAuthoritativeEmpty": true,
+  "losslessFeesAndExistingFallback": true,
+  "canonicalityOutageAndRecovery": true,
+  "operationDeadlineSeconds": {
+    "assets": 15.04,
+    "fees": 15.04
+  },
+  "callerDisconnectSeconds": 0.08,
+  "imageId": "sha256:65a8005c8aa7406c4f01a081ddb399878d495a266b69c86b8e31f2582c272626",
+  "shutdownExitCode": 0,
+  "productEndpointOrDatabaseUsed": false,
+  "walletSignatureOrSubmission": false,
+  "focusedTests": {
+    "recoveryAssets": 7,
+    "transactionFees": 6
+  },
+  "existingCanonicalBackendTests": 217,
+  "completePythonComparisonSuite": "pass",
+  "qualification": "Local source and assembled Linux API; installed rollout remains separate",
+  "newGateOrRequiredCiJob": false
+}

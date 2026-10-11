@@ -1,0 +1,101 @@
+{
+  "scope": "U3 first gold/FX shared reuse slice; later pools/recovery/quotes remain separate",
+  "baseCommit": "73074097c1059697adba3792a47bb0ca617bd0d0",
+  "sourceFiles": [
+    {
+      "path": "python-candidate/pyproject.toml",
+      "sha256": "bb7f24edf07dd4dfbaf2969e9e8c47bf936a260006b5a43f68231ac839c50a14"
+    },
+    {
+      "path": "python-candidate/uv.lock",
+      "sha256": "93c6e46c00a6772530991658e7cce417fe7a8e65ae6692c3e6cd8cc3984fe491"
+    },
+    {
+      "path": "python-candidate/requirements.txt",
+      "sha256": "53b1df5c14e44155738cd68d0eb3a1dd17b5bd56fb824a84ffd161ab3ae9d651"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/shared_market.py",
+      "sha256": "caa12e8e86e1cebfc4dc8a1d27d4e10f3821bb5baedc25ad022fa658b6e19130"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/cache.py",
+      "sha256": "b3908906815244c07c51ead0da277343fc10a8a3ba2dc9516b51251c966c79e0"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/app.py",
+      "sha256": "1b186df492160828e7ba0bc4753c6c2cac54ba4c1f07f62694dc88bda0a5c06b"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/runtime.py",
+      "sha256": "be8e52c44085b99cc9326d24dd99875cf45431554989ae10210fadea8c72c77c"
+    },
+    {
+      "path": "python-candidate/src/cybergold_candidate/telemetry.py",
+      "sha256": "8fe22ab2e6793ca4224c642cecb116e83497ebf643b3e19c84fd6bbe184879e1"
+    },
+    {
+      "path": "python-candidate/tests/test_shared_market.py",
+      "sha256": "8ca47b398d0489e4b76762484c91cf659257a152a32ef0d52a115b25bef8f776"
+    },
+    {
+      "path": "python-candidate/tests/native_shared_market.py",
+      "sha256": "00ab3b89ef331a03f05c4c627341700c432d7ceb355aabecd7e27ccb25364c81"
+    }
+  ],
+  "nativeMeasurement": {
+    "result": "pass",
+    "testedImageId": "sha256:106ce3caa9815a382e103861073d68826611a7bc7c93b44d5d4b461e281fde11",
+    "valkeyImage": "valkey/valkey@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11",
+    "twoApiProcessBaselineSupplierCalls": {
+      "gold": 2,
+      "fx": 2
+    },
+    "twoApiProcessWarmSupplierCalls": {
+      "gold": 1,
+      "fx": 1
+    },
+    "sharedWorkingSetKeys": 4,
+    "valkeyUsedMemoryBytes": 1048320,
+    "twentyCallerOutageSupplierCalls": 1,
+    "outageBatchSeconds": 0.361,
+    "unchangedOriginalTimestamp": true,
+    "staleNotCachedAndNoStore": true,
+    "expiryEvictionAndCacheOutage": true,
+    "nativePressureEvictedKeys": 48,
+    "shutdownExitCode": 0,
+    "deployedEndpointsUsed": false
+  },
+  "focusedBehaviorCases": 6,
+  "retainedLocalCacheCases": 3,
+  "optionalRetainedPythonComparisons": "passed",
+  "canonicalBackendCi": "passed (217 tests, generated contracts, build/typecheck)",
+  "installedAcceptance": "pending H26 after H24/H25",
+  "desiredImagePublished": false,
+  "limitations": [
+    "Simultaneous cold producers in separate processes can each request the supplier; no distributed producer lease added.",
+    "Gold/FX only; no account, recovery, quote or pool-authority changes.",
+    "Current native measurement uses owned synthetic suppliers and disposable Valkey; no deployed endpoint used."
+  ],
+  "retainedNativeApi": {
+    "result": "pass",
+    "providerDeadlineSeconds": 10.02,
+    "fallbackNotCached": true,
+    "goldAndFxFresh": true,
+    "shutdownExitCode": 0,
+    "rpcRawRelay": true,
+    "rpcDeadlineSeconds": 15.05,
+    "rpcNoImplicitRetry": true,
+    "rpcRejectedBodiesNotForwarded": true,
+    "safeSixActionForwarding": true,
+    "safeDeadlineSeconds": 15.03,
+    "faucetLocalhostAndPrivateAdapter": true,
+    "faucetDeadlineSeconds": 20.03,
+    "recoveryNativeWeb3SnapshotAndRepeat": true,
+    "nativeProcessMetricsAndRedactedCorrelatedDiagnostics": true,
+    "nativeLegacyFaucetSyntheticScript": true,
+    "deployedEndpointsUsed": false,
+    "databaseUsed": false
+  },
+  "mergedGenerationProfiles": "Canonical 217 cases and complete Node/Python comparisons passed after merging deployed Sandbox generation support; optional cache remains unset until H26 activation."
+}

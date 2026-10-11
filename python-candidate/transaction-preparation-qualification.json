@@ -1,0 +1,40 @@
+{
+  "result": "pass",
+  "configuredAuthoritySurfaces": 3,
+  "exactRecoveryPayloads": 3,
+  "actualViemApprovalGasCases": 3,
+  "exactSafeExecutionPayloads": 3,
+  "actualViemHelpersOperations": 7,
+  "actualViemHelpersGasCases": 14,
+  "canonicalityOutageRevertAndRecovery": true,
+  "privateRpcAuthorization": true,
+  "operationDeadlineSeconds": {
+    "authority": 15.08,
+    "redemption": 15.08,
+    "approvalGas": 15.07,
+    "safeExecution": 15.08,
+    "helpersExecution": 15.08
+  },
+  "callerDisconnectSeconds": 0.1,
+  "imageId": "sha256:61d37de8365d18f297b97cc1144e233d5ffcbac11572830024f3a3db09daddd6",
+  "shutdownExitCode": 0,
+  "productEndpointOrDatabaseUsed": false,
+  "walletSignatureOrSubmission": false,
+  "testedSourceCommit": "5f08a905dadd0f6390d31b30657e970e66c9e03c",
+  "focusedBackendCases": {
+    "authority": 6,
+    "recoveryRedemption": 6,
+    "permit2ApprovalGas": 6,
+    "safeExecution": 7,
+    "helpersExecution": 6
+  },
+  "canonicalBackendCases": 217,
+  "completePythonComparisonSuite": "pass",
+  "helpersAbiSource": {
+    "repository": "CyberGold-io/cybergold-helpers",
+    "commit": "4de31c5d849837c568b1f713e89a4ebaaee5e827",
+    "file": "generated/abi/HelpersDiamond.json"
+  },
+  "qualification": "Local source and assembled Linux API; installed delivery remains separate",
+  "newGateOrRequiredCiJob": false
+}

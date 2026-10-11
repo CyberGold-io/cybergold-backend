@@ -1,0 +1,7 @@
+{
+  "package": "@uniswap/v3-periphery",
+  "version": "1.4.4",
+  "resolved": "https://registry.npmjs.org/@uniswap/v3-periphery/-/v3-periphery-1.4.4.tgz",
+  "integrity": "sha512-S4+m+wh8HbWSO3DKk4LwUCPZJTpCugIsHrWR86m/OrUyvSqGDTXKFfc2sMuGXCZrD1ZqO3rhQsKgdWg3Hbb2Kw==",
+  "change": "Runtime ABI packaging only: preserve published files, remove Solidity build-tool and source dependency installation. No AMM algorithm or ABI change."
+}

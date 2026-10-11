@@ -1,0 +1,493 @@
+{
+  "core": [
+    {
+      "name": "DiamondCut",
+      "category": "logic",
+      "abi": {
+        "name": "DiamondCut",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "tuple[]",
+            "name": "_diamondCut",
+            "components": [
+              {
+                "type": "address",
+                "name": "facetAddress"
+              },
+              {
+                "type": "uint8",
+                "name": "action"
+              },
+              {
+                "type": "bytes4[]",
+                "name": "functionSelectors"
+              }
+            ]
+          },
+          {
+            "type": "address",
+            "name": "_init"
+          },
+          {
+            "type": "bytes",
+            "name": "_calldata"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IssuanceFeePpmUpdated",
+      "category": "parameter",
+      "abi": {
+        "name": "IssuanceFeePpmUpdated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "uint256",
+            "name": "previousIssuanceFeePpm"
+          },
+          {
+            "type": "uint256",
+            "name": "newIssuanceFeePpm"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionFeePpmUpdated",
+      "category": "parameter",
+      "abi": {
+        "name": "RedemptionFeePpmUpdated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "uint256",
+            "name": "previousRedemptionFeePpm"
+          },
+          {
+            "type": "uint256",
+            "name": "newRedemptionFeePpm"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryUpdated",
+      "category": "parameter",
+      "abi": {
+        "name": "TreasuryUpdated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "previousTreasury"
+          },
+          {
+            "type": "address",
+            "name": "newTreasury"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BasketConfigured",
+      "category": "parameter",
+      "abi": {
+        "name": "BasketConfigured",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address[]",
+            "name": "assets"
+          },
+          {
+            "type": "uint256[]",
+            "name": "targetsPpm"
+          },
+          {
+            "type": "uint256[]",
+            "name": "goldRefGramsFp18"
+          },
+          {
+            "type": "uint256",
+            "name": "cygldRefGramsFp18"
+          },
+          {
+            "type": "uint256[]",
+            "name": "cygldPerUnitFp18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Issued",
+      "category": "activity",
+      "abi": {
+        "name": "Issued",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "caller",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "reserve",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "treasury",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "grossCygldOut"
+          },
+          {
+            "type": "uint256",
+            "name": "netCygldOut"
+          },
+          {
+            "type": "uint256",
+            "name": "protocolFeeCygld"
+          },
+          {
+            "type": "uint256[]",
+            "name": "amountsIn"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Redeemed",
+      "category": "activity",
+      "abi": {
+        "name": "Redeemed",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "caller",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "reserve",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "treasury",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "grossCygldIn"
+          },
+          {
+            "type": "uint256",
+            "name": "netCygldIn"
+          },
+          {
+            "type": "uint256",
+            "name": "protocolFeeCygld"
+          },
+          {
+            "type": "uint8[]",
+            "name": "kinds"
+          },
+          {
+            "type": "address[]",
+            "name": "tokens"
+          },
+          {
+            "type": "uint256[]",
+            "name": "ids"
+          },
+          {
+            "type": "uint256[]",
+            "name": "amounts"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Transfer",
+      "category": "activity",
+      "abi": {
+        "name": "Transfer",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "from",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "to",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "value"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReserveLifecycleChanged",
+      "category": "lifecycle",
+      "abi": {
+        "name": "ReserveLifecycleChanged",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "asset",
+            "indexed": true
+          },
+          {
+            "type": "uint8",
+            "name": "previousLifecycle"
+          },
+          {
+            "type": "uint8",
+            "name": "newLifecycle"
+          },
+          {
+            "type": "uint256",
+            "name": "exitEntitlementRaw"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecoveryActivated",
+      "category": "recovery",
+      "abi": {
+        "name": "RecoveryActivated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "asset",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "addedCoreAttachedShares"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecoveryRehabilitated",
+      "category": "recovery",
+      "abi": {
+        "name": "RecoveryRehabilitated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "asset",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "totalPoolRaw"
+          },
+          {
+            "type": "uint256",
+            "name": "coreRaw"
+          },
+          {
+            "type": "uint256",
+            "name": "externalRaw"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecoverySharesRedeemed",
+      "category": "recovery",
+      "abi": {
+        "name": "RecoverySharesRedeemed",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "asset",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "account",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "recipient",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "shares"
+          },
+          {
+            "type": "uint256",
+            "name": "liabilityReleasedRaw"
+          },
+          {
+            "type": "uint256",
+            "name": "rawAmountOut"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferSingle",
+      "category": "share",
+      "abi": {
+        "name": "TransferSingle",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "operator",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "from",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "to",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "id"
+          },
+          {
+            "type": "uint256",
+            "name": "value"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferBatch",
+      "category": "share",
+      "abi": {
+        "name": "TransferBatch",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "operator",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "from",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "to",
+            "indexed": true
+          },
+          {
+            "type": "uint256[]",
+            "name": "ids"
+          },
+          {
+            "type": "uint256[]",
+            "name": "values"
+          }
+        ]
+      }
+    }
+  ],
+  "governance": [
+    {
+      "name": "RecoveryFundInitialized",
+      "abi": {
+        "name": "RecoveryFundInitialized",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "trustedCore",
+            "indexed": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetRecoveryFundActivated",
+      "abi": {
+        "name": "AssetRecoveryFundActivated",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "impairedAsset",
+            "indexed": true
+          },
+          {
+            "type": "uint64",
+            "name": "generation",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "coverageShares"
+          },
+          {
+            "type": "uint256",
+            "name": "cygldCommitment"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecoverySharesPurchased",
+      "abi": {
+        "name": "RecoverySharesPurchased",
+        "type": "event",
+        "inputs": [
+          {
+            "type": "address",
+            "name": "impairedAsset",
+            "indexed": true
+          },
+          {
+            "type": "uint64",
+            "name": "generation",
+            "indexed": true
+          },
+          {
+            "type": "address",
+            "name": "seller",
+            "indexed": true
+          },
+          {
+            "type": "uint256",
+            "name": "shares"
+          },
+          {
+            "type": "uint256",
+            "name": "cygldAmount"
+          }
+        ]
+      }
+    }
+  ]
+}

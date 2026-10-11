@@ -1,0 +1,1251 @@
+{
+  "sourceRepository": "CyberGold-io/cybergold-app",
+  "sourceCommit": "b3f4d790801882b14509a2ec6a2ca770b6c93b53",
+  "capture": "Production Next HTTP compared with built backend worker; disposable fixture token; no database, external RPC or B2B access",
+  "fixtures": [
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": null,
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "short-fixture",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker is not configured\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Completed on-chain indexer reconciliation is unavailable\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": ""
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"On-chain indexer worker configuration is incomplete\",\"stage\":\"configuration\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "null"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request shape is invalid\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "[]"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request shape is invalid\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{}"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request shape is invalid\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "text/plain",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{}"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request must use application/json\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request is too large\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{\"kind\":\"wrong\",\"formatVersion\":1}"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request shape is invalid\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/reconcile?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{\"kind\":\"cybergold-b2b-reconcile-request\",\"formatVersion\":2,\"mode\":\"require-worker-run\"}"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"On-chain indexer worker failed\",\"diagnostic\":\"Internal reconcile request identity is invalid\",\"stage\":\"request-parsing\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "GET",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Sandbox fork generation status failed\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer wrong-fixture"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Unauthorized\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": ""
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "null"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "[]"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "text/plain",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{\"kind\":\"wrong\",\"formatVersion\":1}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    },
+    {
+      "configuredToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "path": "/api/internal/onchain-indexer/fork-generation?diagnostic=1",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": "{\"kind\":\"cybergold-b2b-reconcile-request\",\"formatVersion\":2,\"mode\":\"require-worker-run\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":\"Invalid Sandbox fork generation request\"}"
+      }
+    }
+  ]
+}

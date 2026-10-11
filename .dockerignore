@@ -1,0 +1,9 @@
+.git
+node_modules
+dist
+out
+.env
+.env.*
+!tests/fixture.env
+python-candidate/.venv
+**/__pycache__
