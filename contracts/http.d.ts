@@ -99,6 +99,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/trade/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description One CYGLD trading intent compares complete Core and supported market candidates after their existing fees. Backend owns basket targets and default adapter selection; one pinned context, progressive qualified winners, tagged retained execution and ordinary independent provider errors. Wallet signing, actual signed-call simulation and submission remain browser-owned. */
+        post: operations["post__api_quotes_trade_stream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quotes/trade/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Organic Core and market models with a Backend-ranked indicative estimate. Warm cached packets require no RPC; cold acquisition reuses existing lightweight provider baselines and shared context. Missing model state does not prevent exact trade search; neither models nor estimates are executable quotes. */
+        post: operations["post__api_quotes_trade_model"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transaction/revert": {
         parameters: {
             query?: never;
@@ -1071,6 +1105,1628 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TradeQuoteRequest: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            counterToken: string;
+            native: boolean;
+            amount: string;
+            slippageBps?: number;
+        } & {
+            recipient: string;
+            deadline: string;
+            retainedPlan?: {
+                /** @constant */
+                strategy: "core";
+                request: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    token: string;
+                    quoteToken: string;
+                    native: boolean;
+                    amount: string;
+                    adapter?: string;
+                    deadline: string;
+                    orderedAssets: string[];
+                    targets: {
+                        inputAsset: string;
+                        outputAsset: string;
+                        amount: string;
+                    }[];
+                    /**
+                     * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                     * @default 100
+                     */
+                    slippageBps: number;
+                    retainedPlan?: {
+                        slippageBps?: number;
+                        expectedInputAmount?: string;
+                        executionAmount: string;
+                        maximumInputAmount: string;
+                        minimumAmountOut: string;
+                        quotes: (({
+                            adapter: string;
+                            amountIn: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: {
+                                            id: string;
+                                            /** @enum {string} */
+                                            protocol: "v2" | "v3" | "v4";
+                                            token0: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            token1: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            address?: string;
+                                            feePips: number;
+                                            tickSpacing?: number;
+                                            poolManager?: string;
+                                            hooks?: string;
+                                        };
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            outputAsset: string;
+                        }) | ({
+                            adapter: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: {
+                                            id: string;
+                                            /** @enum {string} */
+                                            protocol: "v2" | "v3" | "v4";
+                                            token0: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            token1: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            address?: string;
+                                            feePips: number;
+                                            tickSpacing?: number;
+                                            poolManager?: string;
+                                            hooks?: string;
+                                        };
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            inputAsset: string;
+                            inputAmount: string;
+                        }))[];
+                        expectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            minimumAmount: string;
+                        }[];
+                    };
+                };
+                quote: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    preview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    initialPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | null;
+                    basketPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    displayAmount: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    slippageBps?: number;
+                    /** @description Expected input before execution cushions, including direct basket input. */
+                    expectedInputAmount?: string;
+                    requestedGrossCygldOut?: string;
+                    requestedNetCygldOut?: string;
+                    remainingGrossCapacity?: string;
+                    remainingNetCapacity?: string;
+                    expectedOutputAmount?: string;
+                    expectedCoreOutputs?: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                    metrics: {
+                        rpcReads: number;
+                        rpcReadsRequested: number;
+                        rpcReadsCoalesced: number;
+                        rpcReadsReused: number;
+                        candidateCalls: number;
+                        iterations: number;
+                        totalMs: number;
+                    };
+                };
+            } | {
+                /** @constant */
+                strategy: "market";
+                /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
+                request: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    counterToken: string;
+                    amount: string;
+                    adapter?: string;
+                    recipient: string;
+                    deadline: string;
+                    slippageBps?: number;
+                    retainedPlan?: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                };
+                quote: {
+                    /** @constant */
+                    operation: "market";
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    tokenIn: string;
+                    tokenOut: string;
+                    amountIn: string;
+                    amountOut: string;
+                    totalInput: string;
+                    netOutput: string;
+                    grossOutput: string;
+                    routedAmountIn: string;
+                    inputMaximum: string;
+                    outputMinimum: string;
+                    refundDust: string;
+                    outputRefundEstimate?: string;
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    adapterData: string;
+                    plan: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    feeBeneficiaryDisplay?: {
+                        address: string;
+                        observedAt: string;
+                    };
+                    /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                    priceImpactPpm?: string;
+                    /** @enum {string} */
+                    qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                    executionSimulationRequired?: boolean;
+                    quoteVerificationUnavailable?: string;
+                    searchCoverage?: {
+                        /** @constant */
+                        scope: "selected-inventory";
+                        maxHops: number;
+                        splitPercentages: number[];
+                        inventoryPools: number;
+                        catalogMonth: null | string;
+                    };
+                    metrics: {
+                        candidateCalls: number;
+                        totalMs: number;
+                    };
+                };
+            };
+        };
+        TradeQuote: ({
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "core";
+            providerRequest: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                token: string;
+                quoteToken: string;
+                native: boolean;
+                amount: string;
+                adapter?: string;
+                deadline: string;
+                orderedAssets: string[];
+                targets: {
+                    inputAsset: string;
+                    outputAsset: string;
+                    amount: string;
+                }[];
+                /**
+                 * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                 * @default 100
+                 */
+                slippageBps: number;
+                retainedPlan?: {
+                    slippageBps?: number;
+                    expectedInputAmount?: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    minimumAmountOut: string;
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    expectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                };
+            };
+            providerQuote: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                quotes: (({
+                    adapter: string;
+                    amountIn: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    token0: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    token1: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    address?: string;
+                                    feePips: number;
+                                    tickSpacing?: number;
+                                    poolManager?: string;
+                                    hooks?: string;
+                                };
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    outputAsset: string;
+                }) | ({
+                    adapter: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    token0: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    token1: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    address?: string;
+                                    feePips: number;
+                                    tickSpacing?: number;
+                                    poolManager?: string;
+                                    hooks?: string;
+                                };
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    inputAsset: string;
+                    inputAmount: string;
+                }))[];
+                preview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                initialPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | null;
+                basketPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                displayAmount: string;
+                executionAmount: string;
+                maximumInputAmount: string;
+                slippageBps?: number;
+                /** @description Expected input before execution cushions, including direct basket input. */
+                expectedInputAmount?: string;
+                requestedGrossCygldOut?: string;
+                requestedNetCygldOut?: string;
+                remainingGrossCapacity?: string;
+                remainingNetCapacity?: string;
+                expectedOutputAmount?: string;
+                expectedCoreOutputs?: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    minimumAmount: string;
+                }[];
+                metrics: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                };
+            };
+        }) | ({
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "market";
+            /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
+            providerRequest: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                counterToken: string;
+                amount: string;
+                adapter?: string;
+                recipient: string;
+                deadline: string;
+                slippageBps?: number;
+                retainedPlan?: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    token0: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    token1: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    address?: string;
+                                    feePips: number;
+                                    tickSpacing?: number;
+                                    poolManager?: string;
+                                    hooks?: string;
+                                };
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+            };
+            providerQuote: {
+                /** @constant */
+                operation: "market";
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                amountIn: string;
+                amountOut: string;
+                totalInput: string;
+                netOutput: string;
+                grossOutput: string;
+                routedAmountIn: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                refundDust: string;
+                outputRefundEstimate?: string;
+                fee: {
+                    asset: string;
+                    ratePpm: number;
+                    amount: string;
+                    /** @constant */
+                    basis: "quoted";
+                    notional: string;
+                };
+                params: {
+                    /** @enum {number} */
+                    side: 0 | 1;
+                    counterToken: string;
+                    amount: string;
+                    bound: string;
+                    routedInput: string;
+                    feeCygld: string;
+                    recipient: string;
+                    deadline: string;
+                    adapter: string;
+                    data: string;
+                };
+                adapterData: string;
+                plan: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    token0: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    token1: {
+                                        address: string;
+                                        decimals: number;
+                                        chainId: number;
+                                        decimalsKnown?: boolean;
+                                    };
+                                    address?: string;
+                                    feePips: number;
+                                    tickSpacing?: number;
+                                    poolManager?: string;
+                                    hooks?: string;
+                                };
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                feeBeneficiaryDisplay?: {
+                    address: string;
+                    observedAt: string;
+                };
+                /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                priceImpactPpm?: string;
+                /** @enum {string} */
+                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                executionSimulationRequired?: boolean;
+                quoteVerificationUnavailable?: string;
+                searchCoverage?: {
+                    /** @constant */
+                    scope: "selected-inventory";
+                    maxHops: number;
+                    splitPercentages: number[];
+                    inventoryPools: number;
+                    catalogMonth: null | string;
+                };
+                metrics: {
+                    candidateCalls: number;
+                    totalMs: number;
+                };
+            };
+        });
+        TradeEvaluation: {
+            /** @enum {string} */
+            core: "complete" | "running" | "unavailable" | "unsupported";
+            /** @enum {string} */
+            market: "complete" | "running" | "unavailable" | "unsupported";
+        };
+        TradeQuoteEvent: {
+            /** @constant */
+            type: "model";
+            value: {
+                /** @constant */
+                namespace: "trade";
+                /** @description One user trade; Backend chooses a complete Core or market execution. */
+                intent: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    counterToken: string;
+                    native: boolean;
+                    amount: string;
+                    slippageBps?: number;
+                };
+                models: ({
+                    /** @constant */
+                    strategy: "core";
+                    /** @description Display-only source data. No transaction tuples or execution readiness. */
+                    value: {
+                        revision: number;
+                        intent: components["schemas"]["Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">"];
+                        routes: {
+                            tokens: string[];
+                            fees: number[];
+                            context: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: {
+                                            id: string;
+                                            /** @enum {string} */
+                                            protocol: "v2" | "v3" | "v4";
+                                            token0: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            token1: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            address?: string;
+                                            feePips: number;
+                                            tickSpacing?: number;
+                                            poolManager?: string;
+                                            hooks?: string;
+                                        };
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                            protocols?: ("v2" | "v3" | "v4")[];
+                            poolIds?: string[];
+                            points: {
+                                input: string;
+                                output: string;
+                                context?: {
+                                    chainId: number;
+                                    blockNumber: string;
+                                    blockHash: string;
+                                    observedAt: string;
+                                };
+                                recordedAt?: number;
+                            }[];
+                            exchangeRate?: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                            exchangeContext?: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            feeRetention: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                            localImpact?: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                        }[];
+                        whole: {
+                            input: string;
+                            display: string;
+                            context: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            recordedAt: number;
+                        }[];
+                        protocol: {
+                            context: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            state: {
+                                assets: string[];
+                                weights: string[];
+                                conversions: string[];
+                                issueFee: string;
+                                helperFee: string;
+                                redeemFee: string;
+                                supply: string;
+                                maxSupply: string;
+                                effectiveCap: string;
+                                available: string[];
+                                recoveryShares: string[];
+                                recoveryValues: string[];
+                                descriptors: {
+                                    kind: number;
+                                    token: string;
+                                    id: string;
+                                }[];
+                            };
+                        } | null;
+                    };
+                } | {
+                    /** @constant */
+                    strategy: "market";
+                    value: {
+                        /** @constant */
+                        namespace: "market";
+                        family: string;
+                        context?: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        intent: {
+                            /** @enum {string} */
+                            side: "buy" | "sell";
+                            /** @enum {string} */
+                            mode: "exact-in" | "exact-out";
+                            counterToken: string;
+                            adapter: string;
+                        };
+                        cygld: string;
+                        feeRatePpm: number;
+                        routes: {
+                            route: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: {
+                                            id: string;
+                                            /** @enum {string} */
+                                            protocol: "v2" | "v3" | "v4";
+                                            token0: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            token1: {
+                                                address: string;
+                                                decimals: number;
+                                                chainId: number;
+                                                decimalsKnown?: boolean;
+                                            };
+                                            address?: string;
+                                            feePips: number;
+                                            tickSpacing?: number;
+                                            poolManager?: string;
+                                            hooks?: string;
+                                        };
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                            amountIn: string;
+                            amountOut: string;
+                            points: {
+                                amountIn: string;
+                                amountOut: string;
+                            }[];
+                            exchangeRate?: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                            feeRetention?: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                            localImpact?: {
+                                numerator: string;
+                                denominator: string;
+                            };
+                        }[];
+                    };
+                })[];
+                estimate?: {
+                    /** @enum {string} */
+                    strategy: "core" | "market";
+                    amount: string;
+                };
+            };
+        } | {
+            /** @constant */
+            type: "estimate";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            amount: string;
+        } | {
+            /** @enum {string} */
+            type: "complete" | "qualified";
+            value: components["schemas"]["TradeQuote"];
+        } | {
+            /** @constant */
+            type: "progress";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            value: {
+                stage?: string;
+                completed?: number;
+                total?: number;
+                completedCandidates?: number;
+                totalCandidates?: number;
+            };
+        } | {
+            /** @constant */
+            type: "provider-error";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            error: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        } | {
+            /** @constant */
+            type: "invalidated";
+            /** @enum {string} */
+            strategy: "core" | "market";
+        } | {
+            /** @constant */
+            type: "error";
+            error: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        };
+        "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
+            /** @enum {string} */
+            mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+            token: string;
+            amount: string;
+            targets: {
+                inputAsset: string;
+                outputAsset: string;
+                amount: string;
+            }[];
+            native: boolean;
+            adapter?: string;
+            /**
+             * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+             * @default 100
+             */
+            slippageBps: number;
+            quoteToken: string;
+            orderedAssets: string[];
+        };
         /** @description App deployment configuration; routing infrastructure stays server-owned. */
         ProtocolConfiguredToken: ({
             id: string;
@@ -3145,26 +4801,6 @@ export interface components {
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
             };
         };
-        "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
-            /** @enum {string} */
-            mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
-            token: string;
-            amount: string;
-            targets: {
-                inputAsset: string;
-                outputAsset: string;
-                amount: string;
-            }[];
-            native: boolean;
-            adapter?: string;
-            /**
-             * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
-             * @default 100
-             */
-            slippageBps: number;
-            quoteToken: string;
-            orderedAssets: string[];
-        };
         QuoteIntentEvent: {
             /** @constant */
             type: "model";
@@ -3586,6 +5222,8 @@ export interface components {
                 blockHash: string;
                 observedAt: string;
             };
+            /** @constant */
+            reason?: "snapshot-changed";
         } | {
             /** @constant */
             type: "complete";
@@ -4234,6 +5872,253 @@ export interface components {
                 forkBlockHash: string;
             };
         });
+        /** @description One user trade; Backend chooses a complete Core or market execution. */
+        TradeModelRequest: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            counterToken: string;
+            native: boolean;
+            amount: string;
+            slippageBps?: number;
+        };
+        TradeQuoteModelPacket: {
+            /** @constant */
+            namespace: "trade";
+            /** @description One user trade; Backend chooses a complete Core or market execution. */
+            intent: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                counterToken: string;
+                native: boolean;
+                amount: string;
+                slippageBps?: number;
+            };
+            models: ({
+                /** @constant */
+                strategy: "core";
+                /** @description Display-only source data. No transaction tuples or execution readiness. */
+                value: {
+                    revision: number;
+                    intent: components["schemas"]["Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">"];
+                    routes: {
+                        tokens: string[];
+                        fees: number[];
+                        context: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        protocols?: ("v2" | "v3" | "v4")[];
+                        poolIds?: string[];
+                        points: {
+                            input: string;
+                            output: string;
+                            context?: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            recordedAt?: number;
+                        }[];
+                        exchangeRate?: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                        exchangeContext?: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        feeRetention: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                        localImpact?: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                    }[];
+                    whole: {
+                        input: string;
+                        display: string;
+                        context: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        recordedAt: number;
+                    }[];
+                    protocol: {
+                        context: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        state: {
+                            assets: string[];
+                            weights: string[];
+                            conversions: string[];
+                            issueFee: string;
+                            helperFee: string;
+                            redeemFee: string;
+                            supply: string;
+                            maxSupply: string;
+                            effectiveCap: string;
+                            available: string[];
+                            recoveryShares: string[];
+                            recoveryValues: string[];
+                            descriptors: {
+                                kind: number;
+                                token: string;
+                                id: string;
+                            }[];
+                        };
+                    } | null;
+                };
+            } | {
+                /** @constant */
+                strategy: "market";
+                value: {
+                    /** @constant */
+                    namespace: "market";
+                    family: string;
+                    context?: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    intent: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        counterToken: string;
+                        adapter: string;
+                    };
+                    cygld: string;
+                    feeRatePpm: number;
+                    routes: {
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: {
+                                        id: string;
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        token0: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        token1: {
+                                            address: string;
+                                            decimals: number;
+                                            chainId: number;
+                                            decimalsKnown?: boolean;
+                                        };
+                                        address?: string;
+                                        feePips: number;
+                                        tickSpacing?: number;
+                                        poolManager?: string;
+                                        hooks?: string;
+                                    };
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        amountIn: string;
+                        amountOut: string;
+                        points: {
+                            amountIn: string;
+                            amountOut: string;
+                        }[];
+                        exchangeRate?: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                        feeRetention?: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                        localImpact?: {
+                            numerator: string;
+                            denominator: string;
+                        };
+                    }[];
+                };
+            })[];
+            estimate?: {
+                /** @enum {string} */
+                strategy: "core" | "market";
+                amount: string;
+            };
+        };
         ProtocolConfiguration: {
             chainId: number;
             contracts: {
@@ -6679,6 +8564,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketQuoteModelPacket"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_quotes_trade_stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TradeQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Cached models, estimates and tagged provider progress; qualified best incumbents, then complete or error. Integers are decimal strings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["TradeQuoteEvent"];
+                };
+            };
+            /** @description Existing response envelope */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_quotes_trade_model: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TradeModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradeQuoteModelPacket"];
                 };
             };
             /** @description Remote API entry requires its environment's backend bearer */

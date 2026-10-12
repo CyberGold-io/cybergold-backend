@@ -19,6 +19,7 @@ PATHS={
     '/api/quotes/token-preview',
     '/api/quotes/uniswap',
     '/api/quotes/routes', '/api/quotes/routes/stream',
+    '/api/quotes/trade/stream', '/api/quotes/trade/model',
     '/api/transaction/fees',
     '/api/account/transaction-nonce',
     '/api/transaction/receipt',

@@ -13,13 +13,16 @@ from web3 import Web3
 
 from .recovery_rpc import RecoveryRpc, abi_value
 from .quote_errors import public_quote_error, RpcTimeout
+from .shared_reads import SharedReads, discard_pool_observation
 
 ABI = json.loads(Path(__file__).with_name('protocol-facts-abi.json').read_text())
 
 
 class ProtocolFactsRpc(RecoveryRpc):
-    def __init__(self, settings, w3=None, abi=ABI):
+    def __init__(self, settings, w3=None, abi=ABI, *, pool_reads=None):
         super().__init__(settings, w3)
+        self.pool_reads = pool_reads if pool_reads is not None else SharedReads()
+        self.owns_pool_reads = pool_reads is None
         # Existing Ops profiles already carry this optional product address.
         # Invalid/unavailable Helpers fail only their ordinary read; no new
         # startup prerequisite is added to the retained settings contract.
@@ -38,27 +41,44 @@ class ProtocolFactsRpc(RecoveryRpc):
     async def read(self, group, address, name, block):
         function = next(entry for entry in self.abi[group] if entry['name'] == name)
         data = self.contracts[group].encode_abi(name, args=[])
-        response = await self.w3.provider.make_request('eth_call', [
-            {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
+        key = (self.chain_id, block['hash'].lower(), address.lower(), data.lower())
+        async def produce(_keys):
+            return [await self.w3.provider.make_request('eth_call', [
+                {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])]
+        # Borrow the same getter identity as routes and pool observations.
+        # Sandbox administrative writes can change values under one header,
+        # so only overlapping Sandbox callers share an unfinished read.
+        rows, _ = await self.pool_reads.many([key], produce, retain=self.chain_id == 1)
+        response = rows[0]
         if 'error' in response:
             raise ValueError('Contract read failed')
         outputs = function['outputs']
-        decoded = self.w3.codec.decode([collapse_if_tuple(output) for output in outputs],
-                                      bytes.fromhex(response['result'][2:]))
-        return abi_value(decoded[0], outputs[0])
+        try:
+            decoded = self.w3.codec.decode([collapse_if_tuple(output) for output in outputs],
+                                          bytes.fromhex(response['result'][2:]))
+            return abi_value(decoded[0], outputs[0])
+        except Exception:
+            discard_pool_observation(self, (address, data), block)
+            raise
+
+    async def close(self):
+        if self.owns_pool_reads:
+            await self.pool_reads.close()
+        await super().close()
 
 
 class ProtocolFacts:
-    def __init__(self, settings, rpc=None, now=None, on_observation=None, history=None):
+    def __init__(self, settings, rpc=None, now=None, on_observation=None, history=None, *, pool_reads=None):
         self.settings, self.rpc = settings, rpc
         self.on_observation = on_observation
         self.history = history
+        self.pool_reads = pool_reads
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
 
     async def get(self):
         epoch = self.history.epoch if self.history else None
         if self.rpc is None:
-            self.rpc = ProtocolFactsRpc(self.settings)
+            self.rpc = ProtocolFactsRpc(self.settings, pool_reads=self.pool_reads)
         # Existing API RPC deadline/no-retry policy bounds the complete operation.
         async with asyncio.timeout(15):
             block = await self.rpc.block()

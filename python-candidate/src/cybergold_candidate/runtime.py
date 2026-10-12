@@ -53,6 +53,7 @@ from .quote_history import QuoteHistory
 from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import MarketQuotes, DailyRecipientCache
+from .trade_quote import TradeQuotes
 from .shared_reads import SharedReads
 
 
@@ -115,6 +116,9 @@ def create_configured_app(settings=None, database=None, client=None):
     market_quotes = MarketQuotes(settings, uniswap_registry, recipient_cache=market_recipient,
                                 request_resolver=configuration.resolve_request)
     routes.multi_protocol = market_quotes
+    core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
+        correction=delayed_local_step, retain_plans=True)
+    trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
 
     async def close_runtime():
         await pool_reads.close()
@@ -175,15 +179,15 @@ def create_configured_app(settings=None, database=None, client=None):
                           'url':settings.FORK_FAUCET_SERVICE_URL,'token':settings.FORK_FAUCET_SERVICE_TOKEN,
                           'script_path':settings.FORK_FAUCET_SCRIPT_PATH,'faucet_home':settings.FORK_FAUCET_HOME,
                           'foundry_bin':settings.FOUNDRY_BIN_DIR},
-                      recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history),
+                      recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history, pool_reads=pool_reads),
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
                       token_preview=TokenPreview(settings),
                       uniswap_quote=UniswapQuote(settings),
                       route_search=routes,
-                      quote_intent=IntentSharing(QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
-                          correction=delayed_local_step, retain_plans=True),
+                      quote_intent=IntentSharing(core_quotes,
                           rpc_factory=route_rpc, request_resolver=configuration.resolve_request),
+                      trade_quotes=trade_quotes,
                       governance_core_facts=GovernanceCoreFacts(settings),
                       wallet_balances=WalletBalances(settings),
                       token_balance=TokenBalance(settings),
