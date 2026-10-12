@@ -1,0 +1,34 @@
+[
+  {
+    "input": "coreDiamond.json",
+    "output": "src/contracts/generated/coreDiamond.ts",
+    "prefix": "CORE_DIAMOND",
+    "provenance": "Rendering fields deterministically reconstructed from unchanged generated module; not original compiler evidence",
+    "originalModuleSha256": "ccbe5b3dd333a2e048c8215c353725342d3509f687c36e3c614523b654b4820c",
+    "banner": "// Generated from the compiled release facets. Do not edit by hand.\n"
+  },
+  {
+    "input": "governanceDiamond.json",
+    "output": "src/contracts/generated/governanceDiamond.ts",
+    "prefix": "GOVERNANCE_DIAMOND",
+    "provenance": "Rendering fields deterministically reconstructed from unchanged generated module; not original compiler evidence",
+    "originalModuleSha256": "aad5cf8e2fd7f7df3034681ec5b304be7ba42046ddf6b6f773296dde74cab818",
+    "banner": "// Generated from the compiled release facets. Do not edit by hand.\n"
+  },
+  {
+    "input": "helpersDiamond.json",
+    "output": "src/contracts/generated/helpersDiamond.ts",
+    "prefix": "HELPERS_DIAMOND",
+    "provenance": "Rendering fields deterministically reconstructed from unchanged generated module; not original compiler evidence",
+    "originalModuleSha256": "df3864b63486123469f557beb8467d920a4b2eb7e46d75bf4920099bc2be1806",
+    "banner": "// Generated from the compiled release facets and HelpersMarket extension. Do not edit by hand.\n"
+  },
+  {
+    "input": "stakingDiamond.json",
+    "output": "src/contracts/generated/stakingDiamond.ts",
+    "prefix": "STAKING_DIAMOND",
+    "provenance": "Rendering fields deterministically reconstructed from unchanged generated module; not original compiler evidence",
+    "originalModuleSha256": "323093beee9af56507725b635fbf493b0f750452ec02056e24b178e45b8173b1",
+    "banner": "// Generated from the compiled release facets. Do not edit by hand.\n"
+  }
+]

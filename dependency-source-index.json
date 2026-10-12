@@ -1,0 +1,184 @@
+{
+  "schema": "cybergold-dependency-source-offer-v1",
+  "repository": "cybergold-backend",
+  "projectLicense": "AGPL-3.0-only",
+  "sourceGuideUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/THIRD_PARTY_SOURCE.md",
+  "sourceIndexUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/dependency-source-index.json",
+  "scope": "Finite selected preferred library source and build-control supplements. Preserve upstream grants and notices. Existing project lockfiles remain authoritative for installed versions. No bit-identical package/wheel/container or universal transitive-source audit asserted.",
+  "sources": [
+    {
+      "packages": [
+        {
+          "package": "@uniswap/universal-router-sdk",
+          "version": "5.15.0",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        }
+      ],
+      "asset": "universal-router-sdk-5.15.0-source.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/universal-router-sdk-5.15.0-source.tar.gz",
+      "sha256": "5ca7eac36077c8e725eef67465f4ee20a1edf687d428b28e18a2906288050cbc",
+      "bytes": 1311185,
+      "content": "complete unchanged public producer source archive",
+      "upstreamLicenseTreatment": "MIT; all producer workspace notices preserved",
+      "producer": {
+        "repository": "https://github.com/Uniswap/sdks",
+        "commit": "17d70b1b1068fc1b5ce79a89fb5901e562a22e79"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "psycopg-binary",
+          "version": "3.3.6",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        }
+      ],
+      "asset": "psycopg-3.3.6-tag-source.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/psycopg-3.3.6-tag-source.tar.gz",
+      "sha256": "bfa3560402b8f8ac2bf9408c6354b5c8c951d64871629a14526f942361560836",
+      "bytes": 773723,
+      "content": "complete unchanged public producer source archive",
+      "upstreamLicenseTreatment": "LGPL-3.0-only",
+      "producer": {
+        "repository": "https://github.com/psycopg/psycopg",
+        "tag": "3.3.6"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "libpq",
+          "version": "18.6",
+          "retainedSourceTreesUsingVersion": []
+        }
+      ],
+      "asset": "postgresql-libpq-18.6.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/postgresql-libpq-18.6.tar.gz",
+      "sha256": "ff9b1187e3ab120282b9f3e09a5efba2425838b3a843150c5cb2f019f47ac400",
+      "bytes": 29996378,
+      "content": "complete unchanged public producer source archive",
+      "upstreamLicenseTreatment": "PostgreSQL License",
+      "producer": {
+        "sourceArchive": "https://github.com/postgres/postgres/archive/REL_18_6.tar.gz"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "OpenSSL",
+          "version": "3.5.8",
+          "retainedSourceTreesUsingVersion": []
+        }
+      ],
+      "asset": "openssl-3.5.8.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/openssl-3.5.8.tar.gz",
+      "sha256": "59f86483992995df5a213df38d93f31eeafe3b34599309b3e088ba67ca0aad9c",
+      "bytes": 53396153,
+      "content": "complete unchanged public producer source archive",
+      "upstreamLicenseTreatment": "Apache-2.0",
+      "producer": {
+        "sourceArchive": "https://github.com/openssl/openssl/archive/openssl-3.5.8.tar.gz"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "OpenLDAP",
+          "version": "2.6.14",
+          "retainedSourceTreesUsingVersion": []
+        }
+      ],
+      "asset": "openldap-2.6.14.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/openldap-2.6.14.tar.gz",
+      "sha256": "806dcd21d366428187fba3278da773d5930f774852c9e92517f950d585f19107",
+      "bytes": 6524817,
+      "content": "complete unchanged public producer source archive",
+      "upstreamLicenseTreatment": "OpenLDAP Public License; producer notices preserved",
+      "producer": {
+        "sourceArchive": "https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-2.6.14.tgz"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "psycopg-binary",
+          "version": "3.3.6",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        }
+      ],
+      "asset": "psycopg-binary-3.3.6-generated-preferred-source.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/psycopg-binary-3.3.6-generated-preferred-source.tar.gz",
+      "sha256": "27f8544ea22875611cbd419c0928aa19fe4bc7d69094c30d2264d70f1df7533b",
+      "bytes": 54691,
+      "content": "preferred Cython/native extension source generated by unchanged upstream copy_to_binary.py",
+      "upstreamLicenseTreatment": "LGPL-3.0-only; original notices preserved",
+      "producer": {
+        "repository": "https://github.com/psycopg/psycopg",
+        "tag": "3.3.6"
+      }
+    },
+    {
+      "packages": [
+        {
+          "package": "@uniswap/router-sdk",
+          "version": "2.11.6",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        },
+        {
+          "package": "@uniswap/sdk-core",
+          "version": "7.19.4",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        },
+        {
+          "package": "@uniswap/v2-sdk",
+          "version": "4.21.5",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        },
+        {
+          "package": "@uniswap/v3-sdk",
+          "version": "3.31.5",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        },
+        {
+          "package": "@uniswap/v4-sdk",
+          "version": "2.4.1",
+          "retainedSourceTreesUsingVersion": [
+            "3fa9a72dc076eb3f2f3fd517b5fb982e22e01ce5",
+            "8937f25891db4fd66e5832c6465bc4d1d82530a2"
+          ]
+        }
+      ],
+      "asset": "uniswap-sdk-core-bc086008a533.tar.gz",
+      "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/dependency-source-2026-10-12/uniswap-sdk-core-bc086008a533.tar.gz",
+      "sha256": "ae322fea526c8ad55758d1061a6a793935395f3f63560e628e8dc0bb2a43786e",
+      "bytes": 1270068,
+      "content": "unchanged previously verified exact producer source archive",
+      "upstreamLicenseTreatment": "MIT; original producer workspace and notices preserved",
+      "producer": {
+        "repository": "https://github.com/Uniswap/sdks",
+        "commit": "ca94e682f9bcb1212913fbbd82249e2769a85ff6"
+      }
+    }
+  ]
+}

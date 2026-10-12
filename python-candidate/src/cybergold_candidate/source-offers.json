@@ -1,0 +1,14 @@
+[
+  {
+    "repository": "cybergold-backend",
+    "version": "ab8526199a33d81aca84f05c70b4a683993c242d",
+    "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/corresponding-source-ab8526199a33d81aca84f05c70b4a683993c242d/cybergold-backend-3fa9a72dc076.tar.gz",
+    "sha256": "05f8916bf2b87ecca3dfef9bcb369ef72d15e720f90478797eded5e8ed6b493b"
+  },
+  {
+    "repository": "cybergold-backend",
+    "version": "728ca83dc890f6aeb0d67af8c1ef710f15b20e59",
+    "downloadUrl": "https://github.com/CyberGold-io/cybergold-backend/releases/download/corresponding-source-728ca83dc890f6aeb0d67af8c1ef710f15b20e59/cybergold-backend-8937f25891db.tar.gz",
+    "sha256": "ae2ecf124b28ea84fa535c85dad7f6e1a5a596d581cbaafaa6bd6b6351df500c"
+  }
+]

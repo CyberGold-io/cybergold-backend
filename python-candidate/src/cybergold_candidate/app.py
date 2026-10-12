@@ -13,6 +13,7 @@ from .cache import MarketFeed
 from .market import resolve_market, response_headers
 from .rpc_http import RpcHttp
 from .rpc_diagnostics import RpcDiagnosticsMiddleware
+from .source_offer import install_source_offer
 
 
 def timestamp():
@@ -155,6 +156,7 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     app.state.metrics=metrics
     app.add_middleware(TelemetryMiddleware,metrics=metrics,component='api',release=release)
     app.add_middleware(RpcDiagnosticsMiddleware)
+    install_source_offer(app, release)
 
     @app.api_route('/metrics',methods=['GET','HEAD'])
     async def metrics_route():

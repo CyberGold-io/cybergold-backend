@@ -4,7 +4,7 @@ doc_type: contributor-guide
 status: active
 owner: backend-maintainer
 created: 2026-10-11
-last_reviewed: 2026-10-11
+last_reviewed: 2026-10-12
 canonical_for: CyberGold Backend public contributor setup and pull-request path
 ---
 
@@ -64,8 +64,10 @@ and `.env.example` describe self-managed runtime configuration.
    have Write access): `git push -u origin feature/my-change`.
 2. Open a PR with **base repository `CyberGold-io/cybergold-backend` and base branch
    `dev`**. Describe the change, its documentation impact and validation results.
-3. Existing PR CI checks the candidate. An authorized maintainer accepts it
-   with GitHub's merge-commit method after the required checks pass. Public
+3. Existing PR CI checks the candidate. Before merging, an authorized
+   maintainer verifies the actual head/base repositories and branches and
+   reviews the changes, including workflows and policy scripts. The maintainer
+   uses GitHub's merge-commit method after the required checks pass. Public
    contributors cannot merge their own or other contributors' PRs.
 4. Maintainers test integrated product changes in the shared Sandbox. A PR
    itself does not publish or deploy. The Sandbox contains all accepted `dev`
@@ -79,6 +81,11 @@ and the existing CI checks, with zero mandatory approving reviews. Authorized au
 can merge their own valid PRs after CI passes; review comments and voluntary
 approvals remain useful. Direct pushes, force pushes and deletion are outside
 the protected-branch workflow. Human Admin access stays with the owner.
+
+GitHub Free native protections restrict merge actors and require PRs and the
+existing CI checks. Branch-policy CI reports candidate-controlled feedback;
+maintainers verify the permitted source/target relationship before accepting a
+PR. No separate bot or exclusive merger service is part of this workflow.
 
 Write permission has broader GitHub capabilities than merging `dev`; the
 selected actor restrictions apply specifically to the protected branches.
