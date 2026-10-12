@@ -8554,6 +8554,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8565,6 +8567,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8576,6 +8580,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8601,6 +8607,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8612,6 +8620,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8623,6 +8633,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8648,6 +8660,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8659,6 +8673,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8670,6 +8686,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8699,6 +8717,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8710,6 +8730,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8721,6 +8743,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8750,6 +8774,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8761,6 +8787,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8790,6 +8818,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8801,6 +8831,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8812,6 +8844,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8841,6 +8875,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8852,6 +8888,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8881,6 +8919,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8892,6 +8932,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8903,6 +8945,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8930,6 +8974,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8941,6 +8987,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8952,6 +9000,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8979,6 +9029,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8990,6 +9042,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9001,6 +9055,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9028,6 +9084,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9039,6 +9097,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9050,6 +9110,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9079,6 +9141,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9090,6 +9154,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9101,6 +9167,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9130,6 +9198,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9141,6 +9211,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9152,6 +9224,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9180,6 +9254,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9191,6 +9267,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9202,6 +9280,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9229,6 +9309,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9240,6 +9322,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9251,6 +9335,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9278,6 +9364,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9289,6 +9377,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9300,6 +9390,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9328,6 +9420,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9339,6 +9433,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9350,6 +9446,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9379,6 +9477,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9390,6 +9490,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9401,6 +9503,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9430,6 +9534,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9441,6 +9547,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9452,6 +9560,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9479,6 +9589,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9490,6 +9602,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9501,6 +9615,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9530,6 +9646,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9541,6 +9659,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9552,6 +9672,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9581,6 +9703,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9592,6 +9716,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9603,6 +9729,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9632,6 +9760,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9643,6 +9773,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9654,6 +9786,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9681,6 +9815,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9692,6 +9828,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9703,6 +9841,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9728,6 +9868,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9739,6 +9881,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9750,6 +9894,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9777,6 +9923,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9788,6 +9936,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9799,6 +9949,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9826,6 +9978,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9837,6 +9991,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9848,6 +10004,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9875,6 +10033,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9886,6 +10046,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9897,6 +10059,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9924,6 +10088,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9935,6 +10101,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9946,6 +10114,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9971,6 +10141,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9982,6 +10154,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9993,6 +10167,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10020,6 +10196,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10031,6 +10209,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10042,6 +10222,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10067,6 +10249,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10078,6 +10262,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10089,6 +10275,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10118,6 +10306,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10129,6 +10319,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10140,6 +10332,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10170,6 +10364,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10181,6 +10377,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10192,6 +10390,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10220,6 +10420,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10231,6 +10433,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10242,6 +10446,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10271,6 +10477,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10282,6 +10490,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10293,6 +10503,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10320,6 +10532,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10331,6 +10545,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10342,6 +10558,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10367,6 +10585,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10378,6 +10598,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10389,6 +10611,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10419,6 +10643,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10430,6 +10656,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10441,6 +10669,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10468,6 +10698,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10479,6 +10711,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10490,6 +10724,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10517,6 +10753,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10528,6 +10766,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10539,6 +10779,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10568,6 +10810,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10579,6 +10823,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10590,6 +10836,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10619,6 +10867,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10630,6 +10880,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10641,6 +10893,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10670,6 +10924,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10681,6 +10937,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10692,6 +10950,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10721,6 +10981,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10732,6 +10994,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10761,6 +11025,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10772,6 +11038,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10801,6 +11069,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10812,6 +11082,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10823,6 +11095,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10848,6 +11122,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10859,6 +11135,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10870,6 +11148,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10895,6 +11175,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10906,6 +11188,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10917,6 +11201,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10942,6 +11228,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10953,6 +11241,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10964,6 +11254,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10994,6 +11286,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11005,6 +11299,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11016,6 +11312,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11041,6 +11339,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11052,6 +11352,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11063,6 +11365,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11092,6 +11396,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11106,6 +11412,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11131,6 +11439,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11142,6 +11452,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11153,6 +11465,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11182,6 +11496,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11193,6 +11509,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11204,6 +11522,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11233,6 +11553,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11244,6 +11566,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11255,6 +11579,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11284,6 +11610,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11295,6 +11623,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11306,6 +11636,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11335,6 +11667,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11346,6 +11680,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11357,6 +11693,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11386,6 +11724,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11397,6 +11737,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11408,6 +11750,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11436,6 +11780,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11447,6 +11793,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11458,6 +11806,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11487,6 +11837,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11498,6 +11850,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11509,6 +11863,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11538,6 +11894,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11549,6 +11907,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11560,6 +11920,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11589,6 +11951,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11600,6 +11964,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11611,6 +11977,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11636,6 +12004,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11647,6 +12017,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11658,6 +12030,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11691,6 +12065,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11702,6 +12078,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11713,6 +12091,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11724,6 +12104,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11749,6 +12131,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11760,6 +12144,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11771,6 +12157,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11800,6 +12188,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11811,6 +12201,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11822,6 +12214,8 @@ export interface operations {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */
                     "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {

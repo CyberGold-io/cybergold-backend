@@ -286,7 +286,9 @@ for (const methods of Object.values(paths)) {
     for (const reply of Object.values(value.responses) as Record<string, any>[]) {
       reply.headers = { ...(reply.headers ?? {}), "X-CyberGold-Request-Id": {
         description: "Backend request reference, separate for each subscriber to shared quote work.",
-        schema: { type: "string", format: "uuid" } } };
+        schema: { type: "string", format: "uuid" } }, "X-CyberGold-Backend-Revision": {
+        description: "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+        schema: { type: "string", pattern: "^[0-9a-f]{40}$" } } };
     }
   }
 }

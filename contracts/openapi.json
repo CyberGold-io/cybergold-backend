@@ -30,6 +30,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -49,6 +56,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -67,6 +81,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -107,6 +128,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -126,6 +154,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -144,6 +179,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -184,6 +226,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -203,6 +252,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -221,6 +277,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -270,6 +333,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -289,6 +359,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -307,6 +384,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -357,6 +441,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -375,6 +466,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -424,6 +522,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -443,6 +548,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -461,6 +573,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -511,6 +630,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -529,6 +655,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -579,6 +712,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -598,6 +738,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -616,6 +763,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -656,6 +810,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -675,6 +836,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -693,6 +861,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -742,6 +917,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -761,6 +943,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -779,6 +968,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -828,6 +1024,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -847,6 +1050,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -865,6 +1075,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -913,6 +1130,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -932,6 +1156,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -950,6 +1181,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1008,6 +1246,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1027,6 +1272,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1045,6 +1297,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1103,6 +1362,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1122,6 +1388,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1140,6 +1413,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1206,6 +1486,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1225,6 +1512,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1243,6 +1537,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1292,6 +1593,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1311,6 +1619,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1329,6 +1644,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1382,6 +1704,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1401,6 +1730,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1419,6 +1755,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1491,6 +1834,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1510,6 +1860,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1528,6 +1885,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1578,6 +1942,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1597,6 +1968,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1615,6 +1993,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1655,6 +2040,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1674,6 +2066,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1692,6 +2091,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1751,6 +2157,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1770,6 +2183,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1788,6 +2208,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1838,6 +2265,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1857,6 +2291,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1875,6 +2316,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -1925,6 +2373,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1944,6 +2399,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -1962,6 +2424,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2002,6 +2471,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2021,6 +2497,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2039,6 +2522,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2088,6 +2578,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2107,6 +2604,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2125,6 +2629,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2165,6 +2676,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2184,6 +2702,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2202,6 +2727,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2251,6 +2783,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2270,6 +2809,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2288,6 +2834,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2337,6 +2890,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2356,6 +2916,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2374,6 +2941,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2423,6 +2997,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2442,6 +3023,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2460,6 +3048,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2509,6 +3104,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2528,6 +3130,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2546,6 +3155,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2586,6 +3202,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2605,6 +3228,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2623,6 +3253,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2672,6 +3309,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2691,6 +3335,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2709,6 +3360,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2759,6 +3417,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2778,6 +3443,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2796,6 +3468,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2836,6 +3515,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2855,6 +3541,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2873,6 +3566,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -2940,6 +3640,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2959,6 +3666,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -2977,6 +3691,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3045,6 +3766,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3064,6 +3792,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3082,6 +3817,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3122,6 +3864,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3141,6 +3890,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3159,6 +3915,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3208,6 +3971,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3227,6 +3997,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3245,6 +4022,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3285,6 +4069,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3304,6 +4095,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3322,6 +4120,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3404,6 +4209,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3423,6 +4235,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3441,6 +4260,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3490,6 +4316,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3509,6 +4342,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3527,6 +4367,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3586,6 +4433,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3605,6 +4459,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3623,6 +4484,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3673,6 +4541,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3692,6 +4567,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3710,6 +4592,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3760,6 +4649,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3779,6 +4675,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3797,6 +4700,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3847,6 +4757,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3865,6 +4782,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3915,6 +4839,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -3933,6 +4864,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -3983,6 +4921,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4002,6 +4947,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4020,6 +4972,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4060,6 +5019,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4079,6 +5045,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4097,6 +5070,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4136,6 +5116,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4155,6 +5142,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4173,6 +5167,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4213,6 +5214,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4232,6 +5240,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4250,6 +5265,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4290,6 +5312,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4309,6 +5338,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4327,6 +5363,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4407,6 +5450,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4426,6 +5476,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4444,6 +5501,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4502,6 +5566,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4520,6 +5591,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4560,6 +5638,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4579,6 +5664,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4597,6 +5689,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4637,6 +5736,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4656,6 +5762,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4674,6 +5787,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4747,6 +5867,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4766,6 +5893,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4782,6 +5916,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4832,6 +5973,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4851,6 +5999,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4869,6 +6024,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -4918,6 +6080,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4937,6 +6106,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -4955,6 +6131,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5005,6 +6188,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5024,6 +6214,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5042,6 +6239,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5082,6 +6286,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5101,6 +6312,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5119,6 +6337,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5183,6 +6408,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5202,6 +6434,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5220,6 +6459,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5270,6 +6516,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5289,6 +6542,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5307,6 +6567,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5356,6 +6623,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5375,6 +6649,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5393,6 +6674,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5433,6 +6721,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5452,6 +6747,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5470,6 +6772,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5514,6 +6823,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5532,6 +6848,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5552,6 +6875,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5570,6 +6900,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5647,6 +6984,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5666,6 +7010,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5684,6 +7035,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
@@ -5738,6 +7096,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5757,6 +7122,13 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
               }
             }
           },
@@ -5775,6 +7147,13 @@
                 "schema": {
                   "type": "string",
                   "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
                 }
               }
             }
