@@ -1,0 +1,5 @@
+{
+  "repository": "cybergold-backend",
+  "sourceVersions": [],
+  "scope": "Git checkout builds use the actual HEAD. For an extracted public commit archive, pass CG_SOURCE_COMMIT to identify the built version; exact original retained offers are listed separately."
+}
