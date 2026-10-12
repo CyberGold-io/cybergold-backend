@@ -325,6 +325,14 @@ real HTTP/private transport, outage recovery, deadlines and disconnects.
 
 ## Token/native previews and Uniswap quotes — 2026-10-01
 
+The subsequent [unified trade coordinator](../docs/unified-trading.md) owns
+Core basket seed construction and compares complete qualified Core/market
+candidates for one App intent. It retains the family APIs described below;
+their historical App-owned request construction is no longer needed by the
+unified trading surface. Source qualification covers all four Core modes,
+independent provider failure, explicit plan revalidation, one-head sharing,
+model warm reuse, canonical invalidation and last-subscriber cancellation.
+
 The quote-intent stream accepts optional integer `slippageBps` (default `100`,
 equivalent to 1%). It adjusts execution amount limits; raw expected inputs are
 reported separately in `expectedInputAmount` for exact-output requests. Token

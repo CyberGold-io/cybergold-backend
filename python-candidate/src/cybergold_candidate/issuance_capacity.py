@@ -3,6 +3,7 @@ from web3 import Web3
 
 from .quote_errors import rpc_failure
 from .basket_arithmetic import gross_for_net
+from .shared_reads import discard_pool_observation
 
 PPM, FP = 1_000_000, 10**18
 CORE_READS = [('basketTargetsPpm', 'uint256[]'), ('basketCygldPerUnitFp18', 'uint256[]'),
@@ -34,17 +35,29 @@ def capacity_amounts(request, outputs, values):
             'remainingGrossCapacity': str(remaining), 'remainingNetCapacity': str(net(remaining))}
 
 
-async def read_capacity(rpc, settings, block, metrics):
+async def read_capacity(rpc, settings, block, metrics, *, shared=False):
     contract = rpc.w3.eth.contract(abi=ABI)
     core = Web3.to_checksum_address(settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS)
     helpers = Web3.to_checksum_address(settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
     calls = [(core if name != 'helperFeePpm' else helpers, contract.encode_abi(name)) for name, _ in READS]
-    metrics['rpcReads'] += len(calls)
-    metrics['rpcReadsRequested'] += len(calls)
-    rows = await rpc.call_batch(calls, block)
+    if shared:
+        counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
+        rows, _ = await rpc.pool_batch(calls, block, counts)
+        for name, field in (('rpcReads', 'issued'), ('rpcReadsRequested', 'requested'),
+                            ('rpcReadsCoalesced', 'coalesced'), ('rpcReadsReused', 'reused')):
+            metrics[name] += counts[field]
+    else:
+        metrics['rpcReads'] += len(calls)
+        metrics['rpcReadsRequested'] += len(calls)
+        rows = await rpc.call_batch(calls, block)
     values = []
-    for (_, output), row in zip(READS, rows, strict=True):
+    for call, (_, output), row in zip(calls, READS, rows, strict=True):
         if 'error' in row:
             raise rpc_failure(row['error'])
-        values.append(rpc.w3.codec.decode([output], bytes.fromhex(row['result'][2:]))[0])
+        try:
+            values.append(rpc.w3.codec.decode([output], bytes.fromhex(row['result'][2:]))[0])
+        except Exception:
+            if shared:
+                discard_pool_observation(rpc, call, block)
+            raise
     return values

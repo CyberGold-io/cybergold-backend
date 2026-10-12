@@ -192,7 +192,7 @@ class Subscriber:
     terminal: tuple | None = None
 
     def update(self, frame):
-        self.pending[(frame['type'], frame.get('stage'))] = frame
+        self.pending[(frame['type'], frame.get('stage'), frame.get('strategy'))] = frame
         self.wake.set()
 
 
@@ -249,7 +249,7 @@ class IntentSharing:
             self.pending[key] = entry
             self.started += 1
             async def update(frame):
-                entry['latest'][(frame['type'], frame.get('stage'))] = frame
+                entry['latest'][(frame['type'], frame.get('stage'), frame.get('strategy'))] = frame
                 for client in entry['clients']:
                     client.update(frame)
             async def produce():

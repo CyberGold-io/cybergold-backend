@@ -1,0 +1,485 @@
+"""Compare complete Core and market executions, preserving each selected plan.
+
+Models are indicative. Only the existing providers qualify economic execution
+terms; wallet authorization and signed full-call simulation remain separate.
+"""
+import asyncio
+from copy import deepcopy
+from fractions import Fraction
+import json
+import time
+from types import SimpleNamespace
+from typing import Literal
+
+from fastapi.responses import JSONResponse, StreamingResponse
+from eth_abi.exceptions import EncodingError
+from pydantic import BaseModel, Field
+from web3 import Web3
+
+from .basket_arithmetic import BasketArithmetic
+from .basket_preview import InvalidPreview
+from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
+from .pool_producer import ZERO
+from .protocol_facts import ABI
+from .quote_cache import IntentSharing
+from .quote_errors import QuoteFailure, public_quote_error
+from .quote_models import LegModel, PoolBaseline
+from .recovery_rpc import SnapshotChanged
+from .route_search import WETH
+from .wallet_balances import TOKENS
+from .uniswap_routes import uses_typed_adapter
+from .shared_reads import discard_pool_observation
+
+PAXG = next(address for name, address in TOKENS if name == 'paxg')
+
+
+class TradeModelRequest(BaseModel):
+    side: Literal['buy', 'sell']
+    mode: Literal['exact-in', 'exact-out']
+    counterToken: str
+    native: bool = False
+    amount: str
+    slippageBps: int = Field(default=DEFAULT_SLIPPAGE_BPS, ge=0, le=10_000, strict=True)
+
+
+class RetainedPlan(BaseModel):
+    strategy: Literal['core', 'market']
+    request: dict
+    quote: dict
+
+
+class TradeQuoteRequest(TradeModelRequest):
+    recipient: str
+    deadline: str
+    retainedPlan: RetainedPlan | None = None
+
+
+def validate(request, *, model=False):
+    try:
+        request['counterToken'] = Web3.to_checksum_address(request['counterToken'])
+        if request['native']:
+            request['counterToken'] = Web3.to_checksum_address(WETH)
+        if not model:
+            request['recipient'] = Web3.to_checksum_address(request['recipient'])
+        Web3().codec.encode(['uint256'] if model else ['uint256', 'uint256'],
+            [int(request['amount'])] if model else [int(request['amount']), int(request['deadline'])])
+    except (ValueError, TypeError, OverflowError, EncodingError) as error:
+        raise InvalidPreview('Invalid trade quote input.') from error
+    return request
+
+
+def split_amount(amount, weights):
+    total = sum(weights)
+    if not total:
+        raise InvalidPreview('Core basket has no positive target weight.')
+    allocated = 0
+    values = []
+    for index, weight in enumerate(weights):
+        value = amount-allocated if index == len(weights)-1 else amount*weight//total
+        values.append(value)
+        allocated += value
+    return values
+
+
+def core_request(request, assets, weights):
+    """Retain the App's existing weighted seed, direct leg and integer remainder."""
+    counter, amount = request['counterToken'], int(request['amount'])
+    buy, exact_in = request['side'] == 'buy', request['mode'] == 'exact-in'
+    targets = []
+    if (buy and exact_in) or (not buy and not exact_in):
+        index = next((i for i, asset in enumerate(assets) if asset.lower() == counter.lower()), None)
+        if index is None:
+            indices = [i for i, weight in enumerate(weights) if weight > 0] if buy else list(range(len(assets)))
+            values = split_amount(amount, [weights[i] for i in indices])
+        else:
+            total = sum(weights)
+            if not total:
+                raise InvalidPreview('Core basket has no positive target weight.')
+            direct = amount*weights[index]//total
+            indices = [i for i, weight in enumerate(weights) if i != index and (weight > 0 or not buy)]
+            values = split_amount(amount-direct, [weights[i] for i in indices]) if sum(weights[i] for i in indices) else [0]*len(indices)
+            if not buy:
+                targets.append({'inputAsset': assets[index], 'outputAsset': counter, 'amount': str(direct)})
+        targets.extend({'inputAsset': counter if buy else assets[i],
+                        'outputAsset': assets[i] if buy else counter, 'amount': str(value)}
+                       for i, value in zip(indices, values, strict=True) if value > 0)
+        targets = [row for row in targets if int(row['amount']) > 0]
+    result = {'mode': ('issue-' if buy else 'redeem-')+request['mode'],
+        'token': ZERO if request['native'] else counter, 'quoteToken': counter,
+        'native': request['native'], 'amount': request['amount'], 'adapter': request['adapter'],
+        'deadline': request['deadline'], 'slippageBps': request['slippageBps'],
+        'orderedAssets': list(assets), 'targets': targets}
+    retained = request.get('retainedPlan')
+    if retained and retained['strategy'] == 'core':
+        old, quote = retained['request'], retained['quote']
+        for name in ('mode', 'token', 'quoteToken', 'native', 'amount', 'slippageBps'):
+            if old.get(name, DEFAULT_SLIPPAGE_BPS if name == 'slippageBps' else None) != result[name]:
+                raise InvalidPreview('Retained Core '+name+' changed.')
+        result['retainedPlan'] = {'slippageBps': quote.get('slippageBps', DEFAULT_SLIPPAGE_BPS),
+            'executionAmount': quote['executionAmount'], 'maximumInputAmount': quote['maximumInputAmount'],
+            'minimumAmountOut': quote['preview'].get('minimumAmountOut', '0'),
+            'quotes': deepcopy(quote['quotes']), 'expectedCoreOutputs': deepcopy(quote.get('expectedCoreOutputs', [])),
+            **({'expectedInputAmount': quote['expectedInputAmount']} if quote.get('expectedInputAmount') is not None else {})}
+    return result
+
+
+def market_request(request):
+    result = {name: request[name] for name in ('side', 'mode', 'counterToken', 'amount', 'recipient', 'deadline', 'slippageBps', 'adapter')}
+    retained = request.get('retainedPlan')
+    if retained and retained['strategy'] == 'market':
+        result['retainedPlan'] = deepcopy(retained['quote']['plan'])
+    return result
+
+
+def economics(strategy, request, quote):
+    """Requested-token amounts after fees; caps/minima never masquerade as price."""
+    if strategy == 'market':
+        return {name: quote[source] for name, source in (
+            ('quotedInput', 'totalInput'), ('quotedOutput', 'netOutput'),
+            ('inputMaximum', 'inputMaximum'), ('outputMinimum', 'outputMinimum'))}
+    buy, exact_in = request['side'] == 'buy', request['mode'] == 'exact-in'
+    if buy:
+        return {'quotedInput': quote.get('expectedInputAmount', quote['maximumInputAmount']),
+            'quotedOutput': quote['executionAmount'], 'inputMaximum': quote['maximumInputAmount'],
+            'outputMinimum': quote['executionAmount']}
+    return {'quotedInput': quote['executionAmount'],
+        'quotedOutput': quote.get('expectedOutputAmount', quote['displayAmount'] if exact_in else quote['preview']['minimumAmountOut']),
+        'inputMaximum': quote['executionAmount'], 'outputMinimum': quote['preview']['minimumAmountOut']}
+
+
+def score(request, value):
+    return int(value['quotedOutput']) if request['mode'] == 'exact-in' else -int(value['quotedInput'])
+
+
+def model_estimate(packet, request):
+    """Existing factorized Core/Helpers display arithmetic, without chain reads."""
+    if not packet.get('protocol'):
+        return None
+    try:
+        source = packet['protocol']['state']
+        state = {name: [int(v) for v in value] if name in ('weights', 'conversions', 'available', 'recoveryShares', 'recoveryValues')
+                 else int(value) if name in ('issueFee', 'helperFee', 'redeemFee', 'supply', 'maxSupply', 'effectiveCap') else value
+                 for name, value in source.items()}
+        basket = BasketArithmetic(state)
+        counter = request['counterToken'].lower()
+        def predict(asset, amount, *, inverse=False, buy=False):
+            if asset.lower() == counter:
+                return amount
+            values = []
+            for row in packet['routes']:
+                pair = (counter, asset.lower()) if buy else (asset.lower(), counter)
+                if (row['tokens'][0].lower(), row['tokens'][-1].lower()) != pair:
+                    continue
+                def f(value):
+                    return Fraction(int(value['numerator']), int(value['denominator']))
+                baseline = PoolBaseline(f(row['exchangeRate']), f(row['feeRetention']),
+                    f(row['localImpact']) if row.get('localImpact') else None) if row.get('exchangeRate') else None
+                model = LegModel([(int(p['input']), int(p['output'])) for p in row['points']], baseline)
+                value = model.predict(amount, 'anchored' if model.points and baseline else 'local' if baseline else 'larger', inverse)
+                if value is not None:
+                    values.append(value)
+            if not values:
+                raise ValueError('Indicative route unavailable')
+            return min(values) if inverse else max(values)
+        amount = int(request['amount'])
+        if request['side'] == 'buy':
+            if request['mode'] == 'exact-out':
+                result = basket.issue(amount, includes_helper=True)
+                return str(sum(predict(asset, int(value), inverse=True, buy=True)
+                    for asset, value in zip(state['assets'], result['amountsInExact'], strict=True) if value))
+            budgets = {row['outputAsset'].lower(): int(row['amount']) for row in packet['intent']['targets']}
+            # Direct input was omitted from swap targets by the seed builder.
+            used = sum(budgets.values())
+            reserve = [amount-used if asset.lower() == counter else predict(asset, budgets.get(asset.lower(), 0), buy=True)
+                       if budgets.get(asset.lower(), 0) else 0 for asset in state['assets']]
+            return str(basket.issue_in(reserve)['netCygldOut'])
+        def output(gross, *, protected=False):
+            projected = basket.redeem_in(gross)['projectedCoreOutputs']
+            values = []
+            for row in projected:
+                if row['kind'] != 0 or not int(row['amount']):
+                    continue
+                value = predict(row['token'], int(row['amount']))
+                if protected and row['token'].lower() != counter:
+                    value = floor(value, request['slippageBps'])
+                values.append(value)
+            return sum(values)
+        if request['mode'] == 'exact-in':
+            return str(output(amount))
+        seed = basket.redeem_out([int(next((t['amount'] for t in packet['intent']['targets']
+                         if t['inputAsset'].lower() == asset.lower()), '0')) for asset in state['assets']]
+            + [0]*len(state['recoveryShares']))['grossCygldIn']
+        for _ in range(11):
+            received = output(seed, protected=True)
+            if amount <= received <= ceil(amount, request['slippageBps']):
+                return str(seed)
+            if received <= 0:
+                return None
+            next_seed = seed*amount//received
+            seed = next_seed if next_seed != seed else seed+(1 if received < amount else -1)
+    except (ValueError, KeyError, ZeroDivisionError):
+        pass
+    return None
+
+
+class TradeQuotes:
+    def __init__(self, settings, core, market, *, request_resolver=None, basis_reader=None):
+        self.settings, self.core, self.market = settings, core, market
+        self.request_resolver, self.basis_reader = request_resolver, basis_reader
+        self.history = getattr(core, 'history', None)
+        self.basis, self.basis_epoch = None, None
+        self.sharing = IntentSharing(SimpleNamespace(settings=settings, routes=core.routes, get=self._get),
+            rpc_factory=core.routes.rpc_factory, head=market.head)
+
+    async def close(self):
+        await self.sharing.close()
+
+    async def resolve(self, request):
+        retained = request.get('retainedPlan')
+        # A chosen complete plan keeps its concrete adapter through revalidation.
+        if retained:
+            request['adapter'] = retained['request'].get('adapter')
+        return await self.request_resolver(request) if self.request_resolver else request
+
+    def supported_market(self, request):
+        # The historical V3 deployment does not decode the market compiler's
+        # typed payload. Core keeps its existing legacy encoder in that case.
+        return (not request['native'] and request['counterToken'].lower() == PAXG.lower()
+                and uses_typed_adapter(request.get('adapter')))
+
+    def cached_basis(self):
+        if self.history and self.basis_epoch != self.history.epoch:
+            self.basis = None
+        if self.basis:
+            return self.basis
+        model = self.history.protocol_model() if self.history else None
+        if model:
+            return model['state']['assets'], list(map(int, model['state']['weights']))
+        if self.history and self.history.facts:
+            row = next(reversed(self.history.facts.values()))['basket']
+            return row['assets']['value'], list(map(int, row['targetsPpm']['value']))
+        return None
+
+    async def read_basis(self, block):
+        if self.basis_reader:
+            return await self.basis_reader(block)
+        rpc = self.core.routes.rpc
+        names = ('basketAssets', 'basketTargetsPpm')
+        abi = [row for row in ABI['core'] if row['name'] in names]
+        contract = rpc.w3.eth.contract(abi=abi)
+        address = Web3.to_checksum_address(self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS)
+        counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
+        calls = [(address, contract.encode_abi(name, args=[])) for name in names]
+        rows, _ = await rpc.pool_batch(calls, block, counts)
+        values = []
+        for call, name, row in zip(calls, names, rows, strict=True):
+            if 'error' in row:
+                from .quote_errors import rpc_failure
+                raise rpc_failure(row['error'])
+            output = next(entry for entry in abi if entry['name'] == name)['outputs'][0]['type']
+            try:
+                values.append(rpc.w3.codec.decode([output], bytes.fromhex(row['result'][2:]))[0])
+            except Exception:
+                discard_pool_observation(rpc, call, block)
+                raise
+        return list(values[0]), list(map(int, values[1])), counts['issued']
+
+    def packet(self, request, provider_models=None):
+        intent = {name: deepcopy(request[name]) for name in TradeModelRequest.model_fields}
+        packet = {'namespace': 'trade', 'intent': intent, 'models': []}
+        estimates = []
+        basis = self.cached_basis()
+        if self.history and basis:
+            adapted = core_request({**request, 'deadline': request.get('deadline', '0')}, *basis)
+            value = self.history.packet(adapted)
+            packet['models'].append({'strategy': 'core', 'value': value})
+            amount = model_estimate(value, request)
+            if amount is not None:
+                estimates.append(('core', amount))
+        if self.supported_market(request):
+            adapted = market_request({**request, 'recipient': request.get('recipient', ZERO), 'deadline': request.get('deadline', '0')})
+            value = (provider_models or {}).get('market') or self.market.packet(adapted)
+            packet['models'].append({'strategy': 'market', 'value': value})
+            amount = self.market.estimate(value, adapted)
+            if amount is not None:
+                estimates.append(('market', amount))
+        if estimates:
+            strategy, amount = max(estimates, key=lambda row: (int(row[1]) if request['mode'] == 'exact-in' else -int(row[1]), row[0] == 'core'))
+            packet['estimate'] = {'strategy': strategy, 'amount': amount}
+        return packet
+
+    async def acquire_models(self, request, block):
+        models = {}
+        async def core_model():
+            if not self.history or (request.get('retainedPlan') or {}).get('strategy') == 'market':
+                return
+            context = {'chainId': int(self.settings.NEXT_PUBLIC_CHAIN_ID), 'blockNumber': str(block['number']),
+                       'blockHash': block['hash'], 'observedAt': self.core.now()}
+            self.history.ensure_state(self.core.routes.rpc, block, context)
+            task = self.history.tasks.get(('state', block['hash'].lower()))
+            if task:
+                await asyncio.shield(task)
+        async def market_model():
+            if self.supported_market(request) and (request.get('retainedPlan') or {}).get('strategy') != 'core':
+                adapted = market_request({**request, 'recipient': request.get('recipient', ZERO), 'deadline': request.get('deadline', '0')})
+                models['market'] = await self.market.get_model(adapted, block=block)
+        await asyncio.gather(core_model(), market_model(), return_exceptions=True)
+        return self.packet(request, models)
+
+    async def get_model(self, request):
+        request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
+        packet = self.packet(request)
+        if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol')) for row in packet['models']) and packet['models']:
+            return packet
+        # Cold model acquisition reuses the providers' lightweight baselines;
+        # warm display is RPC-free and exact search never waits for this work.
+        if self.core.routes.rpc is None:
+            self.core.routes.rpc = self.core.routes.rpc_factory(self.settings)
+        block = await self.market.head()
+        return await self.acquire_models(request, block)
+
+    async def get(self, request, on_update):
+        request = await self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump()))
+        await on_update({'type': 'model', 'value': self.packet(request)})
+        return await self.sharing.get(request, on_update)
+
+    async def _get(self, request, on_update, *, block):
+        started, target_reads = time.perf_counter(), 0
+        retained = request.get('retainedPlan')
+        strategies = [retained['strategy']] if retained else ['core', 'market']
+        evaluation = {name: 'running' if name in strategies and (name == 'core' or self.supported_market(request)) else 'unsupported'
+                      for name in ('core', 'market')}
+        candidates, winner, errors, context_error = {}, None, {}, None
+        lock = asyncio.Lock()
+
+        def decorate(value):
+            return {**deepcopy(value), 'evaluation': deepcopy(evaluation),
+                    'metrics': {'totalMs': round((time.perf_counter()-started)*1000, 3), 'targetReads': target_reads}}
+
+        async def select():
+            nonlocal winner
+            selected = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core')) if candidates else None
+            if selected is not None and selected != winner:
+                winner = deepcopy(selected)
+                await on_update({'type': 'qualified', 'value': decorate(winner)})
+            elif selected is None:
+                winner = None
+
+        async def run(strategy):
+            nonlocal target_reads, context_error
+            if evaluation[strategy] != 'running':
+                return
+            try:
+                if strategy == 'core':
+                    epoch = self.history.epoch if self.history else None
+                    assets, weights, reads = await self.read_basis(block)
+                    target_reads += reads
+                    if not self.history or self.history.epoch == epoch:
+                        self.basis, self.basis_epoch = (assets, weights), epoch
+                    adapted = core_request(request, assets, weights)
+                else:
+                    adapted = market_request(request)
+                async def publish(frame):
+                    nonlocal context_error
+                    if frame['type'] == 'qualified':
+                        if context_error is not None:
+                            return
+                        quote = frame['value']
+                        counter = ZERO if request['native'] else request['counterToken']
+                        value = {'strategy': strategy, 'side': request['side'], 'mode': request['mode'],
+                            'tokenIn': counter if request['side'] == 'buy' else self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
+                            'tokenOut': self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS if request['side'] == 'buy' else counter,
+                            **economics(strategy, request, quote), 'context': quote['context'],
+                            'providerRequest': deepcopy(adapted), 'providerQuote': deepcopy(quote)}
+                        async with lock:
+                            if context_error is not None:
+                                return
+                            old = candidates.get(strategy)
+                            if old is None or score(request, value) >= score(request, old):
+                                candidates[strategy] = value
+                                await select()
+                    elif frame['type'] == 'invalidated':
+                        async with lock:
+                            if frame.get('reason') == 'snapshot-changed':
+                                context_error = SnapshotChanged('Recovery snapshot changed; restart discovery', retry=1)
+                                candidates.clear()
+                                if winner:
+                                    await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
+                                await select()
+                            else:
+                                candidates.pop(strategy, None)
+                                if winner and winner['strategy'] == strategy:
+                                    await on_update({'type': 'invalidated', 'strategy': strategy})
+                                    await select()
+                    elif frame['type'] == 'model':
+                        await on_update({'type': 'model', 'value': self.packet(request, {strategy: frame['value']})})
+                    elif frame['type'] == 'progress':
+                        await on_update({'type': 'progress', 'strategy': strategy,
+                                         'value': {name: value for name, value in frame.items() if name != 'type'}})
+                    # An estimate is never an executable winner. The common
+                    # packet ranks its separate indicative family models.
+                quote = (await self.core.get(adapted, publish, block=block, quoted_ranking=True) if strategy == 'core'
+                         else await self.market._get(adapted, publish, block=block))
+                await publish({'type': 'qualified', 'value': quote})
+                evaluation[strategy] = 'complete'
+            except Exception as error:
+                evaluation[strategy] = 'unavailable'
+                errors[strategy] = error
+                if isinstance(error, SnapshotChanged):
+                    async with lock:
+                        context_error = error
+                        if winner:
+                            await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
+                        candidates.clear()
+                        await select()
+                await on_update({'type': 'provider-error', 'strategy': strategy, **public_quote_error(error)})
+
+        async def models():
+            value = await self.acquire_models(request, block)
+            await on_update({'type': 'model', 'value': value})
+            if value.get('estimate'):
+                await on_update({'type': 'estimate', **value['estimate']})
+        model_task = asyncio.create_task(models())
+        tasks = [asyncio.create_task(run(strategy)) for strategy in strategies]
+        try:
+            await asyncio.gather(*tasks)
+            if context_error is not None:
+                raise context_error
+            if candidates:
+                winner = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
+                return decorate(winner)
+            raise next(iter(errors.values()), QuoteFailure('quote-no-route'))
+        finally:
+            for task in [model_task, *tasks]:
+                task.cancel()
+            await asyncio.gather(model_task, *tasks, return_exceptions=True)
+
+
+async def handle_trade_quote(request, service, *, model=False):
+    try:
+        value = (TradeModelRequest if model else TradeQuoteRequest).model_validate(await request.json()).model_dump()
+        validate(value, model=model)
+    except (ValueError, TypeError):
+        return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
+    if model:
+        try:
+            return JSONResponse(await service.get_model(value), headers={'Cache-Control': 'no-store'})
+        except Exception as error:
+            return JSONResponse(public_quote_error(error), status_code=503, headers={'Cache-Control': 'no-store'})
+    async def events():
+        queue = asyncio.Queue()
+        async def produce():
+            try:
+                await queue.put({'type': 'complete', 'value': await service.get(value, queue.put)})
+            except Exception as error:
+                await queue.put({'type': 'error', **public_quote_error(error)})
+            finally:
+                await queue.put(None)
+        task = asyncio.create_task(produce())
+        try:
+            while (frame := await queue.get()) is not None:
+                yield json.dumps(frame, separators=(',', ':'))+'\n'
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})

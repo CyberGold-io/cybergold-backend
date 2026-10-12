@@ -186,7 +186,8 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
     async def test_configured_runtime_owns_one_getter_bank_and_closes_it(self):
         from cybergold_candidate.environment import load_environment
         from cybergold_candidate.runtime import create_configured_app
-        routes, registries = [], []
+        from cybergold_candidate.protocol_facts import ProtocolFacts
+        routes, registries, facts = [], [], []
         def route(*args, **kwargs):
             value = RouteSearch(*args, **kwargs)
             routes.append(value)
@@ -194,6 +195,10 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         def registry(*args, **kwargs):
             value = PoolRegistry(*args, **kwargs)
             registries.append(value)
+            return value
+        def protocol(*args, **kwargs):
+            value = ProtocolFacts(*args, **kwargs)
+            facts.append(value)
             return value
         class Database:
             closed = False
@@ -204,10 +209,13 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS': ASSET_A, 'NEXT_PUBLIC_RPC_URL': SETTINGS.RPC_URL,
             'NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS': ASSET_C})
         with patch('cybergold_candidate.runtime.RouteSearch', side_effect=route), \
-                patch('cybergold_candidate.runtime.PoolRegistry', side_effect=registry):
+                patch('cybergold_candidate.runtime.PoolRegistry', side_effect=registry), \
+                patch('cybergold_candidate.runtime.ProtocolFacts', side_effect=protocol):
             app = create_configured_app(settings, database)
         self.assertIsNone(routes[0].rpc)
         self.assertIs(registries[0].pool_reads, registries[0].rpc.reads)
+        self.assertIsNone(facts[0].rpc)
+        self.assertIs(facts[0].pool_reads, registries[0].pool_reads)
         async with app.router.lifespan_context(app):
             routes[0].rpc = routes[0].rpc_factory(settings)
             typed = registries[0].get_rpc()
