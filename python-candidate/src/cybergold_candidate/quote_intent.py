@@ -4,10 +4,8 @@ from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
-import logging
 import time
 from typing import Literal
-import uuid
 
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, TypeAdapter
@@ -24,6 +22,7 @@ from .issuance_capacity import capacity_amounts, read_capacity
 from .market_swap import encode_adapter
 from .uniswap_routes import resize_branches, uses_typed_adapter
 from .recovery_rpc import SnapshotChanged
+from .trade_observation import QuoteObservation
 
 
 class RetainedQuotePlan(BaseModel):
@@ -737,24 +736,19 @@ async def handle_quote_intent(request, service):
         validate(value)
     except ValueError:
         return JSONResponse({'error': 'Invalid quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
+    observation = QuoteObservation(request, value, 'core')
 
     async def events():
         queue = asyncio.Queue()
         history = getattr(service, 'history', None)
         async def publish(event):
             epoch = history.epoch if history and event['type'] == 'model' else None
-            await queue.put((event, epoch))
+            await queue.put((observation.event(event), epoch))
         async def produce():
             try:
                 await publish({'type': 'complete', 'value': await service.get(value, publish)})
             except Exception as error:
-                correlation = str(uuid.uuid4())
-                payload = public_quote_error(error)
-                logging.getLogger('cybergold.candidate').error(json.dumps({'context': 'quote-intent',
-                    'correlationId': correlation, 'errorClassification': payload['code'],
-                    'exceptionType': type(error).__name__,
-                    **({'diagnostics': payload['diagnostics']} if 'diagnostics' in payload else {})}))
-                await publish({'type': 'error', **payload, 'correlationId': correlation})
+                await publish(observation.error(error))
         operation = asyncio.create_task(produce())
         try:
             while True:
@@ -767,5 +761,6 @@ async def handle_quote_intent(request, service):
         finally:
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
+            observation.finish('cancelled')
     return StreamingResponse(events(), media_type='application/x-ndjson',
         headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})

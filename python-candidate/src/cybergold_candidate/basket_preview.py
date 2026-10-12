@@ -2,10 +2,8 @@
 import asyncio
 from datetime import datetime, timezone
 import json
-import logging
 from pathlib import Path
 from typing import Annotated, Literal
-import uuid
 
 from eth_utils.abi import collapse_if_tuple
 from fastapi.responses import JSONResponse, Response
@@ -16,6 +14,7 @@ from .recovery_rpc import RecoveryRpc, abi_value
 from .rpc_transport import rpc_provider
 from .preview_errors import preview_error, KnownPreviewError
 from .quote_errors import rpc_failure, public_quote_error
+from .trade_observation import QuoteObservation, failure
 
 ABI = json.loads(Path(__file__).with_name('basket-preview-abi.json').read_text())
 METHODS = {
@@ -150,21 +149,27 @@ async def handle_basket_preview(request, service, adapter=REQUEST, context='bask
     except (ValueError, ValidationError):
         return JSONResponse({'error': invalid}, status_code=400,
                             headers={'Cache-Control': 'no-store'})
+    qualified_json = context in ('basket-preview', 'token-preview', 'market-quote')
+    observation = QuoteObservation(request, value,
+        'market' if context == 'market-quote' else 'core' if context in ('basket-preview', 'token-preview') else None)
 
     async def result():
         try:
-            return JSONResponse(await service.get(value), headers={'Cache-Control': 'no-store'})
+            result = await service.get(value)
+            if qualified_json:
+                observation.event({'type':'complete', 'value':result})
+            else:
+                observation.finish('succeeded')
+            return JSONResponse(result, headers={'Cache-Control': 'no-store'})
         except InvalidPreview:
+            observation.finish('invalid')
             return JSONResponse({'error': invalid}, status_code=400,
                                 headers={'Cache-Control': 'no-store'})
         except Exception as error:
-            correlation = str(uuid.uuid4())
             payload = public_quote_error(error)
-            logging.getLogger('cybergold.candidate').error(json.dumps({'context': context,
-                'correlationId': correlation, 'errorClassification': payload['code'],
-                'exceptionType': type(error).__name__,
-                **({'diagnostics': payload['diagnostics']} if 'diagnostics' in payload else {})}))
-            return JSONResponse({**payload, 'correlationId': correlation},
+            payload = failure(request, error, context, payload=payload)
+            observation.finish('failed', frame=payload)
+            return JSONResponse(payload,
                                 status_code=503, headers={'Cache-Control': 'no-store'})
 
     async def disconnected():
@@ -179,3 +184,4 @@ async def handle_basket_preview(request, service, adapter=REQUEST, context='bask
         operation.cancel()
         caller.cancel()
         await asyncio.gather(operation, caller, return_exceptions=True)
+        observation.finish('cancelled')

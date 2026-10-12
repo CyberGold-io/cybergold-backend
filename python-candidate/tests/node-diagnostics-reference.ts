@@ -16,6 +16,15 @@ for(const errorSelector of ['0x12345678',true,null,{},'12345678','0X12345678','0
   '0x1234567z','0x12345678\n','0x12345678'+'ab'.repeat(32)])cases.push({body:{...base,errorSelector}});
 for(const raw of ['{','', '\ufeff'+JSON.stringify(base), '{"__proto__":{}}','{"constructor":{"prototype":{}}}',
   '{"parameters":{"constructor":{}}}',' '.repeat(1048577)])cases.push({raw});
+cases.push({body:{...base,requestId:base.attemptId,correlationId:base.quoteId,workId:base.attemptId,
+  side:'buy',strategy:'core',stage:'simulation',errorClassification:'quote-contract-reverted',
+  tokenIn:'0x'+'1'.repeat(40),tokenOut:'0x'+'0'.repeat(40),amount:(2n**256n-1n).toString(),
+  inputMaximum:'100',outputMinimum:'99',blockNumber:'123',blockHash:'0x'+'a'.repeat(64)}});
+cases.push({body:{...base,requestId:'secret',correlationId:'secret',workId:'secret',strategy:'unknown',stage:'unknown',
+  tokenIn:'secret',tokenOut:'secret',amount:(2n**256n).toString(),inputMaximum:'-1',outputMinimum:'1.1',
+  blockNumber:'1\n',blockHash:'secret',errorClassification:'secret'}});
+for(const errorClassification of ['quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit'])
+  cases.push({body:{...base,errorClassification}});
 cases.push({body:base,type:'text/plain'},{body:base,type:'application/json; charset=utf-8'});
 for(const entry of cases){
   const logs:any[]=[];
@@ -24,7 +33,7 @@ for(const entry of cases){
   const raw=entry.raw??JSON.stringify(entry.body);
   const response=await app.inject({method:'POST',url:'/api/diagnostics',payload:raw,
     headers:{'content-type':entry.type??'application/json'}});
-  const records=logs.filter(value=>value.event==='client_diagnostic').map(({level,time,pid,hostname,msg,reqId,requestId,release,...value})=>value);
+  const records=logs.filter(value=>value.event==='client_diagnostic').map(({level,time,pid,hostname,msg,reqId,requestId,diagnosticRequestId,release,...value})=>value);
   Object.assign(entry,{raw,status:response.statusCode,result:response.json(),cache:response.headers['cache-control'],records,
     projection:projectClientDiagnostic(entry.body)});
   await app.close();

@@ -120,13 +120,16 @@ export type MarketQuoteModelPacket = {
     feeRetention?: { numerator: string; denominator: string };
     localImpact?: { numerator: string; denominator: string } }[];
 };
-export type MarketQuoteEvent =
+/** Optional subscriber references; workId belongs to shared producer work. */
+export type DiagnosticReferences = { requestId?: string; attemptId?: string; correlationId?: string; workId?: string };
+
+export type MarketQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: MarketQuoteModelPacket }
   | { type: "estimate"; amount: string }
   | { type: "qualified" | "complete"; value: MarketQuote }
   | { type: "progress"; completedCandidates: number; totalCandidates?: number }
   | { type: "invalidated" }
-  | { type: "error"; error: string; code?: string };
+  | { type: "error"; error: string; code?: string; diagnostics?: RpcErrorDiagnostics });
 
 type ReceiptWaitContext = { chainId: number; observedAt: string };
 export type GovernanceTargetCode = { context: ProtocolFacts["context"]; address: string; hasCode: boolean };
@@ -352,6 +355,8 @@ export type RpcErrorDiagnostics = {
   providerMessage?: string;
   httpStatus?: number;
   failureType?: "rpc-error" | "http-error" | "provider-timeout" | "backend-deadline" | "transport-error";
+  errorSelector?: string;
+  errorName?: string;
 };
 
 export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exceeded"
@@ -417,14 +422,14 @@ export type QuoteModelPacket = {
     };
   };
 };
-export type QuoteIntentEvent =
+export type QuoteIntentEvent = DiagnosticReferences & (
   | { type: "model"; value: QuoteModelPacket }
   | { type: "progress"; stage: string; completed: number; total: number }
   | { type: "estimate"; amount: string; context: BasketPreview["context"] }
   | { type: "qualified"; value: QuoteIntent }
   | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
   | { type: "complete"; value: QuoteIntent }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics });
 
 /** One user trade; Backend chooses a complete Core or market execution. */
 export type TradeModelRequest = {
@@ -453,17 +458,18 @@ export type TradeQuoteModelPacket = {
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
   estimate?: { strategy: "core" | "market"; amount: string };
 };
-export type TradeQuoteEvent =
+export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: TradeQuoteModelPacket }
   | { type: "estimate"; strategy: "core" | "market"; amount: string }
   | { type: "qualified" | "complete"; value: TradeQuote }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
-  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode }
+  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }
   | { type: "invalidated"; strategy: "core" | "market" }
-  | { type: "error"; error: string; code?: QuoteErrorCode };
+  | { type: "error"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics });
 
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
 export interface ContractSchemas {
+  DiagnosticReferences: DiagnosticReferences;
   TradeModelRequest: TradeModelRequest;
   TradeQuoteRequest: TradeQuoteRequest;
   TradeQuote: TradeQuote;
@@ -547,7 +553,7 @@ export interface ContractSchemas {
   Dashboard: (OnchainDashboardSnapshot | { enabled: false; protocolLogicUpdate: null; protocolParameterUpdate: null; lastScannedBlock: null }) & {
     sandboxForkGeneration?: string | null;
   };
-  PublicError: { error: string; correlationId?: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
   AliasesRequest: OwnerAliasesRequest;
   AliasesResult: { entries: GovernanceOwnerAliasEntry[] } | { entry: GovernanceOwnerAliasEntry } | { ok: true; deleted: boolean };
   PoolRequest: PoolCacheRequest;

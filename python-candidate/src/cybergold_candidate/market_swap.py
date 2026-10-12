@@ -21,6 +21,7 @@ from .basket_preview import InvalidPreview, handle_basket_preview
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .market_fee import get_market_fee_rate, gross_buy_target, quoted_fee, routed_sell_budget
 from .quote_errors import public_quote_error, QuoteFailure
+from .trade_observation import QuoteObservation
 from .sdk_worker import SdkWorker, SdkWorkerError, MissingPoolState
 from .uniswap_routes import RoutePlan, candidate_branches, supported_route, resize_branches, v3_path, pool_key
 from .uniswap_state import ZERO
@@ -933,14 +934,17 @@ async def handle_market_quote(request, service, stream=False):
     except (ValueError, TypeError):
         return JSONResponse({'error': 'Invalid market quote input.'}, status_code=400,
             headers={'Cache-Control': 'no-store'})
+    observation = QuoteObservation(request, value, 'market')
     async def generate():
         queue = asyncio.Queue()
+        async def publish(frame):
+            await queue.put(observation.event(frame))
         async def run():
             try:
-                result = await service.get(value, queue.put)
-                await queue.put({'type': 'complete', 'value': result})
+                result = await service.get(value, publish)
+                await publish({'type': 'complete', 'value': result})
             except Exception as error:
-                await queue.put({'type': 'error', 'error': 'Market quote unavailable.', **public_quote_error(error)})
+                await publish(observation.error(error))
             finally:
                 await queue.put(None)
         task = asyncio.create_task(run())
@@ -950,4 +954,5 @@ async def handle_market_quote(request, service, stream=False):
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            observation.finish('cancelled')
     return StreamingResponse(generate(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store'})

@@ -29,6 +29,7 @@ from .route_search import WETH
 from .wallet_balances import TOKENS
 from .uniswap_routes import uses_typed_adapter
 from .shared_reads import discard_pool_observation
+from .trade_observation import QuoteObservation
 
 PAXG = next(address for name, address in TOKENS if name == 'paxg')
 
@@ -461,18 +462,25 @@ async def handle_trade_quote(request, service, *, model=False):
         validate(value, model=model)
     except (ValueError, TypeError):
         return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
+    observation = QuoteObservation(request, value)
     if model:
         try:
-            return JSONResponse(await service.get_model(value), headers={'Cache-Control': 'no-store'})
+            result = await service.get_model(value)
+            observation.finish('succeeded')
+            return JSONResponse(result, headers={'Cache-Control': 'no-store'})
         except Exception as error:
-            return JSONResponse(public_quote_error(error), status_code=503, headers={'Cache-Control': 'no-store'})
+            payload = observation.event(observation.error(error))
+            return JSONResponse({key: value for key, value in payload.items() if key != 'type'},
+                                status_code=503, headers={'Cache-Control': 'no-store'})
     async def events():
         queue = asyncio.Queue()
+        async def publish(frame):
+            await queue.put(observation.event(frame))
         async def produce():
             try:
-                await queue.put({'type': 'complete', 'value': await service.get(value, queue.put)})
+                await publish({'type': 'complete', 'value': await service.get(value, publish)})
             except Exception as error:
-                await queue.put({'type': 'error', **public_quote_error(error)})
+                await publish(observation.error(error))
             finally:
                 await queue.put(None)
         task = asyncio.create_task(produce())
@@ -482,4 +490,5 @@ async def handle_trade_quote(request, service, *, model=False):
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            observation.finish('cancelled')
     return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
