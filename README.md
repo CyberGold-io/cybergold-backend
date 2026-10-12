@@ -362,6 +362,12 @@ installed next-refresh browser acceptance is recorded by Ops.
 
 ## Focused basket previews
 
+The [unified trading coordinator](docs/unified-trading.md) exposes one
+`/api/quotes/trade/stream` intent and `/api/quotes/trade/model` for Backend-selected
+complete Core or supported market executions. Quotes compare fee-inclusive
+amounts, preserve explicit retained execution and keep wallet signing separate.
+Existing family-specific APIs remain compatible with older clients.
+
 `POST /api/quotes/basket-preview` serves the four existing Helpers basket issue
 and redeem previews used by Swap. Each request names a product mode and raw
 amounts; each response contains the canonical block identity, configured Helpers

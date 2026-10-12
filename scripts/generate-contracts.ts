@@ -44,6 +44,13 @@ operation("/api/quotes/market/stream", "post", "MarketQuoteEvent", "MarketQuoteR
 operation("/api/quotes/market/model", "post", "MarketQuoteModelPacket", "MarketModelRequest", {
   description: "Amount-independent market model acquisition for an active view, without prior successful quotes, wallet signing or a mandatory tick scan. Canonical pool baseline plus contextual organic raw-AMM points; missing optional model state leaves ordinary quotes available.",
 });
+operation("/api/quotes/trade/stream", "post", "TradeQuoteEvent", "TradeQuoteRequest", {
+  description: "One CYGLD trading intent compares complete Core and supported market candidates after their existing fees. Backend owns basket targets and default adapter selection; one pinned context, progressive qualified winners, tagged retained execution and ordinary independent provider errors. Wallet signing, actual signed-call simulation and submission remain browser-owned.",
+  responses: { "200": { description: "Cached models, estimates and tagged provider progress; qualified best incumbents, then complete or error. Integers are decimal strings.", content: { "application/x-ndjson": { schema: ref("TradeQuoteEvent") } } }, default: response(ref("PublicError")) },
+});
+operation("/api/quotes/trade/model", "post", "TradeQuoteModelPacket", "TradeModelRequest", {
+  description: "Organic Core and market models with a Backend-ranked indicative estimate. Warm cached packets require no RPC; cold acquisition reuses existing lightweight provider baselines and shared context. Missing model state does not prevent exact trade search; neither models nor estimates are executable quotes.",
+});
 operation("/api/transaction/revert", "get", "TransactionRevert", undefined, {
   parameters: [{ name: "hash", in: "query", required: true, schema: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$" } }],
   description: "Replays the chain transaction at latest state for the Apps' receipt error display, using its hash only. EVM return bytes are preserved; private provider text is redacted, native absence/outage remains unavailable. This is not a historical proof of the original revert and never signs/submits or accepts caller-selected calldata/provider.",

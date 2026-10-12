@@ -20,6 +20,10 @@ class RecoveryApiError(Exception):
         super().__init__(message);self.status,self.retry=status,retry
 
 
+class SnapshotChanged(RecoveryApiError):
+    """The existing canonical header check disproved the pinned snapshot."""
+
+
 def abi_value(value,parameter):
     array=re.fullmatch(r'(.*)\[([0-9]*)\]',parameter['type'])
     if array:return [abi_value(item,{**parameter,'type':array[1]}) for item in value]
@@ -68,7 +72,7 @@ class RecoveryRpc:
     async def assert_canonical(self,block):
         value=await self.w3.eth.get_block(block['number'])
         if value.get('hash') is None or Web3.to_hex(value['hash']).lower()!=block['hash'].lower():
-            raise RecoveryApiError('Recovery snapshot changed; restart discovery',retry=1)
+            raise SnapshotChanged('Recovery snapshot changed; restart discovery',retry=1)
 
     async def count(self,block):return await self.call('core',self.core,'outstandingRecoveryAssetCount',block)
     async def assets(self,block,offset):return await self.call('core',self.core,'outstandingRecoveryAssets',block,[offset,64])

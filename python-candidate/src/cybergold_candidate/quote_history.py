@@ -16,6 +16,7 @@ from .quote_models import LegModel, PoolBaseline
 from .recovery_rpc import ABI as RECOVERY_ABI, abi_value
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .uniswap_routes import uses_typed_adapter
+from .shared_reads import discard_pool_observation
 
 
 def economic_path(path, mode):
@@ -110,17 +111,27 @@ class QuoteHistory:
 
     async def batch(self, rpc, calls, block, abi):
         contracts = {address: rpc.w3.eth.contract(abi=abi) for address, _, _ in calls}
-        rows = await rpc.call_batch([(address, contracts[address].encode_abi(name, args=args))
-                                     for address, name, args in calls], block)
-        self.reads += len(calls)
-        self.envelopes += bool(calls)
+        encoded = [(address, contracts[address].encode_abi(name, args=args)) for address, name, args in calls]
+        if hasattr(rpc, 'pool_batch'):
+            counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
+            rows, _ = await rpc.pool_batch(encoded, block, counts)
+            self.reads += counts['issued']
+            self.envelopes += bool(counts['issued'])
+        else:
+            rows = await rpc.call_batch(encoded, block)
+            self.reads += len(calls)
+            self.envelopes += bool(calls)
         values = []
-        for (_, name, _), row in zip(calls, rows, strict=True):
+        for call, (_, name, _), row in zip(encoded, calls, rows, strict=True):
             if 'error' in row:
                 raise ValueError('Optional model state unavailable: ' + name)
             out = next(entry for entry in abi if entry['name'] == name)['outputs'][0]
-            value = rpc.w3.codec.decode([collapse_if_tuple(out)], bytes.fromhex(row['result'][2:]))[0]
-            values.append(abi_value(value, out))
+            try:
+                value = rpc.w3.codec.decode([collapse_if_tuple(out)], bytes.fromhex(row['result'][2:]))[0]
+                values.append(abi_value(value, out))
+            except Exception:
+                discard_pool_observation(rpc, call, block)
+                raise
         return values
 
     def ensure_state(self, rpc, block, context):
@@ -248,12 +259,16 @@ class QuoteHistory:
                 self.reads += counts['issued']
                 self.envelopes += bool(counts['issued'])
             result = []
-            for name, row in zip(names, rows, strict=True):
+            for call, name, row in zip(calls, names, rows, strict=True):
                 if 'error' in row:
                     raise ValueError('Optional pool state unavailable')
                 outputs = next(entry for entry in POOL_ABI[group] if entry.get('name') == name)['outputs']
-                decoded = rpc.w3.codec.decode([collapse_if_tuple(out) for out in outputs], bytes.fromhex(row['result'][2:]))
-                result.append(decoded[0] if len(decoded) == 1 else decoded)
+                try:
+                    decoded = rpc.w3.codec.decode([collapse_if_tuple(out) for out in outputs], bytes.fromhex(row['result'][2:]))
+                    result.append(decoded[0] if len(decoded) == 1 else decoded)
+                except Exception:
+                    discard_pool_observation(rpc, call, block)
+                    raise
             return result
         async def hop(token_in, token_out, fee):
             ordered = sorted((token_in, token_out))

@@ -26,7 +26,7 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                safe_timeout_seconds=15, safe_status=None, faucet_settings=None, faucet_timeout_seconds=20,
                recovery=None,diagnostic_logger=None,release=None,aliases=None,protocol_facts=None,protocol_configuration=None,
                shared_market=None,pool_producer=None,helpers_activity=None,pool_activity=None,basket_preview=None,governance_core_facts=None,
-               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None):
+               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None):
     from .telemetry import Metrics, TelemetryMiddleware
     metrics=Metrics()
     owned_client = client is None
@@ -91,6 +91,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 await basket_preview.close()
             if token_preview:
                 await token_preview.close()
+            if trade_quotes:
+                await trade_quotes.close()
             if quote_intent and hasattr(quote_intent, 'close'):
                 await quote_intent.close()
             if route_search:
@@ -389,6 +391,16 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     async def market_quote_route(request: Request):
         from .market_swap import handle_market_quote
         return await handle_market_quote(request, market_quotes)
+
+    @app.post('/api/quotes/trade/stream')
+    async def trade_quote_stream(request: Request):
+        from .trade_quote import handle_trade_quote
+        return await handle_trade_quote(request, trade_quotes)
+
+    @app.post('/api/quotes/trade/model')
+    async def trade_quote_model(request: Request):
+        from .trade_quote import handle_trade_quote
+        return await handle_trade_quote(request, trade_quotes, model=True)
 
     @app.post('/api/quotes/market/stream')
     async def market_quote_stream(request: Request):

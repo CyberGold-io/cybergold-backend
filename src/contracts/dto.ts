@@ -422,12 +422,53 @@ export type QuoteIntentEvent =
   | { type: "progress"; stage: string; completed: number; total: number }
   | { type: "estimate"; amount: string; context: BasketPreview["context"] }
   | { type: "qualified"; value: QuoteIntent }
-  | { type: "invalidated"; context: BasketPreview["context"] }
+  | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
   | { type: "complete"; value: QuoteIntent }
   | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
 
+/** One user trade; Backend chooses a complete Core or market execution. */
+export type TradeModelRequest = {
+  side: "buy" | "sell"; mode: "exact-in" | "exact-out"; counterToken: string;
+  native: boolean; amount: string; slippageBps?: number;
+};
+export type TradeRetainedPlan =
+  | { strategy: "core"; request: QuoteIntentRequest; quote: QuoteIntent }
+  | { strategy: "market"; request: MarketQuoteRequest; quote: MarketQuote };
+export type TradeQuoteRequest = TradeModelRequest & {
+  recipient: string; deadline: string; retainedPlan?: TradeRetainedPlan;
+};
+export type TradeEvaluation = Record<"core" | "market", "running" | "complete" | "unavailable" | "unsupported">;
+type TradeEconomics = {
+  side: TradeModelRequest["side"]; mode: TradeModelRequest["mode"];
+  tokenIn: string; tokenOut: string; quotedInput: string; quotedOutput: string;
+  inputMaximum: string; outputMinimum: string; context: QuoteIntent["context"];
+  evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number };
+};
+export type TradeQuote = TradeEconomics & (
+  | { strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent }
+  | { strategy: "market"; providerRequest: MarketQuoteRequest; providerQuote: MarketQuote }
+);
+export type TradeQuoteModelPacket = {
+  namespace: "trade"; intent: TradeModelRequest;
+  models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
+  estimate?: { strategy: "core" | "market"; amount: string };
+};
+export type TradeQuoteEvent =
+  | { type: "model"; value: TradeQuoteModelPacket }
+  | { type: "estimate"; strategy: "core" | "market"; amount: string }
+  | { type: "qualified" | "complete"; value: TradeQuote }
+  | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
+  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode }
+  | { type: "invalidated"; strategy: "core" | "market" }
+  | { type: "error"; error: string; code?: QuoteErrorCode };
+
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
 export interface ContractSchemas {
+  TradeModelRequest: TradeModelRequest;
+  TradeQuoteRequest: TradeQuoteRequest;
+  TradeQuote: TradeQuote;
+  TradeQuoteEvent: TradeQuoteEvent;
+  TradeQuoteModelPacket: TradeQuoteModelPacket;
   ProtocolConfiguration: ProtocolConfiguration;
   MarketQuoteRequest: MarketQuoteRequest;
   MarketQuote: MarketQuote;

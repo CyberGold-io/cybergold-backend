@@ -23,6 +23,7 @@ from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .issuance_capacity import capacity_amounts, read_capacity
 from .market_swap import encode_adapter
 from .uniswap_routes import resize_branches, uses_typed_adapter
+from .recovery_rpc import SnapshotChanged
 
 
 class RetainedQuotePlan(BaseModel):
@@ -119,7 +120,7 @@ class QuoteIntent:
         if self.history:
             await self.history.close()
 
-    async def get(self, request, on_update, *, block=None, model_epoch=None):
+    async def get(self, request, on_update, *, block=None, model_epoch=None, quoted_ranking=False):
         validate(request)
         slippage_bps = request.get('slippageBps', DEFAULT_SLIPPAGE_BPS)
         epoch = self.history.epoch if self.history and model_epoch is None else model_epoch
@@ -156,11 +157,12 @@ class QuoteIntent:
         capacity_state = None
         route_searches = {}
         expected_input_gross = None
+        context_error = None
 
         async def capacity(rows):
             nonlocal capacity_state
             if capacity_state is None:
-                capacity_state = asyncio.create_task(read_capacity(rpc, self.settings, block, metrics))
+                capacity_state = asyncio.create_task(read_capacity(rpc, self.settings, block, metrics, shared=quoted_ranking))
             values = await asyncio.shield(capacity_state)
             return capacity_amounts(request, [row['best']['quote'] for row in rows], values)
 
@@ -174,13 +176,16 @@ class QuoteIntent:
             if request['mode'] == 'issue-exact-in':
                 return int(value['executionAmount']) > int(qualified['executionAmount'])
             if request['mode'] == 'issue-exact-out':
-                return int(value['maximumInputAmount']) < int(qualified['maximumInputAmount'])
+                field = 'expectedInputAmount' if quoted_ranking else 'maximumInputAmount'
+                return int(value.get(field, value['maximumInputAmount'])) < int(qualified.get(field, qualified['maximumInputAmount']))
             if request['mode'] == 'redeem-exact-in':
+                if quoted_ranking:
+                    return int(value['displayAmount']) > int(qualified['displayAmount'])
                 return int(value['preview']['minimumAmountOut']) > int(qualified['preview']['minimumAmountOut'])
             return int(value['executionAmount']) < int(qualified['executionAmount'])
 
         async def qualify():
-            nonlocal pending_qualification, qualified
+            nonlocal pending_qualification, qualified, context_error
             while pending_qualification is not None:
                 read, pending_qualification = pending_qualification, None
                 try:
@@ -195,6 +200,15 @@ class QuoteIntent:
                         await rpc.assert_canonical(block)
                     qualified = value
                     await on_update({'type': 'qualified', 'value': result_value(value)})
+                except SnapshotChanged as error:
+                    # A disproved common snapshot is different from an
+                    # unavailable prospective route. It also retires an
+                    # earlier tuple and survives a later ordinary tail error.
+                    context_error = error
+                    qualified = None
+                    pending_qualification = None
+                    await on_update({'type': 'invalidated', 'context': context, 'reason': 'snapshot-changed'})
+                    return
                 except Exception:
                     # An optional candidate failure does not replace ordinary
                     # complete coverage/validation or discard a checked tuple.
@@ -202,7 +216,7 @@ class QuoteIntent:
 
         def schedule_qualification(read):
             nonlocal pending_qualification, qualifying
-            if not self.qualification:
+            if not self.qualification or context_error is not None:
                 return
             pending_qualification = read
             if qualifying is None or qualifying.done():
@@ -462,6 +476,7 @@ class QuoteIntent:
                     return {'quotes': selected['quotes'], 'preview': final, 'initialPreview': None, 'basketPreview': required,
                             **({'expectedInputAmount': str(expected_input_gross)} if expected_input_gross is not None else {}),
                             'displayAmount': str(expected_output(final, rows, selected['quotes']) if early_display else gross),
+                            'expectedOutputAmount': str(expected_output(final, rows, selected['quotes'])),
                             'executionAmount': str(gross), 'maximumInputAmount': '0'}
                 schedule_qualification(checked)
             if selected is None:
@@ -673,6 +688,8 @@ class QuoteIntent:
                 result = await redeem_out()
             async with asyncio.timeout(15):
                 await rpc.assert_canonical(block)
+            if context_error is not None:
+                raise context_error
             # Final completion supersedes any still-running display-only read.
             result.update(mode=request['mode'], slippageBps=slippage_bps, context=context,
                           metrics={**metrics, 'totalMs': round((time.perf_counter() - started) * 1000, 3)})
@@ -710,6 +727,8 @@ class QuoteIntent:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+            if context_error is not None:
+                raise context_error
 
 
 async def handle_quote_intent(request, service):

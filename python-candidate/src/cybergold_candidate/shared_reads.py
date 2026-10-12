@@ -4,6 +4,14 @@ from collections import OrderedDict
 from dataclasses import dataclass
 
 
+def discard_pool_observation(rpc, call, block):
+    """A failed typed decode must not retain its raw successful RPC envelope."""
+    bank = getattr(rpc, 'pool_reads', None)
+    if bank is not None:
+        address, data = call
+        bank.completed.pop((rpc.chain_id, block['hash'].lower(), address.lower(), data.lower()), None)
+
+
 @dataclass
 class PendingRead:
     future: asyncio.Future
