@@ -4,7 +4,7 @@ doc_type: development-guide
 status: active
 owner: backend-maintainer
 created: 2026-10-11
-last_reviewed: 2026-10-11
+last_reviewed: 2026-10-12
 canonical_for: CyberGold Backend feature integration and dev-to-main promotion
 ---
 
@@ -36,8 +36,9 @@ Actions and secret management, so it is not a dev-only permission.
 
 Only `feature/*` may target `dev`, from this repository or a fork. Only the
 canonical CyberGold repository's exact `dev` branch may target `main`. GitHub
-lets a contributor select `main` in the PR form, but a feature or fork head,
-including a fork branch named `dev`, fails the source/base policy check.
+lets a contributor select `main` in the PR form. Maintainers do not accept a
+feature or fork head into `main`, including a fork branch named `dev`; they
+verify the actual head and base repositories and branches before merging.
 Keep unfinished changes on feature branches: a `dev` promotion
 includes every integrated feature, rather than selecting one feature again.
 
@@ -49,11 +50,15 @@ integration with an ordinary revert PR into `dev`.
 ## CI and delivery
 
 Ordinary fork PR CI uses a read-only token and receives no repository secrets.
-The selected required CI checks evaluate the permitted source/base relationship
-using candidate-controlled source. Maintainers must separately establish and
-verify authoritative policy enforcement and GitHub's selected actor and
-required PR/check protections for both branches during the public rollout.
-This source document alone is not proof that hosted protection is active.
+GitHub Free native protections enforce the selected merge actors, required PRs
+and existing required CI checks. Branch-policy CI uses candidate-controlled
+source and provides feedback; it does not independently enforce the permitted
+source/base relationship. Before accepting a PR, the authorized maintainer
+verifies that relationship and reviews the proposed changes, including
+workflows and policy scripts. This workflow uses maintainer checks without a
+separate bot or exclusive merger service. Maintainers verify the selected
+hosted protections during rollout; this document alone does not establish that
+they are active.
 
 PR jobs do not dispatch deployment. Successful admitted `dev` push CI requests
 publication through the existing private Ops delivery path, followed by

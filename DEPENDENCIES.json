@@ -1,0 +1,3004 @@
+{
+  "npm": [
+    {
+      "packagePath": "node_modules/@adraffy/ens-normalize",
+      "version": "1.11.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@adraffy/ens-normalize/-/ens-normalize-1.11.1.tgz",
+      "integrity": "sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@babel/code-frame",
+      "version": "7.29.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz",
+      "integrity": "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@babel/helper-validator-identifier",
+      "version": "7.29.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.29.7.tgz",
+      "integrity": "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@cspotcode/source-map-support",
+      "version": "0.8.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz",
+      "integrity": "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@cspotcode/source-map-support/node_modules/@jridgewell/trace-mapping",
+      "version": "0.3.9",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.9.tgz",
+      "integrity": "sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/abi",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/abi/-/abi-5.8.0.tgz",
+      "integrity": "sha512-b9YS/43ObplgyV6SlyQsG53/vkSal0MNA1fskSC4mbnCMi8R+NkcH8K9FPYNESf6jUefBUniE4SOKms0E/KK1Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/abstract-provider",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/abstract-provider/-/abstract-provider-5.8.0.tgz",
+      "integrity": "sha512-wC9SFcmh4UK0oKuLJQItoQdzS/qZ51EJegK6EmAWlh+OptpQ/npECOR3QqECd8iGHC0RJb4WKbVdSfif4ammrg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/abstract-signer",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/abstract-signer/-/abstract-signer-5.8.0.tgz",
+      "integrity": "sha512-N0XhZTswXcmIZQdYtUnd79VJzvEwXQw6PK0dTl9VoYrEBxxCPXqS0Eod7q5TNKRxe1/5WUMuR0u0nqTF/avdCA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/address",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/address/-/address-5.8.0.tgz",
+      "integrity": "sha512-GhH/abcC46LJwshoN+uBNoKVFPxUuZm6dA257z0vZkKmU1+t8xTn8oK7B9qrj8W2rFRMch4gbJl6PmVxjxBEBA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/base64",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/base64/-/base64-5.8.0.tgz",
+      "integrity": "sha512-lN0oIwfkYj9LbPx4xEkie6rAMJtySbpOAFXSDVQaBnAzYfB4X2Qr+FXJGxMoc3Bxp2Sm8OwvzMrywxyw0gLjIQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/basex",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/basex/-/basex-5.8.0.tgz",
+      "integrity": "sha512-PIgTszMlDRmNwW9nhS6iqtVfdTAKosA7llYXNmGPw4YAI1PUyMv28988wAb41/gHF/WqGdoLv0erHaRcHRKW2Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/bignumber",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/bignumber/-/bignumber-5.8.0.tgz",
+      "integrity": "sha512-ZyaT24bHaSeJon2tGPKIiHszWjD/54Sz8t57Toch475lCLljC6MgPmxk7Gtzz+ddNN5LuHea9qhAe0x3D+uYPA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/bytes",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/bytes/-/bytes-5.8.0.tgz",
+      "integrity": "sha512-vTkeohgJVCPVHu5c25XWaWQOZ4v+DkGoC42/TS2ond+PARCxTJvgTFUNDZovyQ/uAQ4EcpqqowKydcdmRKjg7A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/constants",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/constants/-/constants-5.8.0.tgz",
+      "integrity": "sha512-wigX4lrf5Vu+axVTIvNsuL6YrV4O5AXl5ubcURKMEME5TnWBouUh0CDTWxZ2GpnRn1kcCgE7l8O5+VbV9QTTcg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/contracts",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/contracts/-/contracts-5.8.0.tgz",
+      "integrity": "sha512-0eFjGz9GtuAi6MZwhb4uvUM216F38xiuR0yYCjKJpNfSEy4HUM8hvqqBj9Jmm0IUz8l0xKEhWwLIhPgxNY0yvQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/hash",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/hash/-/hash-5.8.0.tgz",
+      "integrity": "sha512-ac/lBcTbEWW/VGJij0CNSw/wPcw9bSRgCB0AIBz8CvED/jfvDoV9hsIIiWfvWmFEi8RcXtlNwp2jv6ozWOsooA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/hdnode",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/hdnode/-/hdnode-5.8.0.tgz",
+      "integrity": "sha512-4bK1VF6E83/3/Im0ERnnUeWOY3P1BZml4ZD3wcH8Ys0/d1h1xaFt6Zc+Dh9zXf9TapGro0T4wvO71UTCp3/uoA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/json-wallets",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/json-wallets/-/json-wallets-5.8.0.tgz",
+      "integrity": "sha512-HxblNck8FVUtNxS3VTEYJAcwiKYsBIF77W15HufqlBF9gGfhmYOJtYZp8fSDZtn9y5EaXTE87zDwzxRoTFk11w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/keccak256",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/keccak256/-/keccak256-5.8.0.tgz",
+      "integrity": "sha512-A1pkKLZSz8pDaQ1ftutZoaN46I6+jvuqugx5KYNeQOPqq+JZ0Txm7dlWesCHB5cndJSu5vP2VKptKf7cksERng==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/logger",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/logger/-/logger-5.8.0.tgz",
+      "integrity": "sha512-Qe6knGmY+zPPWTC+wQrpitodgBfH7XoceCGL5bJVejmH+yCS3R8jJm8iiWuvWbG76RUmyEG53oqv6GMVWqunjA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/networks",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/networks/-/networks-5.8.0.tgz",
+      "integrity": "sha512-egPJh3aPVAzbHwq8DD7Po53J4OUSsA1MjQp8Vf/OZPav5rlmWUaFLiq8cvQiGK0Z5K6LYzm29+VA/p4RL1FzNg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/pbkdf2",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/pbkdf2/-/pbkdf2-5.8.0.tgz",
+      "integrity": "sha512-wuHiv97BrzCmfEaPbUFpMjlVg/IDkZThp9Ri88BpjRleg4iePJaj2SW8AIyE8cXn5V1tuAaMj6lzvsGJkGWskg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/properties",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/properties/-/properties-5.8.0.tgz",
+      "integrity": "sha512-PYuiEoQ+FMaZZNGrStmN7+lWjlsoufGIHdww7454FIaGdbe/p5rnaCXTr5MtBYl3NkeoVhHZuyzChPeGeKIpQw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/providers",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/providers/-/providers-5.8.0.tgz",
+      "integrity": "sha512-3Il3oTzEx3o6kzcg9ZzbE+oCZYyY+3Zh83sKkn4s1DZfTUjIegHnN2Cm0kbn9YFy45FDVcuCLLONhU7ny0SsCw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/random",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/random/-/random-5.8.0.tgz",
+      "integrity": "sha512-E4I5TDl7SVqyg4/kkA/qTfuLWAQGXmSOgYyO01So8hLfwgKvYK5snIlzxJMk72IFdG/7oh8yuSqY2KX7MMwg+A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/rlp",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/rlp/-/rlp-5.8.0.tgz",
+      "integrity": "sha512-LqZgAznqDbiEunaUvykH2JAoXTT9NV0Atqk8rQN9nx9SEgThA/WMx5DnW8a9FOufo//6FZOCHZ+XiClzgbqV9Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/sha2",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/sha2/-/sha2-5.8.0.tgz",
+      "integrity": "sha512-dDOUrXr9wF/YFltgTBYS0tKslPEKr6AekjqDW2dbn1L1xmjGR+9GiKu4ajxovnrDbwxAKdHjW8jNcwfz8PAz4A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/signing-key",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/signing-key/-/signing-key-5.8.0.tgz",
+      "integrity": "sha512-LrPW2ZxoigFi6U6aVkFN/fa9Yx/+4AtIUe4/HACTvKJdhm0eeb107EVCIQcrLZkxaSIgc/eCrX8Q1GtbH+9n3w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/solidity",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/solidity/-/solidity-5.8.0.tgz",
+      "integrity": "sha512-4CxFeCgmIWamOHwYN9d+QWGxye9qQLilpgTU0XhYs1OahkclF+ewO+3V1U0mvpiuQxm5EHHmv8f7ClVII8EHsA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/strings",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/strings/-/strings-5.8.0.tgz",
+      "integrity": "sha512-qWEAk0MAvl0LszjdfnZ2uC8xbR2wdv4cDabyHiBh3Cldq/T8dPH3V4BbBsAYJUeonwD+8afVXld274Ls+Y1xXg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/transactions",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/transactions/-/transactions-5.8.0.tgz",
+      "integrity": "sha512-UglxSDjByHG0TuU17bDfCemZ3AnKO2vYrL5/2n2oXvKzvb7Cz+W9gOWXKARjp2URVwcWlQlPOEQyAviKwT4AHg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/units",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/units/-/units-5.8.0.tgz",
+      "integrity": "sha512-lxq0CAnc5kMGIiWW4Mr041VT8IhNM+Pn5T3haO74XZWFulk7wH1Gv64HqE96hT4a7iiNMdOCFEBgaxWuk8ETKQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/wallet",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/wallet/-/wallet-5.8.0.tgz",
+      "integrity": "sha512-G+jnzmgg6UxurVKRKvw27h0kvG75YKXZKdlLYmAHeF32TGUzHkOFd7Zn6QHOTYRFWnfjtSSFjBowKo7vfrXzPA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/web",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/web/-/web-5.8.0.tgz",
+      "integrity": "sha512-j7+Ksi/9KfGviws6Qtf9Q7KCqRhpwrYKQPs+JBA/rKVFF/yaWLHJEH3zfVP2plVu+eys0d2DlFmhoQJayFewcw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@ethersproject/wordlists",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/wordlists/-/wordlists-5.8.0.tgz",
+      "integrity": "sha512-2df9bbXicZws2Sb5S6ET493uJ0Z84Fjr3pC4tu/qlnZERibZCeUVuqdtt+7Tv9xxhUxHoIekIA7avrKUWHrezg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/ajv-compiler",
+      "version": "4.0.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/ajv-compiler/-/ajv-compiler-4.0.6.tgz",
+      "integrity": "sha512-NtuzM0SfaMJbGlnjr9LWQUN5LzgSrbB8tf/wRZNas+4E1O/Nmzl53e7ruT61HDZyRCJGC6FxIogmNZO1c5ETBA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/error",
+      "version": "4.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/error/-/error-4.2.0.tgz",
+      "integrity": "sha512-RSo3sVDXfHskiBZKBPRgnQTtIqpi/7zhJOEmAxCiBcM7d0uwdGdxLlsCaLzGs8v8NnxIRlfG0N51p5yFaOentQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/fast-json-stringify-compiler",
+      "version": "5.1.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/fast-json-stringify-compiler/-/fast-json-stringify-compiler-5.1.0.tgz",
+      "integrity": "sha512-PxcYtKLbQ8Z+yApiqjK8FwxIwvEj38k2OiLc17u8dkJSlmfi2wHHPaSnaoqBPQqtvF8YVsDgDpP2snDCfFrpfw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/forwarded",
+      "version": "3.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/forwarded/-/forwarded-3.0.2.tgz",
+      "integrity": "sha512-NE8HgKLgYejV9lDpqkEFaDKMLYelJBVfHekhB0UKvX0ghagXRJqg68feg8er1NPXxG4N9i6vPxzt8E+3wHfcmA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/merge-json-schemas",
+      "version": "0.2.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/merge-json-schemas/-/merge-json-schemas-0.2.1.tgz",
+      "integrity": "sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@fastify/proxy-addr",
+      "version": "5.1.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@fastify/proxy-addr/-/proxy-addr-5.1.1.tgz",
+      "integrity": "sha512-zv07Y9GEuDsJPegZoDFd4SDWaZOW8N2pa0GSrYmKpId/tjt1Hgo3BjZBVjdVpfVrHaA+Qv5jawtS2O50J5xM9g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@jridgewell/resolve-uri",
+      "version": "3.1.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
+      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@jridgewell/sourcemap-codec",
+      "version": "1.6.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz",
+      "integrity": "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@noble/ciphers",
+      "version": "1.3.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@noble/ciphers/-/ciphers-1.3.0.tgz",
+      "integrity": "sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@noble/curves",
+      "version": "1.9.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@noble/curves/-/curves-1.9.1.tgz",
+      "integrity": "sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@noble/hashes",
+      "version": "1.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@noble/hashes/-/hashes-1.8.0.tgz",
+      "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@opentelemetry/api",
+      "version": "1.9.1",
+      "declaredLicense": "Apache-2.0",
+      "packageArtifact": "https://registry.npmjs.org/@opentelemetry/api/-/api-1.9.1.tgz",
+      "integrity": "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@pinojs/redact",
+      "version": "0.4.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@pinojs/redact/-/redact-0.4.0.tgz",
+      "integrity": "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@prometheus-io/client",
+      "version": "0.16.1",
+      "declaredLicense": "Apache-2.0",
+      "packageArtifact": "https://registry.npmjs.org/@prometheus-io/client/-/client-0.16.1.tgz",
+      "integrity": "sha512-XkFPsGFGoSs/UMg/vh0QLDpanl/tsrOV5PLHdpGe8Ho+ir/Llhytr15j6y8ZwLrpIGzK9gTVVpIalA6C4UjUZw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@redocly/ajv",
+      "version": "8.11.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@redocly/ajv/-/ajv-8.11.2.tgz",
+      "integrity": "sha512-io1JpnwtIcvojV7QKDUSIuMN/ikdOUd1ReEnUnMKGfDVridQZ31J0MmIuqwuRjWDZfmvr+Q0MqCcfHM2gTivOg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@redocly/config",
+      "version": "0.22.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@redocly/config/-/config-0.22.0.tgz",
+      "integrity": "sha512-gAy93Ddo01Z3bHuVdPWfCwzgfaYgMdaZPcfL7JZ7hWJoK9V0lXDbigTWkhiPFAaLWzbOJ+kbUQG1+XwIm0KRGQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@redocly/openapi-core",
+      "version": "1.34.20",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@redocly/openapi-core/-/openapi-core-1.34.20.tgz",
+      "integrity": "sha512-ypeBZ/6BKXR9+7/TtbKhbl4UgD7raHhPS12oknlKno2A8+lnFkxIwiE/Aklu6L2cd/ioH+fCWuMxi9/p3EyAPw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@scure/base",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@scure/base/-/base-1.2.6.tgz",
+      "integrity": "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@scure/bip32",
+      "version": "1.7.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@scure/bip32/-/bip32-1.7.0.tgz",
+      "integrity": "sha512-E4FFX/N3f4B80AKWp5dP6ow+flD1LQZo/w8UnLGYZO674jS6YnYeepycOOksv+vLPSpgN35wgKgy+ybfTb2SMw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@scure/bip39",
+      "version": "1.6.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@scure/bip39/-/bip39-1.6.0.tgz",
+      "integrity": "sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@tsconfig/node10",
+      "version": "1.0.13",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@tsconfig/node10/-/node10-1.0.13.tgz",
+      "integrity": "sha512-gcLdvR9HO1ZJBypsOGqaP6TFEzb6vIta0KSTLt9NAQ6pXQO3cRgSVyCN6pzYqI9DlJgY71XKO0dpDhCf08b3pg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@tsconfig/node12",
+      "version": "1.0.11",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@tsconfig/node12/-/node12-1.0.11.tgz",
+      "integrity": "sha512-cqefuRsh12pWyGsIoBKJA9luFu3mRxCA+ORZvA4ktLSzIuCUtWVxGIuXigEwO5/ywWFMZ2QEGKWvkZG1zDMTag==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@tsconfig/node14",
+      "version": "1.0.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@tsconfig/node14/-/node14-1.0.3.tgz",
+      "integrity": "sha512-ysT8mhdixWK6Hw3i1V2AeRqZ5WfXg1G43mqoYlM2nc6388Fq5jcXyr5mRsqViLx/GJYdoL0bfXD8nmF+Zn/Iow==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@tsconfig/node16",
+      "version": "1.0.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@tsconfig/node16/-/node16-1.0.4.tgz",
+      "integrity": "sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@types/json-schema",
+      "version": "7.0.15",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@types/json-schema/-/json-schema-7.0.15.tgz",
+      "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@types/node",
+      "version": "26.6.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@types/node/-/node-26.6.3.tgz",
+      "integrity": "sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@types/pg",
+      "version": "8.23.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@types/pg/-/pg-8.23.1.tgz",
+      "integrity": "sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/permit2-sdk",
+      "version": "1.4.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/permit2-sdk/-/permit2-sdk-1.4.0.tgz",
+      "integrity": "sha512-l/aGhfhB93M76vXs4eB8QNwhELE6bs66kh7F1cyobaPtINaVpMmlJv+j3KmHeHwAZIsh7QXyYzhDxs07u0Pe4Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/router-sdk",
+      "version": "2.11.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/router-sdk/-/router-sdk-2.11.6.tgz",
+      "integrity": "sha512-WyTUOi24s+0VwrNVGCxBKYKs3v5edZGKNLChw49hcKxZ5smDNQ/Tjzbxm/jQcmMMsb1LvxPoP6owwMiqHLjAZw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/router-sdk/node_modules/@uniswap/swap-router-contracts",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "node_modules/@uniswap/router-sdk/vendor/uniswap-abi-packages/swap-router-contracts",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/router-sdk/vendor/uniswap-abi-packages/swap-router-contracts",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/sdk-core",
+      "version": "7.19.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/sdk-core/-/sdk-core-7.19.4.tgz",
+      "integrity": "sha512-jV9qVMMD6qvEATgfFnZ3QgrhIMv5lullzeGPWjyC4+sUctatft+1M+OtAZxxjbFm8NQfJA73hqIeFPOg4cUyoA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/sdk-core/node_modules/@ethersproject/keccak256",
+      "version": "5.7.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/keccak256/-/keccak256-5.7.0.tgz",
+      "integrity": "sha512-2UcPboeL/iW+pSg6vZ6ydF8tCnv3Iu/8tUmLLzWWGzxWKFFqOBQFLo6uLUv6BDrLgCDfN28RJ/wtByx+jZ4KBg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/sdk-core/node_modules/@ethersproject/strings",
+      "version": "5.7.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@ethersproject/strings/-/strings-5.7.0.tgz",
+      "integrity": "sha512-/9nu+lj0YswRNSH0NXYqrh8775XNyEdUQAuf3f+SmOrnVewcJ5SBNAjF7lpgehKi4abvNNXyf+HX86czCdJ8Mg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/swap-router-contracts",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "vendor/uniswap-abi-packages/swap-router-contracts",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router",
+      "version": "2.1.0",
+      "declaredLicense": "GPL-2.0-or-later",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/universal-router/-/universal-router-2.1.0.tgz",
+      "integrity": "sha512-rt18RUsZd9xDfyVfIONJo+TEQ8w+olOYxu9+A1g4Thil1R7IMa+8mnyVQjdLPK2REhejScDwjYbOGpeaAce0hg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router-sdk",
+      "version": "5.15.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/universal-router-sdk/-/universal-router-sdk-5.15.0.tgz",
+      "integrity": "sha512-Brfj3h2knWIM/ApQpVJ8+UQqXOo9zMxEgBfX45DEJKRgZN9UiVQeMXe0HF7UVyaXyuoUA3StD+kllCkPxAewxQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router-sdk/node_modules/@openzeppelin/contracts",
+      "version": "4.9.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@openzeppelin/contracts/-/contracts-4.9.6.tgz",
+      "integrity": "sha512-xSmezSupL+y9VkHZJGDoCBpmnB2ogM13ccaYDWqJTfS3dbuHkgjuwDFUmaFauBCboQMGB/S5UqUl2y54X99BmA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router-sdk/node_modules/@uniswap/v3-core",
+      "version": "1.0.0",
+      "declaredLicense": "BUSL-1.1",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v3-core/-/v3-core-1.0.0.tgz",
+      "integrity": "sha512-kSC4djMGKMHj7sLMYVnn61k9nu+lHjMIxgg9CDQT+s2QYLoA56GbSK9Oxr+qJXzzygbkrmuY6cwgP6cW2JXPFA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router/node_modules/@openzeppelin/contracts",
+      "version": "5.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@openzeppelin/contracts/-/contracts-5.0.2.tgz",
+      "integrity": "sha512-ytPc6eLGcHHnapAZ9S+5qsdomhjo6QBHTDRRBFfTxXIpsicMhVPouPgmUPebZZZGX7vt9USA+Z+0M0dSVtSUEA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/universal-router/node_modules/@uniswap/v3-core",
+      "version": "1.0.0",
+      "declaredLicense": "BUSL-1.1",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v3-core/-/v3-core-1.0.0.tgz",
+      "integrity": "sha512-kSC4djMGKMHj7sLMYVnn61k9nu+lHjMIxgg9CDQT+s2QYLoA56GbSK9Oxr+qJXzzygbkrmuY6cwgP6cW2JXPFA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v2-core",
+      "version": "1.0.1",
+      "declaredLicense": "GPL-3.0-or-later",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v2-core/-/v2-core-1.0.1.tgz",
+      "integrity": "sha512-MtybtkUPSyysqLY2U210NBDeCHX+ltHt3oADGdjqoThZaFRDKwM6k1Nb3F0A3hk5hwuQvytFWhrWHOEq6nVJ8Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v2-sdk",
+      "version": "4.21.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v2-sdk/-/v2-sdk-4.21.5.tgz",
+      "integrity": "sha512-vhGJ8vHRMKxuolR47RXOF9DXARUxNujVQg+kSwu+an5YiTwNBlyCp7ewkJvFLPVeE3UFvYt11NguQuf+vE0wNg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-periphery",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "vendor/uniswap-abi-packages/v3-periphery",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk",
+      "version": "3.31.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v3-sdk/-/v3-sdk-3.31.5.tgz",
+      "integrity": "sha512-2A623gfOBpIkJtPNsEdXCLrdtqJEebcJMimqxQgQY9LOfBsuFvgexwAb6aKPpeYh6gl9cdKmsunNyxeqgzc3Cg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/node_modules/@uniswap/swap-router-contracts",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/swap-router-contracts",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/node_modules/@uniswap/v3-periphery",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/v3-periphery",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/node_modules/@uniswap/v3-staker",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/v3-staker",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/swap-router-contracts",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/v3-periphery",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-sdk/vendor/uniswap-abi-packages/v3-staker",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v3-staker",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "vendor/uniswap-abi-packages/v3-staker",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v4-sdk",
+      "version": "2.4.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@uniswap/v4-sdk/-/v4-sdk-2.4.1.tgz",
+      "integrity": "sha512-MlpipUvxTIR5FS01nYfyynBKYiY4X0iYD3oxJ4vvWChHJZ/qoDwsXNDs9QMA/pkomAIIw2uR4u24KIhU4phI1Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v4-sdk/node_modules/@uniswap/v3-periphery",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": "node_modules/@uniswap/v4-sdk/vendor/uniswap-abi-packages/v3-periphery",
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/@uniswap/v4-sdk/vendor/uniswap-abi-packages/v3-periphery",
+      "version": null,
+      "declaredLicense": null,
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/abitype",
+      "version": "1.2.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/abitype/-/abitype-1.2.3.tgz",
+      "integrity": "sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/abstract-logging",
+      "version": "2.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/abstract-logging/-/abstract-logging-2.0.1.tgz",
+      "integrity": "sha512-2BjRTZxTPvheOvGbBslFSYOUkr+SjPtOnrLP33f+VIWLzezQpZcqVg7ja3L4dBXmzzgwT+a029jRx5PCi3JuiA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/acorn",
+      "version": "8.18.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/acorn/-/acorn-8.18.0.tgz",
+      "integrity": "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/acorn-walk",
+      "version": "8.3.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/acorn-walk/-/acorn-walk-8.3.5.tgz",
+      "integrity": "sha512-HEHNfbars9v4pgpW6SO1KSPkfoS0xVOM/9UzkJltjlsHZmJasxg8aXkuZa7SMf8vKGIBhpUsPluQSqhJFCqebw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/aes-js",
+      "version": "3.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/aes-js/-/aes-js-3.0.0.tgz",
+      "integrity": "sha512-H7wUZRn8WpTq9jocdxQ2c8x2sKo9ZVmzfRE13GiNJXfp7NcKYEdvl3vspKjXox6RIG2VtaRe4JFvxG4rqp2Zuw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/agent-base",
+      "version": "7.1.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/agent-base/-/agent-base-7.1.4.tgz",
+      "integrity": "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ajv",
+      "version": "8.20.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ajv/-/ajv-8.20.0.tgz",
+      "integrity": "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ajv-formats",
+      "version": "3.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ajv-formats/-/ajv-formats-3.0.1.tgz",
+      "integrity": "sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ajv/node_modules/fast-uri",
+      "version": "3.1.8",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz",
+      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ansi-colors",
+      "version": "4.1.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ansi-colors/-/ansi-colors-4.1.3.tgz",
+      "integrity": "sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ansi-regex",
+      "version": "6.4.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.4.0.tgz",
+      "integrity": "sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ansi-styles",
+      "version": "6.2.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz",
+      "integrity": "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/arg",
+      "version": "4.1.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/arg/-/arg-4.1.3.tgz",
+      "integrity": "sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/argparse",
+      "version": "2.0.1",
+      "declaredLicense": "Python-2.0",
+      "packageArtifact": "https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz",
+      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/atomic-sleep",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/atomic-sleep/-/atomic-sleep-1.0.0.tgz",
+      "integrity": "sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/avvio",
+      "version": "9.3.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/avvio/-/avvio-9.3.0.tgz",
+      "integrity": "sha512-g2tQ7LE7oOSqDfwEm3M+ZCMTJc7KiZCdJ4UwyZJb5ckTKyYu50OYmvv0mCFXPuYXoM4zkSt8zM9XQ9KCvxA74A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/balanced-match",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/balanced-match/-/balanced-match-1.0.2.tgz",
+      "integrity": "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/bech32",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/bech32/-/bech32-1.1.4.tgz",
+      "integrity": "sha512-s0IrSOzLlbvX7yp4WBfPITzpAU8sqQcpsmwXDiKwrG4r491vwCO/XpejasRNl0piBMe/DvP4Tz0mIS/X1DPJBQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/big.js",
+      "version": "5.2.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/big.js/-/big.js-5.2.2.tgz",
+      "integrity": "sha512-vyL2OymJxmarO8gxMr0mhChsO9QGwhynfuu4+MHTAW6czfq9humCB7rKpUjDd9YUiDPU4mzpyupFSvOClAwbmQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/bignumber.js",
+      "version": "9.3.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.3.1.tgz",
+      "integrity": "sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/bintrees",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/bintrees/-/bintrees-1.0.2.tgz",
+      "integrity": "sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/bn.js",
+      "version": "5.2.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/bn.js/-/bn.js-5.2.5.tgz",
+      "integrity": "sha512-Vq886eXykuP5E6HcKSSStP3bJgrE6In5WKxVUvJ8XGpWWYs2xZHWqUwzCtGgEtBcxyd57KBFDPFoUfNzdaHCNg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/brace-expansion",
+      "version": "2.1.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-2.1.7.tgz",
+      "integrity": "sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/brorand",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/brorand/-/brorand-1.1.0.tgz",
+      "integrity": "sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/change-case",
+      "version": "5.4.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/change-case/-/change-case-5.4.4.tgz",
+      "integrity": "sha512-HRQyTk2/YPEkt9TnUPbOpr64Uw3KOicFWPVBb+xiHvd6eBx/qPr9xqfBFDT8P2vWsvvz4jbEkfDe71W3VyNu2w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/cliui",
+      "version": "9.0.1",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/cliui/-/cliui-9.0.1.tgz",
+      "integrity": "sha512-k7ndgKhwoQveBL+/1tqGJYNz097I7WOvwbmmU2AR5+magtbjPWQTS1C5vzGkBC8Ym8UWRzfKUzUUqFLypY4Q+w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/cliui/node_modules/string-width",
+      "version": "7.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz",
+      "integrity": "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/colorette",
+      "version": "1.4.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/colorette/-/colorette-1.4.0.tgz",
+      "integrity": "sha512-Y2oEozpomLn7Q3HFP7dpww7AtMJplbM9lGZP6RDfHqmbeRjiwRg4n6VM6j4KLmRke85uWEI7JqF17f3pqdRA0g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/cookie",
+      "version": "1.1.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz",
+      "integrity": "sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/create-require",
+      "version": "1.1.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/create-require/-/create-require-1.1.1.tgz",
+      "integrity": "sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/debug",
+      "version": "4.4.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
+      "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/decimal.js-light",
+      "version": "2.5.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/decimal.js-light/-/decimal.js-light-2.5.1.tgz",
+      "integrity": "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/dequal",
+      "version": "2.0.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/dequal/-/dequal-2.0.3.tgz",
+      "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/diff",
+      "version": "4.0.4",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/diff/-/diff-4.0.4.tgz",
+      "integrity": "sha512-X07nttJQkwkfKfvTPG/KSnE2OMdcUCao6+eXF3wmnIQRn2aPAHH3VxDbDOdegkd6JbPsXqShpvEOHfAT+nCNwQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/elliptic",
+      "version": "6.6.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/elliptic/-/elliptic-6.6.1.tgz",
+      "integrity": "sha512-RaddvvMatK2LJHqFJ+YA4WysVN5Ita9E35botqIYspQ4TkRAlCicdzKOjlyv/1Za5RyTNn7di//eEV0uTAfe3g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/elliptic/node_modules/bn.js",
+      "version": "4.12.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/bn.js/-/bn.js-4.12.5.tgz",
+      "integrity": "sha512-3aRg6/JxfffFD+OlOjOFR3Vo79l39ooBTFucxx+MT3dhCtzn3EmiUPQo+6/OZuI2jbXi3YKgmiTFBgChQMwIRQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/emoji-regex",
+      "version": "10.6.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-10.6.0.tgz",
+      "integrity": "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/escalade",
+      "version": "3.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz",
+      "integrity": "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ethers",
+      "version": "5.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ethers/-/ethers-5.8.0.tgz",
+      "integrity": "sha512-DUq+7fHrCg1aPDFCHx6UIPb3nmt2XMpM7Y/g2gLhsl3lIBqeAfOJIl1qEvRf2uq3BiKxmh6Fh5pfp2ieyek7Kg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/eventemitter3",
+      "version": "5.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/eventemitter3/-/eventemitter3-5.0.1.tgz",
+      "integrity": "sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fast-decode-uri-component",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fast-decode-uri-component/-/fast-decode-uri-component-1.0.1.tgz",
+      "integrity": "sha512-WKgKWg5eUxvRZGwW8FvfbaH7AXSh2cL+3j5fMGzUMCxWBJ3dV3a7Wz8y2f/uQ0e3B6WmodD3oS54jTQ9HVTIIg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fast-deep-equal",
+      "version": "3.1.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
+      "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fast-json-stringify",
+      "version": "7.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fast-json-stringify/-/fast-json-stringify-7.0.1.tgz",
+      "integrity": "sha512-eRSayARSbbwlBjpP4vnTTIRD5QPcIrmihPxDeN1DtKnHPg66UuJLx+8hlK1kaFdjvzyQ/dzALoi4vwAQ+T+iZA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fast-querystring",
+      "version": "1.1.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fast-querystring/-/fast-querystring-1.1.2.tgz",
+      "integrity": "sha512-g6KuKWmFXc0fID8WWH0jit4g0AGBoJhCkJMb1RmbsSEUNvQ+ZC8D6CUZ+GtF8nMzSPXnhiePyyqqipzNNEnHjg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fast-uri",
+      "version": "4.2.1",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/fast-uri/-/fast-uri-4.2.1.tgz",
+      "integrity": "sha512-TmHQgewjHtMq1E5QKA0tOE0yeYGQs25KZC/ziJpubRtWI15W92e6vPFydWOeZBVROSHBYw/QhD9d5OefdD6LDg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fastify",
+      "version": "5.12.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fastify/-/fastify-5.12.5.tgz",
+      "integrity": "sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fastq",
+      "version": "1.20.3",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/fastq/-/fastq-1.20.3.tgz",
+      "integrity": "sha512-XKv5nnLs6nLF71NgiKJLIZFLkPyIEuOselLG7ujZnGrRfQK8HpvY+WqKhAJUAdLomwVHErVS4LfxFlPq0/FTAw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/find-my-way",
+      "version": "9.9.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/find-my-way/-/find-my-way-9.9.0.tgz",
+      "integrity": "sha512-sJsgZ1sQH2UDuowPuMKg8az7Qc8F0jnj+SKkFWU/+T0xcFlgV5skgXOGUqmQzOdmW6ALA7AhJINWx3qFBkbLHA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/fsevents",
+      "version": "2.3.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz",
+      "integrity": "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/get-caller-file",
+      "version": "2.0.5",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz",
+      "integrity": "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/get-east-asian-width",
+      "version": "1.7.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/get-east-asian-width/-/get-east-asian-width-1.7.0.tgz",
+      "integrity": "sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/glob",
+      "version": "13.0.6",
+      "declaredLicense": "BlueOak-1.0.0",
+      "packageArtifact": "https://registry.npmjs.org/glob/-/glob-13.0.6.tgz",
+      "integrity": "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/glob/node_modules/balanced-match",
+      "version": "4.0.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/glob/node_modules/brace-expansion",
+      "version": "5.0.12",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+      "integrity": "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/glob/node_modules/minimatch",
+      "version": "10.2.6",
+      "declaredLicense": "BlueOak-1.0.0",
+      "packageArtifact": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz",
+      "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/hash.js",
+      "version": "1.1.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/hash.js/-/hash.js-1.1.7.tgz",
+      "integrity": "sha512-taOaskGt4z4SOANNseOviYDvjEJinIkRgmp7LbKP2YTTmVxWBl87s/uzK9r+44BclBSp2X7K1hqeNfz9JbBeXA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/hmac-drbg",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/hmac-drbg/-/hmac-drbg-1.0.1.tgz",
+      "integrity": "sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/https-proxy-agent",
+      "version": "7.0.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-7.0.6.tgz",
+      "integrity": "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/index-to-position",
+      "version": "1.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/index-to-position/-/index-to-position-1.2.0.tgz",
+      "integrity": "sha512-Yg7+ztRkqslMAS2iFaU+Oa4KTSidr63OsFGlOrJoW981kIYO3CGCS3wA95P1mUi/IVSJkn0D479KTJpVpvFNuw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/inherits",
+      "version": "2.0.4",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/inherits/-/inherits-2.0.4.tgz",
+      "integrity": "sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ipaddr.js",
+      "version": "2.5.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ipaddr.js/-/ipaddr.js-2.5.0.tgz",
+      "integrity": "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/isows",
+      "version": "1.0.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/isows/-/isows-1.0.7.tgz",
+      "integrity": "sha512-I1fSfDCZL5P0v33sVqeTDSpcstAg/N+wF5HS033mogOVIp4B+oHC7oOCsA3axAbBSGTJ8QubbNmnIRN/h8U7hg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/js-levenshtein",
+      "version": "1.1.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/js-levenshtein/-/js-levenshtein-1.1.6.tgz",
+      "integrity": "sha512-X2BB11YZtrRqY4EnQcLX5Rh373zbK4alC1FW7D7MBhL2gtcC17cTnr6DmfHZeS0s2rTHjUTMMHfG7gO8SSdw+g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/js-sha3",
+      "version": "0.8.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/js-sha3/-/js-sha3-0.8.0.tgz",
+      "integrity": "sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/js-tokens",
+      "version": "4.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/js-yaml",
+      "version": "4.3.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz",
+      "integrity": "sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/jsbi",
+      "version": "3.2.5",
+      "declaredLicense": "Apache-2.0",
+      "packageArtifact": "https://registry.npmjs.org/jsbi/-/jsbi-3.2.5.tgz",
+      "integrity": "sha512-aBE4n43IPvjaddScbvWRA2YlTzKEynHzu7MqOyTipdHucf/VxS63ViCjxYRg86M8Rxwbt/GfzHl1kKERkt45fQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/json-schema-ref-resolver",
+      "version": "3.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/json-schema-ref-resolver/-/json-schema-ref-resolver-3.0.0.tgz",
+      "integrity": "sha512-hOrZIVL5jyYFjzk7+y7n5JDzGlU8rfWDuYyHwGa2WA8/pcmMHezp2xsVwxrebD/Q9t8Nc5DboieySDpCp4WG4A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/json-schema-traverse",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz",
+      "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/light-my-request",
+      "version": "6.6.0",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/light-my-request/-/light-my-request-6.6.0.tgz",
+      "integrity": "sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/light-my-request/node_modules/process-warning",
+      "version": "4.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/process-warning/-/process-warning-4.0.1.tgz",
+      "integrity": "sha512-3c2LzQ3rY9d0hc1emcsHhfT9Jwz0cChib/QN89oME2R451w5fy3f0afAhERFZAwrbDU43wk12d0ORBpDVME50Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/lru-cache",
+      "version": "11.5.3",
+      "declaredLicense": "BlueOak-1.0.0",
+      "packageArtifact": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.3.tgz",
+      "integrity": "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/make-error",
+      "version": "1.3.6",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/make-error/-/make-error-1.3.6.tgz",
+      "integrity": "sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/minimalistic-assert",
+      "version": "1.0.1",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/minimalistic-assert/-/minimalistic-assert-1.0.1.tgz",
+      "integrity": "sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/minimalistic-crypto-utils",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/minimalistic-crypto-utils/-/minimalistic-crypto-utils-1.0.1.tgz",
+      "integrity": "sha512-JIYlbt6g8i5jKfJ3xz7rF0LXmv2TkDxBLUkiBeZ7bAx4GnnNMr8xFpGnOxn6GhTEHx3SjRrZEoU+j04prX1ktg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/minimatch",
+      "version": "5.1.9",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/minimatch/-/minimatch-5.1.9.tgz",
+      "integrity": "sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/minipass",
+      "version": "7.1.3",
+      "declaredLicense": "BlueOak-1.0.0",
+      "packageArtifact": "https://registry.npmjs.org/minipass/-/minipass-7.1.3.tgz",
+      "integrity": "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ms",
+      "version": "2.1.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
+      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/on-exit-leak-free",
+      "version": "2.1.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/on-exit-leak-free/-/on-exit-leak-free-2.1.2.tgz",
+      "integrity": "sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/openapi-typescript",
+      "version": "7.13.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/openapi-typescript/-/openapi-typescript-7.13.0.tgz",
+      "integrity": "sha512-EFP392gcqXS7ntPvbhBzbF8TyBA+baIYEm791Hy5YkjDYKTnk/Tn5OQeKm5BIZvJihpp8Zzr4hzx0Irde1LNGQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ox",
+      "version": "0.14.29",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ox/-/ox-0.14.29.tgz",
+      "integrity": "sha512-M5j87Ec4V99MQdRct/g09eWXW60g6zhHTUs1lr4deUtrPDnezBdCJTgKd7pxqTpSZBFveV0ALi9jMMuT1qKyNg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/parse-json",
+      "version": "8.3.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/parse-json/-/parse-json-8.3.0.tgz",
+      "integrity": "sha512-ybiGyvspI+fAoRQbIPRddCcSTV9/LsJbf0e/S85VLowVGzRmokfneg2kwVW/KU5rOXrPSbF1qAKPMgNTqqROQQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/path-equal",
+      "version": "1.2.8",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/path-equal/-/path-equal-1.2.8.tgz",
+      "integrity": "sha512-rCJWMlXlk9lZ2FEllgvh2IgPj/kxMx2sOeqtFNLO8dxEY0I4hBTa+ZW3JAsgeiTe8vL4MifATVDwxF9nGUI7HQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/path-scurry",
+      "version": "2.0.2",
+      "declaredLicense": "BlueOak-1.0.0",
+      "packageArtifact": "https://registry.npmjs.org/path-scurry/-/path-scurry-2.0.2.tgz",
+      "integrity": "sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg",
+      "version": "8.23.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg/-/pg-8.23.0.tgz",
+      "integrity": "sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-cloudflare",
+      "version": "1.4.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.4.0.tgz",
+      "integrity": "sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-connection-string",
+      "version": "2.14.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.14.0.tgz",
+      "integrity": "sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-int8",
+      "version": "1.0.1",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
+      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-pool",
+      "version": "3.14.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg-pool/-/pg-pool-3.14.0.tgz",
+      "integrity": "sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-protocol",
+      "version": "1.16.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.16.0.tgz",
+      "integrity": "sha512-sILXutLVjCLjcDuOmvhX5e2Z4cS5qG/6Bu3VkpFwdf/633ElGLpEh9bgmuI5I4sqKqkifQiGyiCcx1HdtrK7tg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pg-types",
+      "version": "2.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz",
+      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pgpass",
+      "version": "1.0.5",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz",
+      "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/picocolors",
+      "version": "1.1.1",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+      "integrity": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pino",
+      "version": "10.3.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pino/-/pino-10.3.1.tgz",
+      "integrity": "sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pino-abstract-transport",
+      "version": "3.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pino-abstract-transport/-/pino-abstract-transport-3.0.0.tgz",
+      "integrity": "sha512-wlfUczU+n7Hy/Ha5j9a/gZNy7We5+cXp8YL+X+PG8S0KXxw7n/JXA3c46Y0zQznIJ83URJiwy7Lh56WLokNuxg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pino-std-serializers",
+      "version": "7.1.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pino-std-serializers/-/pino-std-serializers-7.1.0.tgz",
+      "integrity": "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/pluralize",
+      "version": "8.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/pluralize/-/pluralize-8.0.0.tgz",
+      "integrity": "sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/postgres-array",
+      "version": "2.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz",
+      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/postgres-bytea",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.1.tgz",
+      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/postgres-date",
+      "version": "1.0.7",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz",
+      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/postgres-interval",
+      "version": "1.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz",
+      "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/process-warning",
+      "version": "5.1.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/process-warning/-/process-warning-5.1.0.tgz",
+      "integrity": "sha512-jQSaVHsPgtyw60e1rQ/A+/ArPEj/S8pS/vFnyGa/gYFXrKk/6RuDkoqVDQ5NI5MmS01698ltlAk0NoDBNLujRw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/quick-format-unescaped",
+      "version": "4.0.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/quick-format-unescaped/-/quick-format-unescaped-4.0.4.tgz",
+      "integrity": "sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/real-require",
+      "version": "0.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/real-require/-/real-require-0.2.0.tgz",
+      "integrity": "sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/require-from-string",
+      "version": "2.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/require-from-string/-/require-from-string-2.0.2.tgz",
+      "integrity": "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ret",
+      "version": "0.5.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ret/-/ret-0.5.0.tgz",
+      "integrity": "sha512-I1XxrZSQ+oErkRR4jYbAyEEu2I0avBvvMM5JN+6EBprOGRCs63ENqZ3vjavq8fBw2+62G5LF5XelKwuJpcvcxw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/reusify",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/reusify/-/reusify-1.1.0.tgz",
+      "integrity": "sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/rfdc",
+      "version": "1.4.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/rfdc/-/rfdc-1.4.1.tgz",
+      "integrity": "sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/safe-regex2",
+      "version": "5.1.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/safe-regex2/-/safe-regex2-5.1.1.tgz",
+      "integrity": "sha512-mOSBvHGDZMuIEZMdOz/aCEYDCv0E7nfcNsIhUF+/P+xC7Hyf3FkvymqgPbg9D1EdSGu+uKbJgy09K/RKKc7kJA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/safe-stable-stringify",
+      "version": "2.5.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/safe-stable-stringify/-/safe-stable-stringify-2.5.0.tgz",
+      "integrity": "sha512-b3rppTKm9T+PsVCBEOUR46GWI7fdOs00VKZ1+9c1EWDaDMvjQc6tUwuFyIprgGgTcWoVHSKrU8H31ZHA2e0RHA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/scrypt-js",
+      "version": "3.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/scrypt-js/-/scrypt-js-3.0.1.tgz",
+      "integrity": "sha512-cdwTTnqPu0Hyvf5in5asVdZocVDTNRmR7XEcJuIzMjJeSHybHl7vpB66AzwTaIg6CLSbtjcxc8fqcySfnTkccA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/secure-json-parse",
+      "version": "4.1.0",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/secure-json-parse/-/secure-json-parse-4.1.0.tgz",
+      "integrity": "sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/semver",
+      "version": "7.8.5",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/semver/-/semver-7.8.5.tgz",
+      "integrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/set-cookie-parser",
+      "version": "2.7.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/set-cookie-parser/-/set-cookie-parser-2.7.2.tgz",
+      "integrity": "sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/sonic-boom",
+      "version": "4.2.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/sonic-boom/-/sonic-boom-4.2.1.tgz",
+      "integrity": "sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/split2",
+      "version": "4.2.0",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz",
+      "integrity": "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/string-width",
+      "version": "8.3.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/string-width/-/string-width-8.3.0.tgz",
+      "integrity": "sha512-ZbmZM0JCihQN91dWnxoipT2KOEyHqEyfRXUyjuRhW8b/xnqPDoq4gWEVApTVa9db2wN8mmoikgFBbjh71+cGeQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/strip-ansi",
+      "version": "7.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
+      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/supports-color",
+      "version": "10.2.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/supports-color/-/supports-color-10.2.2.tgz",
+      "integrity": "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tdigest",
+      "version": "0.1.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/tdigest/-/tdigest-0.1.3.tgz",
+      "integrity": "sha512-zbRt+lT+/H4fRItHshczHErVCQnitJk8MfMT24MqFJf3YL7SJJPqGIGeuOdvxXxM/AHFzKBl7WoyaYwqO9s3Kw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/thread-stream",
+      "version": "4.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/thread-stream/-/thread-stream-4.2.0.tgz",
+      "integrity": "sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/thread-stream/node_modules/real-require",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/real-require/-/real-require-1.0.0.tgz",
+      "integrity": "sha512-P4nbQYQfePJxRSmY+v/KINxVucm4NF3p3s7pJveMTtom52FR4YGltUQLB8idDXwDDWW+eYrWDFbuzUnjoWHF7g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tiny-invariant",
+      "version": "1.3.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/tiny-invariant/-/tiny-invariant-1.3.3.tgz",
+      "integrity": "sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tiny-warning",
+      "version": "1.0.3",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/tiny-warning/-/tiny-warning-1.0.3.tgz",
+      "integrity": "sha512-lBN9zLN/oAf68o3zNXYrdCt1kP8WsiGW8Oo2ka41b2IM5JL/S1CTyX1rW0mb/zSuJun0ZUrDxx4sqvYS2FWzPA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/toad-cache",
+      "version": "3.7.4",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/toad-cache/-/toad-cache-3.7.4.tgz",
+      "integrity": "sha512-m1TdR/rvT7kgGJZhspNtXdsdYk0fddFpJJFlG5s+UkPFo6lkLoZ3YLOaovPYjq1R75NP5JfeTlSHaOsE09peCg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/toformat",
+      "version": "2.0.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/toformat/-/toformat-2.0.0.tgz",
+      "integrity": "sha512-03SWBVop6nU8bpyZCx7SodpYznbZF5R4ljwNLBcTQzKOD9xuihRo/psX58llS1BMFhhAI08H3luot5GoXJz2pQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ts-node",
+      "version": "10.9.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ts-node/-/ts-node-10.9.2.tgz",
+      "integrity": "sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tslib",
+      "version": "2.8.1",
+      "declaredLicense": "0BSD",
+      "packageArtifact": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
+      "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx",
+      "version": "4.23.15",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/tsx/-/tsx-4.23.15.tgz",
+      "integrity": "sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/aix-ppc64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.28.2.tgz",
+      "integrity": "sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/android-arm",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/android-arm/-/android-arm-0.28.2.tgz",
+      "integrity": "sha512-kXXoiPVVGQcnIYGOeaovwOURpniDBpSq4A03qkQ+BMQqtGG6HYap3xne9C1O1yo4TR3qxlCX5IqqmX6fFo2Lqg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/android-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/android-arm64/-/android-arm64-0.28.2.tgz",
+      "integrity": "sha512-5YfKeeI8qWfBZIX+u2xZC3Zlb3Os/gLS2sbEKM+I4ZOcsWmHS2WLysCcQZDAFRslDUU5Oiq44gf6PYN1vGwG5A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/android-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/android-x64/-/android-x64-0.28.2.tgz",
+      "integrity": "sha512-O387ite7SzUyCcy3JQX4P4bLtEA7bLLkx+esve5JHnyYfNTxcVpXZo9jhdB0lTKN44gztELTdU7nS8Nr16Fs1Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/darwin-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.28.2.tgz",
+      "integrity": "sha512-n4KqkOQrraxHJcgjM1RvwbigfQKIKJVpM7xp+KsxiyUSrRdIXnt73VhrPAx0fV44hgfmIVKjxMN9J1t5jySVkw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/darwin-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/darwin-x64/-/darwin-x64-0.28.2.tgz",
+      "integrity": "sha512-uq6suIWYP37qzGddBKPw5QEQPi6HiLGsO7UmkpfyaYNQ3D+rN6w6WfwH+nuqcGXWvawGwxOEroO4YGnFh95azw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/freebsd-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/freebsd-arm64/-/freebsd-arm64-0.28.2.tgz",
+      "integrity": "sha512-n+I0BTSRIoy+d6RPKnEVwql5UwBJolytvY4mAOIEJorKlqgPII8ix6slVVrfZ5Tnj7glIZvloylbB/EJPMWEXw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/freebsd-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/freebsd-x64/-/freebsd-x64-0.28.2.tgz",
+      "integrity": "sha512-78XJTJkvPs0kz2w61301PJjXl4g7q3JqiYMZ/M/yVI73EHBrCRTgkhu9oqG7vPqq+a/yadEW8aD+agKlk5xrmg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-arm",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-arm/-/linux-arm-0.28.2.tgz",
+      "integrity": "sha512-XlDnu2q5yoqems+xay6wSAcg9DDD7K9RLKZEBOMZm3ckNpJBvOX20tSfby8KfrrhINDyv9V2YVZKY/SpoGJI8w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.2.tgz",
+      "integrity": "sha512-pW4AC0P3it8c7do9MVM4p51FzHzdM/TZrerurgRcHJ2WTa1VQ1CIq18xncfpBJw4ojkiZZrKW2yIBWBP92j6Ug==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-ia32",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-ia32/-/linux-ia32-0.28.2.tgz",
+      "integrity": "sha512-CYbnj78HsIeA+DhgUKgFCfvNsTHFhMMrinUrMZpDXJXKN8T3XViTZ/+wtHeVxEWY8ewSzTFN+nRmSwO2tZaLUQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-loong64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-loong64/-/linux-loong64-0.28.2.tgz",
+      "integrity": "sha512-buwkd8nsph4R+ajRvw0qM5Hja/TXQow3ptzWO2EbG/cqcIkHloRrdlBtQlshyYGTNFvfkfJ5tpPLVkY4DtsPfQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-mips64el",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-mips64el/-/linux-mips64el-0.28.2.tgz",
+      "integrity": "sha512-ZVykbDyk7519VwiNb9Lcj9m8XM6v5V9uKPvrEMkkEedVewf+0itkhahp4HDpgERXhwLRpWFypsGbG/J8s0QjJA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-ppc64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-ppc64/-/linux-ppc64-0.28.2.tgz",
+      "integrity": "sha512-CAXl+Dtd9UUuJd8pKKdwh6MLm3MUMiqMPmhZ3tTSXPqfyQ3vDl6R5hZdZ/kYojK4ofXtdfSv1tFq8XzWx3heNQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-riscv64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-riscv64/-/linux-riscv64-0.28.2.tgz",
+      "integrity": "sha512-GeXCej4IQtU1B+QlDV8W/RRvbzI3O/Stss+/bCXv4lZls5WGRtu2a+3JkA3i4qIUlMXpcHebWpF8AkJhATowuA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-s390x",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-s390x/-/linux-s390x-0.28.2.tgz",
+      "integrity": "sha512-3H1weTYZPxt/WOhByszQZybS9w5lKzUn1FDMsgEChbHWQwHYQQRfBxgCcZvPhjHfKyJjIievvMmEUawJrdY9Dg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/linux-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+      "integrity": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/netbsd-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/netbsd-arm64/-/netbsd-arm64-0.28.2.tgz",
+      "integrity": "sha512-sSATRjPeDBg3pdgHoQfoYBob11Kk1FGa9lui5RIHZCoCkJa9QKlvl3/vKz2usCmYYjs7ymJR/2Nnsqe+Hjt5nw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/netbsd-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.28.2.tgz",
+      "integrity": "sha512-lqnzCV+mM0gIADaKihiCg6ifgfU2L3h5E33rNQBN1Y4MaVGnzryzmvvf7UHxprpQdE8hpqLolJ9Rl+SkIRDpyw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/openbsd-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/openbsd-arm64/-/openbsd-arm64-0.28.2.tgz",
+      "integrity": "sha512-AL2qJILH7lNjrDmCQDvdxMfAUIv8KMNZOvrwAQ8i8//ntL9FflhOyMJ8OZSMBb8/AWXe3/5v5S20y3zCoZWKoQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/openbsd-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.28.2.tgz",
+      "integrity": "sha512-QtiuPytchRyC4rwUKhexJdQKvDuZ6hWloi3igqPQNUJCS1/v9EiO3UTOXR6A3FoMo4fnAKbWJdqaIwhOzh8qEw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/openharmony-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/openharmony-arm64/-/openharmony-arm64-0.28.2.tgz",
+      "integrity": "sha512-WkhYDmpTjLvGlScA1rwjRUmhl4k8oXR3cIbtqWmELgU/dFeHHlEllxDvdWcNJV9rbzCexB5vz8gtNewWLgCT7Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/sunos-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.28.2.tgz",
+      "integrity": "sha512-GPMSkTOtMnv2U2F8gxe4Io6qmVs+YKyp832Etqqxr0hFngmXQ3rzwytelm3GIn7T4VviRUlf3sOgBOiTdvaf7g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/win32-arm64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/win32-arm64/-/win32-arm64-0.28.2.tgz",
+      "integrity": "sha512-PIhhEkE9uPBleRBrQEJpUn7MBnibZzbGzYWPmY3x+YoVg/95zbjB4CxPPOQ8l5tYYM4mMaCthF8/1DIfBQQyWQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/win32-ia32",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/win32-ia32/-/win32-ia32-0.28.2.tgz",
+      "integrity": "sha512-YmJbfTlvU7Sdn9BB+4PRES4oB6pxgS37MAONj+hBr/cpXS1aBPKXxNnDbu+QCWPj0o9dgyxeq79g6c5P8KeuYA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/@esbuild/win32-x64",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.28.2.tgz",
+      "integrity": "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/tsx/node_modules/esbuild",
+      "version": "0.28.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/esbuild/-/esbuild-0.28.2.tgz",
+      "integrity": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/type-fest",
+      "version": "4.41.0",
+      "declaredLicense": "(MIT OR CC0-1.0)",
+      "packageArtifact": "https://registry.npmjs.org/type-fest/-/type-fest-4.41.0.tgz",
+      "integrity": "sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/typescript",
+      "version": "5.9.3",
+      "declaredLicense": "Apache-2.0",
+      "packageArtifact": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
+      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/typescript-json-schema",
+      "version": "0.68.0",
+      "declaredLicense": "BSD-3-Clause",
+      "packageArtifact": "https://registry.npmjs.org/typescript-json-schema/-/typescript-json-schema-0.68.0.tgz",
+      "integrity": "sha512-1X60xXxkZpLAr125Jt5MT9VJTTxT0xfafbjdcbtml26nvpUr2p/P4V34JEXa+ObrHc71W9ksH5pemstY6y+SEw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/typescript-json-schema/node_modules/@types/node",
+      "version": "24.19.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/@types/node/-/node-24.19.0.tgz",
+      "integrity": "sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/typescript-json-schema/node_modules/undici-types",
+      "version": "7.24.6",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz",
+      "integrity": "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/undici-types",
+      "version": "8.9.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/undici-types/-/undici-types-8.9.0.tgz",
+      "integrity": "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/uri-js-replace",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/uri-js-replace/-/uri-js-replace-1.0.1.tgz",
+      "integrity": "sha512-W+C9NWNLFOoBI2QWDp4UT9pv65r2w5Cx+3sTYFvtMdDBxkKt1syCqsUdSFAChbEe1uK5TfS04wt/nGwmaeIQ0g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/v8-compile-cache-lib",
+      "version": "3.0.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/v8-compile-cache-lib/-/v8-compile-cache-lib-3.0.1.tgz",
+      "integrity": "sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/viem",
+      "version": "2.52.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/viem/-/viem-2.52.2.tgz",
+      "integrity": "sha512-HSU12p5aD/kAPZfrlbCUqdiP4P/c6hQ9AhfTS51VbLUQIjkWd1d5EjrCx/SCxZ0zhZVRn4Iv5X5WDqXPG8Ubew==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/wrap-ansi",
+      "version": "9.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-9.0.2.tgz",
+      "integrity": "sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/wrap-ansi/node_modules/string-width",
+      "version": "7.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz",
+      "integrity": "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/ws",
+      "version": "8.21.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/ws/-/ws-8.21.0.tgz",
+      "integrity": "sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/xtend",
+      "version": "4.0.2",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
+      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/y18n",
+      "version": "5.0.8",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/y18n/-/y18n-5.0.8.tgz",
+      "integrity": "sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/yaml-ast-parser",
+      "version": "0.0.43",
+      "declaredLicense": "Apache-2.0",
+      "packageArtifact": "https://registry.npmjs.org/yaml-ast-parser/-/yaml-ast-parser-0.0.43.tgz",
+      "integrity": "sha512-2PTINUwsRqSd+s8XxKaJWQlUuEMHJQyEuh2edBbW8KNJz0SJPwUSD2zRWqezFEdN7IzAgeuYHFUCF7o8zRdZ0A==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/yargs",
+      "version": "18.2.0",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/yargs/-/yargs-18.2.0.tgz",
+      "integrity": "sha512-9OpKOLeaoNFecEp7P6iYbzze/5CqWoH7N3SMs/6y1XF4nMvFMspEGZzJ6uFi9MmQwXhyzqYoSEKO3tvA3Z/o2w==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/yargs-parser",
+      "version": "21.1.1",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/yargs-parser/-/yargs-parser-21.1.1.tgz",
+      "integrity": "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/yargs/node_modules/yargs-parser",
+      "version": "22.0.0",
+      "declaredLicense": "ISC",
+      "packageArtifact": "https://registry.npmjs.org/yargs-parser/-/yargs-parser-22.0.0.tgz",
+      "integrity": "sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "node_modules/yn",
+      "version": "3.1.1",
+      "declaredLicense": "MIT",
+      "packageArtifact": "https://registry.npmjs.org/yn/-/yn-3.1.1.tgz",
+      "integrity": "sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==",
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "vendor/uniswap-abi-packages/swap-router-contracts",
+      "version": "1.3.1",
+      "declaredLicense": "GPL-2.0-or-later",
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "vendor/uniswap-abi-packages/v3-periphery",
+      "version": "1.4.4",
+      "declaredLicense": "GPL-2.0-or-later",
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    },
+    {
+      "packagePath": "vendor/uniswap-abi-packages/v3-staker",
+      "version": "1.0.0",
+      "declaredLicense": "GPL-3.0-or-later",
+      "packageArtifact": null,
+      "integrity": null,
+      "sourceStatus": "Exact package artifact pinned; preferred-form library source coverage not yet independently verified or bundled"
+    }
+  ],
+  "python": [
+    {
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/ce/f4/eec0465c2f67b2664688d0240b3212d5196fd89e741df67ddb81f8d35658/aiohappyeyeballs-2.7.1.tar.gz",
+        "hash": "sha256:065665c041c42a5938ed220bdcd7230f22527fbec085e1853d2402c8a3615d9d",
+        "size": 24757,
+        "upload-time": "2026-07-01T17:11:55.501Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "aiohttp",
+      "version": "3.14.3",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/58/d9/22ce5786ac0c1653ae8b6c23bded02c1686d11f0dbb45b31ce128e0df985/aiohttp-3.14.3.tar.gz",
+        "hash": "sha256:9491196535a88924a60afd5b5f434b5b203b6cc616250878dbdb223a8f7844bc",
+        "size": 7971213,
+        "upload-time": "2026-07-23T01:57:27.037Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz",
+        "hash": "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7",
+        "size": 25007,
+        "upload-time": "2025-07-03T22:54:43.528Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "alembic",
+      "version": "1.20.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/ed/aa/02910bdb8e2f1444f6654d5b296cd827d126f82209050ee7b1000f92ac4b/alembic-1.20.0.tar.gz",
+        "hash": "sha256:db505480647bc60386c5369402f4a57a506b7539c9e9ef5e270d45cbbe4939bf",
+        "size": 2093272,
+        "upload-time": "2026-09-11T19:09:11.126Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.5",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/5a/8e/38aa427ed5402449e226975b649c5dc73ccadfefeb95e6aecb8f8ea4b6b6/annotated_doc-0.0.5.tar.gz",
+        "hash": "sha256:c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb",
+        "size": 10758,
+        "upload-time": "2026-07-28T13:50:58.129Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/5f/56/a8120250d128bed162cd73c76d45f6ef9991f3e068f62a8ee060afa3104a/annotated_types-0.8.0.tar.gz",
+        "hash": "sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7",
+        "size": 15893,
+        "upload-time": "2026-07-23T20:16:13.995Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "anyio",
+      "version": "4.15.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz",
+        "hash": "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94",
+        "size": 276966,
+        "upload-time": "2026-09-05T10:42:39.44Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz",
+        "hash": "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32",
+        "size": 952055,
+        "upload-time": "2026-03-19T14:22:25.026Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "bitarray",
+      "version": "3.11.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/04/f7/6765577df59e2345036e435f7e983e1c291d67b7d76a51918eff04ad1494/bitarray-3.11.0.tar.gz",
+        "hash": "sha256:bf19437ec00ec3d40aef82eaeedc14cf4000be9b635c4f5049796506e6630dd8",
+        "size": 174911,
+        "upload-time": "2026-09-01T15:21:52.076Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "cachetools",
+      "version": "7.2.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/29/2c/3f18755527b03ca9ff6be724bd5370cb777c76a87f17301377cf04a4729b/cachetools-7.2.0.tar.gz",
+        "hash": "sha256:bcac1a1b8da6909994a2957238a57b8140dab7c5c5c69a43669654fe87a33c1d",
+        "size": 41129,
+        "upload-time": "2026-09-16T20:48:27.209Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
+        "hash": "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55",
+        "size": 138112,
+        "upload-time": "2026-07-22T03:35:12.644Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/33/1c/f41d4e74c28ab327ff3acd36053f7ea506c55872d7a90b0fa71aa3ab0c89/charset_normalizer-3.5.2.tar.gz",
+        "hash": "sha256:39de2a259fc954455c57274dc94c79d5842774e1247a016aff30bc0efed0f4ef",
+        "size": 172659,
+        "upload-time": "2026-09-30T04:39:23.398Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "ckzg",
+      "version": "2.1.8",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/2b/88/552337d9fc69dc85fb6102c18b73a9f3f77efb39bb9a0c1a8c61bbdd7274/ckzg-2.1.8.tar.gz",
+        "hash": "sha256:d7bef6b425dca6995457fc59fc5b30211d9b28cbbeee0e7a7bef1372e13f29ca",
+        "size": 1128002,
+        "upload-time": "2026-07-09T23:02:13.994Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/c7/0e/7fa0ef50764b67090eca4114772a2abf8b6148198475e54c660b97caeee6/click-8.5.0.tar.gz",
+        "hash": "sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34",
+        "size": 382235,
+        "upload-time": "2026-08-26T13:33:14.56Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "cybergold-python-candidate",
+      "version": "0.0.1",
+      "source": {
+        "virtual": "."
+      },
+      "sdist": null,
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "cytoolz",
+      "version": "1.1.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/bd/d4/16916f3dc20a3f5455b63c35dcb260b3716f59ce27a93586804e70e431d5/cytoolz-1.1.0.tar.gz",
+        "hash": "sha256:13a7bf254c3c0d28b12e2290b82aed0f0977a4c2a2bf84854fcdc7796a29f3b0",
+        "size": 642510,
+        "upload-time": "2025-10-19T00:44:56.174Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-abi",
+      "version": "6.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/b6/90/8bbcb07308436211a1e9a09a2fbaa259d2a169d3b081ca22525e22d16444/eth_abi-6.0.0.tar.gz",
+        "hash": "sha256:e83a0ed91f2dadeeb50236d673736fe2edc6fcc0a1c1e13d461192d4b23d5bcc",
+        "size": 70553,
+        "upload-time": "2026-08-22T22:37:32.401Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-account",
+      "version": "0.14.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/15/f1/e1e35b67d0f36f0186cfc0502da7984560c03d1fe51e36e3bbe6d6167ba7/eth_account-0.14.0.tar.gz",
+        "hash": "sha256:2c8291b1a8fcbd29a55b07f75f0a0aaffd04704d3ec28d1396587f18a5541c6d",
+        "size": 8366399,
+        "upload-time": "2026-08-23T01:42:07.17Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-hash",
+      "version": "0.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/3c/f5/c67fc24f2f676aa9b7ab29679d44f113f314c817207cd4319353356f62da/eth_hash-0.8.0.tar.gz",
+        "hash": "sha256:b009752b620da2e9c7668014849d1f5fadbe4f138603f1871cc5d4ca706896b1",
+        "size": 12225,
+        "upload-time": "2026-03-25T16:36:55.099Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-keyfile",
+      "version": "0.10.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/07/e1/eb8cc218abd7e7ee8eeafbb9c1deef17e9fdda9c3f39af23479899745136/eth_keyfile-0.10.0.tar.gz",
+        "hash": "sha256:3003b20000d68203e8fbf45456851a524f859a7432d2fae73be4a9aebeb4b8e1",
+        "size": 19864,
+        "upload-time": "2026-08-21T17:21:46.996Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-keys",
+      "version": "0.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/39/58/f54660cffe3f39aad2d80d13b072973ee9134b6cdfd8b4d086419eda997b/eth_keys-0.8.0.tar.gz",
+        "hash": "sha256:11549b251876fccd7caedd6905e494ea2309aec352ec2579b00ef9978017a964",
+        "size": 31311,
+        "upload-time": "2026-08-21T17:01:21.923Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-rlp",
+      "version": "3.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/5f/e1/9719acaa45e6f158ebfc260a97edc71591264c1d09701cf8a30a687a36b0/eth_rlp-3.0.0.tar.gz",
+        "hash": "sha256:9663e54a4a1c1c847d2d328c1d07e4174ec1c082953fbb42b60e61c501c4931c",
+        "size": 17981,
+        "upload-time": "2026-08-22T22:01:51.528Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-typing",
+      "version": "6.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/37/e7/06c5af99ad40494f6d10126a9030ff4eb14c5b773f2a4076017efb0a163a/eth_typing-6.0.0.tar.gz",
+        "hash": "sha256:315dd460dc0b71c15a6cd51e3c0b70d237eec8771beb844144f3a1fb4adb2392",
+        "size": 21852,
+        "upload-time": "2026-03-25T16:41:57.444Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "eth-utils",
+      "version": "6.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/e9/1b/0b8548da7b31eba87ed58bca1d0de5dcb13a6c113e02c09019ec5a6716ed/eth_utils-6.0.0.tar.gz",
+        "hash": "sha256:eb54b2f82dd300d3142c49a89da195e823f5e5284d43203593f87c67bad92a96",
+        "size": 123457,
+        "upload-time": "2026-03-25T17:11:51.433Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "fastapi",
+      "version": "0.142.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/56/4f/f7c30a73127e0a8bbffe788369b8359e530b01ae06e2757936fa35bc5e6d/fastapi-0.142.2.tar.gz",
+        "hash": "sha256:06366626f2e70576367714d9ab2fe8472e6c8456dba69b399f9f797ab5e92570",
+        "size": 466721,
+        "upload-time": "2026-09-30T09:51:11.277Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/2d/f5/c831fac6cc817d26fd54c7eaccd04ef7e0288806943f7cc5bbf69f3ac1f0/frozenlist-1.8.0.tar.gz",
+        "hash": "sha256:3ede829ed8d842f6cd48fc7081d7a41001a56f1f38603f9d49bf3020d59a31ad",
+        "size": 45875,
+        "upload-time": "2025-10-06T05:38:17.865Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz",
+        "hash": "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1",
+        "size": 101250,
+        "upload-time": "2025-04-24T03:35:25.427Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "hexbytes",
+      "version": "2.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/27/4f/eabe45c58f2d27cd0b338ecc41b0b475a3751ed70eb1a21db08497e3ceec/hexbytes-2.0.0.tar.gz",
+        "hash": "sha256:01312fcd5c57e8a8d2d7dd3274dcf84ea50422aff2abcc2d9fd89ad6a32498e5",
+        "size": 21344,
+        "upload-time": "2026-08-21T20:22:09.711Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz",
+        "hash": "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8",
+        "size": 85484,
+        "upload-time": "2025-04-24T22:06:22.219Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz",
+        "hash": "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc",
+        "size": 141406,
+        "upload-time": "2024-12-06T15:37:23.222Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz",
+        "hash": "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44",
+        "size": 216463,
+        "upload-time": "2026-09-17T14:11:04.752Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "mako",
+      "version": "1.4.3",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/5a/09/e07c4b5579a79f4b16f8d4f29f6c54514ac787c4ad506b8c4f28a0e6b0bf/mako-1.4.3.tar.gz",
+        "hash": "sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a",
+        "size": 412799,
+        "upload-time": "2026-09-22T20:54:31.509Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz",
+        "hash": "sha256:722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698",
+        "size": 80313,
+        "upload-time": "2025-09-27T18:37:40.426Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "multidict",
+      "version": "6.9.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/d6/99/1d4d69c3512d0ddbfa3a1b69cfd9a151012ab2eb4eabbb096201b1f0b7d8/multidict-6.9.1.tar.gz",
+        "hash": "sha256:0f06e60fa190aa7abd0914c2a766736fdc8e9f34878c4346338534b73d1b20e2",
+        "size": 182404,
+        "upload-time": "2026-09-21T17:59:05.362Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "opentelemetry-api",
+      "version": "1.45.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/1f/dc/e12c1fe1ed8a7b7149777127b1a0e12ce5bd5a81d97408bedc2128c260f5/opentelemetry_api-1.45.0.tar.gz",
+        "hash": "sha256:711ede81773c8025c2c03dac0450bc89f3d30aea6eabcc815c570d4e35a963f7",
+        "size": 72115,
+        "upload-time": "2026-09-25T12:32:28.399Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "parsimonious",
+      "version": "0.10.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/7b/91/abdc50c4ef06fdf8d047f60ee777ca9b2a7885e1a9cea81343fbecda52d7/parsimonious-0.10.0.tar.gz",
+        "hash": "sha256:8281600da180ec8ae35427a4ab4f7b82bfec1e3d1e52f80cb60ea82b9512501c",
+        "size": 52172,
+        "upload-time": "2022-09-03T17:01:17.004Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "prometheus-client",
+      "version": "0.26.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/52/73/f1334c29c2af4cd9dba6c7817e61b611bd0215e2eb5565c6064a4de18802/prometheus_client-0.26.0.tar.gz",
+        "hash": "sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b",
+        "size": 92910,
+        "upload-time": "2026-07-24T19:36:41.893Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "propcache",
+      "version": "0.5.4",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/b3/9a/9fbf4e4ec0c2d7f1c32519fff782ef467859b8faa9fbc5331a96f6395d43/propcache-0.5.4.tar.gz",
+        "hash": "sha256:ff6b113f50bc066a698db5d944d2c6dc7507168dd3341e255a8892fd0715a558",
+        "size": 61545,
+        "upload-time": "2026-09-16T00:17:14.386Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "psycopg",
+      "version": "3.3.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/76/26/3ea4ca5eaea1c0debcdf7ee7c1613fbe721dc27a03c461c0817ffd8a0601/psycopg-3.3.6.tar.gz",
+        "hash": "sha256:c081f2250df751a943036e42db6df4571c66cd0aabe8291a7a506512b12007d2",
+        "size": 168171,
+        "upload-time": "2026-09-18T13:22:55.152Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "psycopg-binary",
+      "version": "3.3.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": null,
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "psycopg-pool",
+      "version": "3.3.3",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/74/5e/c0664b968b102ff68b811d999c728546c48d5c1eec03e3bbaf88c0cb4472/psycopg_pool-3.3.3.tar.gz",
+        "hash": "sha256:df87b5d9d0ad7db37f6cdad4fa8ce113d250f5997f6db38e9a99192fb67f9e1d",
+        "size": 32006,
+        "upload-time": "2026-09-22T15:53:24.947Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "py-ecc",
+      "version": "8.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/1c/96/e73075d5c885274efada2fbc5db6377022036c2f5b4b470dbcf4106e07d5/py_ecc-8.0.0.tar.gz",
+        "hash": "sha256:56aca19e5dc37294f60c1cc76666c03c2276e7666412b9a559fa0145d099933d",
+        "size": 51193,
+        "upload-time": "2025-04-14T16:14:03.29Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/8e/a6/8452177684d5e906854776276ddd34eca30d1b1e15aa1ee9cefc289a33f5/pycryptodome-3.23.0.tar.gz",
+        "hash": "sha256:447700a657182d60338bab09fdb27518f8856aecd80ae4c6bdddb67ff5da44ef",
+        "size": 4921276,
+        "upload-time": "2025-05-17T17:21:45.242Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.5",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/53/ef/fc4f868f4e2cee79f863883abffceff107875f569b848507319842d2a681/pydantic-2.13.5.tar.gz",
+        "hash": "sha256:51a9c5f7b2f8e636f04c6cada605d9b6a3bf1348fdf945a3d8869b19bba0ee08",
+        "size": 845750,
+        "upload-time": "2026-08-28T14:04:00.916Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.5",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/af/f9/8a06bea35ef8daf588f707784c973a7046e0034c8d8cfb08828eeffb8b75/pydantic_core-2.46.5.tar.gz",
+        "hash": "sha256:10416c15b8839ecc4ef4d0885da76da6fd0f67333a0eb8aff6d93c4b8f2910fc",
+        "size": 472262,
+        "upload-time": "2026-08-28T10:01:31.677Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "pyunormalize",
+      "version": "17.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/25/ab/b912c484cfb96ba4834efe050bbf10c9e157bd8189eb859aefba8712b136/pyunormalize-17.0.0.tar.gz",
+        "hash": "sha256:0949a3e56817e287febcaf1b0cc4b5adf0bb107628d379335938040947eec792",
+        "size": 53121,
+        "upload-time": "2025-09-28T20:53:06.141Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "pywin32",
+      "version": "312",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": null,
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "regex",
+      "version": "2026.9.29",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/fc/f2/af1da9d3ceed77bfcdce40427d49ba0be94e4fe84245e3bfef68c10e75b6/regex-2026.9.29.tar.gz",
+        "hash": "sha256:8b5fcc4771732191b2b7d1dd68d8f0353f47f8d90b6150f6dce58bf1112442cb",
+        "size": 419199,
+        "upload-time": "2026-09-29T00:49:58.298Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz",
+        "hash": "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed",
+        "size": 142856,
+        "upload-time": "2026-05-14T19:25:27.735Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "rlp",
+      "version": "5.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/1e/45/68859ee36a69ddd8fa819d52fab75214de56f05500907e8bf09b5fd7bd75/rlp-5.0.0.tar.gz",
+        "hash": "sha256:ae8ac791160c160e270f9c7df76e68f4d42bb86a13726d807b9357c312d0bac4",
+        "size": 46769,
+        "upload-time": "2026-08-21T21:48:51.694Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "sqlalchemy",
+      "version": "2.1.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/53/c4/6a57fe8bc24ebb438519d20ea4dcab48e4e388b1da8a53783326e762c8b9/sqlalchemy-2.1.2.tar.gz",
+        "hash": "sha256:077ac635f7d92644888df8cf6dd92abde06c083dbf996fa58c22792d68b151db",
+        "size": 10523935,
+        "upload-time": "2026-10-02T04:15:55.84Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "starlette",
+      "version": "1.7.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/7b/2b/3850dc6bf7ef71b088962eba31dafc6cffd2f96e577ebb0bb316df96da3e/starlette-1.7.0.tar.gz",
+        "hash": "sha256:c79f74ea63cff761804fbbfb182f1e0b440c2d07b164d24700c5a1bab5d6ff5d",
+        "size": 2736246,
+        "upload-time": "2026-09-23T07:30:26.35Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "toolz",
+      "version": "1.1.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/11/d6/114b492226588d6ff54579d95847662fc69196bdeec318eb45393b24c192/toolz-1.1.0.tar.gz",
+        "hash": "sha256:27a5c770d068c110d9ed9323f24f1543e83b2f300a687b7891c1a6d56b697b5b",
+        "size": 52613,
+        "upload-time": "2025-10-17T04:03:21.661Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz",
+        "hash": "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5",
+        "size": 113555,
+        "upload-time": "2026-07-02T08:40:05.92Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/a3/26/b09b8010994eccc3c09092e6b34058f36a460eea2d4c3e8b910c695975a0/typing_inspection-0.4.4.tar.gz",
+        "hash": "sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47",
+        "size": 76928,
+        "upload-time": "2026-08-12T12:37:25.997Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026.4",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/e4/31/3d74fa778a63b98b7374323befcc0be5ab3bd94afd4096a0124e7379152c/tzdata-2026.4.tar.gz",
+        "hash": "sha256:f1b8bd365d8d210c55353f4d7f8d6d8561c0ba50d704b700d195a9424bba0d79",
+        "size": 199350,
+        "upload-time": "2026-09-12T12:56:03.251Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/e3/05/b17359e1cefb4f909b5e40b1b90a496d987258916dbbf88e842c729f510e/urllib3-2.8.0.tar.gz",
+        "hash": "sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63",
+        "size": 458972,
+        "upload-time": "2026-09-15T19:29:36.253Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.54.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/da/34/30e9280707135d2cfc589dfff3cb796bd07a3aeb1a3e415ba09dd89d7bb4/uvicorn-0.54.0.tar.gz",
+        "hash": "sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620",
+        "size": 112283,
+        "upload-time": "2026-09-25T06:52:37.601Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "valkey",
+      "version": "6.1.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/c3/ee/7fd930fc712275084722ddd464a0ea296abdb997d2da396320507968daeb/valkey-6.1.1.tar.gz",
+        "hash": "sha256:5880792990c6c2b5eb604a5ed5f98f300880b6dd92d123819b66ed54bb259731",
+        "size": 4601372,
+        "upload-time": "2025-08-11T06:41:10.63Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "web3",
+      "version": "8.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/d6/87/ce55e6cbcb7980c51be46f233a562174cf59abff44ca437b80571e8a2ec2/web3-8.0.0.tar.gz",
+        "hash": "sha256:8d898fe1909037d6269c998d27c1806ce201cf6d7e49514ad6f3e4dcc64e6e9a",
+        "size": 2819785,
+        "upload-time": "2026-08-31T21:43:28.167Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "websockets",
+      "version": "17.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/18/72/fba934cb3dff7a85d811820efffcd141ddd52b5a2a01637f64551373ff4d/websockets-17.1.tar.gz",
+        "hash": "sha256:acfea4c20bf54384883ea33b1240fc1db4f52e190823a4e2b334bc3e8bfca96a",
+        "size": 187520,
+        "upload-time": "2026-08-26T17:25:33.063Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    },
+    {
+      "name": "yarl",
+      "version": "1.25.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "sdist": {
+        "url": "https://files.pythonhosted.org/packages/75/16/e8be8e2fb175bbf41a0680381a319f1199fae256588241a2ac8677eafb49/yarl-1.25.1.tar.gz",
+        "hash": "sha256:03dd38de09bc213e9a8b29761eec33ee1d5318dac0e49d8af36e4d27830e23a7",
+        "size": 246245,
+        "upload-time": "2026-09-15T19:35:02.264Z"
+      },
+      "sourceStatus": "Upstream source archive listed by original lock; source content/license/build completeness not independently verified here"
+    }
+  ],
+  "scope": "Original exact dependency artifact identities; this inventory is not proof that every non-System library preferred-form source has been supplied. Patched SDK script and vendored ABI packages remain included."
+}
