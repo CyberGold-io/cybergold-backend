@@ -1,0 +1,11 @@
+--- a/python-candidate/src/cybergold_candidate/quote_intent.py
++++ b/python-candidate/src/cybergold_candidate/quote_intent.py
+@@ -575,6 +575,8 @@
+                 if gross <= 0:
+                     raise InvalidPreview('Unable to compute a reliable quote for the entered amount.')
+                 result = await redemption(gross, early_display=False)
++                if hasattr(self.correction, 'observe_result'):
++                    self.correction.observe_result(result)
+                 quoted = int(result['preview']['minimumAmountOut'])
+                 observations.append((gross, quoted))
+                 if target <= quoted <= ceil(target, slippage_bps):
