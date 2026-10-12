@@ -16,6 +16,7 @@ def source_information(version):
         'repository': REPOSITORY,
         'license': 'AGPL-3.0-only',
         'version': version,
+        'dependencySourcesUrl': REPOSITORY + '/releases/download/dependency-source-2026-10-12/dependency-source-index.json',
         'downloadUrl': offer['downloadUrl'] if offer else
             REPOSITORY + '/archive/' + quote(version, safe='') + '.tar.gz' if version else None,
         'sha256': offer['sha256'] if offer else None,

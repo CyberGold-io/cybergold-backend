@@ -46,6 +46,8 @@ class SourceOfferTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()['version'], version)
         self.assertEqual(response.json()['downloadUrl'], OFFERS[0]['downloadUrl'])
         self.assertEqual(response.json()['sha256'], OFFERS[0]['sha256'])
+        self.assertEqual(response.json()['dependencySourcesUrl'],
+            REPOSITORY + '/releases/download/dependency-source-2026-10-12/dependency-source-index.json')
         self.assertNotIn('fixture-private', response.text)
         self.assertIn(OFFERS[0]['downloadUrl'], response.headers['link'])
 
@@ -57,6 +59,8 @@ class SourceOfferTests(unittest.IsolatedAsyncioTestCase):
                 response = await self.read_source(app)
         self.assertEqual(response.json()['downloadUrl'], REPOSITORY + '/archive/' + version + '.tar.gz')
         self.assertIsNone(response.json()['sha256'])
+        self.assertEqual(response.json()['dependencySourcesUrl'],
+            REPOSITORY + '/releases/download/dependency-source-2026-10-12/dependency-source-index.json')
 
     async def test_local_build_without_release_remains_available(self):
         async with httpx.AsyncClient() as provider:
