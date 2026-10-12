@@ -34,6 +34,10 @@ and attempt IDs. The IDs never affect sharing keys, signing, authentication or
 product decisions. Browser diagnostic POSTs keep the supplied operation's
 `requestId` and record their own ingress ID as `diagnosticRequestId`.
 
+The optional `X-CyberGold-Backend-Revision` response header records the responding
+process's build commit when `CYBERGOLD_BACKEND_COMMIT` supplies a 40-hex revision.
+It is absent for local builds without a commit and never required for a request.
+
 `cybergold_backend_quote_outcomes_total` counts semantic subscription outcomes
 separately from HTTP status (a quote stream may fail under HTTP 200).
 `quote_first_executable_seconds` measures the first qualified/complete quote,

@@ -132,6 +132,10 @@ class Metrics:
 class TelemetryMiddleware:
     def __init__(self,app,metrics,component,release=None):
         self.app,self.metrics,self.component,self.release=app,metrics,component,release
+        # Optional observed build context. Unset/local release values do not
+        # affect requests, and arbitrary environment text never becomes a header.
+        self.backend_revision=(release.lower() if isinstance(release,str)
+            and re.fullmatch(r'[0-9a-f]{40}',release,re.I) else None)
 
     async def __call__(self,scope,receive,send):
         if scope['type']!='http' or scope['path']=='/metrics':return await self.app(scope,receive,send)
@@ -149,7 +153,10 @@ class TelemetryMiddleware:
             if message['type']=='http.response.start':
                 status=message['status']
                 message={**message,'headers':[(key,value) for key,value in message.get('headers',[])
-                    if key.lower()!=b'x-cybergold-request-id']+[(b'x-cybergold-request-id',request_id.encode())]}
+                    if key.lower() not in (b'x-cybergold-request-id',b'x-cybergold-backend-revision')]
+                    +[(b'x-cybergold-request-id',request_id.encode())]}
+                if self.backend_revision:
+                    message['headers'].append((b'x-cybergold-backend-revision',self.backend_revision.encode()))
             await send(message)
         try:await self.app(scope,receive,forward)
         except Exception:

@@ -9,7 +9,7 @@ import httpx
 
 from cybergold_candidate.app import create_app
 from cybergold_candidate.cache import MarketFeed
-from cybergold_candidate.telemetry import Metrics,configure_logging
+from cybergold_candidate.telemetry import Metrics,TelemetryMiddleware,configure_logging
 
 
 def values(metric,suffix=''):
@@ -18,8 +18,23 @@ def values(metric,suffix=''):
         for family in metric.collect() for sample in family.samples if sample.name==metric._name+suffix]
 
 
+async def revision_headers():
+    async def product(scope,receive,send):
+        await send({'type':'http.response.start','status':503,'headers':[
+            (b'x-cybergold-backend-revision',b'not-observed-build-context')]})
+        await send({'type':'http.response.body','body':b'ordinary product failure'})
+    for release,expected in [(None,None),('fixture-release',None),('A'*40,'a'*40)]:
+        app=TelemetryMiddleware(product,Metrics(),'api',release)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app),base_url='http://fixture') as api:
+            response=await api.get('/api/transaction/wait/head')
+        assert response.status_code==503 and response.text=='ordinary product failure'
+        assert response.headers.get('X-CyberGold-Backend-Revision')==expected
+        assert response.headers.get('X-CyberGold-Request-Id')
+
+
 async def run(path):
     reference=json.loads(Path(path).read_text());stream=io.StringIO();logger=configure_logging(stream)
+    await revision_headers()
     app=create_app(release='fixture-release')
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app,raise_app_exceptions=False),base_url='http://fixture') as api:
