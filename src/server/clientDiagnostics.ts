@@ -22,6 +22,22 @@ export type ClientDiagnostic = {
   walletStep?: "approval" | "signature" | "transaction";
   attemptId?: string;
   quoteId?: string;
+  requestId?: string;
+  correlationId?: string;
+  workId?: string;
+  side?: "buy" | "sell";
+  strategy?: "core" | "market";
+  stage?: "quote" | "balance" | "network" | "authorization" | "preparation" | "simulation" | "submission" | "confirmation";
+  errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "rpc-rate-limit" | "rpc-timeout"
+    | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout" | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable"
+    | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-invalid-input" | "quote-request-limit";
+  tokenIn?: string;
+  tokenOut?: string;
+  amount?: string;
+  inputMaximum?: string;
+  outputMinimum?: string;
+  blockNumber?: string;
+  blockHash?: string;
   transactionHash?: string;
   durationMs?: number;
   chainId?: number;
@@ -38,11 +54,16 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
     reason: ["wallet_rejected", "rpc_error", "contract_reverted", "wrong_chain", "unknown"],
     direction: ["issue", "redeem"], route: ["basket", "token"], inputMode: ["exact-in", "exact-out"],
     walletStep: ["approval", "signature", "transaction"],
+    side: ["buy", "sell"], strategy: ["core", "market"],
+    stage: ["quote", "balance", "network", "authorization", "preparation", "simulation", "submission", "confirmation"],
+    errorClassification: ["insufficient-protocol-supply", "issuance-cap-exceeded", "rpc-rate-limit", "rpc-timeout",
+      "rpc-unavailable", "rpc-access-denied", "quote-timeout", "quote-no-route", "quote-contract-reverted", "quote-unavailable",
+      "quote-service-unavailable", "quote-stream-interrupted", "quote-invalid-input", "quote-request-limit"],
   };
   for (const [key, values] of Object.entries(enums)) {
     if (typeof source[key] === "string" && values.includes(source[key])) result[key] = source[key];
   }
-  for (const key of ["attemptId", "quoteId"]) {
+  for (const key of ["attemptId", "quoteId", "requestId", "correlationId", "workId"]) {
     if (typeof source[key] === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source[key])) {
       result[key] = source[key];
     }
@@ -57,6 +78,13 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
   if (typeof source.errorSelector === "string" && /^0x[0-9a-fA-F]{8}$/.test(source.errorSelector)) {
     result.errorSelector = source.errorSelector.toLowerCase();
   }
+  for (const key of ["tokenIn", "tokenOut"]) {
+    if (typeof source[key] === "string" && /^0x[0-9a-fA-F]{40}$/.test(source[key])) result[key] = source[key];
+  }
+  for (const key of ["amount", "inputMaximum", "outputMinimum", "blockNumber"]) {
+    if (typeof source[key] === "string" && /^[0-9]{1,78}$/.test(source[key]) && BigInt(source[key]) < 2n ** 256n) result[key] = source[key];
+  }
+  if (typeof source.blockHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(source.blockHash)) result.blockHash = source.blockHash;
   return result as ClientDiagnostic;
 }
 
@@ -78,7 +106,8 @@ export async function registerClientDiagnostics(app: FastifyInstance) {
       if (diagnostic.operation && diagnostic.outcome) {
         try {
           app.log.info({ ...diagnostic, event: "client_diagnostic", source: "browser",
-            component: "api", requestId: request.id, release: process.env.CYBERGOLD_BACKEND_COMMIT },
+            component: "api", requestId: diagnostic.requestId ?? request.id,
+            diagnosticRequestId: request.id, release: process.env.CYBERGOLD_BACKEND_COMMIT },
           "DApp diagnostic");
         } catch { /* Telemetry must not become a product dependency. */ }
       }

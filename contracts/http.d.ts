@@ -2426,7 +2426,12 @@ export interface components {
             /** @enum {string} */
             market: "complete" | "running" | "unavailable" | "unsupported";
         };
-        TradeQuoteEvent: {
+        TradeQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             value: {
@@ -2665,17 +2670,32 @@ export interface components {
                     amount: string;
                 };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             /** @enum {string} */
             strategy: "core" | "market";
             amount: string;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @enum {string} */
             type: "complete" | "qualified";
             value: components["schemas"]["TradeQuote"];
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             /** @enum {string} */
@@ -2687,7 +2707,12 @@ export interface components {
                 completedCandidates?: number;
                 totalCandidates?: number;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "provider-error";
             /** @enum {string} */
@@ -2695,18 +2720,54 @@ export interface components {
             error: string;
             /** @enum {string} */
             code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
-        } | {
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
             /** @enum {string} */
             strategy: "core" | "market";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
             /** @enum {string} */
             code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
-        };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+        });
         "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
             /** @enum {string} */
             mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
@@ -2748,7 +2809,12 @@ export interface components {
             /** @constant */
             type: "native";
         });
-        MarketQuoteEvent: {
+        MarketQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             value: {
@@ -2834,11 +2900,21 @@ export interface components {
                     };
                 }[];
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             amount: string;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @enum {string} */
             type: "complete" | "qualified";
             value: {
@@ -2982,20 +3058,48 @@ export interface components {
                     totalMs: number;
                 };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             completedCandidates: number;
             totalCandidates?: number;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
             code?: string;
-        };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+        });
         MarketModelRequest: {
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
@@ -4677,6 +4781,8 @@ export interface components {
                         httpStatus?: number;
                         /** @enum {string} */
                         failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                        errorSelector?: string;
+                        errorName?: string;
                     };
                 }[];
             } & {
@@ -4767,6 +4873,8 @@ export interface components {
                             httpStatus?: number;
                             /** @enum {string} */
                             failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                            errorSelector?: string;
+                            errorName?: string;
                         };
                     }[];
                 }[];
@@ -4799,9 +4907,16 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
             };
         };
-        QuoteIntentEvent: {
+        QuoteIntentEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             /** @description Display-only source data. No transaction tuples or execution readiness. */
@@ -4930,13 +5045,23 @@ export interface components {
                     };
                 } | null;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             stage: string;
             completed: number;
             total: number;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             amount: string;
@@ -4946,7 +5071,12 @@ export interface components {
                 blockHash: string;
                 observedAt: string;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "qualified";
             value: {
@@ -5213,7 +5343,12 @@ export interface components {
                     totalMs: number;
                 };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
             context: {
@@ -5224,7 +5359,12 @@ export interface components {
             };
             /** @constant */
             reason?: "snapshot-changed";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "complete";
             value: {
@@ -5491,7 +5631,12 @@ export interface components {
                     totalMs: number;
                 };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
@@ -5508,8 +5653,10 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
             };
-        };
+        });
         "Record<string,unknown>": Record<string, never>;
         HelpersActivity: {
             /** @constant */
@@ -5872,6 +6019,13 @@ export interface components {
                 forkBlockHash: string;
             };
         });
+        /** @description Optional subscriber references; workId belongs to shared producer work. */
+        DiagnosticReferences: {
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        };
         /** @description One user trade; Backend chooses a complete Core or market execution. */
         TradeModelRequest: {
             /** @enum {string} */
@@ -7219,6 +7373,8 @@ export interface components {
                         httpStatus?: number;
                         /** @enum {string} */
                         failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                        errorSelector?: string;
+                        errorName?: string;
                     };
                 }[];
             }[];
@@ -7767,6 +7923,8 @@ export interface components {
             httpStatus?: number;
             /** @enum {string} */
             failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+            errorSelector?: string;
+            errorName?: string;
         };
         ClientDiagnostic: {
             /** @enum {string} */
@@ -7789,6 +7947,24 @@ export interface components {
             walletStep?: "approval" | "signature" | "transaction";
             attemptId?: string;
             quoteId?: string;
+            requestId?: string;
+            correlationId?: string;
+            workId?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            /** @enum {string} */
+            strategy?: "core" | "market";
+            /** @enum {string} */
+            stage?: "authorization" | "balance" | "confirmation" | "network" | "preparation" | "quote" | "simulation" | "submission";
+            /** @enum {string} */
+            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            tokenIn?: string;
+            tokenOut?: string;
+            amount?: string;
+            inputMaximum?: string;
+            outputMinimum?: string;
+            blockNumber?: string;
+            blockHash?: string;
             transactionHash?: string;
             durationMs?: number;
             chainId?: number;
@@ -8137,8 +8313,12 @@ export interface components {
             sandboxForkGeneration?: null | string;
         });
         PublicError: {
-            error: string;
+            requestId?: string;
+            attemptId?: string;
             correlationId?: string;
+            workId?: string;
+        } & {
+            error: string;
             /** @enum {string} */
             code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
@@ -8151,6 +8331,8 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
             };
         };
         AliasesRequest: components["schemas"]["OwnerAliasesRequest"];
@@ -8358,7 +8540,10 @@ export interface operations {
     get__api_protocol_facts: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8367,6 +8552,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8376,6 +8563,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8385,6 +8574,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8396,7 +8587,10 @@ export interface operations {
     get__api_protocol_config: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8405,6 +8599,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8414,6 +8610,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8423,6 +8621,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8434,7 +8634,10 @@ export interface operations {
     get__api_gold: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8443,6 +8646,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8452,6 +8657,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8461,6 +8668,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8472,7 +8681,10 @@ export interface operations {
     post__api_quotes_market: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8485,6 +8697,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8494,6 +8708,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8503,6 +8719,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8514,7 +8732,10 @@ export interface operations {
     post__api_quotes_market_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8527,6 +8748,8 @@ export interface operations {
             /** @description Market model/estimate/progress/qualified, then complete or error; amount integers are decimal strings. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8536,6 +8759,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8547,7 +8772,10 @@ export interface operations {
     post__api_quotes_market_model: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8560,6 +8788,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8569,6 +8799,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8578,6 +8810,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8589,7 +8823,10 @@ export interface operations {
     post__api_quotes_trade_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8602,6 +8839,8 @@ export interface operations {
             /** @description Cached models, estimates and tagged provider progress; qualified best incumbents, then complete or error. Integers are decimal strings. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8611,6 +8850,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8622,7 +8863,10 @@ export interface operations {
     post__api_quotes_trade_model: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8635,6 +8879,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8644,6 +8890,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8653,6 +8901,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8666,7 +8916,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8675,6 +8928,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8684,6 +8939,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8693,6 +8950,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8706,7 +8965,10 @@ export interface operations {
             query: {
                 holder: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8715,6 +8977,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8724,6 +8988,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8733,6 +8999,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8746,7 +9014,10 @@ export interface operations {
             query: {
                 name: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8755,6 +9026,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8764,6 +9037,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8773,6 +9048,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8788,7 +9065,10 @@ export interface operations {
                 /** @description display opts ordinary loading out of the repeated chain check and final canonical block reread; omitted or other values retain both existing checks. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8797,6 +9077,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8806,6 +9088,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8815,6 +9099,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8830,7 +9116,10 @@ export interface operations {
                 /** @description display opts ordinary loading out of the repeated chain check and final canonical block reread; omitted, swap-preflight or other values retain both existing checks. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8839,6 +9128,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8848,6 +9139,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8857,6 +9150,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8871,7 +9166,10 @@ export interface operations {
                 holder: string;
                 tokenId: "eth" | "cygld" | "xaut" | "paxg" | "usdt" | "usdc" | "weth";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8880,6 +9178,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8889,6 +9189,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8898,6 +9200,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8911,7 +9215,10 @@ export interface operations {
             query: {
                 holder: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8920,6 +9227,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8929,6 +9238,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8938,6 +9249,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8951,7 +9264,10 @@ export interface operations {
             query: {
                 surface: "core" | "staking" | "governance-diamond";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8960,6 +9276,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8969,6 +9287,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8978,6 +9298,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8992,7 +9314,10 @@ export interface operations {
                 surface: "core" | "staking" | "governance-diamond";
                 account?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9001,6 +9326,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9010,6 +9337,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9019,6 +9348,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9030,7 +9361,10 @@ export interface operations {
     post__api_transaction_recovery_redemption: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9043,6 +9377,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9052,6 +9388,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9061,6 +9399,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9072,7 +9412,10 @@ export interface operations {
     post__api_transaction_permit2_approval_gas: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9085,6 +9428,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9094,6 +9439,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9103,6 +9450,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9116,7 +9465,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9125,6 +9477,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9134,6 +9488,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9143,6 +9499,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9154,7 +9512,10 @@ export interface operations {
     post__api_governance_safe_transaction_hash: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9167,6 +9528,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9176,6 +9539,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9185,6 +9550,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9196,7 +9563,10 @@ export interface operations {
     post__api_governance_safe_execution: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9209,6 +9579,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9218,6 +9590,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9227,6 +9601,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9238,7 +9614,10 @@ export interface operations {
     post__api_transaction_helpers_execution: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9251,6 +9630,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9260,6 +9641,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9269,6 +9652,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9282,7 +9667,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9291,6 +9679,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9300,6 +9690,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9309,6 +9701,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9320,7 +9714,10 @@ export interface operations {
     get__api_transaction_wait_head: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9329,6 +9726,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9338,6 +9737,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9347,6 +9748,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9360,7 +9763,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9369,6 +9775,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9378,6 +9786,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9387,6 +9797,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9400,7 +9812,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9409,6 +9824,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9418,6 +9835,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9427,6 +9846,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9440,7 +9861,10 @@ export interface operations {
             query: {
                 blockNumber: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9449,6 +9873,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9458,6 +9884,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9467,6 +9895,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9480,7 +9910,10 @@ export interface operations {
             query: {
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9489,6 +9922,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9498,6 +9933,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9507,6 +9944,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9518,7 +9957,10 @@ export interface operations {
     get__api_transaction_fees: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9527,6 +9969,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9536,6 +9980,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9545,6 +9991,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9558,7 +10006,10 @@ export interface operations {
             query: {
                 asset: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9567,6 +10018,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9576,6 +10029,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9585,6 +10040,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9596,7 +10053,10 @@ export interface operations {
     get__api_protocol_recovery_assets: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9605,6 +10065,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9614,6 +10076,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9623,6 +10087,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9634,7 +10100,10 @@ export interface operations {
     post__api_account_permit2: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9647,6 +10116,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9656,6 +10127,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9665,6 +10138,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9681,7 +10156,10 @@ export interface operations {
                 /** @description balance reads only selected holder balance/context; metadata fields and authorization are explicitly not-requested. Default and other values retain optional discovery. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9690,6 +10168,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9699,6 +10179,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9708,6 +10190,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9722,7 +10206,10 @@ export interface operations {
                 token: string;
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9731,6 +10218,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9740,6 +10229,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9749,6 +10240,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9760,7 +10253,10 @@ export interface operations {
     post__api_transaction_token_approval_gas: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9773,6 +10269,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9782,6 +10280,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9791,6 +10291,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9804,7 +10306,10 @@ export interface operations {
             query: {
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9813,6 +10318,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9822,6 +10329,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9831,6 +10340,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9842,7 +10353,10 @@ export interface operations {
     get__api_governance_core_facts: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9851,6 +10365,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9860,6 +10376,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9869,6 +10387,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9885,7 +10405,10 @@ export interface operations {
                 basketPermitIssuance?: "true";
                 marketSwap?: "true";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9894,6 +10417,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9903,6 +10428,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9912,6 +10439,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9925,7 +10454,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9934,6 +10466,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9943,6 +10477,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9952,6 +10488,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9965,7 +10503,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9974,6 +10515,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9983,6 +10526,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9992,6 +10537,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10003,7 +10550,10 @@ export interface operations {
     post__api_quotes_basket_preview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10016,6 +10566,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10025,6 +10577,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10034,6 +10588,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10045,7 +10601,10 @@ export interface operations {
     post__api_quotes_token_preview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10058,6 +10617,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10067,6 +10628,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10076,6 +10639,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10087,7 +10652,10 @@ export interface operations {
     post__api_quotes_routes: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10100,6 +10668,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10109,6 +10679,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10118,6 +10690,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10129,7 +10703,10 @@ export interface operations {
     post__api_quotes_routes_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10142,6 +10719,8 @@ export interface operations {
             /** @description One RouteSearchEvent JSON object per line; progress, then complete or error. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10151,6 +10730,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10162,7 +10743,10 @@ export interface operations {
     post__api_quotes_intent_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10175,6 +10759,8 @@ export interface operations {
             /** @description One QuoteIntentEvent per line; optional model/estimate/progress/qualified, then complete or error. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10184,6 +10770,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10195,7 +10783,10 @@ export interface operations {
     post__api_quotes_uniswap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10208,6 +10799,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10217,6 +10810,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10226,6 +10821,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10237,7 +10834,10 @@ export interface operations {
     get__api_fx: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10246,6 +10846,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10255,6 +10857,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10264,6 +10868,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10275,7 +10881,10 @@ export interface operations {
     get__api_activity_core: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10284,6 +10893,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10293,6 +10904,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10302,6 +10915,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10313,7 +10928,10 @@ export interface operations {
     get__api_activity_helpers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10322,6 +10940,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10331,6 +10951,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10340,6 +10962,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10356,7 +10980,10 @@ export interface operations {
                 poolAddress?: string;
                 poolManager?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10365,6 +10992,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10374,6 +11003,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10383,6 +11014,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10394,7 +11027,10 @@ export interface operations {
     get__api_activity_safe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10403,6 +11039,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10412,6 +11050,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10421,6 +11061,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10432,7 +11074,10 @@ export interface operations {
     post__api_diagnostics: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10445,6 +11090,8 @@ export interface operations {
             /** @description Existing response envelope */
             202: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10457,6 +11104,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10468,7 +11117,10 @@ export interface operations {
     get__api_dashboard_onchain_summary: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10477,6 +11129,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10486,6 +11140,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10495,6 +11151,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10510,7 +11168,10 @@ export interface operations {
                 offset?: string;
                 blockHash?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10519,6 +11180,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10528,6 +11191,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10537,6 +11202,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10548,7 +11215,10 @@ export interface operations {
     post__api_rpc: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10561,6 +11231,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10570,6 +11242,8 @@ export interface operations {
             /** @description Remote entry bearer rejected before JSON-RPC parsing */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10579,6 +11253,8 @@ export interface operations {
             /** @description Existing single/batch JSON-RPC error with preserved IDs */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10590,7 +11266,10 @@ export interface operations {
     post__api_governance_owner_aliases: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10603,6 +11282,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10612,6 +11293,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10621,6 +11304,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10632,7 +11317,10 @@ export interface operations {
     post__api_quote_pool_cache: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10645,6 +11333,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10654,6 +11344,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10663,6 +11355,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10674,7 +11368,10 @@ export interface operations {
     post__api_pools_snapshot: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10687,6 +11384,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10696,6 +11395,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10705,6 +11406,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10719,7 +11422,10 @@ export interface operations {
                 tokenA?: string;
                 tokenB?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10728,6 +11434,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10737,6 +11445,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10746,6 +11456,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10757,7 +11469,10 @@ export interface operations {
     post__api_safe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10770,6 +11485,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10779,6 +11496,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10788,6 +11507,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10799,7 +11520,10 @@ export interface operations {
     post__api_safe_events: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10812,6 +11536,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10821,6 +11547,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10830,6 +11558,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10841,7 +11571,10 @@ export interface operations {
     post__api_faucet: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10854,6 +11587,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10863,6 +11598,8 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10872,6 +11609,8 @@ export interface operations {
             /** @description Safe faucet failure with stable code and backend log reference */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10883,7 +11622,10 @@ export interface operations {
     get__api_internal_onchain_indexer_reconcile: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10892,6 +11634,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10901,6 +11645,8 @@ export interface operations {
             /** @description Private worker bearer rejected */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10910,6 +11656,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10924,7 +11672,10 @@ export interface operations {
                 force?: "1";
                 diagnostic?: "1";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10938,6 +11689,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10947,6 +11700,8 @@ export interface operations {
             /** @description Existing response envelope */
             202: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10956,6 +11711,8 @@ export interface operations {
             /** @description Existing response envelope */
             409: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10965,6 +11722,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10976,7 +11735,10 @@ export interface operations {
     get__api_internal_onchain_indexer_fork_generation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10985,6 +11747,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10994,6 +11758,8 @@ export interface operations {
             /** @description Private worker bearer rejected */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11003,6 +11769,8 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11014,7 +11782,10 @@ export interface operations {
     post__api_internal_onchain_indexer_fork_generation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11027,6 +11798,8 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11036,6 +11809,8 @@ export interface operations {
             /** @description Existing response envelope */
             409: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11045,6 +11820,8 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {

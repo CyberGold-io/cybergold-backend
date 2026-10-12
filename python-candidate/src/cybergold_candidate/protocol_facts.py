@@ -2,10 +2,8 @@
 import asyncio
 from datetime import datetime, timezone
 import json
-import logging
 import os
 from pathlib import Path
-import uuid
 
 from eth_utils.abi import collapse_if_tuple
 from fastapi.responses import JSONResponse, Response
@@ -14,6 +12,7 @@ from web3 import Web3
 from .recovery_rpc import RecoveryRpc, abi_value
 from .quote_errors import public_quote_error, RpcTimeout
 from .shared_reads import SharedReads, discard_pool_observation
+from .trade_observation import failure as observe_failure
 
 ABI = json.loads(Path(__file__).with_name('protocol-facts-abi.json').read_text())
 
@@ -138,18 +137,12 @@ async def handle_protocol_facts(request, service, context='protocol-facts', unav
                 raise ValueError('Protocol facts not configured')
             return JSONResponse(await service.get(), headers={'Cache-Control': 'no-store'})
         except Exception as error:
-            correlation = str(uuid.uuid4())
             failure = RpcTimeout() if isinstance(error, TimeoutError) and not isinstance(error, RpcTimeout) else error
             payload = public_quote_error(failure)
             if payload['code'] == 'quote-unavailable':
                 payload = {'error': unavailable,
                            **({'diagnostics': payload['diagnostics']} if 'diagnostics' in payload else {})}
-            logging.getLogger('cybergold.candidate').error(json.dumps({
-                'context': context, 'correlationId': correlation,
-                'errorClassification': payload.get('code', context+'-unavailable'),
-                'exceptionType': type(error).__name__,
-                **({'diagnostics': payload['diagnostics']} if 'diagnostics' in payload else {})}))
-            return JSONResponse({**payload, 'correlationId': correlation},
+            return JSONResponse(observe_failure(request, error, context, payload=payload),
                                 status_code=503, headers={'Cache-Control': 'no-store'})
     operation, caller = asyncio.create_task(result()), asyncio.create_task(disconnected())
     try:

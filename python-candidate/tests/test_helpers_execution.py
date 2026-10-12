@@ -12,6 +12,7 @@ from web3.providers import AsyncBaseProvider
 
 from cybergold_candidate.app import create_app
 from cybergold_candidate.helpers_execution import HelpersExecution, HelpersExecutionRequest, HelpersExecutionRpc
+from cybergold_candidate.rpc_diagnostics import error_diagnostics, rpc_diagnostic_scope
 
 ROWS = json.loads(Path(sys.argv[1]).read_text())
 HASH = '0x'+'a'*64
@@ -23,6 +24,7 @@ class Provider(AsyncBaseProvider):
         self.calls = []
         self.failure, self.blocked, self.reorg, self.chain = failure, blocked, reorg, chain
         self.started, self.cancelled = asyncio.Event(), False
+        self.error_override = None
 
     async def make_request(self, method, params):
         self.calls.append({'method': method, 'params': list(params)})
@@ -40,7 +42,7 @@ class Provider(AsyncBaseProvider):
                     self.cancelled = True
                     raise
             if self.failure == method:
-                return {'jsonrpc': '2.0', 'id': 1, 'error': {'code': 3, 'message': 'execution reverted https://password@private.invalid'}}
+                return {'jsonrpc': '2.0', 'id': 1, 'error': self.error_override or {'code': 3, 'message': 'execution reverted https://password@private.invalid'}}
             if self.failure == 'decode' and method == 'eth_call':
                 result = '0x'
             else:
@@ -138,6 +140,53 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             result = await client.post('/api/transaction/helpers-execution', json={**ROWS[0]['payload'], 'args': []})
             self.assertEqual(result.status_code, 503)
         self.assertTrue(all(call['method'] in ('eth_call', 'eth_estimateGas', 'eth_chainId', 'eth_getBlockByNumber') for call in provider.calls))
+
+    async def test_simulation_and_estimation_preserve_rpc_stage_and_known_revert_identity(self):
+        selector = AsyncWeb3.to_hex(AsyncWeb3.keccak(text='NativeValueMismatch(uint256,uint256)'))[:10]
+        data = selector+AsyncWeb3().codec.encode(['uint256','uint256'], [100, 99]).hex()
+        for method, stage in [('eth_call','helpers-simulation'), ('eth_estimateGas','helpers-gas-estimation')]:
+            with self.subTest(method=method):
+                provider = Provider(failure=method)
+                provider.error_override = {'code': 3, 'message': 'execution reverted https://password@private.invalid', 'data': data}
+                app = create_app(helpers_execution=service(provider))
+                async with app.router.lifespan_context(app), httpx.AsyncClient(
+                        transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+                    with self.assertLogs('cybergold.candidate', level='ERROR') as logs:
+                        result = await client.post('/api/transaction/helpers-execution', json=ROWS[0]['payload'])
+                payload = result.json()
+                diagnostic = payload['diagnostics']
+                self.assertEqual(payload['code'], 'quote-contract-reverted')
+                self.assertEqual(diagnostic['rpcMethod'], method)
+                self.assertEqual(diagnostic['stage'], stage)
+                self.assertEqual(diagnostic['upstreamErrorCode'], 3)
+                self.assertEqual(diagnostic['errorSelector'], selector)
+                self.assertEqual(diagnostic['errorName'], 'NativeValueMismatch')
+                record = json.loads(logs.records[-1].getMessage())
+                self.assertEqual(record['diagnostics'], diagnostic)
+                self.assertEqual(record['requestId'], result.headers['X-CyberGold-Request-Id'])
+                self.assertEqual(record['correlationId'], payload['correlationId'])
+                self.assertNotIn(data, result.text+record.__repr__())
+                self.assertNotIn('password', result.text+record.__repr__())
+
+    async def test_backend_deadline_retains_the_simulation_stage_without_inventing_provider_error(self):
+        provider = Provider(blocked=True)
+        observer = service(provider)
+        with rpc_diagnostic_scope():
+            try:
+                async with asyncio.timeout(.01):
+                    await observer.rpc.estimate(ROWS[0]['helpers'], HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
+            except TimeoutError as error:
+                diagnostics = error_diagnostics(error)
+            else:
+                self.fail('Blocked simulation should reach the existing caller deadline')
+        self.assertEqual(diagnostics['rpcMethod'],'eth_call')
+        self.assertEqual(diagnostics['stage'],'helpers-simulation')
+        self.assertEqual(diagnostics['failureType'],'backend-deadline')
+        self.assertGreater(diagnostics['elapsedMs'],0)
+        self.assertNotIn('providerMessage',diagnostics)
+        self.assertNotIn('upstreamErrorCode',diagnostics)
+        self.assertTrue(provider.cancelled)
+        self.assertFalse(any(row['method']=='eth_estimateGas' for row in provider.calls))
 
 
 if __name__ == '__main__':

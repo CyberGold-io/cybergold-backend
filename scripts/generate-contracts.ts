@@ -276,6 +276,20 @@ operation("/api/internal/onchain-indexer/fork-generation", "get", "ForkStatus", 
 operation("/api/internal/onchain-indexer/fork-generation", "post", "ForkResult", "ForkRequest", {
   ...worker, responses: { "200": response(ref("ForkResult")), "409": response(ref("ForkResult")), default: response(ref("PublicError")) },
 });
+// Diagnostic linkage is optional on every fixed operation and grants no
+// authority. Existing clients can ignore it; IDs never become metric labels.
+for (const methods of Object.values(paths)) {
+  for (const value of Object.values(methods as Record<string, any>)) {
+    value.parameters = [...(value.parameters ?? []), { name: "X-CyberGold-Attempt-Id", in: "header",
+      required: false, description: "Optional UUID for one browser trade attempt. Invalid values are ignored.",
+      schema: { type: "string", format: "uuid" } }];
+    for (const reply of Object.values(value.responses) as Record<string, any>[]) {
+      reply.headers = { ...(reply.headers ?? {}), "X-CyberGold-Request-Id": {
+        description: "Backend request reference, separate for each subscriber to shared quote work.",
+        schema: { type: "string", format: "uuid" } } };
+    }
+  }
+}
 const document = { openapi: "3.1.0", info: { title: "CyberGold backend compatibility API", version: "1.0.0" },
   security: [{ BackendBearer: [] }],
   paths, components: { schemas, securitySchemes: {

@@ -8,6 +8,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from fractions import Fraction
+import uuid
 import json
 import time
 
@@ -245,10 +246,12 @@ class IntentSharing:
         entry = self.pending.get(key)
         subscriber = Subscriber()
         if entry is None:
-            entry = {'clients': {subscriber}, 'latest': {}, 'task': None, 'modelEpoch': epoch}
+            entry = {'clients': {subscriber}, 'latest': {}, 'task': None, 'modelEpoch': epoch,
+                     'workId': str(uuid.uuid4())}
             self.pending[key] = entry
             self.started += 1
             async def update(frame):
+                frame = {**frame, 'workId': entry['workId']}
                 entry['latest'][(frame['type'], frame.get('stage'), frame.get('strategy'))] = frame
                 for client in entry['clients']:
                     client.update(frame)

@@ -23,6 +23,28 @@ context and correlation ID. Provider URLs, RPC parameters and authorization
 values are excluded. Existing deadlines, retries and product messages are
 unchanged; these fields add no frontend warning or required client behavior.
 
+Product responses expose `X-CyberGold-Request-Id`; callers may send the optional
+UUID `X-CyberGold-Attempt-Id` to join one logical browser trade across its reads.
+Missing or malformed attempt metadata is ignored. Intent, market and unified
+trade stream frames retain their own request reference, and failures add a
+correlation ID matching a best-effort JSON log. Losing-provider failures remain
+observable when another provider succeeds. Coalesced quote work has a separate
+`workId`: subscribers share that producer identity and retain distinct request
+and attempt IDs. The IDs never affect sharing keys, signing, authentication or
+product decisions. Browser diagnostic POSTs keep the supplied operation's
+`requestId` and record their own ingress ID as `diagnosticRequestId`.
+
+`cybergold_backend_quote_outcomes_total` counts semantic subscription outcomes
+separately from HTTP status (a quote stream may fail under HTTP 200).
+`quote_first_executable_seconds` measures the first qualified/complete quote,
+excluding indicative model/estimate frames. `quote_stage_events_total` and
+`quote_provider_outcomes_total` retain bounded stage/strategy observations.
+These count logical HTTP subscriptions, not physical shared RPC producers.
+IDs, addresses, amounts and exception text remain outside metric labels.
+Helpers simulation/estimation failures preserve the transport's sanitized
+RPC context and expose an EVM selector plus a recognized error name when its
+arguments decode; encoded return arguments and signed material are excluded.
+
 `GET /api/account/wallet-balances?holder=0x…` is a focused Python read operation
 for the Apps' configured CYGLD Core and fixed XAUT/PAXG/USDT/USDC/WETH assets,
 plus native ETH in one Multicall3 `aggregate3` call at

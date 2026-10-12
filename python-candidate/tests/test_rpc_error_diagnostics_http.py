@@ -255,6 +255,7 @@ class RpcErrorDiagnosticsHttp(unittest.IsolatedAsyncioTestCase):
         success_event = json.loads(success.text.splitlines()[-1])
         unrelated_event = json.loads(unrelated.text.splitlines()[-1])
         failed_event = json.loads(failed.text.splitlines()[-1])
+        self.assertEqual(success_event.pop('requestId'), success.headers['X-CyberGold-Request-Id'])
         self.assertEqual(success_event, {'type': 'complete', 'value': {'chainId': 31338}})
         self.assertNotIn('diagnostics', unrelated_event)
         self.assertEqual(failed_event['diagnostics']['rpcMethod'], 'eth_getBlockByNumber')
