@@ -924,6 +924,56 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload['diagnostics']['stage'], 'route-search')
         self.assertEqual(payload['diagnostics']['failureType'], 'backend-deadline')
 
+    async def test_primary_deadline_diagnostics_survive_inner_route_replay_cleanup(self):
+        for mode in ('issue-exact-in', 'redeem-exact-out'):
+            with self.subTest(mode=mode):
+                intent, _provider, routes, _wire = service()
+                self.addAsyncCleanup(routes.close)
+                replay_started, replay_cancelled = asyncio.Event(), asyncio.Event()
+                primary, events = [], []
+                typed = SimpleNamespace(semaphore=asyncio.Semaphore(1))
+
+                async def compose(rows, *_args, **_kwargs):
+                    replay_started.set()
+                    try:
+                        await asyncio.Event().wait()
+                    except asyncio.CancelledError:
+                        # The prospective replay is cancelled inside search(),
+                        # before get() can freeze the primary route failure.
+                        with rpc_call('eth_call', stage='contract-read'):
+                            replay_cancelled.set()
+                            raise
+
+                async def search(value, on_update, *, block):
+                    rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+                        'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
+                        for target in value['targets']]
+                    await on_update({'results': rows})
+                    await replay_started.wait()
+                    try:
+                        async with asyncio.timeout(.01):
+                            with rpc_call('eth_call', stage='route-search'):
+                                await asyncio.Event().wait()
+                    except TimeoutError as error:
+                        primary.append(error_diagnostics(error))
+                        raise
+
+                async def publish(event):
+                    events.append(event)
+
+                typed.compose_core_rows = compose
+                routes.multi_protocol, routes.get = typed, search
+                with rpc_diagnostic_scope():
+                    with self.assertRaises(TimeoutError) as raised:
+                        await asyncio.wait_for(intent.get(request(mode), publish), 2)
+                    payload = public_quote_error(raised.exception)
+                self.assertTrue(replay_cancelled.is_set())
+                self.assertFalse(any(event['type'] == 'qualified' for event in events))
+                self.assertEqual(payload['code'], 'quote-timeout')
+                self.assertEqual(payload['diagnostics'], primary[0])
+                self.assertEqual(payload['diagnostics']['stage'], 'route-search')
+                self.assertEqual(payload['diagnostics']['failureType'], 'backend-deadline')
+
     async def test_final_preview_failure_and_reorg_never_complete_after_estimate(self):
         for fault in ('fail_final','reorg','wrong_chain'):
             intent,provider,route,_=service();self.addAsyncCleanup(route.close)
