@@ -23,6 +23,7 @@ from .market_swap import encode_adapter
 from .uniswap_routes import resize_branches, uses_typed_adapter
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
+from .rpc_diagnostics import error_diagnostics
 
 
 class RetainedQuotePlan(BaseModel):
@@ -612,6 +613,17 @@ class QuoteIntent:
                     gross = self.correction(observations, target, gross)
             raise AssertionError('Unreachable expected-input correction loop')
 
+        async def discover(operation):
+            try:
+                return await operation
+            except Exception as error:
+                # A checked Helpers tuple survives an ordinary optimization
+                # failure, as it does in the unified trade coordinator. A
+                # disproved snapshot and caller cancellation still retire it.
+                if isinstance(error, SnapshotChanged) or context_error is not None or qualified is None:
+                    raise
+                return deepcopy(qualified)
+
         try:
             retained_key = json.dumps({key: value for key, value in request.items() if key not in ('deadline', 'retainedPlan')}, sort_keys=True)
             incumbent = self.retained.get(retained_key) if self.retain_plans and rpc.chain_id == 1 else None
@@ -680,11 +692,11 @@ class QuoteIntent:
                     seed = prior.get('expectedInputAmount') or result['executionAmount']
                     result['expectedInputAmount'] = str(await expected_redemption_input(int(seed), result['quotes']))
             elif request['mode'].startswith('issue'):
-                result = await issue()
+                result = await discover(issue())
             elif request['mode'] == 'redeem-exact-in':
-                result = await redemption(int(request['amount']))
+                result = await discover(redemption(int(request['amount'])))
             else:
-                result = await redeem_out()
+                result = await discover(redeem_out())
             async with asyncio.timeout(15):
                 await rpc.assert_canonical(block)
             if context_error is not None:
@@ -719,6 +731,14 @@ class QuoteIntent:
                             elif row['best'] and row['best']['path'] != '0x':
                                 self.history.ensure_pool(rpc, row['best']['path'], mode, block, context)
             return result
+        except Exception as error:
+            # Auxiliary previews cancelled below must not replace the RPC
+            # stage/timing of the primary failure with their cleanup cause.
+            if getattr(error, 'rpc_diagnostics', None) is None:
+                diagnostics = error_diagnostics(error)
+                if diagnostics:
+                    error.rpc_diagnostics = diagnostics
+            raise
         finally:
             for task in estimates:
                 task.cancel()
