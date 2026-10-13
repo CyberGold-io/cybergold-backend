@@ -23,6 +23,7 @@ from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
 from .quote_errors import QuoteFailure, public_quote_error
+from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
 from .quote_models import LegModel, PoolBaseline
 from .recovery_rpc import SnapshotChanged
 from .route_search import WETH
@@ -351,6 +352,7 @@ class TradeQuotes:
         evaluation = {name: 'running' if name in strategies and (name == 'core' or self.supported_market(request)) else 'unsupported'
                       for name in ('core', 'market')}
         candidates, winner, errors, context_error = {}, None, {}, None
+        error_quote_diagnostics = {}
         lock = asyncio.Lock()
 
         def decorate(value):
@@ -426,6 +428,7 @@ class TradeQuotes:
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
+                error_quote_diagnostics[strategy] = quote_error_diagnostics(error)
                 if isinstance(error, SnapshotChanged):
                     async with lock:
                         context_error = error
@@ -445,11 +448,16 @@ class TradeQuotes:
         try:
             await asyncio.gather(*tasks)
             if context_error is not None:
+                bind_quote_error(context_error, next((error_quote_diagnostics[strategy]
+                    for strategy, error in errors.items() if error is context_error), None))
                 raise context_error
             if candidates:
                 winner = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
                 return decorate(winner)
-            raise next(iter(errors.values()), QuoteFailure('quote-no-route'))
+            error = next(iter(errors.values()), QuoteFailure('quote-no-route'))
+            bind_quote_error(error, next((error_quote_diagnostics[strategy]
+                for strategy, value in errors.items() if value is error), None))
+            raise error
         finally:
             for task in [model_task, *tasks]:
                 task.cancel()

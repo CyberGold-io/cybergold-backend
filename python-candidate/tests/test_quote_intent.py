@@ -965,7 +965,8 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 routes.multi_protocol, routes.get = typed, search
                 with rpc_diagnostic_scope():
                     with self.assertRaises(TimeoutError) as raised:
-                        await asyncio.wait_for(intent.get(request(mode), publish), 2)
+                        async with asyncio.timeout(2):
+                            await intent.get(request(mode), publish)
                     payload = public_quote_error(raised.exception)
                 self.assertTrue(replay_cancelled.is_set())
                 self.assertFalse(any(event['type'] == 'qualified' for event in events))

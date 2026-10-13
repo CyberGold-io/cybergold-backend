@@ -10,7 +10,9 @@ from cybergold_candidate.app import create_app
 from cybergold_candidate.diagnostics import project
 from cybergold_candidate.quote_errors import QuoteFailure
 from test_trade_quote import Engines, request
-from test_quote_intent import request as intent_request
+from test_quote_intent import request as intent_request, service as intent_service
+from cybergold_candidate.quote_cache import IntentSharing
+from cybergold_candidate.shared_reads import SharedReads
 
 ATTEMPTS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']
 
@@ -154,6 +156,85 @@ class TradeDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         error.quote_diagnostics = {'phase': 'initial-search', 'elapsedMs': 1}
         with patch('cybergold_candidate.rpc_diagnostics.math.isfinite', side_effect=ValueError('collector unavailable')):
             self.assertEqual(public_quote_error(error), {'code': 'quote-timeout', 'error': str(error)})
+
+    async def test_shared_physical_failure_keeps_two_intent_owners_and_subscribers_distinct(self):
+        intent, _provider, routes, _wire = intent_service()
+        bank = SharedReads()
+        self.addAsyncCleanup(bank.close)
+        self.addAsyncCleanup(routes.close)
+        started, release = asyncio.Event(), asyncio.Event()
+        physical = QuoteFailure('rpc-timeout', diagnostics={'rpcMethod': 'eth_call',
+            'stage': 'contract-read', 'elapsedMs': 8, 'failureType': 'provider-timeout'})
+        produced, raised_errors = [], []
+        async def produce():
+            produced.append(True)
+            started.set()
+            await release.wait()
+            raise physical
+        async def eligibility(*_args):
+            try:
+                return await bank.one('same-pool-eligibility-read', produce)
+            except Exception as error:
+                raised_errors.append(error)
+                raise
+        routes.rpc.eligible_paths = eligibility
+        sharing = IntentSharing(intent)
+        app = create_app(quote_intent=sharing)
+        async with app.router.lifespan_context(app), httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+            with self.assertLogs('cybergold.candidate', level='ERROR') as captured:
+                first = asyncio.create_task(client.post('/api/quotes/intent/stream',
+                    json=intent_request('issue-exact-in')))
+                await asyncio.wait_for(started.wait(), 2)
+                await asyncio.sleep(.02)
+                other = asyncio.create_task(client.post('/api/quotes/intent/stream',
+                    json=intent_request('issue-exact-out')))
+                async with asyncio.timeout(2):
+                    while bank.pending['same-pool-eligibility-read'].users != 2:
+                        await asyncio.sleep(0)
+                release.set()
+                responses = await asyncio.gather(first, other)
+        self.assertEqual(len(produced), 1)
+        self.assertEqual(sharing.started, 2)
+        self.assertEqual(len(raised_errors), 2)
+        self.assertTrue(all(error is physical for error in raised_errors))
+        payloads = [json.loads(response.text.splitlines()[-1]) for response in responses]
+        self.assertEqual([payload['code'] for payload in payloads], ['rpc-timeout'] * 2)
+        self.assertEqual([payload['diagnostics'] for payload in payloads], [physical.rpc_diagnostics] * 2)
+        logical = [payload['quoteDiagnostics'] for payload in payloads]
+        self.assertEqual([value['phase'] for value in logical], ['initial-search', 'execution-search'])
+        self.assertEqual([value['routeWave']['mode'] for value in logical], ['exact-in', 'exact-out'])
+        self.assertGreater(logical[0]['elapsedMs'], logical[1]['elapsedMs'] + 10)
+        records = [json.loads(row.getMessage()) for row in captured.records]
+        for payload in payloads:
+            record = next(row for row in records if row['correlationId'] == payload['correlationId'])
+            self.assertEqual(record['quoteDiagnostics'], payload['quoteDiagnostics'])
+
+    async def test_actual_core_snapshot_survives_outer_trade_and_shared_terminal_rethrows(self):
+        intent, _provider, routes, _wire = intent_service()
+        self.addAsyncCleanup(routes.close)
+        physical = QuoteFailure('rpc-timeout', diagnostics={'rpcMethod': 'eth_call', 'elapsedMs': 8})
+        async def failed(*_args):
+            raise physical
+        routes.rpc.eligible_paths = failed
+        engines = Engines()
+        engines.quotes.core = intent
+        app = create_app(trade_quotes=engines.quotes)
+        async with app.router.lifespan_context(app), httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+            with self.assertLogs('cybergold.candidate', level='ERROR') as captured:
+                response = await client.post('/api/quotes/trade/stream',
+                    json=request(counterToken=intent_request('issue-exact-in')['quoteToken']))
+        frames = [json.loads(row) for row in response.text.splitlines()]
+        provider = next(frame for frame in frames if frame['type'] == 'provider-error')
+        terminal = frames[-1]
+        self.assertEqual(terminal['type'], 'error')
+        self.assertEqual(terminal['code'], 'rpc-timeout')
+        self.assertEqual(provider['quoteDiagnostics']['phase'], 'initial-search')
+        self.assertEqual(terminal['quoteDiagnostics'], provider['quoteDiagnostics'])
+        self.assertEqual(terminal['diagnostics'], physical.rpc_diagnostics)
+        records = [json.loads(row.getMessage()) for row in captured.records]
+        self.assertTrue(all(record['quoteDiagnostics'] == provider['quoteDiagnostics'] for record in records))
 
     async def test_coalesced_requests_keep_distinct_subscriber_ids_and_one_work_id(self):
         engines = Engines()

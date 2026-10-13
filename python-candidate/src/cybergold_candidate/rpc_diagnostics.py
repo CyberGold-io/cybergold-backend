@@ -8,6 +8,7 @@ import re
 from time import perf_counter
 import math
 from urllib.parse import parse_qsl, unquote, urlsplit
+from weakref import WeakKeyDictionary
 
 import aiohttp
 import httpx
@@ -278,8 +279,29 @@ def freeze_quote_work(error=None):
                 current.frozen = current.snapshot()
                 if current.wave:
                     current.wave.frozen = current.frozen.get('routeWave')
-            if error is not None and getattr(error, 'quote_diagnostics', None) is None:
-                error.quote_diagnostics = current.frozen
+            if error is not None:
+                bind_quote_error(error, current.frozen)
+    except Exception:
+        pass
+
+
+def _quote_owner():
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+def bind_quote_error(error, snapshot):
+    """Transfer one logical owner's snapshot without changing a shared error."""
+    try:
+        owner = _quote_owner()
+        if owner is None or snapshot is None:
+            return
+        owners = getattr(error, '_quote_work_by_owner', None)
+        if owners is None:
+            owners = error._quote_work_by_owner = WeakKeyDictionary()
+        owners[owner] = snapshot
     except Exception:
         pass
 
@@ -313,7 +335,13 @@ def quote_sdk_request():
 def quote_error_diagnostics(error):
     """Closed projection: diagnostic payloads cannot contain request data."""
     try:
-        source = getattr(error, 'quote_diagnostics', None)
+        owners, owner = getattr(error, '_quote_work_by_owner', None), _quote_owner()
+        source = owners.get(owner) if isinstance(owners, WeakKeyDictionary) and owner is not None else None
+        if source is None:
+            # Explicit/manual diagnostics remain supported. Produced logical
+            # snapshots live only in the owner association: a shared physical
+            # exception never supplies another producer's phase or counters.
+            source = getattr(error, 'quote_diagnostics', None)
         if not isinstance(source, dict):
             return None
         result = {}
