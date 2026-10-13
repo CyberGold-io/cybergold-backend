@@ -1,11 +1,14 @@
 """Request-local RPC failure context, without URLs, credentials or call data."""
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import wraps
 from http import HTTPStatus
 import asyncio
 import re
 from time import perf_counter
+import math
 from urllib.parse import parse_qsl, unquote, urlsplit
+from weakref import WeakKeyDictionary
 
 import aiohttp
 import httpx
@@ -13,6 +16,12 @@ from web3.exceptions import Web3RPCError
 
 
 _scope = ContextVar('rpc_diagnostic_scope', default=None)
+_quote_scope = ContextVar('quote_work_scope', default=None)
+_quote_background = ContextVar('quote_background_work', default=False)
+_QUOTE_PHASES = {'context', 'initial-search', 'initial-preview', 'capacity', 'basket-preview',
+                 'expected-input-search', 'execution-search', 'final-preview', 'canonicality',
+                 'retained-validation'}
+_ROUTE_PHASES = {'context', 'eligibility', 'v3-coverage', 'typed-reserve', 'composition', 'canonicality'}
 _stages = {'eth_chainId': 'chain-head', 'eth_blockNumber': 'chain-head', 'eth_getBlockByNumber': 'block-read',
            'eth_getBlockByHash': 'block-read', 'eth_call': 'contract-read',
            'eth_estimateGas': 'gas-estimation', 'eth_maxPriorityFeePerGas': 'priority-fee',
@@ -131,6 +140,237 @@ def error_diagnostics(error):
         if current and current.cancelled:
             return dict(max(current.cancelled, key=lambda item: item['elapsedMs']))
     return None
+
+
+def _milliseconds(started, finished=None):
+    return round(((perf_counter() if finished is None else finished) - started) * 1000, 3)
+
+
+class _QuoteWork:
+    """One producer's bounded logical work, independent of physical RPC context."""
+    def __init__(self):
+        self.owner = asyncio.current_task()
+        self.started = perf_counter()
+        self.phase, self.qualified, self.iteration = 'context', False, 0
+        self.wave, self.frozen = None, None
+
+    def snapshot(self):
+        if self.frozen is not None:
+            return self.frozen
+        result = {'phase': self.phase, 'elapsedMs': _milliseconds(self.started),
+                  'qualified': self.qualified, 'inversionIteration': self.iteration}
+        if self.wave is not None:
+            result['routeWave'] = self.wave.snapshot()
+        return result
+
+
+class _RouteWork:
+    def __init__(self, mode):
+        self.mode, self.started = mode, perf_counter()
+        self.subphase, self.phase_started = 'context', self.started
+        self.finished, self.frozen = None, None
+        self.counts = dict.fromkeys(('legacyCandidates', 'legacyCompleted', 'typedEnumerated',
+                                    'typedCompleted', 'sdkRequests'), 0)
+        # SDK waits/exchanges accumulate across candidates and can exceed the
+        # wave's wall time. They are never added to the aggregate elapsed time.
+        self.sdk_wait, self.sdk_exchange, self.sdk_active = 0, 0, {}
+
+    def snapshot(self):
+        if self.frozen is not None:
+            return self.frozen
+        end = self.finished if self.finished is not None else perf_counter()
+        waiting = sum(acquired is None for _, acquired in self.sdk_active.values())
+        wait = self.sdk_wait + sum(((end if acquired is None else acquired) - queued) * 1000
+                                  for queued, acquired in self.sdk_active.values())
+        exchange = self.sdk_exchange + sum((end - acquired) * 1000
+                                          for _, acquired in self.sdk_active.values() if acquired is not None)
+        return {'mode': self.mode, 'elapsedMs': _milliseconds(self.started, end),
+                'subphase': self.subphase, 'subphaseElapsedMs': _milliseconds(self.phase_started, end),
+                **self.counts, 'typedPending': self.counts['typedEnumerated'] - self.counts['typedCompleted'],
+                'sdkWaiting': waiting, 'sdkLockWaitMs': round(wait, 3), 'sdkExchangeMs': round(exchange, 3)}
+
+
+def quote_work_scope(method):
+    @wraps(method)
+    async def observed(*args, **kwargs):
+        token = _quote_scope.set(_QuoteWork())
+        try:
+            return await method(*args, **kwargs)
+        except Exception as error:
+            freeze_quote_work(error)
+            raise
+        finally:
+            _quote_scope.reset(token)
+    return observed
+
+
+@contextmanager
+def quote_background():
+    # Prospective replay/qualification must not replace the main phase or
+    # claim its candidate/SDK work. The original RPC diagnostic scope remains.
+    token = _quote_background.set(True)
+    try:
+        yield
+    finally:
+        _quote_background.reset(token)
+
+
+def quote_phase(phase, *, iteration=None):
+    current = _quote_scope.get()
+    if current and current.owner is asyncio.current_task() and phase in _QUOTE_PHASES:
+        if current.phase != phase:
+            current.wave = None
+        current.phase, current.frozen = phase, None
+        if iteration is not None:
+            current.iteration = iteration
+
+
+def quote_qualified(value):
+    current = _quote_scope.get()
+    if current:
+        current.qualified = value
+        if not value:
+            # A background snapshot invalidation supersedes an ordinary tail
+            # error and must describe the now-retired tuple in its own error.
+            current.frozen = None
+
+
+def route_work_scope(method):
+    @wraps(method)
+    async def observed(self, request, *args, **kwargs):
+        current = _quote_scope.get()
+        if current and current.owner is asyncio.current_task():
+            current.wave, current.frozen = _RouteWork(request['mode']), None
+        try:
+            return await method(self, request, *args, **kwargs)
+        except BaseException as error:
+            freeze_quote_work(error)
+            raise
+        finally:
+            finish_route_work()
+    return observed
+
+
+def route_subphase(phase):
+    current = _quote_scope.get()
+    if current and current.wave and current.owner is asyncio.current_task() and phase in _ROUTE_PHASES:
+        current.wave.subphase, current.wave.phase_started = phase, perf_counter()
+        current.wave.finished = None
+
+
+def route_count(name, amount=1):
+    current = _quote_scope.get()
+    if current and current.wave and not _quote_background.get() and current.wave.frozen is None and name in current.wave.counts:
+        current.wave.counts[name] += amount
+
+
+def finish_route_work():
+    current = _quote_scope.get()
+    if current and current.wave and current.owner is asyncio.current_task():
+        current.wave.finished = perf_counter()
+
+
+def freeze_quote_work(error=None):
+    # Diagnostic collection never changes the original error or recovery.
+    try:
+        current = _quote_scope.get()
+        if current and current.owner is asyncio.current_task():
+            if current.frozen is None:
+                current.frozen = current.snapshot()
+                if current.wave:
+                    current.wave.frozen = current.frozen.get('routeWave')
+            if error is not None:
+                bind_quote_error(error, current.frozen)
+    except Exception:
+        pass
+
+
+def _quote_owner():
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+def bind_quote_error(error, snapshot):
+    """Transfer one logical owner's snapshot without changing a shared error."""
+    try:
+        owner = _quote_owner()
+        if owner is None or snapshot is None:
+            return
+        owners = getattr(error, '_quote_work_by_owner', None)
+        if owners is None:
+            owners = error._quote_work_by_owner = WeakKeyDictionary()
+        owners[owner] = snapshot
+    except Exception:
+        pass
+
+
+@contextmanager
+def quote_sdk_request():
+    current = _quote_scope.get()
+    wave = current.wave if current and not _quote_background.get() else None
+    key = object()
+    if wave and wave.frozen is None:
+        route_count('sdkRequests')
+        wave.sdk_active[key] = (perf_counter(), None)
+    def acquired():
+        if wave and key in wave.sdk_active:
+            queued, _ = wave.sdk_active[key]
+            wave.sdk_active[key] = (queued, perf_counter())
+    try:
+        yield acquired
+    except asyncio.CancelledError as error:
+        freeze_quote_work(error)
+        raise
+    finally:
+        if wave and key in wave.sdk_active:
+            queued, locked = wave.sdk_active.pop(key)
+            end = perf_counter()
+            wave.sdk_wait += ((end if locked is None else locked) - queued) * 1000
+            if locked is not None:
+                wave.sdk_exchange += (end - locked) * 1000
+
+
+def quote_error_diagnostics(error):
+    """Closed projection: diagnostic payloads cannot contain request data."""
+    try:
+        owners, owner = getattr(error, '_quote_work_by_owner', None), _quote_owner()
+        source = owners.get(owner) if isinstance(owners, WeakKeyDictionary) and owner is not None else None
+        if source is None:
+            # Explicit/manual diagnostics remain supported. Produced logical
+            # snapshots live only in the owner association: a shared physical
+            # exception never supplies another producer's phase or counters.
+            source = getattr(error, 'quote_diagnostics', None)
+        if not isinstance(source, dict):
+            return None
+        result = {}
+        for name, allowed in (('phase', _QUOTE_PHASES),):
+            if source.get(name) in allowed:
+                result[name] = source[name]
+        if type(source.get('qualified')) is bool:
+            result['qualified'] = source['qualified']
+        def numbers(value, names, target):
+            for name in names:
+                number = value.get(name)
+                if type(number) in (int, float) and math.isfinite(number) and 0 <= number <= 1e12:
+                    target[name] = number
+        numbers(source, ('elapsedMs', 'inversionIteration'), result)
+        wave = source.get('routeWave')
+        if isinstance(wave, dict):
+            projected = {}
+            if wave.get('mode') in ('exact-in', 'exact-out'):
+                projected['mode'] = wave['mode']
+            if wave.get('subphase') in _ROUTE_PHASES:
+                projected['subphase'] = wave['subphase']
+            numbers(wave, ('elapsedMs', 'subphaseElapsedMs', 'legacyCandidates', 'legacyCompleted',
+                          'typedEnumerated', 'typedCompleted', 'typedPending', 'sdkRequests',
+                          'sdkWaiting', 'sdkLockWaitMs', 'sdkExchangeMs'), projected)
+            if projected:
+                result['routeWave'] = projected
+        return result or None
+    except Exception:
+        return None
 
 
 @contextmanager

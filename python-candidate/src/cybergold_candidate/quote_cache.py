@@ -15,6 +15,7 @@ import time
 from .route_search import RouteSearchRpc
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
+from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
 
 
 class SharingQuoterRpc(RouteSearchRpc):
@@ -260,6 +261,7 @@ class IntentSharing:
                     options = {'model_epoch': entry['modelEpoch']} if history else {}
                     terminal = ('result', await self.service.get(request, update, block=block, **options))
                 except BaseException as error:
+                    entry['errorQuoteDiagnostics'] = quote_error_diagnostics(error)
                     terminal = ('error', error)
                 finally:
                     if self.pending.get(key) is entry:
@@ -283,6 +285,7 @@ class IntentSharing:
                 if subscriber.terminal:
                     kind, value = subscriber.terminal
                     if kind == 'error':
+                        bind_quote_error(value, entry.get('errorQuoteDiagnostics'))
                         raise value
                     return deepcopy(value)
         finally:

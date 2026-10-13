@@ -6,7 +6,7 @@ import httpx
 from web3.exceptions import Web3RPCError
 
 from .preview_errors import KnownPreviewError
-from .rpc_diagnostics import error_diagnostics
+from .rpc_diagnostics import error_diagnostics, quote_error_diagnostics
 
 
 MESSAGES = {
@@ -66,4 +66,6 @@ def _public_quote_error(error):
 def public_quote_error(error):
     payload = _public_quote_error(error)
     diagnostics = error_diagnostics(error)
-    return {**payload, **({'diagnostics': diagnostics} if diagnostics else {})}
+    quote_diagnostics = quote_error_diagnostics(error)
+    return {**payload, **({'diagnostics': diagnostics} if diagnostics else {}),
+            **({'quoteDiagnostics': quote_diagnostics} if quote_diagnostics else {})}

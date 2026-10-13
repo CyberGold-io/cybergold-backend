@@ -6,6 +6,8 @@ import tempfile
 import unittest
 
 from cybergold_candidate.sdk_worker import SdkWorker
+from cybergold_candidate.quote_errors import public_quote_error
+from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope
 
 
 SCRIPT = '''import json, pathlib, sys, time
@@ -61,6 +63,37 @@ class SdkWorkerLifecycle(unittest.IsolatedAsyncioTestCase):
             active.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await active
+            self.assertEqual(await worker.request({'value': 'recovered'}), 'recovered')
+
+    async def test_route_deadline_observes_sdk_lock_wait_without_cancelling_active_client(self):
+        worker = SdkWorker([sys.executable, '-u', '-c', SCRIPT])
+        self.addAsyncCleanup(worker.close)
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / 'started'
+            active = asyncio.create_task(worker.request({'block': True, 'started': str(marker)}))
+            await self.wait_started(marker)
+            process = worker.process
+            class WaitingRoute:
+                @route_work_scope
+                async def get(self, _request):
+                    async with asyncio.timeout(.03):
+                        return await worker.request({'value': 'private request value'})
+            @quote_work_scope
+            async def quote():
+                return await WaitingRoute().get({'mode': 'exact-in'})
+            with self.assertRaises(TimeoutError) as raised:
+                await quote()
+            wave = public_quote_error(raised.exception)['quoteDiagnostics']['routeWave']
+            self.assertEqual(wave['sdkRequests'], 1)
+            self.assertEqual(wave['sdkWaiting'], 1)
+            self.assertGreaterEqual(wave['sdkLockWaitMs'], 20)
+            self.assertEqual(wave['sdkExchangeMs'], 0)
+            self.assertIs(worker.process, process)
+            self.assertIsNone(process.returncode)
+            self.assertFalse(active.done())
+            self.assertNotIn('private request value', str(wave))
+            active.cancel()
+            await asyncio.gather(active, return_exceptions=True)
             self.assertEqual(await worker.request({'value': 'recovered'}), 'recovered')
 
     async def test_timeout_stops_blocked_process_and_next_request_restarts_cleanly(self):

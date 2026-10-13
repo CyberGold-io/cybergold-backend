@@ -69,7 +69,7 @@ class QuoteObservation:
         if kind == 'provider-error':
             result = {**failure(self.request, None, self.operation,
                                strategy=strategy, work_id=self.work_id,
-                               payload={key: frame[key] for key in ('error', 'code', 'diagnostics') if key in frame}),
+                               payload={key: frame[key] for key in ('error', 'code', 'diagnostics', 'quoteDiagnostics') if key in frame}),
                       'type': kind, 'strategy': strategy}
             observe(lambda: self.metrics.quote_provider_outcomes.labels(self.operation, strategy, 'failed').inc())
         if kind in ('qualified', 'complete') and self.first is None:
