@@ -4,6 +4,7 @@ import json
 from copy import deepcopy
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import httpx
 from web3 import AsyncWeb3, Web3
@@ -16,7 +17,9 @@ from cybergold_candidate.token_preview import TokenPreviewRpc
 from cybergold_candidate.quote_intent import QuoteIntent, REQUEST, issue_input_bounds, ceil
 from cybergold_candidate.issuance_capacity import ABI as CAPACITY_ABI, READS as CAPACITY_READS, capacity_amounts
 from cybergold_candidate.quote_errors import QuoteFailure, RpcTimeout, public_quote_error
-from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH
+from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH, candidates
+from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope, error_diagnostics
 from test_route_search import ASSET_A, ASSET_B, ASSET_C, HASH, Wire, wire_result
 
 CORE = '0x' + '4' * 40
@@ -750,6 +753,176 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(final['executionAmount'], value['executionAmount'])
             finally:
                 release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_qualified_helpers_tuple_survives_route_tail_timeout(self):
+        for mode in ('issue-exact-in', 'issue-exact-out', 'redeem-exact-in', 'redeem-exact-out'):
+            for native in (False, True):
+                with self.subTest(mode=mode, native=native):
+                    intent, provider, routes, wire = service()
+                    self.addAsyncCleanup(routes.close)
+                    ready, events, failed_tail = asyncio.Event(), [], []
+                    async def quote(path, amount):
+                        forward_input = path[:20] == bytes.fromhex(WETH[2:])
+                        exact_in = mode == 'redeem-exact-in' or (mode == 'issue-exact-in' and forward_input) \
+                            or (mode == 'redeem-exact-out' and not forward_input)
+                        if int.from_bytes(path[20:23]) >= 3000 and not (mode == 'issue-exact-in' and forward_input):
+                            if mode == 'redeem-exact-out':
+                                # Seed/expected-output searches may finish before
+                                # the first protected Helpers tuple can qualify.
+                                try:
+                                    await asyncio.wait_for(ready.wait(), .05)
+                                except TimeoutError:
+                                    return amount*2 if exact_in else (amount+1)//2
+                            else:
+                                await ready.wait()
+                            failed_tail.append(True)
+                            raise TimeoutError('Unfinished optimization deadline')
+                        return amount*2 if exact_in else (amount+1)//2
+                    async def update(event):
+                        events.append(event)
+                        if event['type'] == 'qualified':
+                            ready.set()
+                    wire.on_quote = quote
+                    final = await asyncio.wait_for(intent.get(request(mode, native), update), 2)
+                    self.assertTrue(failed_tail)
+                    incumbent = next(event['value'] for event in events if event['type'] == 'qualified')
+                    for field in ('quotes', 'preview', 'executionAmount', 'maximumInputAmount'):
+                        self.assertEqual(final[field], incumbent[field])
+                    self.assertEqual(final['context']['blockHash'], HASH)
+                    self.assertEqual(final['mode'], mode)
+                    self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 3)
+
+    async def test_estimate_without_qualified_candidate_does_not_recover_timeout(self):
+        intent, _provider, routes, wire = service()
+        self.addAsyncCleanup(routes.close)
+        intent.qualification = False
+        estimated, events = asyncio.Event(), []
+        async def quote(path, amount):
+            if int.from_bytes(path[20:23]) >= 3000:
+                await estimated.wait()
+                raise TimeoutError('No executable candidate')
+            return amount*2
+        async def update(event):
+            events.append(event)
+            if event['type'] == 'estimate':
+                estimated.set()
+        wire.on_quote = quote
+        with self.assertRaises(TimeoutError) as raised:
+            await asyncio.wait_for(intent.get(request('issue-exact-in'), update), 2)
+        self.assertTrue(estimated.is_set())
+        self.assertFalse(any(event['type'] == 'qualified' for event in events))
+        self.assertEqual(public_quote_error(raised.exception)['code'], 'quote-timeout')
+
+    async def test_recovered_candidate_still_requires_final_canonical_snapshot(self):
+        intent, provider, routes, wire = service()
+        self.addAsyncCleanup(routes.close)
+        ready = asyncio.Event()
+        async def quote(path, amount):
+            if int.from_bytes(path[20:23]) >= 3000:
+                await ready.wait()
+                provider.reorg = True
+                raise TimeoutError('Optimization deadline after a reorg')
+            return (amount+1)//2
+        async def update(event):
+            if event['type'] == 'qualified':
+                ready.set()
+        wire.on_quote = quote
+        with self.assertRaises(SnapshotChanged):
+            await asyncio.wait_for(intent.get(request('issue-exact-out'), update), 2)
+        self.assertTrue(ready.is_set())
+
+    async def test_qualifier_snapshot_disproof_survives_later_tail_timeout(self):
+        intent, _provider, routes, _wire = service()
+        self.addAsyncCleanup(routes.close)
+        first, disproved = asyncio.Event(), asyncio.Event()
+        checks, events = [], []
+        async def canonical(block):
+            checks.append(block)
+            if len(checks) >= 2:
+                disproved.set()
+                raise SnapshotChanged('Recovery snapshot changed; restart discovery', retry=1)
+        routes.rpc.assert_canonical = canonical
+        async def search(value, on_update, *, block):
+            async def update(amount):
+                rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
+                    'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
+                await on_update({'results': rows})
+            await update(25)
+            await first.wait()
+            await update(20)
+            await disproved.wait()
+            raise TimeoutError('Ordinary later candidate deadline')
+        routes.get = search
+        async def publish(event):
+            events.append(event)
+            if event['type'] == 'qualified':
+                first.set()
+        with self.assertRaises(SnapshotChanged):
+            await asyncio.wait_for(intent.get(request('issue-exact-out'), publish), 2)
+        invalidated = next(index for index, event in enumerate(events) if event['type'] == 'invalidated')
+        self.assertFalse(any(event['type'] == 'qualified' for event in events[invalidated+1:]))
+
+    async def test_caller_cancellation_does_not_complete_qualified_candidate(self):
+        intent, _provider, routes, wire = service()
+        self.addAsyncCleanup(routes.close)
+        ready, hold = asyncio.Event(), asyncio.Event()
+        async def quote(path, amount):
+            if int.from_bytes(path[20:23]) >= 3000:
+                await hold.wait()
+            return (amount+1)//2
+        async def update(event):
+            if event['type'] == 'qualified':
+                ready.set()
+        wire.on_quote = quote
+        operation = asyncio.create_task(intent.get(request('issue-exact-out'), update))
+        try:
+            await asyncio.wait_for(ready.wait(), 2)
+            self.assertFalse(operation.done())
+            operation.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await operation
+            self.assertTrue(operation.cancelled())
+        finally:
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_primary_deadline_diagnostics_survive_auxiliary_preview_cleanup(self):
+        intent, _provider, routes, _wire = service()
+        self.addAsyncCleanup(routes.close)
+        preview_started, preview_cancelled = asyncio.Event(), asyncio.Event()
+        primary = []
+        async def preview(_service, *_args):
+            preview_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                # A preview's cancellation cleanup can begin another observed
+                # call, replacing the request scope's mutable cancellation list.
+                with rpc_call('eth_call', stage='contract-read'):
+                    preview_cancelled.set()
+                    raise
+        async def search(value, on_update, *, block):
+            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+                'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
+            await on_update({'results': rows})
+            await preview_started.wait()
+            try:
+                async with asyncio.timeout(.01):
+                    with rpc_call('eth_call', stage='route-search'):
+                        await asyncio.Event().wait()
+            except TimeoutError as error:
+                primary.append(error_diagnostics(error))
+                raise
+        routes.get = search
+        with rpc_diagnostic_scope(), patch.object(TokenPreviewRpc, 'preview', preview):
+            with self.assertRaises(TimeoutError) as raised:
+                await asyncio.wait_for(intent.get(request('issue-exact-in'), lambda _: asyncio.sleep(0)), 2)
+            payload = public_quote_error(raised.exception)
+        self.assertTrue(preview_cancelled.is_set())
+        self.assertEqual(payload['code'], 'quote-timeout')
+        self.assertEqual(payload['diagnostics'], primary[0])
+        self.assertEqual(payload['diagnostics']['stage'], 'route-search')
+        self.assertEqual(payload['diagnostics']['failureType'], 'backend-deadline')
 
     async def test_final_preview_failure_and_reorg_never_complete_after_estimate(self):
         for fault in ('fail_final','reorg','wrong_chain'):
