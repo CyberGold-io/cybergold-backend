@@ -332,6 +332,14 @@ class QuoteIntent:
                 search_request['adapter'] = request['adapter']
             try:
                 result = await self.routes.get(search_request, on_update=update, block=block)
+            except Exception as error:
+                # Freeze the route cause before this search's prospective
+                # replay cleanup can replace the request-local RPC context.
+                if getattr(error, 'rpc_diagnostics', None) is None:
+                    diagnostics = error_diagnostics(error)
+                    if diagnostics:
+                        error.rpc_diagnostics = diagnostics
+                raise
             finally:
                 if preparing:
                     preparing.cancel()
