@@ -19,7 +19,7 @@ from cybergold_candidate.issuance_capacity import ABI as CAPACITY_ABI, READS as 
 from cybergold_candidate.quote_errors import QuoteFailure, RpcTimeout, public_quote_error
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH, candidates
 from cybergold_candidate.recovery_rpc import SnapshotChanged
-from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope, error_diagnostics
+from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope, error_diagnostics, quote_sdk_request
 from test_route_search import ASSET_A, ASSET_B, ASSET_C, HASH, Wire, wire_result
 
 CORE = '0x' + '4' * 40
@@ -973,6 +973,57 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(payload['diagnostics'], primary[0])
                 self.assertEqual(payload['diagnostics']['stage'], 'route-search')
                 self.assertEqual(payload['diagnostics']['failureType'], 'backend-deadline')
+                self.assertEqual(payload['quoteDiagnostics']['phase'], 'initial-search')
+                self.assertFalse(payload['quoteDiagnostics']['qualified'])
+                self.assertGreaterEqual(payload['quoteDiagnostics']['elapsedMs'], payload['diagnostics']['elapsedMs'])
+
+    async def test_initial_deadline_attributes_aggregate_subphase_separately_from_last_read(self):
+        ordinary_timeout = asyncio.timeout
+        for mode in ('issue-exact-in', 'redeem-exact-out'):
+            for subphase in ('eligibility', 'v3-coverage', 'typed-reserve'):
+                with self.subTest(mode=mode, subphase=subphase):
+                    intent, _provider, routes, _wire = service()
+                    self.addAsyncCleanup(routes.close)
+                    events = []
+                    async def blocked(*_args, **_kwargs):
+                        # Work already consumed part of the aggregate budget
+                        # before this final physical read starts.
+                        await asyncio.sleep(.02)
+                        with rpc_call('eth_call', stage='route-search'):
+                            await asyncio.Event().wait()
+                    if subphase == 'eligibility':
+                        routes.rpc.eligible_paths = blocked
+                    elif subphase == 'v3-coverage':
+                        routes.rpc.quote_batch_counted = blocked
+                    else:
+                        async def compose(rows, *_args, **_kwargs):
+                            with quote_sdk_request() as acquired:
+                                acquired()
+                                await asyncio.sleep(0)
+                                return rows
+                        routes.multi_protocol = SimpleNamespace(semaphore=asyncio.Semaphore(8),
+                            reserve_quotes=blocked, compose_core_rows=compose)
+                    async def publish(event):
+                        events.append(event)
+                    with rpc_diagnostic_scope(), patch('cybergold_candidate.route_search.asyncio.timeout',
+                            side_effect=lambda _seconds: ordinary_timeout(.08)):
+                        with self.assertRaises(TimeoutError) as raised:
+                            await intent.get(request(mode), publish)
+                        payload = public_quote_error(raised.exception)
+                    logical, physical = payload['quoteDiagnostics'], payload['diagnostics']
+                    self.assertEqual(payload['code'], 'quote-timeout')
+                    self.assertEqual(logical['phase'], 'initial-search')
+                    self.assertFalse(logical['qualified'])
+                    self.assertFalse(any(event['type'] == 'qualified' for event in events))
+                    self.assertEqual(logical['routeWave']['subphase'], subphase)
+                    self.assertGreater(logical['routeWave']['elapsedMs'], physical['elapsedMs'] + 10)
+                    wave = logical['routeWave']
+                    if subphase == 'typed-reserve':
+                        self.assertEqual(wave['sdkRequests'], 0)
+                        self.assertGreater(wave['legacyCompleted'], 0)
+                        self.assertEqual(wave['legacyCompleted'], wave['legacyCandidates'])
+                    else:
+                        self.assertEqual(wave['legacyCompleted'], 0)
 
     async def test_final_preview_failure_and_reorg_never_complete_after_estimate(self):
         for fault in ('fail_final','reorg','wrong_chain'):
@@ -980,6 +1031,48 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             setattr(provider,fault,True)
             with self.assertRaises(Exception):
                 await intent.get(request('issue-exact-in'),lambda event: asyncio.sleep(0))
+
+    async def test_later_expected_input_wave_has_its_own_phase_and_iteration(self):
+        intent, _provider, routes, _wire = service()
+        self.addAsyncCleanup(routes.close)
+        original, calls = routes.get, []
+        async def blocked(*_args, **_kwargs):
+            async with asyncio.timeout(.01):
+                with rpc_call('eth_call', stage='route-search'):
+                    await asyncio.Event().wait()
+        async def search(value, on_update, *, block):
+            calls.append(value['mode'])
+            if len(calls) == 2:
+                routes.rpc.quote_batch_counted = blocked
+            return await original(value, on_update, block=block)
+        routes.get = search
+        with rpc_diagnostic_scope():
+            with self.assertRaises(TimeoutError) as raised:
+                await intent.get(request('redeem-exact-out'), lambda _event: asyncio.sleep(0))
+            logical = public_quote_error(raised.exception)['quoteDiagnostics']
+        self.assertEqual(calls, ['exact-out', 'exact-in'])
+        self.assertEqual(logical['phase'], 'expected-input-search')
+        self.assertEqual(logical['inversionIteration'], 0)
+        self.assertFalse(logical['qualified'])
+        self.assertEqual(logical['routeWave']['mode'], 'exact-in')
+        self.assertEqual(logical['routeWave']['legacyCompleted'], 0)
+
+    async def test_logical_snapshot_failure_does_not_replace_primary_timeout(self):
+        intent, _provider, routes, _wire = service()
+        self.addAsyncCleanup(routes.close)
+        async def blocked(*_args, **_kwargs):
+            async with asyncio.timeout(.01):
+                with rpc_call('eth_call', stage='route-search'):
+                    await asyncio.Event().wait()
+        routes.get = blocked
+        with rpc_diagnostic_scope(), patch('cybergold_candidate.rpc_diagnostics._QuoteWork.snapshot',
+                side_effect=ValueError('optional observer unavailable')):
+            with self.assertRaises(TimeoutError) as raised:
+                await intent.get(request('issue-exact-in'), lambda _event: asyncio.sleep(0))
+            payload = public_quote_error(raised.exception)
+        self.assertEqual(payload['code'], 'quote-timeout')
+        self.assertEqual(payload['diagnostics']['stage'], 'route-search')
+        self.assertNotIn('quoteDiagnostics', payload)
 
     async def test_slow_failed_typed_replay_does_not_interrupt_later_candidate_coverage(self):
         from cybergold_candidate.basket_preview import InvalidPreview

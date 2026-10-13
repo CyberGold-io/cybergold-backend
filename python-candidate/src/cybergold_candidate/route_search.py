@@ -19,7 +19,8 @@ from .shared_reads import SharedReads
 from .uniswap_quote import ABI, METHODS, UniswapQuoteRpc
 from .wallet_balances import TOKENS
 from .quote_errors import rpc_failure, public_quote_error
-from .rpc_diagnostics import rpc_call, error_diagnostics
+from .rpc_diagnostics import (rpc_call, error_diagnostics, route_work_scope, route_subphase,
+                              route_count, freeze_quote_work)
 from .uniswap_routes import uses_typed_adapter
 
 WETH = next(address for name, address in TOKENS if name == 'weth')
@@ -231,6 +232,7 @@ class RouteSearch:
         self.multi_protocol = multi_protocol
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
 
+    @route_work_scope
     async def get(self, request, on_update=None, *, block=None):
         if self.rpc is None:
             self.rpc = self.rpc_factory(self.settings)
@@ -254,13 +256,17 @@ class RouteSearch:
             owns_context = block is None
             block = await self.rpc.block(None) if owns_context else block
             context_done = time.perf_counter()
+            route_subphase('eligibility')
             eligible, pool_reads = await self.rpc.eligible_paths(list(dict.fromkeys(call_paths)), block)
             selected = [index for index, path in enumerate(call_paths) if path in eligible]
+            route_count('legacyCandidates', len(selected))
+            route_subphase('v3-coverage')
             outcomes = {}
             quote_reads = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
             if on_update is None:
                 quoted = await self.rpc.quote_batch_counted(request['mode'], [calls[index] for index in selected], block, quote_reads) if selected else []
                 outcomes = dict(zip(selected, quoted, strict=True))
+                route_count('legacyCompleted', len(outcomes))
             else:
                 async def snapshot():
                     results = reduce_results(request, plans, outcomes)
@@ -292,8 +298,13 @@ class RouteSearch:
                 try:
                     await snapshot()
                     for task in asyncio.as_completed(tasks):
-                        outcomes.update(await task)
+                        completed = await task
+                        outcomes.update(completed)
+                        route_count('legacyCompleted', len(completed))
                         await snapshot()
+                except BaseException as error:
+                    freeze_quote_work(error)
+                    raise
                 finally:
                     for task in tasks:
                         task.cancel()
@@ -301,6 +312,7 @@ class RouteSearch:
             quotes_done = time.perf_counter()
             results = reduce_results(request, plans, outcomes)
             if provider:
+                route_subphase('typed-reserve')
                 def combined(extended):
                     rows = reduce_results(request, plans, outcomes)
                     for row, extra, plan in zip(rows, extended, plans, strict=True):
@@ -321,6 +333,7 @@ class RouteSearch:
                 for row in results:
                     row.pop('total', None)
             if owns_context:
+                route_subphase('canonicality')
                 await self.rpc.assert_canonical(block)
             if self.group_planner:
                 self.group_planner.observe(request, results)

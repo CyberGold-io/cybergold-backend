@@ -28,6 +28,7 @@ from .uniswap_state import ZERO
 from .wallet_balances import TOKENS
 from .quote_models import PoolBaseline, LegModel
 from .quote_cache import IntentSharing
+from .rpc_diagnostics import route_count, freeze_quote_work
 
 
 class MarketQuoteRequest(BaseModel):
@@ -607,9 +608,11 @@ class MarketQuotes:
                 best = result['best']
                 if observed > 0 and (best is None or (observed > int(best['quote']) if mode == 'exactIn' else observed < int(best['quote']))):
                     result['best'] = row
+                route_count('typedCompleted')
             except Exception as error:
                 if len(result['failures']) < 128:
                     result['failures'].append({'path': '0x', 'rpcCode': 0, **public_quote_error(error)})
+                route_count('typedCompleted')
             finally:
                 result['attempted'] += 1
 
@@ -640,11 +643,15 @@ class MarketQuotes:
                         pending.remove(entry)
                         continue
                     result['total'] += 1
+                    route_count('typedEnumerated')
                     active.add(asyncio.create_task(evaluate(result, branches)))
                     if len(active) >= 8:
                         await completed()
             while active:
                 await completed()
+        except BaseException as error:
+            freeze_quote_work(error)
+            raise
         finally:
             for task in active:
                 task.cancel()

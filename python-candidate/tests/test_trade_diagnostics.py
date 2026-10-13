@@ -119,6 +119,42 @@ class TradeDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(frames[-1]['requestId'], metric)
         self.assertNotIn(provider['correlationId'], metric)
 
+    async def test_optional_quote_work_survives_provider_error_log_projection(self):
+        engines = Engines()
+        error = QuoteFailure('quote-timeout', diagnostics={'rpcMethod': 'eth_call', 'elapsedMs': 8})
+        error.quote_diagnostics = {'phase': 'initial-search', 'elapsedMs': 15000, 'qualified': False,
+            'inversionIteration': 0, 'private': 'private-wallet',
+            'routeWave': {'mode': 'exact-in', 'subphase': 'typed-reserve', 'elapsedMs': 15000,
+                          'typedEnumerated': 32, 'typedCompleted': 24, 'typedPending': 8,
+                          'sdkLockWaitMs': 42000, 'calldata': 'private-calldata'}}
+        engines.core_error = error
+        app = create_app(trade_quotes=engines.quotes)
+        async with app.router.lifespan_context(app), httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+            with self.assertLogs('cybergold.candidate', level='INFO') as captured:
+                response = await client.post('/api/quotes/trade/stream', json=request())
+        frames = [json.loads(row) for row in response.text.splitlines()]
+        self.assertEqual(frames[-1]['type'], 'complete')
+        provider = next(row for row in frames if row['type'] == 'provider-error')
+        failure = next(json.loads(row.getMessage()) for row in captured.records if row.levelname == 'ERROR')
+        self.assertEqual(failure['event'], 'quote_failure')
+        self.assertEqual(failure['quoteDiagnostics'], provider['quoteDiagnostics'])
+        self.assertEqual(failure['diagnostics'], {'rpcMethod': 'eth_call', 'elapsedMs': 8})
+        self.assertEqual(failure['quoteDiagnostics']['routeWave']['sdkLockWaitMs'], 42000)
+        for secret in ('private-wallet', 'private-calldata'):
+            self.assertNotIn(secret, response.text + json.dumps(failure))
+
+    def test_malformed_optional_quote_work_cannot_replace_the_original_error(self):
+        from cybergold_candidate.quote_errors import public_quote_error
+        error = QuoteFailure('quote-timeout')
+        for source in (None, 'private-data', {'phase': [], 'elapsedMs': float('nan')},
+                       {'phase': 'private-seed', 'qualified': 'private-key', 'elapsedMs': -1}):
+            error.quote_diagnostics = source
+            self.assertEqual(public_quote_error(error), {'code': 'quote-timeout', 'error': str(error)})
+        error.quote_diagnostics = {'phase': 'initial-search', 'elapsedMs': 1}
+        with patch('cybergold_candidate.rpc_diagnostics.math.isfinite', side_effect=ValueError('collector unavailable')):
+            self.assertEqual(public_quote_error(error), {'code': 'quote-timeout', 'error': str(error)})
+
     async def test_coalesced_requests_keep_distinct_subscriber_ids_and_one_work_id(self):
         engines = Engines()
         engines.hold_core, engines.hold_market = asyncio.Event(), asyncio.Event()

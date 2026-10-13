@@ -25,6 +25,8 @@ from cybergold_candidate.helpers_execution import ABI, argument
 from cybergold_candidate.quote_revalidation import revalidate, core_bounds
 from cybergold_candidate.recovery_rpc import RecoveryApiError
 from cybergold_candidate.quote_history import QuoteHistory
+from cybergold_candidate.quote_errors import public_quote_error
+from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope, quote_phase, freeze_quote_work
 
 A, B, C = ('0x'+str(index).rjust(40, '0') for index in (1, 2, 3))
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -969,20 +971,39 @@ for line in sys.stdin:
             finally:
                 stopped.add(amount)
         self.quotes.quote_branches = quote
+        quotes, diagnostics = self.quotes, {}
+        class ObservedReserve:
+            @route_work_scope
+            async def get(self, value):
+                return await quotes.reserve_quotes(value, BLOCK, on_update=lambda _rows: asyncio.sleep(0))
+        @quote_work_scope
         async def search(amount):
-            return await self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': [
-                {'inputAsset': A, 'outputAsset': B, 'amount': str(amount)}]}, BLOCK,
-                on_update=lambda _rows: asyncio.sleep(0))
+            quote_phase('initial-search')
+            try:
+                result = await ObservedReserve().get({'mode': 'exact-in', 'targets': [
+                    {'inputAsset': A, 'outputAsset': B, 'amount': str(amount)}]})
+            except asyncio.CancelledError as error:
+                diagnostics[amount] = public_quote_error(error)['quoteDiagnostics']
+                raise
+            probe = ValueError('offline snapshot')
+            freeze_quote_work(probe)
+            diagnostics[amount] = public_quote_error(probe)['quoteDiagnostics']
+            return result
         first, other = asyncio.create_task(search(1000)), asyncio.create_task(search(2000))
         try:
             await asyncio.wait_for(asyncio.gather(*(event.wait() for event in started.values())), 1)
             first.cancel()
             await asyncio.gather(first, return_exceptions=True)
             self.assertTrue(first.cancelled())
+            cancelled = diagnostics[1000]['routeWave']
+            self.assertEqual((cancelled['typedEnumerated'], cancelled['typedCompleted'], cancelled['typedPending']), (1, 0, 1))
             self.assertEqual(stopped, {1000})
             self.assertFalse(other.done())
             release.set()
             self.assertEqual((await other)[0]['best']['quote'], '4000')
+            completed = diagnostics[2000]['routeWave']
+            self.assertEqual((completed['typedEnumerated'], completed['typedCompleted'], completed['typedPending']), (1, 1, 0))
+            self.assertEqual(diagnostics[1000]['routeWave'], cancelled)
         finally:
             first.cancel(); other.cancel()
             await asyncio.gather(first, other, return_exceptions=True)

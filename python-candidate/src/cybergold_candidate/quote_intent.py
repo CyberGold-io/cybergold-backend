@@ -23,7 +23,8 @@ from .market_swap import encode_adapter
 from .uniswap_routes import resize_branches, uses_typed_adapter
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
-from .rpc_diagnostics import error_diagnostics
+from .rpc_diagnostics import (error_diagnostics, quote_work_scope, quote_background, quote_phase,
+                              quote_qualified, route_subphase, finish_route_work, freeze_quote_work)
 
 
 class RetainedQuotePlan(BaseModel):
@@ -120,6 +121,7 @@ class QuoteIntent:
         if self.history:
             await self.history.close()
 
+    @quote_work_scope
     async def get(self, request, on_update, *, block=None, model_epoch=None, quoted_ranking=False):
         validate(request)
         slippage_bps = request.get('slippageBps', DEFAULT_SLIPPAGE_BPS)
@@ -199,6 +201,7 @@ class QuoteIntent:
                     async with asyncio.timeout(15):
                         await rpc.assert_canonical(block)
                     qualified = value
+                    quote_qualified(True)
                     await on_update({'type': 'qualified', 'value': result_value(value)})
                 except SnapshotChanged as error:
                     # A disproved common snapshot is different from an
@@ -206,6 +209,7 @@ class QuoteIntent:
                     # earlier tuple and survives a later ordinary tail error.
                     context_error = error
                     qualified = None
+                    quote_qualified(False)
                     pending_qualification = None
                     await on_update({'type': 'invalidated', 'context': context, 'reason': 'snapshot-changed'})
                     return
@@ -220,7 +224,10 @@ class QuoteIntent:
                 return
             pending_qualification = read
             if qualifying is None or qualifying.done():
-                qualifying = asyncio.create_task(qualify())
+                async def background():
+                    with quote_background():
+                        await qualify()
+                qualifying = asyncio.create_task(background())
                 estimates.add(qualifying)
                 qualifying.add_done_callback(estimates.discard)
 
@@ -252,7 +259,10 @@ class QuoteIntent:
                 pass
 
         def schedule(read, display):
-            task = asyncio.create_task(estimate(read, display))
+            async def background():
+                with quote_background():
+                    await estimate(read, display)
+            task = asyncio.create_task(background())
             estimates.add(task)
             task.add_done_callback(estimates.discard)
 
@@ -286,7 +296,8 @@ class QuoteIntent:
                 values.append(leg)
             return values
 
-        async def search(targets, mode, stage, early=None):
+        async def search(targets, mode, stage, early=None, *, logical_phase=None):
+            quote_phase(logical_phase or ('initial-search' if stage == 'initial' else 'execution-search'))
             cache_key = (mode, json.dumps(targets, sort_keys=True))
             if cache_key in route_searches:
                 rows = route_searches[cache_key]
@@ -322,7 +333,10 @@ class QuoteIntent:
                     if multi_provider:
                         pending_early = deepcopy(rows)
                         if preparing is None or preparing.done():
-                            preparing = asyncio.create_task(prepare_early())
+                            async def background():
+                                with quote_background():
+                                    await prepare_early()
+                            preparing = asyncio.create_task(background())
                             estimates.add(preparing)
                             preparing.add_done_callback(estimates.discard)
                     else:
@@ -333,6 +347,7 @@ class QuoteIntent:
             try:
                 result = await self.routes.get(search_request, on_update=update, block=block)
             except Exception as error:
+                freeze_quote_work(error)
                 # Freeze the route cause before this search's prospective
                 # replay cleanup can replace the request-local RPC context.
                 if getattr(error, 'rpc_diagnostics', None) is None:
@@ -345,9 +360,11 @@ class QuoteIntent:
                     preparing.cancel()
                     await asyncio.gather(preparing, return_exceptions=True)
             if multi_provider:
+                route_subphase('composition')
                 result['results'] = await multi_provider.compose_core_rows(result['results'],
                     'exactIn' if mode == 'exact-in' else 'exactOut', block,
                     ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
+                finish_route_work()
             for key in ('rpcReads', 'rpcReadsRequested', 'rpcReadsCoalesced', 'rpcReadsReused', 'candidateCalls'):
                 metrics[key] += result['metrics'][key]
             waves.append((mode, result['results'], result['context']))
@@ -411,12 +428,15 @@ class QuoteIntent:
                         return result
                     schedule_qualification(checked)
                 rows = await search(targets, 'exact-in', 'initial', early)
+                quote_phase('initial-preview')
                 initial = await preview(token, issue_request('exact-in', legs(targets, rows, 'exact-in', protect=False), amount))
                 same_order(initial['orderedCoreAssets'], request['orderedAssets'])
                 net = int(initial['netCygldOut'])
+                quote_phase('capacity')
                 capacity_value = await capacity(rows)
             else:
                 net = amount
+            quote_phase('basket-preview')
             required = await preview(basket, {'mode': 'issue-exact-out', 'netCygldOut': str(net)})
             same_order(required['orderedCoreAssets'], request['orderedAssets'])
             targets = [{'inputAsset': request['quoteToken'], 'outputAsset': asset, 'amount': raw}
@@ -446,6 +466,7 @@ class QuoteIntent:
             rows = await search(targets, 'exact-out', 'execution', early)
             quotes = execution_quotes(rows)
             maximum = amount if initial else direct + sum(int(leg['amountIn']) for leg in quotes)
+            quote_phase('final-preview')
             final = await preview(token, issue_request('exact-out', quotes, maximum, net))
             same_order(final['orderedCoreAssets'], request['orderedAssets'])
             display = int(initial['netCygldOut']) if initial else maximum
@@ -456,6 +477,7 @@ class QuoteIntent:
                     'executionAmount': str(net), 'maximumInputAmount': str(maximum)}
 
         async def redemption(gross, early_display=True, *, protect=True, selected=None):
+            quote_phase('basket-preview')
             required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
             targets = [{'inputAsset': row['token'], 'outputAsset': request['quoteToken'], 'amount': row['amount']}
                 for row in required['projectedCoreOutputs'] if row['kind'] == 0 and int(row['amount']) > 0
@@ -488,8 +510,10 @@ class QuoteIntent:
                             'executionAmount': str(gross), 'maximumInputAmount': '0'}
                 schedule_qualification(checked)
             if selected is None:
-                rows = await search(targets, 'exact-in', 'execution', early)
+                rows = await search(targets, 'exact-in', 'execution', early,
+                                    logical_phase='execution-search' if protect else 'expected-input-search')
             else:
+                quote_phase('expected-input-search')
                 by_asset = {quote['inputAsset'].lower(): quote for quote in selected}
                 calls, paths = [], []
                 typed_rows = {}
@@ -516,6 +540,7 @@ class QuoteIntent:
                         for path, row in zip((path for path in paths if path is not None), observed, strict=True)])
                 rows = [typed_rows[index] if index in typed_rows else next(ordinary) for index in range(len(paths))]
             selected = value(rows)
+            quote_phase('final-preview')
             final = await preview(token, selected)
             return {'quotes': selected['quotes'], 'preview': final,
                     'initialPreview': None, 'basketPreview': required,
@@ -568,6 +593,7 @@ class QuoteIntent:
                 if recovery is None:
                     recovery = asyncio.create_task(recovery_assets())
                 rows = await search(targets, 'exact-out', 'initial', early)
+                quote_phase('initial-preview')
                 return await seed(rows)
             gross = self.seeds.suggest(request, context) if self.seeds else None
             hinted, initial, observations = gross is not None, None, []
@@ -580,6 +606,7 @@ class QuoteIntent:
             expected_input_gross = await expected_redemption_input(gross)
             for iteration in range(11):
                 metrics['iterations'] = iteration
+                quote_phase('execution-search', iteration=iteration)
                 if gross <= 0:
                     raise InvalidPreview('Unable to compute a reliable quote for the entered amount.')
                 result = await redemption(gross, early_display=False)
@@ -606,6 +633,7 @@ class QuoteIntent:
             target = int(request['amount'])
             observations = []
             for iteration in range(11):
+                quote_phase('expected-input-search', iteration=iteration)
                 result = await redemption(gross, early_display=False, protect=False, selected=selected)
                 quoted = int(result['expectedOutputAmount'])
                 observations.append((gross, quoted))
@@ -648,6 +676,7 @@ class QuoteIntent:
             elif incumbent and time.monotonic()-incumbent[0] < 600:
                 prior = incumbent[1]
             if prior:
+                quote_phase('retained-validation')
                 try:
                     result = await revalidate(request, prior, rpc, block, basket, token, preview, metrics)
                 except RetainedPlanChanged:
@@ -705,6 +734,7 @@ class QuoteIntent:
                 result = await discover(redemption(int(request['amount'])))
             else:
                 result = await discover(redeem_out())
+            quote_phase('canonicality')
             async with asyncio.timeout(15):
                 await rpc.assert_canonical(block)
             if context_error is not None:
@@ -740,6 +770,7 @@ class QuoteIntent:
                                 self.history.ensure_pool(rpc, row['best']['path'], mode, block, context)
             return result
         except Exception as error:
+            freeze_quote_work(error)
             # Auxiliary previews cancelled below must not replace the RPC
             # stage/timing of the primary failure with their cleanup cause.
             if getattr(error, 'rpc_diagnostics', None) is None:
