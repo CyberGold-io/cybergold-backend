@@ -20,6 +20,7 @@ from cybergold_candidate.quote_errors import QuoteFailure, RpcTimeout, public_qu
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH, candidates
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope, error_diagnostics, quote_sdk_request
+from cybergold_candidate.market_swap import MarketQuotes
 from test_route_search import ASSET_A, ASSET_B, ASSET_C, HASH, Wire, wire_result
 
 CORE = '0x' + '4' * 40
@@ -259,6 +260,288 @@ class IssueInputBoundsTests(unittest.TestCase):
                     self.assertLessEqual(int(new['amountIn']), ceil(int(old['amountIn'])))
                     self.assertEqual(new['minimumAmountOut'], old['minimumAmountOut'])
                     self.assertEqual(new['data'], old['data'])
+
+
+class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
+    """Opt-in experiment using real route/Helpers/revalidation boundaries."""
+    async def ready(self, event):
+        try:
+            await asyncio.wait_for(event.wait(), 1)
+        except TimeoutError:
+            self.fail('Expected observation did not arrive while the route tail was held')
+
+    def fixture(self, *, protocol='v2', shape='single', opt_in=True, settled=True, filled=True):
+        intent, provider, routes, wire = service(31338)
+        self.addAsyncCleanup(routes.close)
+        wire.missing_fees = {100, 500, 3000, 10000}
+        intent.early_issue_probe = opt_in
+        release, initial_progress, resolved = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        control = SimpleNamespace(release=release, initial_progress=initial_progress, resolved=resolved,
+                                  fail_tail=False, requests=[], quote_calls=[], composition_calls=[], source_rows=[])
+        inventory = {}
+        def pool(source, target, kind, number):
+            first, second = sorted((source, target), key=str.lower)
+            identity = '0x' + format(number, '064x' if kind == 'v4' else '040x')
+            value = {'protocol': kind, 'id': identity, 'address': '0x' + format(number, '040x'),
+                'feePips': 3000, 'tickSpacing': 60, 'hooks': '0x' + '0' * 40,
+                'token0': {'address': first, 'decimals': 18, 'chainId': 31338},
+                'token1': {'address': second, 'decimals': 18, 'chainId': 31338}}
+            inventory[identity] = value
+            return {'pool': value, 'zeroForOne': first.lower() == source.lower()}
+        paths = {}
+        for index, asset in enumerate((ASSET_A, ASSET_B)):
+            paths[(WETH.lower(), asset.lower())] = [pool(WETH, asset, protocol, index + 10)] if shape not in ('mixed', 'shared') else [
+                pool(WETH, ASSET_C, 'v2', 20 if shape == 'shared' else index + 20),
+                pool(ASSET_C, asset, 'v2' if shape == 'shared' else 'v3', index + 30)]
+        typed = SimpleNamespace(semaphore=asyncio.Semaphore(8), registry=SimpleNamespace(inventory=inventory))
+        def resolve(*args):
+            control.resolved.set()
+            return MarketQuotes.resolve_branches(typed, *args)
+        typed.resolve_branches = resolve
+        async def sdk(branches, mode, amount, block, **kwargs):
+            control.quote_calls.append((mode, amount, deepcopy(branches)))
+            index = 0
+            if isinstance(candidate := kwargs.get('candidate'), dict):
+                index = candidate.get('fixture-order', 0)
+                candidate['fixture-order'] = index + 1
+                hop = branches[-1]['hops'][-1]
+                target = hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
+                control.composition_calls.append((mode, target, amount, index))
+            return {'amountIn': str(amount if mode == 'exactIn' else (amount + 1) // 2 + index),
+                    'amountOut': str(amount * 2 - 1 - 2 * index if mode == 'exactIn' and shape == 'shared' else amount * 2 if mode == 'exactIn' else amount),
+                    'settled': settled if mode == 'exactOut' else True, 'fullyFilled': filled}
+        typed.quote_sdk_branches = sdk
+        async def quote(*args):
+            return await MarketQuotes.quote_branches(typed, *args)
+        typed.quote_branches = quote
+        async def compose(*args, **kwargs):
+            return await MarketQuotes.compose_core_rows(typed, *args, **kwargs)
+        typed.compose_core_rows = compose
+        async def reserve(value, block, on_update=None):
+            control.requests.append(deepcopy(value))
+            mode = 'exactIn' if value['mode'] == 'exact-in' else 'exactOut'
+            rows = []
+            for target in value['targets']:
+                amount = int(target['amount'])
+                hops = deepcopy(paths[(target['inputAsset'].lower(), target['outputAsset'].lower())])
+                branches = [{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': hops}]
+                if shape == 'split' and mode == 'exactIn':
+                    branches = [{'amountIn': str(amount // 2), 'hops': hops},
+                                {'amountIn': str(amount - amount // 2), 'hops': deepcopy(hops)}]
+                observed = amount * 2 if mode == 'exactIn' else (amount + 1) // 2
+                plan = {'version': 1, 'executionContext': 'helpers-core', 'mode': mode,
+                    'tokenIn': target['inputAsset'], 'tokenOut': target['outputAsset'],
+                    'inputAmount': str(amount if mode == 'exactIn' else observed),
+                    'outputAmount': str(observed if mode == 'exactIn' else amount),
+                    'limit': '0', 'deadline': '0', 'branches': branches}
+                rows.append({'target': target, 'best': {'path': '0x', 'quote': str(observed), 'routePlan': plan},
+                             'attempted': 1, 'succeeded': 1, 'failures': [], 'total': 2})
+            control.source_rows.append(deepcopy(rows))
+            if on_update:
+                await on_update(rows)
+            if value['mode'] == 'exact-in':
+                control.initial_progress.set()
+                await release.wait()
+                if control.fail_tail:
+                    raise TimeoutError('Ordinary unfinished typed reserve tail')
+            for row in rows:
+                row.update(attempted=2, total=2)
+            return rows
+        typed.reserve_quotes = reserve
+        routes.multi_protocol = typed
+        return intent, provider, routes, control
+
+    async def test_homogeneous_typed_incumbent_is_checked_before_full_initial_coverage(self):
+        for protocol in ('v2', 'v4'):
+            for native in (False, True):
+                with self.subTest(protocol=protocol, native=native):
+                    intent, provider, _routes, control = self.fixture(protocol=protocol)
+                    qualified, frames = asyncio.Event(), []
+                    async def publish(frame):
+                        frames.append(frame)
+                        if frame['type'] == 'qualified':
+                            qualified.set()
+                    operation = asyncio.create_task(intent.get(request('issue-exact-in', native), publish))
+                    try:
+                        await self.ready(qualified)
+                        self.assertFalse(operation.done())
+                        value = next(frame['value'] for frame in frames if frame['type'] == 'qualified')
+                        self.assertEqual(value['executionAmount'], '200')
+                        self.assertEqual(value['maximumInputAmount'], '100')
+                        self.assertEqual(value['context']['blockHash'], HASH)
+                        self.assertEqual(value['basketPreview']['orderedCoreAssets'], [ASSET_A, ASSET_B])
+                        self.assertEqual(value['preview']['orderedCoreAssets'], [ASSET_A, ASSET_B])
+                        self.assertEqual([leg['amountIn'] for leg in value['quotes']], ['50', '50'])
+                        self.assertEqual([leg['minimumAmountOut'] for leg in value['quotes']], ['100', '100'])
+                        self.assertTrue(all(leg['routePlan']['mode'] == 'exactOut' for leg in value['quotes']))
+                        self.assertTrue(all(leg['routePlan']['deadline'] == request('issue-exact-in')['deadline'] for leg in value['quotes']))
+                        self.assertTrue(all(branch['amountIn'] == '0' for leg in value['quotes'] for branch in leg['routePlan']['branches']))
+                        self.assertTrue(all(row['best']['routePlan']['mode'] == 'exactIn'
+                                            for row in control.source_rows[0]))
+                        self.assertTrue(any(name.endswith('ExactOut') and name.startswith('previewIssueFrom')
+                                            and name != 'previewIssueFromBasketExactOut' for name, _, _ in provider.contract_calls))
+                        self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 2)
+                        self.assertEqual(len(control.requests), 1)
+                        control.release.set()
+                        final = await operation
+                        self.assertEqual(len(control.requests), 2)
+                        self.assertEqual(final['executionAmount'], value['executionAmount'])
+                    finally:
+                        control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_preview_and_canonicality_are_both_required_before_qualification(self):
+        intent, provider, _routes, control = self.fixture()
+        provider.finish_final = asyncio.Event()
+        qualified = asyncio.Event()
+        async def publish(frame):
+            if frame['type'] == 'qualified':
+                qualified.set()
+        operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+        try:
+            await self.ready(provider.final_started)
+            self.assertFalse(qualified.is_set())
+            headers = sum(method.startswith('eth_getBlock') for method, _ in provider.calls)
+            provider.hold_header = asyncio.Event()
+            provider.finish_final.set()
+            for _ in range(100):
+                if sum(method.startswith('eth_getBlock') for method, _ in provider.calls) > headers:
+                    break
+                await asyncio.sleep(0)
+            self.assertGreater(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), headers)
+            self.assertFalse(qualified.is_set())
+            provider.hold_header.set()
+            await self.ready(qualified)
+        finally:
+            control.release.set()
+            provider.finish_final.set()
+            if provider.hold_header:
+                provider.hold_header.set()
+            operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_released_full_search_keeps_the_same_targets_and_economics_as_default(self):
+        results, searches = [], []
+        for opt_in in (False, True):
+            intent, _provider, _routes, control = self.fixture(opt_in=opt_in)
+            observed = asyncio.Event()
+            async def publish(frame):
+                if frame['type'] == ('qualified' if opt_in else 'estimate'):
+                    observed.set()
+            operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+            try:
+                await self.ready(observed)
+                self.assertFalse(operation.done())
+                control.release.set()
+                results.append(await operation)
+                searches.append(deepcopy(control.requests))
+            finally:
+                control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+        self.assertEqual(searches[0], searches[1])
+        for key in ('quotes', 'preview', 'basketPreview', 'initialPreview', 'displayAmount', 'expectedInputAmount',
+                    'executionAmount', 'maximumInputAmount', 'requestedGrossCygldOut', 'remainingGrossCapacity',
+                    'requestedNetCygldOut', 'remainingNetCapacity', 'mode', 'slippageBps'):
+            self.assertEqual(results[0][key], results[1][key], key)
+
+    async def test_shared_selected_pool_uses_core_order_before_protected_qualification(self):
+        intent, _provider, _routes, control = self.fixture(shape='shared')
+        value = request('issue-exact-in')
+        value['targets'].reverse()
+        qualified, frames = asyncio.Event(), []
+        async def publish(frame):
+            frames.append(frame)
+            if frame['type'] == 'qualified':
+                qualified.set()
+        operation = asyncio.create_task(intent.get(value, publish))
+        try:
+            await self.ready(qualified)
+            self.assertFalse(operation.done())
+            checked = next(frame['value'] for frame in frames if frame['type'] == 'qualified')
+            self.assertEqual(checked['executionAmount'], '196')
+            self.assertEqual(checked['maximumInputAmount'], '100')
+            self.assertEqual(checked['expectedInputAmount'], '99')
+            self.assertEqual([leg['outputAsset'] for leg in checked['quotes']], [ASSET_A, ASSET_B])
+            self.assertEqual([leg['minimumAmountOut'] for leg in checked['quotes']], ['98', '98'])
+            self.assertEqual(control.composition_calls[:2], [('exactIn', ASSET_A, 50, 0), ('exactIn', ASSET_B, 50, 1)])
+            exact_out = [row for row in control.composition_calls if row[0] == 'exactOut']
+            self.assertEqual(exact_out[:2], [('exactOut', ASSET_A, 98, 0), ('exactOut', ASSET_B, 98, 1)])
+            control.fail_tail = True
+            control.release.set()
+            result = await operation
+            self.assertEqual(result['quotes'], checked['quotes'])
+        finally:
+            control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_failed_final_helpers_preview_withholds_early_qualification(self):
+        intent, provider, _routes, control = self.fixture()
+        provider.fail_final = True
+        frames = []
+        operation = asyncio.create_task(intent.get(request('issue-exact-in'), lambda frame: asyncio.sleep(0, result=frames.append(frame))))
+        try:
+            await self.ready(provider.final_started)
+            for _ in range(20):
+                await asyncio.sleep(0)
+            self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
+            control.fail_tail = True
+            control.release.set()
+            with self.assertRaises(TimeoutError):
+                await operation
+        finally:
+            control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_checked_tuple_recovers_tail_error_but_not_reorg_or_caller_cancellation(self):
+        for outcome in ('timeout', 'reorg', 'cancel'):
+            with self.subTest(outcome=outcome):
+                intent, provider, _routes, control = self.fixture()
+                qualified, frames = asyncio.Event(), []
+                async def publish(frame):
+                    frames.append(frame)
+                    if frame['type'] == 'qualified':
+                        qualified.set()
+                operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+                try:
+                    await self.ready(qualified)
+                    incumbent = next(frame['value'] for frame in frames if frame['type'] == 'qualified')
+                    control.fail_tail = True
+                    provider.reorg = outcome == 'reorg'
+                    if outcome == 'cancel':
+                        operation.cancel()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await operation
+                        self.assertTrue(operation.cancelled())
+                    else:
+                        control.release.set()
+                        if outcome == 'reorg':
+                            with self.assertRaises(SnapshotChanged):
+                                await operation
+                        else:
+                            result = await operation
+                            for key in ('quotes', 'preview', 'executionAmount', 'maximumInputAmount'):
+                                self.assertEqual(result[key], incumbent[key])
+                finally:
+                    control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_default_estimates_and_unsupported_or_unsettled_typed_conversions_do_not_qualify(self):
+        for options in ({'opt_in': False}, {'shape': 'mixed'}, {'shape': 'split'}, {'settled': False}, {'filled': False}):
+            with self.subTest(options=options):
+                intent, _provider, _routes, control = self.fixture(**options)
+                frames, estimated = [], asyncio.Event()
+                async def publish(frame):
+                    frames.append(frame)
+                    if frame['type'] == 'estimate':
+                        estimated.set()
+                operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+                try:
+                    await self.ready(estimated)
+                    if options.get('opt_in') is not False:
+                        await self.ready(control.resolved)
+                    for _ in range(20):
+                        await asyncio.sleep(0)
+                    self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
+                    control.fail_tail = True
+                    control.release.set()
+                    with self.assertRaises(TimeoutError):
+                        await operation
+                finally:
+                    control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
 
 
 class IntentTests(unittest.IsolatedAsyncioTestCase):
