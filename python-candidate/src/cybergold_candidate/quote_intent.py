@@ -482,9 +482,15 @@ class QuoteIntent:
                     'expectedInputAmount': str(direct + sum(int(row['best']['quote']) for row in rows)),
                     'executionAmount': str(net), 'maximumInputAmount': str(maximum)}
 
-        async def redemption(gross, early_display=True, *, protect=True, selected=None):
+        async def redemption(gross, early_display=True, *, protect=True, selected=None, fallback_gross=None):
             quote_phase('basket-preview')
-            required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
+            try:
+                required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
+            except KnownPreviewError as error:
+                if fallback_gross is None or error.code != 'insufficient-protocol-supply':
+                    raise
+                gross = fallback_gross
+                required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
             targets = [{'inputAsset': row['token'], 'outputAsset': request['quoteToken'], 'amount': row['amount']}
                 for row in required['projectedCoreOutputs'] if row['kind'] == 0 and int(row['amount']) > 0
                 and row['token'].lower() != request['quoteToken'].lower()]
@@ -528,8 +534,8 @@ class QuoteIntent:
                     if quote.get('routePlan'):
                         plan = deepcopy(quote['routePlan'])
                         plan['branches'] = resize_branches(plan['branches'], int(target['amount']))
-                        value = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
-                        typed_rows[len(paths)] = {'best': {'path': '0x', 'quote': value['amountOut'], 'routePlan': plan}, 'failures': []}
+                        quoted = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
+                        typed_rows[len(paths)] = {'best': {'path': '0x', 'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}
                         paths.append(None)
                         continue
                     path, _, _, _ = rpc.w3.codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(quote['data'][2:]))
@@ -609,16 +615,27 @@ class QuoteIntent:
             else:
                 await on_update({'type': 'estimate', 'amount': str(gross), 'context': context})
             target = int(request['amount'])
-            expected_input_gross = await expected_redemption_input(gross)
+            # Padding is only a protected-search hint. Keep the original seed
+            # for advisory inversion and the specific first-preview fallback.
+            expected_input_seed = gross
+            routed = initial and any(row['kind'] == 0 and int(row['amount']) > 0
+                and row['token'].lower() != request['quoteToken'].lower() for row in initial['projectedCoreOutputs'])
+            if not hinted and routed and slippage_bps < 10_000:
+                adjusted = (gross * 10_000 + (10_000 - slippage_bps) - 1) // (10_000 - slippage_bps)
+                if adjusted < 2**256:
+                    gross = adjusted
             for iteration in range(11):
                 metrics['iterations'] = iteration
                 quote_phase('execution-search', iteration=iteration)
                 if gross <= 0:
                     raise InvalidPreview('Unable to compute a reliable quote for the entered amount.')
-                result = await redemption(gross, early_display=False)
+                result = await redemption(gross, early_display=False,
+                    fallback_gross=expected_input_seed if iteration == 0 and gross != expected_input_seed else None)
+                gross = int(result['executionAmount'])
                 quoted = int(result['preview']['minimumAmountOut'])
                 observations.append((gross, quoted))
                 if target <= quoted <= ceil(target, slippage_bps):
+                    expected_input_gross = await expected_redemption_input(expected_input_seed)
                     result.update(displayAmount=str(gross), expectedInputAmount=str(expected_input_gross), initialPreview=initial)
                     return result
                 if iteration == 10 or quoted <= 0:

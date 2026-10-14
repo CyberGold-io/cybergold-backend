@@ -1,6 +1,7 @@
 """Actual ABI, route producer and whole-intent invariants; no live transactions."""
 import asyncio
 import json
+import time
 from copy import deepcopy
 from types import SimpleNamespace
 import unittest
@@ -12,7 +13,7 @@ from web3.providers import AsyncBaseProvider
 from eth_utils.abi import collapse_if_tuple
 
 from cybergold_candidate.app import create_app
-from cybergold_candidate.basket_preview import ABI as BASKET_ABI
+from cybergold_candidate.basket_preview import ABI as BASKET_ABI, InvalidPreview
 from cybergold_candidate.token_preview import TokenPreviewRpc
 from cybergold_candidate.quote_intent import QuoteIntent, REQUEST, issue_input_bounds, ceil
 from cybergold_candidate.issuance_capacity import ABI as CAPACITY_ABI, READS as CAPACITY_READS, capacity_amounts
@@ -544,6 +545,102 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
                     control.release.set(); operation.cancel(); await asyncio.gather(operation, return_exceptions=True)
 
 
+class RetainedTypedRedemptionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_selected_typed_redemption_preserves_raw_input_interval_and_execution_bounds(self):
+        for chain in (31338, 1):
+            for native in (False, True):
+                intent, provider, routes, wire = service(chain)
+                self.addAsyncCleanup(routes.close)
+                intent.retain_plans = True
+                wire.missing_fees = {100, 500, 3000, 10000}
+                inventory, paths, calls, searches = {}, {}, [], []
+                price_bonus = 0
+                for index, asset in enumerate((ASSET_A, ASSET_B)):
+                    first, second = sorted((asset, WETH), key=str.lower)
+                    address = '0x' + format(index + 10, '040x')
+                    pool = {'protocol': 'v2', 'id': address, 'address': address, 'feePips': 3000,
+                        'token0': {'address': first, 'decimals': 18, 'chainId': chain},
+                        'token1': {'address': second, 'decimals': 18, 'chainId': chain}}
+                    inventory[address] = pool
+                    paths[asset.lower()] = [{'pool': pool, 'zeroForOne': first.lower() == asset.lower()}]
+                typed = SimpleNamespace(semaphore=asyncio.Semaphore(8), registry=SimpleNamespace(inventory=inventory))
+                typed.resolve_branches = lambda *args: MarketQuotes.resolve_branches(typed, *args)
+                async def sdk(branches, mode, amount, block, **_kwargs):
+                    calls.append((mode, amount, block['hash']))
+                    return {'amountIn': str(amount if mode == 'exactIn' else (amount + 1) // 2),
+                            'amountOut': str(amount * 2 + price_bonus if mode == 'exactIn' else amount),
+                            'settled': True, 'fullyFilled': True}
+                typed.quote_sdk_branches = sdk
+                async def quote(*args):
+                    return await MarketQuotes.quote_branches(typed, *args)
+                typed.quote_branches = quote
+                async def compose(*args, **kwargs):
+                    return await MarketQuotes.compose_core_rows(typed, *args, **kwargs)
+                typed.compose_core_rows = compose
+                async def reserve(value, block, on_update=None):
+                    searches.append(deepcopy(value))
+                    mode = 'exactIn' if value['mode'] == 'exact-in' else 'exactOut'
+                    rows = []
+                    for target in value['targets']:
+                        amount = int(target['amount'])
+                        observed = amount * 2 + price_bonus if mode == 'exactIn' else (amount + 1) // 2
+                        branches = [{'amountIn': str(amount) if mode == 'exactIn' else '0',
+                                     'hops': deepcopy(paths[target['inputAsset'].lower()])}]
+                        plan = {'version': 1, 'executionContext': 'helpers-core', 'mode': mode,
+                            'tokenIn': target['inputAsset'], 'tokenOut': target['outputAsset'],
+                            'inputAmount': str(amount if mode == 'exactIn' else observed),
+                            'outputAmount': str(observed if mode == 'exactIn' else amount),
+                            'limit': '0', 'deadline': '0', 'branches': branches}
+                        rows.append({'target': target, 'best': {'path': '0x', 'quote': str(observed), 'routePlan': plan},
+                                     'attempted': 1, 'succeeded': 1, 'failures': [], 'total': 1})
+                    if on_update:
+                        await on_update(rows)
+                    return rows
+                typed.reserve_quotes = reserve
+                routes.multi_protocol = typed
+                value = {**request('redeem-exact-out', native), 'slippageBps': 500}
+                first = await intent.get(value, lambda _frame: asyncio.sleep(0))
+                self.assertEqual(first['expectedInputAmount'], '100')
+                self.assertEqual(first['executionAmount'], '106')
+                self.assertEqual(first['preview']['minimumAmountOut'], '200')
+                old_plan = retained_plan(first)
+                old_quotes = deepcopy(first['quotes'])
+                provider.block_hash = '0x' + 'c' * 64
+                price_bonus = 2
+                searches.clear(); calls.clear()
+                provider.contract_calls.clear()
+                selected = {**value, 'deadline': '1792000010', 'retainedPlan': old_plan}
+                try:
+                    current = await intent.get(selected, lambda _frame: asyncio.sleep(0))
+                except TypeError:
+                    self.fail('Retained typed redemption raised TypeError instead of completing selected-route inversion')
+                self.assertEqual(searches, [], 'Selected-route revalidation must not restart route discovery')
+                self.assertEqual(current['expectedInputAmount'], '98')
+                self.assertEqual(current['executionAmount'], first['executionAmount'])
+                self.assertEqual(current['preview']['minimumAmountOut'], first['preview']['minimumAmountOut'])
+                self.assertEqual(current['expectedCoreOutputs'], first['expectedCoreOutputs'])
+                self.assertEqual(current['context']['blockHash'], provider.block_hash)
+                self.assertEqual([call[1] for call in calls], [53, 53, 50, 50, 49, 49])
+                self.assertTrue(all(call[0] == 'exactIn' and call[2] == provider.block_hash for call in calls))
+                raw_previews = {args['grossCygldIn'] if native else args['params']['grossCygldIn']:
+                    sum(leg['minimumAmountOut'] for leg in args['legs'])
+                    for name, args, _block in provider.contract_calls
+                    if name == ('previewRedeemToNativeExactIn' if native else 'previewRedeemToTokenExactIn')}
+                raw_output = raw_previews[int(current['expectedInputAmount'])]
+                self.assertLessEqual(int(value['amount']), raw_output)
+                self.assertLessEqual(raw_output, ceil(int(value['amount'])))
+                stale_raw_output = raw_previews[int(old_plan['expectedInputAmount'])]
+                self.assertEqual(stale_raw_output, 204)
+                self.assertGreater(stale_raw_output, ceil(int(value['amount'])))
+                self.assertLessEqual(stale_raw_output, ceil(int(value['amount']), value['slippageBps']))
+                self.assertEqual(old_plan['quotes'], old_quotes)
+                for leg in current['quotes']:
+                    self.assertEqual(leg['routePlan']['mode'], 'exactIn')
+                    self.assertEqual(leg['routePlan']['deadline'], selected['deadline'])
+                    self.assertEqual(leg['routePlan']['inputAmount'], '53')
+                    self.assertEqual(leg['minimumAmountOut'], '100')
+
+
 class IntentTests(unittest.IsolatedAsyncioTestCase):
     def fail_quote_calls(self, route, wire, error_for_call):
         self.addAsyncCleanup(route.rpc.client.aclose)
@@ -991,7 +1088,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(result['executionAmount'],'200')
                         self.assertEqual(sum(int(row['amountIn']) for row in result['quotes']),100)
                     if mode=='redeem-exact-out':
-                        self.assertEqual(result['metrics']['iterations'],2)
+                        self.assertEqual(result['metrics']['iterations'],0)
                         self.assertTrue(200<=int(result['preview']['minimumAmountOut'])<=202)
                         seed=next(args for name,args,_ in provider.contract_calls if name=='previewRedeemToBasketExactOut')
                         self.assertEqual(seed['minimumOutputs'][-1]['id'],int(ASSET_C,16))
@@ -1316,7 +1413,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(Exception):
                 await intent.get(request('issue-exact-in'),lambda event: asyncio.sleep(0))
 
-    async def test_later_expected_input_wave_has_its_own_phase_and_iteration(self):
+    async def test_first_protected_search_wave_has_its_own_phase_and_iteration(self):
         intent, _provider, routes, _wire = service()
         self.addAsyncCleanup(routes.close)
         original, calls = routes.get, []
@@ -1335,7 +1432,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 await intent.get(request('redeem-exact-out'), lambda _event: asyncio.sleep(0))
             logical = public_quote_error(raised.exception)['quoteDiagnostics']
         self.assertEqual(calls, ['exact-out', 'exact-in'])
-        self.assertEqual(logical['phase'], 'expected-input-search')
+        self.assertEqual(logical['phase'], 'execution-search')
         self.assertEqual(logical['inversionIteration'], 0)
         self.assertFalse(logical['qualified'])
         self.assertEqual(logical['routeWave']['mode'], 'exact-in')
@@ -1462,4 +1559,224 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(any(row['type']=='complete' for row in events))
 
 
-if __name__=='__main__':unittest.main()
+class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
+    """Actual ABI reads; numeric hints never replace the protected tuple."""
+    def fixture(self, *, shape='routed', amount=200, bps=100, supply=None,
+                fees=(0, 0), seed_override=None, raw_fault=None, basket_fault=None):
+        ready, raw_started, hold = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class SeedProvider(Provider):
+            def __init__(self):
+                super().__init__()
+                self.chain_id = 31338
+                self.seed = None
+                self.burns = []
+            async def make_request(self, method, params):
+                if method != 'eth_call' or params[0]['to'].lower() == CORE.lower():
+                    return await super().make_request(method, params)
+                function, args = self.contract.decode_function_input(params[0]['data'])
+                name = function.fn_name
+                if not name.startswith('previewRedeem'):
+                    return await super().make_request(method, params)
+                self.calls.append((method, params))
+                self.contract_calls.append((name, args, params[1]))
+                def rejected(code, data=None):
+                    return {'jsonrpc': '2.0', 'id': 1, 'error': {'code': code,
+                        **({'data': data} if data else {})}}
+                if name == 'previewRedeemToBasketExactOut':
+                    outputs = args['minimumOutputs']
+                    self.seed = seed_override if seed_override is not None else sum(
+                        row['minimumAmount'] for row in outputs if row['kind'] == 0) + sum(fees)
+                    value = (self.seed, [(row['kind'], row['token'], row['id'], row['minimumAmount'])
+                             for row in outputs], fees)
+                else:
+                    gross = args['grossCygldIn'] if name == 'previewRedeemToBasketExactIn' else args['params']['grossCygldIn']
+                    if name == 'previewRedeemToBasketExactIn':
+                        self.burns.append(gross)
+                        if supply is not None and gross > supply:
+                            return rejected(3, '0x33aa101c')
+                        if basket_fault and gross != self.seed:
+                            if basket_fault == 'hold':
+                                raw_started.set(); await hold.wait()
+                            if basket_fault == 'timeout':
+                                raise TimeoutError
+                            return rejected(-32603)
+                        if raw_fault and gross == self.seed and any(value != self.seed for value in self.burns):
+                            await ready.wait()
+                            raw_started.set()
+                            if raw_fault == 'hold':
+                                await hold.wait()
+                            if raw_fault == 'reorg':
+                                self.reorg = True
+                            return rejected(-32603)
+                    elif raw_fault == 'later-supply':
+                        return rejected(3, '0x33aa101c')
+                    net = max(0, gross - sum(fees))
+                    direct = net if shape == 'direct' else net * 99 // 100 if shape == 'mixed' else 0
+                    assets = [WETH] if shape == 'direct' else [WETH, ASSET_A] if shape == 'mixed' else [ASSET_A, ASSET_B]
+                    outputs = [(0, WETH, 0, direct)] if shape == 'direct' else [(0, WETH, 0, direct),
+                        (0, ASSET_A, 0, net-direct)] if shape == 'mixed' else [(0, ASSET_A, 0, net//2), (0, ASSET_B, 0, net-net//2)]
+                    outputs.append((1, CORE, int(ASSET_C, 16), gross))
+                    minimum = direct + sum(row['minimumAmountOut'] for row in args.get('legs', []))
+                    value = (outputs, fees) if name == 'previewRedeemToBasketExactIn' else (minimum, outputs, fees)
+                output = function.abi['outputs'][0]
+                return {'jsonrpc': '2.0', 'id': 1, 'result': '0x' + Web3().codec.encode(
+                    [collapse_if_tuple(output)], [value]).hex()}
+        provider, wire = SeedProvider(), QuoteWire()
+        wire.provider = provider
+        settings = SimpleNamespace(**{**vars(SETTINGS), 'NEXT_PUBLIC_CHAIN_ID': '31338'})
+        routes = RouteSearch(settings, RouteSearchRpc(settings, AsyncWeb3(provider),
+            httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+        self.addAsyncCleanup(routes.close)
+        intent = QuoteIntent(settings, routes)
+        value = {**request('redeem-exact-out'), 'amount': str(amount), 'slippageBps': bps}
+        if shape == 'direct':
+            value.update(orderedAssets=[WETH], targets=[{'inputAsset': WETH, 'outputAsset': WETH, 'amount': str(amount)}], adapter='')
+        elif shape == 'mixed':
+            value.update(orderedAssets=[WETH, ASSET_A], targets=[{'inputAsset': WETH, 'outputAsset': WETH, 'amount': str(amount-1)},
+                {'inputAsset': ASSET_A, 'outputAsset': WETH, 'amount': '1'}])
+        else:
+            value['targets'] = [{'inputAsset': asset, 'outputAsset': WETH, 'amount': str(amount//2)} for asset in (ASSET_A, ASSET_B)]
+        frames = []
+        async def publish(frame):
+            frames.append(frame)
+            if frame['type'] == 'qualified':
+                ready.set()
+        return intent, provider, wire, value, frames, publish, raw_started
+
+    async def test_first_protected_burn_is_adjusted_but_raw_metadata_keeps_the_original_seed(self):
+        intent, provider, _, value, _, publish, _ = self.fixture()
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[0], 102)
+        self.assertEqual(result['executionAmount'], '102')
+        self.assertEqual(result['displayAmount'], '102')
+        self.assertEqual(result['expectedInputAmount'], '100')
+        self.assertEqual(result['preview']['minimumAmountOut'], '200')
+
+    async def test_direct_output_and_recovery_shares_do_not_pad_a_valid_supply_limited_seed(self):
+        intent, provider, wire, value, _, publish, _ = self.fixture(shape='direct', amount=100, supply=100)
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns, [100])
+        self.assertEqual(result['executionAmount'], '100')
+        self.assertEqual(result['expectedInputAmount'], '100')
+        self.assertEqual(result['quotes'], [])
+        self.assertEqual(wire.batches, [])
+
+    async def test_mixed_supply_rejection_restores_original_gross_in_every_returned_field(self):
+        intent, provider, _, value, frames, publish, _ = self.fixture(shape='mixed', amount=100, supply=100)
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[:2], [102, 100])
+        self.assertEqual(result['executionAmount'], '100')
+        self.assertEqual(result['displayAmount'], '100')
+        self.assertEqual(result['expectedInputAmount'], '100')
+        self.assertEqual(result['preview']['minimumAmountOut'], '100')
+        self.assertTrue(all(frame['value']['executionAmount'] == '100' for frame in frames if frame['type'] == 'qualified'))
+
+    async def test_tiny_routed_plateau_uses_specific_supply_fallback_and_keeps_raw_inversion(self):
+        intent, provider, _, value, _, publish, _ = self.fixture(amount=2, supply=2)
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[:2], [3, 2])
+        self.assertEqual(result['executionAmount'], '2')
+        self.assertEqual(result['expectedInputAmount'], '1')
+        self.assertEqual(result['preview']['minimumAmountOut'], '2')
+
+    async def test_zero_custom_and_full_tolerance_preserve_existing_domain_and_bounds(self):
+        for bps, first in ((0, 100), (37, 101), (100, 102), (500, 106), (10_000, 100)):
+            with self.subTest(bps=bps):
+                intent, provider, _, value, frames, publish, _ = self.fixture(bps=bps)
+                if bps == 10_000:
+                    with self.assertRaises(InvalidPreview):
+                        await intent.get(value, publish)
+                    self.assertEqual(len(provider.burns), 11)
+                    self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
+                else:
+                    result = await intent.get(value, publish)
+                    minimum = int(result['preview']['minimumAmountOut'])
+                    self.assertLessEqual(200, minimum)
+                    self.assertLessEqual(minimum, ceil(200, bps))
+                    self.assertEqual(result['expectedInputAmount'], '100')
+                self.assertEqual(provider.burns[0], first)
+
+    async def test_protocol_and_helper_fees_remain_in_the_burn_and_advisory_metadata(self):
+        intent, provider, _, value, _, publish, _ = self.fixture(fees=(5, 7))
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[0], 114)
+        self.assertEqual(result['executionAmount'], '114')
+        self.assertEqual(result['expectedInputAmount'], '112')
+        self.assertEqual(result['preview']['fees'], {'protocolFeeCygld': '5', 'helperFeeCygld': '7'})
+        self.assertEqual(result['preview']['minimumAmountOut'], '200')
+
+    async def test_accepted_mainnet_hint_is_not_padded_again(self):
+        from cybergold_candidate.quote_cache import VerifiedGrossSeed
+        intent, provider, _, value, _, publish, _ = self.fixture()
+        provider.chain_id = 1
+        intent.routes.rpc.chain_id = 1
+        seeds = VerifiedGrossSeed()
+        seeds.rows[seeds.key(value, {'chainId': 1, 'blockHash': HASH})] = (time.monotonic(), 101)
+        intent.seeds = seeds
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[0], 101)
+        self.assertEqual(result['executionAmount'], '102')
+        self.assertEqual(result['expectedInputAmount'], '101')
+
+    async def test_reciprocal_uint_overflow_keeps_the_original_abi_encodable_seed(self):
+        maximum = 2**256-1
+        intent, provider, wire, value, _, publish, _ = self.fixture(amount=2, seed_override=maximum)
+        async def identity(_path, amount):
+            return amount
+        wire.on_quote = identity
+        result = await intent.get(value, publish)
+        self.assertEqual(provider.burns[0], maximum)
+        self.assertEqual(result['executionAmount'], '2')
+        self.assertEqual(result['expectedInputAmount'], '2')
+        self.assertEqual(result['preview']['minimumAmountOut'], '2')
+
+    async def test_unknown_first_basket_error_and_later_helpers_supply_error_are_not_fallbacks(self):
+        from cybergold_candidate.preview_errors import KnownPreviewError
+        for options, error_type in (({'basket_fault': 'rpc'}, QuoteFailure),
+                ({'basket_fault': 'timeout'}, TimeoutError), ({'raw_fault': 'later-supply'}, KnownPreviewError)):
+            with self.subTest(options=options):
+                intent, provider, _, value, _, publish, _ = self.fixture(**options)
+                with self.assertRaises(error_type):
+                    await intent.get(value, publish)
+                self.assertEqual(provider.burns, [102])
+
+    async def test_late_advisory_rpc_failure_preserves_checked_execution_with_optional_metadata_absent(self):
+        intent, _, _, value, frames, publish, _ = self.fixture(raw_fault='rpc')
+        result = await intent.get(value, publish)
+        self.assertNotIn('expectedInputAmount', result)
+        self.assertEqual(result['executionAmount'], '102')
+        self.assertEqual(result['preview']['minimumAmountOut'], '200')
+        self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
+
+    async def test_late_advisory_reorg_and_caller_cancellation_never_return_a_checked_stale_tuple(self):
+        intent, _, _, value, _, publish, _ = self.fixture(raw_fault='reorg')
+        with self.assertRaises(SnapshotChanged):
+            await intent.get(value, publish)
+        intent, _, _, value, frames, publish, started = self.fixture(raw_fault='hold')
+        task = asyncio.create_task(intent.get(value, publish))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_first_padded_basket_cancellation_does_not_retry_the_original_seed(self):
+        intent, provider, _, value, _, publish, started = self.fixture(basket_fault='hold')
+        task = asyncio.create_task(intent.get(value, publish))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertEqual(provider.burns, [102])
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+if __name__ == '__main__':
+    unittest.main()
