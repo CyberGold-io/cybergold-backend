@@ -477,14 +477,29 @@ class MarketQuotes:
     async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate=None, canonical=None):
         canonical = canonical if canonical is not None else {}
         snapshots = {}
+        pools = {}
         for branch in branches:
             for hop in branch['hops']:
                 pool = hop['pool']
-                if pool['id'] not in snapshots:
-                    if pool['id'] not in canonical:
-                        canonical[pool['id']] = await self.registry.snapshot(pool, block)
-                    snapshots[pool['id']] = deepcopy(candidate.get(pool['id'], canonical[pool['id']])
-                        if candidate is not None else canonical[pool['id']])
+                pools.setdefault(pool['id'], pool)
+        missing = {identity: pool for identity, pool in pools.items() if identity not in canonical}
+        reads = {identity: asyncio.create_task(self.registry.snapshot(pool, block))
+                 for identity, pool in missing.items()} if len(missing) > 1 else {}
+        try:
+            # Start only this candidate's required observations. Consume in
+            # route order, preserving canonical insertion and read-error priority.
+            for identity, pool in pools.items():
+                if identity not in canonical:
+                    canonical[identity] = await reads[identity] if reads else await self.registry.snapshot(pool, block)
+                snapshots[identity] = deepcopy(candidate.get(identity, canonical[identity])
+                    if candidate is not None else canonical[identity])
+        finally:
+            # These subscriptions are owned here; SharedReads preserves other
+            # subscribers and cancels a producer only when nobody still needs it.
+            for task in reads.values():
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*reads.values(), return_exceptions=True)
         payload = {'operation': 'simulateRoute', 'mode': mode, 'amount': str(amount),
             'pools': list(snapshots.values()), 'route': {'branches': [
                 {'amountIn': branch['amountIn'], 'hops': [{'poolId': hop['pool']['id'],
