@@ -408,11 +408,17 @@ class QuoteIntent:
                         same_order(provisional['orderedCoreAssets'], request['orderedAssets'])
                         net = int(provisional['netCygldOut'])
                         selected = []
-                        for target, row in zip(targets, rows, strict=True):
+                        for index, (target, row) in enumerate(zip(targets, rows, strict=True)):
                             if row['best'].get('routePlan'):
-                                # The optional V3 reverse-path probe cannot turn
-                                # mixed exact-input sourcing into exact-output.
-                                return None
+                                # Fresh revalidation resolves the same selected
+                                # pools, checks exact-output support and rebuilds
+                                # calldata after quantities/bounds are known.
+                                leg = deepcopy(value['quotes'][index])
+                                leg['routePlan']['mode'] = 'exactOut'
+                                for branch in leg['routePlan']['branches']:
+                                    branch['amountIn'] = '0'
+                                selected.append(leg)
+                                continue
                             raw = bytes.fromhex(row['best']['path'][2:])
                             tokens = [raw[:20]] + [raw[offset+3:offset+23] for offset in range(20,len(raw),23)]
                             fees = [raw[offset:offset+3] for offset in range(20,len(raw),23)]

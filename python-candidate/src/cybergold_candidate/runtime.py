@@ -117,7 +117,7 @@ def create_configured_app(settings=None, database=None, client=None):
                                 request_resolver=configuration.resolve_request)
     routes.multi_protocol = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
-        correction=delayed_local_step, retain_plans=True)
+        correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
 
     async def close_runtime():
