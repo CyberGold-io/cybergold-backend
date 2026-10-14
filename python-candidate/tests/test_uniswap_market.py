@@ -1,5 +1,6 @@
 """Real SDK bridge, fee boundary, custody payload and cache/event regressions."""
 import asyncio
+from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
@@ -1175,6 +1176,220 @@ for line in sys.stdin:
         self.assertEqual(states[C]['reserve0'], '100000')
         self.assertEqual(states[C]['reserve1'], '200000')
         self.assertGreaterEqual(int(composed[1]['best']['routePlan']['outputAmount']), 1000)
+
+
+def acquisition_address(value):
+    return '0x' + f'{value:040x}'
+
+
+ACQUISITION_BLOCK = {'number': 123, 'hash': '0x' + 'ab' * 32}
+ACQUISITION_POOLS = [{'id': acquisition_address(i + 100), 'address': acquisition_address(i + 100), 'protocol': 'v2', 'feePips': 3000,
+          'token0': {'address': acquisition_address(i), 'chainId': 31338, 'decimals': 18},
+          'token1': {'address': acquisition_address(i + 1), 'chainId': 31338, 'decimals': 18}}
+         for i in (1, 2)]
+ACQUISITION_BRANCHES = [{'amountIn': '1000', 'hops': [{'pool': pool, 'zeroForOne': True} for pool in ACQUISITION_POOLS]}]
+
+
+class AcquisitionRpc:
+    chain_id = 31338
+    w3 = Web3()
+
+    def __init__(self):
+        self.started = {pool['id']: asyncio.Event() for pool in ACQUISITION_POOLS}
+        self.release = {pool['id']: asyncio.Event() for pool in ACQUISITION_POOLS}
+        self.errors = {}
+        self.calls = Counter()
+        self.cancelled = set()
+        self.reserves = (100_000, 200_000, 0)
+
+    async def read_function(self, identity, signature, inputs, args, outputs, block):
+        assert signature == 'getReserves()' and block == ACQUISITION_BLOCK
+        self.calls[identity] += 1
+        self.started[identity].set()
+        try:
+            await self.release[identity].wait()
+            if identity in self.errors:
+                raise self.errors[identity]
+            return self.reserves
+        except asyncio.CancelledError:
+            self.cancelled.add(identity)
+            raise
+
+    async def close(self):
+        pass
+
+
+class AcquisitionSdk:
+    def __init__(self):
+        self.payloads = []
+
+    async def request(self, payload):
+        self.payloads.append(deepcopy(payload))
+        return {'amountIn': '1000', 'amountOut': '1900', 'settled': True, 'fullyFilled': True,
+                'postState': [{'id': row['id'], 'reserve0': '101000'} for row in payload['pools']]}
+
+    async def close(self):
+        pass
+
+
+class CandidateAcquisition(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=acquisition_address(1))
+        self.rpc, self.sdk = AcquisitionRpc(), AcquisitionSdk()
+        self.registry = PoolRegistry(settings, rpc=self.rpc)
+        self.quotes = MarketQuotes(settings, self.registry, sdk=self.sdk)
+
+    async def asyncTearDown(self):
+        for event in self.rpc.release.values():
+            event.set()
+        await self.quotes.close()
+        await self.registry.close()
+
+    async def started(self):
+        try:
+            await asyncio.wait_for(asyncio.gather(*(event.wait() for event in self.rpc.started.values())), 1)
+        except TimeoutError:
+            self.fail('All required candidate snapshots must start before either is released')
+
+    async def test_starts_distinct_snapshots_and_keeps_first_occurrence_payload_order(self):
+        # The repeated pool belongs to the same candidate, not another getter.
+        branches = deepcopy(ACQUISITION_BRANCHES)
+        branches.append({'amountIn': '0', 'hops': [deepcopy(branches[0]['hops'][0])]})
+        canonical = {}
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(branches, 'exactIn', 1000, ACQUISITION_BLOCK, canonical=canonical))
+        try:
+            await self.started()
+            self.assertFalse(task.done())
+            for event in self.rpc.release.values():
+                event.set()
+            await task
+            self.assertEqual(list(canonical), [pool['id'] for pool in ACQUISITION_POOLS])
+            self.assertEqual([row['id'] for row in self.sdk.payloads[0]['pools']], list(canonical))
+            self.assertEqual(self.rpc.calls, Counter({pool['id']: 1 for pool in ACQUISITION_POOLS}))
+            self.assertEqual(self.sdk.payloads[0]['route']['branches'][0]['hops'],
+                             [{'poolId': pool['id'], 'zeroForOne': True} for pool in ACQUISITION_POOLS])
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_first_read_failure_drains_blocked_sibling_and_preserves_exception(self):
+        error = ValueError('first fixture read')
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = error
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        with self.assertRaises(ValueError) as caught:
+            await task
+        self.assertIs(caught.exception, error)
+        self.assertEqual(self.rpc.cancelled, {ACQUISITION_POOLS[1]['id']})
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_error_priority_is_route_order_even_when_later_read_fails_first(self):
+        first = ValueError('first fixture read')
+        self.rpc.errors = {ACQUISITION_POOLS[0]['id']: first, ACQUISITION_POOLS[1]['id']: RuntimeError('second fixture read')}
+        self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.assertFalse(task.done())
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        with self.assertRaises(ValueError) as caught:
+            await task
+        self.assertIs(caught.exception, first)
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_failure_does_not_cancel_other_snapshot_subscriber(self):
+        shared = asyncio.create_task(self.registry.snapshot(ACQUISITION_POOLS[1], ACQUISITION_BLOCK))
+        await self.rpc.started[ACQUISITION_POOLS[1]['id']].wait()
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = ValueError('first fixture read')
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        try:
+            await self.started()
+            key = ('v2', ACQUISITION_POOLS[1]['id'], ACQUISITION_BLOCK['hash'])
+            # Awaiting the first start also gives the sibling task its normal
+            # subscription turn; inspect the actual shared primitive's users.
+            self.assertEqual(self.registry.pending.pending[key].users, 2)
+            self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+            with self.assertRaises(ValueError):
+                await task
+            self.assertFalse(shared.done())
+            self.assertNotIn(ACQUISITION_POOLS[1]['id'], self.rpc.cancelled)
+            self.assertEqual(self.registry.pending.pending[key].users, 1)
+            self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+            self.assertEqual((await shared)['reserve0'], '100000')
+            self.assertEqual(self.rpc.calls[ACQUISITION_POOLS[1]['id']], 1)
+        finally:
+            shared.cancel()
+            task.cancel()
+            await asyncio.gather(shared, task, return_exceptions=True)
+
+    async def test_caller_cancellation_drains_last_subscriptions_without_sdk(self):
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(self.rpc.cancelled, {pool['id'] for pool in ACQUISITION_POOLS})
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_existing_canonical_entry_and_candidate_post_state_stay_private(self):
+        existing = {**deepcopy(ACQUISITION_POOLS[0]), 'reserve0': '50000', 'reserve1': '200000'}
+        canonical = {ACQUISITION_POOLS[0]['id']: existing}
+        candidate = {ACQUISITION_POOLS[0]['id']: {**deepcopy(existing), 'reserve0': '51000'}}
+        self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK,
+                                             candidate=candidate, canonical=canonical)
+        self.assertEqual(self.rpc.calls, Counter({ACQUISITION_POOLS[1]['id']: 1}))
+        self.assertIs(canonical[ACQUISITION_POOLS[0]['id']], existing)
+        self.assertEqual(self.sdk.payloads[0]['pools'][0]['reserve0'], '51000')
+        self.assertEqual(existing['reserve0'], '50000')
+        self.assertEqual(candidate[ACQUISITION_POOLS[0]['id']]['reserve0'], '101000')
+        self.sdk.payloads[0]['pools'][0]['reserve0'] = '0'
+        self.assertEqual(existing['reserve0'], '50000')
+
+    async def test_next_sandbox_operation_rereads_mutation_at_same_header(self):
+        for event in self.rpc.release.values():
+            event.set()
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.rpc.reserves = (200_000, 300_000, 0)
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.assertEqual([row['reserve0'] for row in self.sdk.payloads[1]['pools']], ['200000', '200000'])
+        self.assertEqual(self.rpc.calls, Counter({pool['id']: 2 for pool in ACQUISITION_POOLS}))
+        self.assertEqual(self.registry.observed, {})
+        self.assertEqual(self.registry.pending.completed, {})
+
+    async def test_single_snapshot_keeps_original_caller_await(self):
+        # A single read gains no concurrency. Keeping it on the caller retains
+        # the existing observation scheduling used by Mainnet model acquisition.
+        owner, readers = asyncio.current_task(), []
+        original = self.registry.snapshot
+        async def snapshot(*arguments):
+            readers.append(asyncio.current_task())
+            return await original(*arguments)
+        self.registry.snapshot = snapshot
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        branches = [{'amountIn': '1000', 'hops': [deepcopy(ACQUISITION_BRANCHES[0]['hops'][0])]}]
+        await self.quotes.quote_sdk_branches(branches, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.assertEqual(readers, [owner])
+        self.assertEqual(self.rpc.calls, Counter({ACQUISITION_POOLS[0]['id']: 1}))
+
+    async def test_failure_retains_existing_quote_fallback(self):
+        error = ValueError('first fixture read')
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = error
+        fallback = []
+        async def original_fallback(*arguments):
+            fallback.append(arguments)
+            return {'amountIn': '1000', 'amountOut': '1800', 'qualification': 'quoter'}
+        self.quotes.quote_fallback_branches = original_fallback
+        task = asyncio.create_task(self.quotes.quote_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        self.assertEqual((await task)['qualification'], 'quoter')
+        self.assertEqual(fallback, [(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)])
+        self.assertEqual(self.rpc.cancelled, {ACQUISITION_POOLS[1]['id']})
+        self.assertEqual(self.sdk.payloads, [])
 
 
 if __name__ == '__main__':
