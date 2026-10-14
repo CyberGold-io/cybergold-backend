@@ -325,6 +325,23 @@ real HTTP/private transport, outage recovery, deadlines and disconnects.
 
 ## Token/native previews and Uniswap quotes — 2026-10-01
 
+The configured Sandbox runtime (chain `31338`) enables the existing single
+early probe for issue exact-in. Forced Core and automatic trade quotes share
+the same Core engine. A supported selected typed route can become a usable
+incumbent before exhaustive initial discovery finishes, after fresh exact-output
+repricing, ordered shared-pool composition, the full protected Helpers preview,
+capacity checks and canonicality. Estimates alone remain indicative. Full search
+continues and may refine that incumbent; its existing deadline, route coverage,
+input budget and execution tolerance are unchanged. An ordinary search-tail
+failure can retain that checked tuple; reorgs and caller cancellation retire it.
+
+The early probe adds RPC and SDK work and can consume its one attempt on an
+unsupported or unfillable first route. It does not guarantee the exhaustive best
+route or fix every quote timeout. Mainnet keeps the probe disabled, and
+redeem exact-out and the other quote modes keep their existing search behavior.
+Sandbox transaction and frontend amount acceptance are recorded separately in
+the Ops regression workplan.
+
 The subsequent [unified trade coordinator](../docs/unified-trading.md) owns
 Core basket seed construction and compares complete qualified Core/market
 candidates for one App intent. It retains the family APIs described below;
