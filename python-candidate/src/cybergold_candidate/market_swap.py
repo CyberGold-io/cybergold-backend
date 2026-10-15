@@ -601,10 +601,10 @@ class MarketQuotes:
         """Core reserve legs share protocol providers, without market fees."""
         await self.registry.ensure_loaded()
         mode = 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
-        for target in request['targets']:
-            await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
-        pools = [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
-            pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)]
+        def inventory():
+            return [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
+                pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)]
+        pools = inventory()
         results = [{'target': target, 'best': None, 'attempted': 0, 'succeeded': 0, 'failures': [], 'total': 0}
             for target in request['targets']]
 
@@ -631,47 +631,110 @@ class MarketQuotes:
             finally:
                 result['attempted'] += 1
 
-        async def branches_for(target):
-            async for branches in candidate_branches(pools, target['inputAsset'], target['outputAsset'], mode, int(target['amount'])):
+        seen = [{} for _ in results]
+        scheduled = [0 for _ in results]
+        async def branches_for(index, selected, *, cached=False, same=False):
+            target = results[index]['target']
+            skip = scheduled[index] if same else 0
+            pool_keys = {}
+            def identity(branches):
+                result = []
+                for branch in branches:
+                    hops = []
+                    for hop in branch['hops']:
+                        pool = hop['pool']
+                        key = (pool['protocol'], pool['id'])
+                        if key not in pool_keys:
+                            pool_keys[key] = json.dumps(pool, sort_keys=True)
+                        hops.append((pool_keys[key], hop['zeroForOne']))
+                    result.append((branch['amountIn'], tuple(hops)))
+                return tuple(result)
+            async for branches in candidate_branches(selected, target['inputAsset'], target['outputAsset'], mode, int(target['amount'])):
                 # The existing V3 search covers its original homogeneous paths.
                 if len(branches) == 1 and all(hop['pool']['protocol'] == 'v3' for hop in branches[0]['hops']):
                     continue
+                if skip:
+                    skip -= 1
+                    continue
+                if cached:
+                    key = identity(branches)
+                    seen[index][key] = seen[index].get(key, 0) + 1
+                    scheduled[index] += 1
+                elif not same and seen[index]:
+                    key = identity(branches)
+                    remaining = seen[index].get(key, 0)
+                    if remaining:
+                        # Match scans, preserving duplicate rounded allocations.
+                        if remaining == 1:
+                            del seen[index][key]
+                        else:
+                            seen[index][key] = remaining - 1
+                        continue
                 yield branches
 
-        generators = [(result, branches_for(result['target'])) for result in results]
-        pending, active = list(generators), set()
-        async def completed():
-            nonlocal active
-            done, active = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
-            await asyncio.gather(*done)
-            if on_update:
+        async def discover():
+            for target in request['targets']:
+                await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
+
+        active = set()
+        discovery = asyncio.create_task(discover())
+        async def completed(*, during_discovery=False):
+            waiters = active | ({discovery} if during_discovery else set())
+            done, _ = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+            finished = done & active
+            active.difference_update(finished)
+            await asyncio.gather(*finished)
+            if on_update and finished:
                 await on_update(deepcopy(results))
-        try:
+
+        async def scan(selected, *, during_discovery=False, same=False):
+            generators = [(result, branches_for(index, selected, cached=during_discovery, same=same))
+                          for index, result in enumerate(results)]
+            pending = list(generators)
             # One candidate per leg per turn, with the existing global budget.
             # A slow connector tail must not hide another leg's cheap route.
-            while pending:
-                for entry in list(pending):
-                    result, generator = entry
-                    try:
-                        branches = await anext(generator)
-                    except StopAsyncIteration:
-                        pending.remove(entry)
-                        continue
-                    result['total'] += 1
-                    route_count('typedEnumerated')
-                    active.add(asyncio.create_task(evaluate(result, branches)))
-                    if len(active) >= 8:
-                        await completed()
+            try:
+                while pending:
+                    if during_discovery and discovery.done():
+                        return False
+                    for entry in list(pending):
+                        if during_discovery and discovery.done():
+                            return False
+                        result, generator = entry
+                        try:
+                            branches = await anext(generator)
+                        except StopAsyncIteration:
+                            pending.remove(entry)
+                            continue
+                        while len(active) >= 8:
+                            await completed()
+                        result['total'] += 1
+                        route_count('typedEnumerated')
+                        active.add(asyncio.create_task(evaluate(result, branches)))
+                return True
+            finally:
+                await asyncio.gather(*(generator.aclose() for _, generator in generators))
+
+        try:
+            exhausted = await scan(pools, during_discovery=True)
+            while active and not discovery.done():
+                await completed(during_discovery=True)
+            await discovery
+            expanded = inventory()
+            # Unchanged exhausted inventory needs no second graph traversal.
+            # Expanded coverage never executes an already scheduled candidate.
+            if not exhausted or expanded != pools:
+                await scan(expanded, same=expanded == pools)
             while active:
                 await completed()
         except BaseException as error:
             freeze_quote_work(error)
             raise
         finally:
+            discovery.cancel()
             for task in active:
                 task.cancel()
-            await asyncio.gather(*active, return_exceptions=True)
-            await asyncio.gather(*(generator.aclose() for _, generator in generators))
+            await asyncio.gather(discovery, *active, return_exceptions=True)
         return results
 
     def make_quote(self, request, branches, raw, rate, block, *, retained=None):
