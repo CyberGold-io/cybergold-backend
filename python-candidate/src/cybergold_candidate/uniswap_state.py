@@ -364,8 +364,20 @@ class PoolRegistry:
         return state
 
     async def extend_ticks(self, snapshot, requests, block):
-        rpc = self.get_rpc()
+        snapshot, requests = deepcopy(snapshot), deepcopy(requests)
         generation = self.generation
+        # Share only an identical fill that is still acquiring its coverage.
+        # Completed Sandbox observations remain fresh on the next call, even
+        # at the same header; each caller owns the returned mutable snapshot.
+        key = ('tick-fill', generation, block['hash'],
+               json.dumps(snapshot, sort_keys=True), json.dumps(requests, sort_keys=True))
+        async def produce():
+            return await self._extend_ticks(snapshot, requests, block, generation)
+        result = deepcopy(await self.pending.one(key, produce))
+        return result
+
+    async def _extend_ticks(self, snapshot, requests, block, generation):
+        rpc = self.get_rpc()
         pool = snapshot
         current = self.observed.get(pool['id'])
         covered = current if current and current['context']['blockHash'] == block['hash'] else snapshot
