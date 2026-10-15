@@ -602,8 +602,8 @@ class MarketQuotes:
         await self.registry.ensure_loaded()
         mode = 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
         def inventory():
-            return deepcopy([pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
-                pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)])
+            return [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
+                pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)]
         pools = inventory()
         results = [{'target': target, 'best': None, 'attempted': 0, 'succeeded': 0, 'failures': [], 'total': 0}
             for target in request['targets']]
@@ -631,17 +631,45 @@ class MarketQuotes:
             finally:
                 result['attempted'] += 1
 
-        seen = [set() for _ in results]
-        async def branches_for(index, selected):
+        seen = [{} for _ in results]
+        scheduled = [0 for _ in results]
+        async def branches_for(index, selected, *, cached=False, same=False):
             target = results[index]['target']
+            skip = scheduled[index] if same else 0
+            pool_keys = {}
+            def identity(branches):
+                result = []
+                for branch in branches:
+                    hops = []
+                    for hop in branch['hops']:
+                        pool = hop['pool']
+                        key = (pool['protocol'], pool['id'])
+                        if key not in pool_keys:
+                            pool_keys[key] = json.dumps(pool, sort_keys=True)
+                        hops.append((pool_keys[key], hop['zeroForOne']))
+                    result.append((branch['amountIn'], tuple(hops)))
+                return tuple(result)
             async for branches in candidate_branches(selected, target['inputAsset'], target['outputAsset'], mode, int(target['amount'])):
                 # The existing V3 search covers its original homogeneous paths.
                 if len(branches) == 1 and all(hop['pool']['protocol'] == 'v3' for hop in branches[0]['hops']):
                     continue
-                identity = json.dumps(branches, sort_keys=True)
-                if identity in seen[index]:
+                if skip:
+                    skip -= 1
                     continue
-                seen[index].add(identity)
+                if cached:
+                    key = identity(branches)
+                    seen[index][key] = seen[index].get(key, 0) + 1
+                    scheduled[index] += 1
+                elif not same and seen[index]:
+                    key = identity(branches)
+                    remaining = seen[index].get(key, 0)
+                    if remaining:
+                        # Match scans, preserving duplicate rounded allocations.
+                        if remaining == 1:
+                            del seen[index][key]
+                        else:
+                            seen[index][key] = remaining - 1
+                        continue
                 yield branches
 
         async def discover():
@@ -659,8 +687,9 @@ class MarketQuotes:
             if on_update and finished:
                 await on_update(deepcopy(results))
 
-        async def scan(selected, *, during_discovery=False):
-            generators = [(result, branches_for(index, selected)) for index, result in enumerate(results)]
+        async def scan(selected, *, during_discovery=False, same=False):
+            generators = [(result, branches_for(index, selected, cached=during_discovery, same=same))
+                          for index, result in enumerate(results)]
             pending = list(generators)
             # One candidate per leg per turn, with the existing global budget.
             # A slow connector tail must not hide another leg's cheap route.
@@ -695,7 +724,7 @@ class MarketQuotes:
             # Unchanged exhausted inventory needs no second graph traversal.
             # Expanded coverage never executes an already scheduled candidate.
             if not exhausted or expanded != pools:
-                await scan(expanded)
+                await scan(expanded, same=expanded == pools)
             while active:
                 await completed()
         except BaseException as error:

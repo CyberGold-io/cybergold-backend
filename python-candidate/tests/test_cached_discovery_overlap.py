@@ -323,7 +323,10 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
     async def test_exact_out_expansion_retains_ordinary_coverage_and_equal_incumbent(self):
         await self.complete_expansion('exact-out')
 
-    async def complete_expansion(self, input_mode):
+    async def test_expansion_preserves_rounded_split_duplicate_multiplicity(self):
+        await self.complete_expansion('exact-in', amount=2)
+
+    async def complete_expansion(self, input_mode, amount=1000):
         original = deepcopy(POOLS[0])
         added = {**original, 'id': '0x'+'8'*40, 'address': '0x'+'8'*40}
         self.registry.inventory = {original['id']: original}
@@ -343,12 +346,12 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
             frames.append(deepcopy(rows))
             if rows[0]['best']:
                 released.set()
-        value = {'mode': input_mode, 'targets': [{'inputAsset': ASSET_A, 'outputAsset': WETH, 'amount': '1000'}]}
+        value = {'mode': input_mode, 'targets': [{'inputAsset': ASSET_A, 'outputAsset': WETH, 'amount': str(amount)}]}
         final = await asyncio.wait_for(self.quotes.reserve_quotes(value, BLOCK, on_update=update), 5)
         expected = [json.dumps(branches, sort_keys=True) async for branches in candidate_branches(
-            [original, added], ASSET_A, WETH, 'exactIn' if input_mode == 'exact-in' else 'exactOut', 1000)]
+            [original, added], ASSET_A, WETH, 'exactIn' if input_mode == 'exact-in' else 'exactOut', amount)]
         self.assertCountEqual(observed, expected)
-        self.assertEqual(len(observed), len(set(observed)))
+        self.assertEqual(Counter(observed), Counter(expected))
         self.assertEqual(final[0]['attempted'], len(expected))
         first = next(frame[0]['best'] for frame in frames if frame[0]['best'])
         # Split improvement remains selectable; equal standalone quote must
