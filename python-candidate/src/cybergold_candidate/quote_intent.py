@@ -319,7 +319,7 @@ class QuoteIntent:
                 best['routePlan'] = plan
             return rows
 
-        async def search(targets, mode, stage, early=None, *, logical_phase=None):
+        async def search(targets, mode, stage, early=None, *, logical_phase=None, wait_early=False):
             quote_phase(logical_phase or ('initial-search' if stage == 'initial' else 'execution-search'))
             cache_key = (mode, json.dumps(targets, sort_keys=True))
             if cache_key in route_searches:
@@ -334,15 +334,22 @@ class QuoteIntent:
                 while pending_early is not None:
                     rows, pending_early = pending_early, None
                     try:
-                        # Prospective shared-state replay uses the same budget
-                        # as candidate quotes and cannot block search coverage.
+                        # Prospective replay shares candidate pricing slots
+                        # and the producer's existing selection budget.
                         async with engine.semaphore:
                             rows = await engine.compose_core_rows(rows,
                                 'exactIn' if mode == 'exact-in' else 'exactOut', block,
                                 ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
                         early(rows)
+                        if wait_early and qualifying is not None:
+                            await asyncio.shield(qualifying)
+                            if context_error is not None:
+                                raise context_error
                     except SnapshotChanged as error:
-                        await invalidate_context(error)
+                        if context_error is not error:
+                            await invalidate_context(error)
+                        if wait_early:
+                            raise
                         return
                     except Exception:
                         # Final selection retains its ordinary errors. A failed
@@ -357,7 +364,12 @@ class QuoteIntent:
                 if early and all(row['best'] for row in rows) and identity != previous:
                     previous = identity
                     pending_early = deepcopy(rows)
-                    if preparing is None or preparing.done():
+                    if wait_early:
+                        # Use the completed candidate's released slots for its
+                        # executable check before unrelated coverage refills them.
+                        with quote_background():
+                            await prepare_early()
+                    elif preparing is None or preparing.done():
                         async def background():
                             with quote_background():
                                 await prepare_early()
@@ -531,37 +543,12 @@ class QuoteIntent:
                     schedule(lambda: preview(token, selected), lambda result: expected_output(result, rows, selected['quotes']))
                 async def checked():
                     final = await preview(token, selected)
-                    minimum = int(final['minimumAmountOut'])
-                    if not early_display and not int(request['amount']) <= minimum <= ceil(int(request['amount']), slippage_bps):
-                        # Reuse the ordinary eleven forward evaluations while
-                        # unrelated route coverage continues. Each local slope
-                        # is a hint: new quantities are repriced, composed and
-                        # checked by the full Helpers preview before publishing.
-                        target = int(request['amount'])
-                        observed_gross, quotes = gross, selected['quotes']
-                        observations = [(observed_gross, minimum)]
-                        for _ in range(remaining_corrections):
-                            if minimum <= 0:
-                                break
-                            next_gross = observed_gross * target // minimum
-                            next_gross = next_gross if next_gross != observed_gross else observed_gross + (1 if minimum < target else -1)
-                            if self.correction:
-                                next_gross = self.correction(observations, target, next_gross)
-                            if next_gross <= 0:
-                                break
-                            revised = await redemption(next_gross, early_display=False, selected=quotes)
-                            observed_gross = int(revised['executionAmount'])
-                            minimum = int(revised['preview']['minimumAmountOut'])
-                            observations.append((observed_gross, minimum))
-                            if target <= minimum <= ceil(target, slippage_bps):
-                                return revised
-                            quotes = revised['quotes']
-                        raise InvalidPreview('Candidate is outside the minimum-output interval.')
-                    return {'quotes': selected['quotes'], 'preview': final, 'initialPreview': None, 'basketPreview': required,
+                    result = {'quotes': selected['quotes'], 'preview': final, 'initialPreview': None, 'basketPreview': required,
                             **({'expectedInputAmount': str(expected_input_gross)} if expected_input_gross is not None else {}),
                             'displayAmount': str(expected_output(final, rows, selected['quotes']) if early_display else gross),
                             'expectedOutputAmount': str(expected_output(final, rows, selected['quotes'])),
                             'executionAmount': str(gross), 'maximumInputAmount': '0'}
+                    return await refine_redemption(result, remaining_corrections) if not early_display else result
                 schedule_qualification(checked)
             if selected is None:
                 rows = await search(targets, 'exact-in', 'execution', early,
@@ -589,7 +576,10 @@ class QuoteIntent:
                         for task in tasks:
                             if not task.done():
                                 task.cancel()
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+                        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+                        if disproof is not None:
+                            raise disproof
                 else:
                     rows = [await reprice(target) for target in targets]
                 metrics['candidateCalls'] += len(targets)
@@ -605,6 +595,27 @@ class QuoteIntent:
                     'expectedOutputAmount': str(expected_output(final, rows, selected['quotes'])),
                     'displayAmount': str(expected_output(final, rows, selected['quotes']) if early_display else gross), 'executionAmount': str(gross),
                     'maximumInputAmount': '0'}
+
+        async def refine_redemption(result, remaining_corrections=10):
+            """Check the existing eleven-point protected inversion on one route."""
+            target = int(request['amount'])
+            observations = []
+            for iteration in range(remaining_corrections + 1):
+                gross = int(result['executionAmount'])
+                minimum = int(result['preview']['minimumAmountOut'])
+                observations.append((gross, minimum))
+                if target <= minimum <= ceil(target, slippage_bps):
+                    return result
+                if iteration == remaining_corrections or minimum <= 0:
+                    break
+                next_gross = gross * target // minimum
+                next_gross = next_gross if next_gross != gross else gross + (1 if minimum < target else -1)
+                if self.correction:
+                    next_gross = self.correction(observations, target, next_gross)
+                if next_gross <= 0:
+                    break
+                result = await redemption(next_gross, early_display=False, selected=result['quotes'])
+            raise InvalidPreview('Candidate is outside the minimum-output interval.')
 
         async def recovery_assets():
             metrics['rpcReads'] += 1
@@ -644,13 +655,41 @@ class QuoteIntent:
             async def seed(rows):
                 assets = await asyncio.shield(recovery)
                 return await preview(basket, {'mode': 'redeem-exact-out', 'minimumOutputs': minimums(rows, assets)})
+            def padded_seed(initial):
+                gross = int(initial['grossCygldIn'])
+                routed = any(row['kind'] == 0 and int(row['amount']) > 0
+                    and row['token'].lower() != request['quoteToken'].lower()
+                    for row in initial['projectedCoreOutputs'])
+                if routed and slippage_bps < 10_000:
+                    adjusted = (gross * 10_000 + (10_000 - slippage_bps) - 1) // (10_000 - slippage_bps)
+                    if adjusted < 2**256:
+                        return adjusted
+                return gross
             def early(rows):
                 schedule(lambda: seed(rows), lambda result: result['grossCygldIn'])
+                async def checked():
+                    initial = await seed(rows)
+                    original = int(initial['grossCygldIn'])
+                    selected = []
+                    for target, row in zip(targets, rows, strict=True):
+                        plan = deepcopy(row['best']['routePlan'])
+                        # Exact-output seed terms only locate a route. Actual
+                        # forward Core amounts and prices are acquired below.
+                        plan.update(mode='exactIn', inputAmount='0', outputAmount='0', limit='0')
+                        selected.append({'inputAsset': target['inputAsset'],
+                            'minimumAmountOut': '0', 'routePlan': plan})
+                    gross = padded_seed(initial)
+                    result = await redemption(gross, early_display=False, selected=selected,
+                        fallback_gross=original if gross != original else None)
+                    result = await refine_redemption(result)
+                    result['initialPreview'] = initial
+                    return result
+                schedule_qualification(checked)
             async def legacy_seed():
                 nonlocal recovery
                 if recovery is None:
                     recovery = asyncio.create_task(recovery_assets())
-                rows = await search(targets, 'exact-out', 'initial', early)
+                rows = await search(targets, 'exact-out', 'initial', early, wait_early=True)
                 quote_phase('initial-preview')
                 return await seed(rows)
             gross = self.seeds.suggest(request, context) if self.seeds else None
@@ -664,12 +703,8 @@ class QuoteIntent:
             # Padding is only a protected-search hint. Keep the original seed
             # for advisory inversion and the specific first-preview fallback.
             expected_input_seed = gross
-            routed = initial and any(row['kind'] == 0 and int(row['amount']) > 0
-                and row['token'].lower() != request['quoteToken'].lower() for row in initial['projectedCoreOutputs'])
-            if not hinted and routed and slippage_bps < 10_000:
-                adjusted = (gross * 10_000 + (10_000 - slippage_bps) - 1) // (10_000 - slippage_bps)
-                if adjusted < 2**256:
-                    gross = adjusted
+            if not hinted:
+                gross = padded_seed(initial)
             for iteration in range(11):
                 metrics['iterations'] = iteration
                 quote_phase('execution-search', iteration=iteration)

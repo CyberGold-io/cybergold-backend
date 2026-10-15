@@ -1248,7 +1248,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         routes.rpc.assert_canonical = canonical
         async def search(value, on_update, *, block):
             async def update(amount):
-                rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
+                rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
                     'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
                 await on_update({'results': rows})
             await update(25)
@@ -1274,7 +1274,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             raise SnapshotChanged('Pinned pool observation was disproved', retry=1)
         routes.engine.compose_core_rows = compose
         async def search(value, on_update, *, block):
-            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '25'},
+            rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '25'},
                 'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
                 for target in value['targets']]
             await on_update({'results': rows})
@@ -1331,7 +1331,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     preview_cancelled.set()
                     raise
         async def search(value, on_update, *, block):
-            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+            rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
                 'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
             await on_update({'results': rows})
             await preview_started.wait()
@@ -1374,14 +1374,17 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                             raise
 
                 async def search(value, on_update, *, block):
-                    rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+                    rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
                         'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
                         for target in value['targets']]
-                    await on_update({'results': rows})
-                    await replay_started.wait()
                     try:
                         async with asyncio.timeout(.01):
                             with rpc_call('eth_call', stage='route-search'):
+                                # Cold redemption now awaits protected work in
+                                # this callback; its existing route deadline
+                                # must include that pending replay too.
+                                await on_update({'results': rows})
+                                await replay_started.wait()
                                 await asyncio.Event().wait()
                     except TimeoutError as error:
                         primary.append(error_diagnostics(error))
@@ -1447,7 +1450,15 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_first_protected_search_wave_has_its_own_phase_and_iteration(self):
         intent, _provider, routes, _wire = service()
         self.addAsyncCleanup(routes.close)
-        original, calls = routes.get, []
+        original, quote, calls, early_forward = routes.get, routes.engine.quote_branches, [], []
+        async def unavailable(branches, mode, amount, block, **kwargs):
+            if mode == 'exactIn' and calls == ['exact-out']:
+                # A failed cold prospective point resumes ordinary coverage.
+                # This test then observes the first complete forward search.
+                early_forward.append(amount)
+                raise QuoteFailure('quote-no-route')
+            return await quote(branches, mode, amount, block, **kwargs)
+        routes.engine.quote_branches = unavailable
         async def blocked(*_args, **_kwargs):
             async with asyncio.timeout(.01):
                 with rpc_call('eth_call', stage='route-search'):
@@ -1463,6 +1474,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 await intent.get(request('redeem-exact-out'), lambda _event: asyncio.sleep(0))
             logical = public_quote_error(raised.exception)['quoteDiagnostics']
         self.assertEqual(calls, ['exact-out', 'exact-in'])
+        self.assertTrue(early_forward)
         self.assertEqual(logical['phase'], 'execution-search')
         self.assertEqual(logical['inversionIteration'], 0)
         self.assertFalse(logical['qualified'])

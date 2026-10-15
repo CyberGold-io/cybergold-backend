@@ -1,3 +1,4 @@
+from legacy_quote_wire_fixture import ReferenceRouteSearchRpc as RouteSearchRpc
 """Sharing preserves exact read identity, cancellation, errors and fork behavior."""
 import asyncio
 from types import SimpleNamespace
@@ -6,7 +7,7 @@ from unittest.mock import patch
 
 from cybergold_candidate.shared_reads import SharedReads
 from route_engine_fixture import install_fixture_engine
-from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH
+from cybergold_candidate.route_search import RouteSearch, WETH
 from test_route_search import Provider, Wire, service, target, ASSET_A, ASSET_B, ASSET_C, SETTINGS, HASH, candidates
 from cybergold_candidate.uniswap_state import UniswapRpc, PoolRegistry
 from cybergold_candidate.quote_errors import QuoteFailure

@@ -274,8 +274,8 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
     async def test_known_identity_is_helpers_and_canonical_qualified_during_discovery(self):
         await self.whole_intent(expect_early=os.environ.get('CYBERGOLD_OVERLAP_BASELINE') != '1')
 
-    async def test_exact_out_unseeded_waits_for_initial_discovery_before_protected_qualification(self):
-        await self.whole_intent(expect_early=False, mode='redeem-exact-out')
+    async def test_exact_out_unseeded_qualifies_protected_point_during_initial_discovery(self):
+        await self.whole_intent(expect_early=True, mode='redeem-exact-out')
 
     async def test_reorg_never_qualifies_and_cleans_up(self):
         await self.whole_intent(expect_early=False, reorg=True)

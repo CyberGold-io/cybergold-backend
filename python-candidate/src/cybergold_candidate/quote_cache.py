@@ -19,56 +19,6 @@ from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
 from .quote_budget import budget_entry, current_budget
 
 
-class SharingQuoterRpc(RouteSearchRpc):
-    """Coalesce identical Quoter calldata; optionally retain successful Mainnet math."""
-    def __init__(self, *args, completed=False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.quotes = SharedReads()
-        self.retain_completed = completed
-        self.completed_quotes = OrderedDict()
-        self.counts = dict(requested=0, issued=0, coalesced=0, reused=0)
-
-    async def quote_batch(self, mode, data, block):
-        return await self.quote_batch_counted(mode, data, block, {})
-
-    async def quote_batch_counted(self, mode, data, block, caller_counts):
-        keys = [(self.chain_id, block['hash'].lower(), self.quoter.lower(), mode, value.lower()) for value in data]
-        by_key = dict(zip(keys, data, strict=True))
-        hits = {}
-        if self.retain_completed and self.chain_id == 1:
-            for key in keys:
-                row = self.completed_quotes.get(key)
-                if row and time.monotonic()-row[0] < 10:
-                    hits[key] = deepcopy(row[1])
-                    self.completed_quotes.move_to_end(key)
-                else:
-                    self.completed_quotes.pop(key,None)
-        async def produce(missing):
-            result = await super(SharingQuoterRpc, self).quote_batch(mode, [by_key[key] for key in missing], block)
-            if self.retain_completed and self.chain_id == 1:
-                for key,value in zip(missing,result,strict=True):
-                    if value['status'] == 'success':
-                        self.completed_quotes[key] = (time.monotonic(),deepcopy(value))
-                        self.completed_quotes.move_to_end(key)
-                        while len(self.completed_quotes)>4096:
-                            self.completed_quotes.popitem(last=False)
-            return result
-        missing = [key for key in keys if key not in hits]
-        values, counts = await self.quotes.many(missing, produce)
-        counts['requested'] += len(keys)-len(missing)
-        counts['reused'] += len(keys)-len(missing)
-        resolved = dict(zip(missing,values,strict=True))
-        for key, value in counts.items():
-            self.counts[key] += value
-            caller_counts[key] = caller_counts.get(key, 0) + value
-        return [hits[key] if key in hits else resolved[key] for key in keys]
-
-    async def close(self):
-        await self.quotes.close()
-        self.completed_quotes.clear()
-        await super().close()
-
-
 class BasketMath:
     """N8: bounded ten-second decoded-success cache of deadline-free Basket math.
 

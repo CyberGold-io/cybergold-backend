@@ -516,19 +516,23 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated['params']['bound'], quote['params']['bound'])
         self.assertEqual(repeated['params']['deadline'], '10000000000')
 
-    async def test_retained_quote_rechecks_native_reference_and_keeps_frozen_fee_and_limits(self):
+    async def test_retained_quote_reprices_with_sdk_and_keeps_frozen_fee_and_limits(self):
         quote = await self.quotes.get(self.request)
-        verified = []
-        async def reference(branches, mode, amount, block):
-            verified.append(amount)
-            return {'amountIn': '1000', 'amountOut': str(int(quote['netOutput'])-1), 'qualification': 'quoter'}
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
         self.quotes.quote_fallback_branches = reference
+        sdk = self.sdk.request
+        calls = []
+        async def priced(payload):
+            calls.append(deepcopy(payload))
+            return await sdk(payload)
+        self.sdk.request = priced
         repeated = await self.quotes.get({**self.request, 'retainedPlan': quote['plan'], 'deadline': '10000000000'})
-        self.assertEqual(verified, [1000])
-        self.assertEqual(repeated['qualification'], 'sdk-and-quoter')
+        reference.assert_not_awaited()
+        self.assertEqual([row['operation'] for row in calls], ['simulateRoute'])
+        self.assertEqual(repeated['qualification'], 'sdk')
         self.assertEqual(repeated['fee'], quote['fee'])
         self.assertEqual(repeated['params']['bound'], quote['params']['bound'])
-        self.assertEqual(repeated['netOutput'], str(int(quote['netOutput'])-1))
+        self.assertEqual(repeated['netOutput'], quote['netOutput'])
 
     async def test_retained_pool_metadata_uses_canonical_inventory_and_wrong_direction_researches(self):
         quote = await self.quotes.get(self.request)
@@ -674,78 +678,86 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['fullyFilled'])
         self.assertEqual(result['postState']['liquidity'], '1500000')
 
-    async def test_selected_quoter_disagreement_reprices_and_reranks_candidates(self):
-        other = {**POOL, 'id': '0x'+'4'.rjust(40, '0'), 'protocol': 'v4', 'feePips': 100,
-            'tickSpacing': 1, 'hooks': ZERO}
+    async def test_sdk_economics_rank_candidates_without_contract_repricing(self):
+        other = {**POOL, 'id': '0x'+'4'.rjust(40, '0'), 'address': '0x'+'4'.rjust(40, '0'),
+            'protocol': 'v3', 'feePips': 100, 'tickSpacing': 1}
         self.registry.inventory[other['id']] = other
-        checks = []
-        async def sdk(branches, _mode, amount, _block):
-            if len(branches) != 1:
-                raise SdkWorkerError('Fixture exercises standalone candidate ranking')
-            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
-                raise SdkWorkerError('Fixture liquidity is V2/V4 only')
-            is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
-            return {'amountIn': str(amount), 'amountOut': '2000' if is_v4 else '1500', 'qualification': 'sdk'}
-        async def quoter(branches, _mode, amount, _block):
-            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
-                raise SdkWorkerError('Fixture liquidity is V2/V4 only')
-            is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
-            checks.append(is_v4)
-            return {'amountIn': str(amount), 'amountOut': '1000' if is_v4 else '1490', 'qualification': 'quoter'}
-        self.quotes.quote_branches, self.quotes.quote_fallback_branches = sdk, quoter
-        result = await self.quotes.get(self.request)
-        self.assertEqual(result['qualification'], 'sdk-and-quoter')
-        self.assertEqual(result['netOutput'], '1490')
-        self.assertEqual(result['plan']['route']['branches'][0]['hops'][0]['pool']['protocol'], 'v2')
-        self.assertCountEqual(checks, [True, False])
-
-    async def test_pinned_v4_quoter_success_proves_specified_output_at_quote_block(self):
-        pool = {**POOL, 'protocol': 'v4', 'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO}
-        async def sdk(*_args, **_kwargs):
-            raise SdkWorkerError('Uncovered range')
-        async def read(*_args):
-            return (500, 21000)
-        self.quotes.quote_sdk_branches, self.rpc.read_function = sdk, read
-        branches = [{'amountIn': '0', 'hops': [{'pool': pool, 'zeroForOne': False}]}]
-        raw = await self.quotes.quote_hop(branches[0]['hops'][0], 'exactOut', 1004, BLOCK)
-        self.assertTrue(raw['fullyFilled'])
-        request = {**self.request, 'side': 'buy', 'mode': 'exact-out'}
-        quote = self.quotes.make_quote(request, branches, raw, 1000, BLOCK)
-        self.assertNotIn('outputFillUnverified', quote)
-        self.assertEqual(quote['qualification'], 'quoter')
-
-    async def test_native_exact_output_reference_keeps_sdk_proven_forward_overdelivery(self):
-        request = {**self.request, 'amount': '1000', 'side': 'buy', 'mode': 'exact-out'}
-        branches = [{'amountIn': '0', 'hops': [{'pool': POOL, 'zeroForOne': False}]}]
-        raw = {'amountIn': '505', 'amountOut': '1003', 'qualification': 'sdk', 'fullyFilled': True}
-        async def reference(*_args):
-            return {'amountIn': '505', 'amountOut': '1002', 'qualification': 'quoter'}
+        read = self.rpc.read_function
+        async def state(address, signature, inputs, args, outputs, block):
+            if signature == 'slot0()':
+                return 1 << 96, 0, 0, 0, 0, 0, True
+            if signature == 'liquidity()':
+                return (10**12,)
+            if signature == 'tickBitmap(int16)':
+                return (0,)
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = state
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
         self.quotes.quote_fallback_branches = reference
-        events = []
-        quote = await self.quotes.qualify_quote(request, branches, raw, 1000, BLOCK, 1002,
-            lambda event: collect(events, event))
+        sdk, prices = self.sdk.request, []
+        async def priced(payload):
+            value = await sdk(payload)
+            prices.append(({pool['protocol'] for pool in payload.get('pools', [])}, deepcopy(value)))
+            return value
+        self.sdk.request = priced
+        request = {**self.request, 'mode': 'exact-out'}
+        result = await self.quotes.get(request)
+        reference.assert_not_awaited()
+        self.assertTrue(any(protocols == {'v3'} and value['fullyFilled'] for protocols, value in prices))
+        self.assertTrue(any(protocols == {'v2'} and value['fullyFilled'] for protocols, value in prices))
+        self.assertEqual(result['qualification'], 'sdk')
+        self.assertEqual(result['netOutput'], request['amount'])
+        self.assertEqual(result['plan']['route']['branches'][0]['hops'][0]['pool']['id'], POOL['id'])
+        self.assertEqual(result['amountIn'], '506')
+        self.assertEqual(result['totalInput'], '507')
+
+    async def test_unavailable_v4_sdk_state_never_uses_contract_quote(self):
+        pool = {**POOL, 'protocol': 'v4', 'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO}
+        self.rpc.state_view = C
+        quoted = []
+        async def read(_address, signature, _inputs, _args, _outputs, _block):
+            if signature.startswith('quoteExact'):
+                quoted.append(signature)
+                return (500, 21000)
+            raise ValueError('Pinned SDK state unavailable')
+        self.rpc.read_function = read
+        branches = [{'amountIn': '0', 'hops': [{'pool': pool, 'zeroForOne': False}]}]
+        with self.assertRaises(ValueError):
+            await self.quotes.quote_branches(branches, 'exactOut', 1004, BLOCK)
+        self.assertEqual(quoted, [])
+
+    async def test_sdk_exact_output_keeps_proven_forward_overdelivery(self):
+        read = self.rpc.read_function
+        async def state(address, signature, inputs, args, outputs, block):
+            if signature == 'getReserves()':
+                return 200_000, 100_000, 0
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = state
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
+        request = {**self.request, 'amount': '1000', 'side': 'buy', 'mode': 'exact-out'}
+        quote = await self.quotes.get(request)
+        reference.assert_not_awaited()
+        self.assertEqual(quote['qualification'], 'sdk')
         self.assertEqual(quote['amountOut'], '1003')
         self.assertEqual(quote['grossOutput'], '1002')
         self.assertEqual(quote['outputRefundEstimate'], '1')
         self.assertEqual(quote['fee']['amount'], '2')
-        self.assertFalse(events)
 
-    async def test_stream_invalidates_before_native_repricing_and_never_publishes_optimistic_amount(self):
-        async def sdk(branches, _mode, amount, _block):
-            return {'amountIn': str(amount), 'amountOut': '2000', 'qualification': 'sdk'}
-        async def quoter(branches, _mode, amount, _block):
-            return {'amountIn': str(amount), 'amountOut': '1500', 'qualification': 'quoter'}
-        self.quotes.quote_branches, self.quotes.quote_fallback_branches = sdk, quoter
+    async def test_stream_publishes_sdk_terms_without_contract_repricing(self):
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
         app = create_app(market_quotes=self.quotes)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://local') as client:
             response = await client.post('/api/quotes/market/stream', json=self.request)
         events = [json.loads(line) for line in response.text.splitlines()]
-        invalidated = next(index for index, event in enumerate(events) if event['type'] == 'invalidated')
-        qualified = next(index for index, event in enumerate(events) if event['type'] == 'qualified')
-        self.assertLess(invalidated, qualified)
-        self.assertEqual(events[qualified]['value']['netOutput'], '1500')
+        reference.assert_not_awaited()
+        self.assertFalse(any(event['type'] == 'invalidated' for event in events))
+        qualified = next(event for event in events if event['type'] == 'qualified')
+        self.assertEqual(qualified['value']['qualification'], 'sdk')
+        self.assertEqual(qualified['value']['netOutput'], '1974')
         self.assertEqual(events[-1]['type'], 'complete')
-        self.assertEqual(events[-1]['value']['netOutput'], '1500')
+        self.assertEqual(events[-1]['value']['netOutput'], '1974')
 
     async def test_amount_edits_across_blocks_reuse_factory_identity_and_decimals(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
@@ -779,10 +791,11 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(first['netOutput'], second['netOutput'])
         self.assertEqual(static['getPair(address,address)'], reads.count('getPair(address,address)'))
         self.assertEqual(static['decimals()'], reads.count('decimals()'))
-        # Negative catalog observations are advisory; original V3 candidates
-        # recheck absence at the new quote block instead of inheriting a veto.
+        # Negative catalog observations are advisory. SDK state acquisition
+        # checks all four direct hops and both hops of nine via-WETH candidates
+        # at the new block instead of inheriting an old absence as a veto.
         self.assertEqual(reads.count('getPool(address,address,uint24)'),
-                         static['getPool(address,address,uint24)']+13)
+                         static['getPool(address,address,uint24)']+4+2*9)
         self.assertEqual(reads.count('getReserves()'), 1)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
@@ -1514,19 +1527,18 @@ class CandidateAcquisition(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(readers, [owner])
         self.assertEqual(self.rpc.calls, Counter({ACQUISITION_POOLS[0]['id']: 1}))
 
-    async def test_failure_retains_existing_quote_fallback(self):
+    async def test_snapshot_failure_propagates_without_contract_quote_fallback(self):
         error = ValueError('first fixture read')
         self.rpc.errors[ACQUISITION_POOLS[0]['id']] = error
-        fallback = []
-        async def original_fallback(*arguments):
-            fallback.append(arguments)
-            return {'amountIn': '1000', 'amountOut': '1800', 'qualification': 'quoter'}
-        self.quotes.quote_fallback_branches = original_fallback
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
         task = asyncio.create_task(self.quotes.quote_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
         await self.started()
         self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
-        self.assertEqual((await task)['qualification'], 'quoter')
-        self.assertEqual(fallback, [(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)])
+        with self.assertRaises(ValueError) as raised:
+            await task
+        self.assertIs(raised.exception, error)
+        reference.assert_not_awaited()
         self.assertEqual(self.rpc.cancelled, {ACQUISITION_POOLS[1]['id']})
         self.assertEqual(self.sdk.payloads, [])
 

@@ -1,6 +1,6 @@
 """Market quote coordinator: inventory -> protocol quotes -> fee-neutral plan.
 
-Quoter qualification is deliberately distinct from a real wallet's signed
+SDK pricing is deliberately distinct from a real wallet's signed
 permit-and-swap simulation. Fees are first-party pricing facts, not signatures.
 """
 import asyncio
@@ -24,7 +24,6 @@ from .quote_errors import public_quote_error, QuoteFailure
 from .quote_budget import budget_entry, current_budget, SearchStopped
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
-from .sdk_worker import SdkWorkerError
 from .uniswap_routes import RoutePlan
 from .uniswap_state import ZERO
 from .quote_models import PoolBaseline, LegModel
@@ -325,41 +324,12 @@ class MarketQuotes(RouteQuoteEngine):
         return quote
 
     async def qualify_quote(self, request, branches, raw, rate, block, amount, emit, *, retained=None):
-        """Economic reference comparison; signed full-call simulation is separate."""
-        result = self.make_quote(request, branches, raw, rate, block, retained=retained)
-        if raw.get('qualification') != 'sdk':
-            return result
-        try:
-            async with self.semaphore:
-                observed = await self.quote_fallback_branches(branches, raw_mode(request), amount, block)
-            if observed['qualification'] in ('quoter', 'sdk-and-quoter'):
-                if request['mode'] == 'exact-in' and observed['amountOut'] == raw['amountOut']:
-                    observed['amountIn'] = raw['amountIn']
-                elif request['mode'] == 'exact-out' and observed['amountIn'] == raw['amountIn'] and int(raw['amountOut']) >= int(observed['amountOut']):
-                    # Native V2 backwards quotes expose the target, while SDK
-                    # forward replay also exposes integer output overdelivery.
-                    observed['amountOut'] = raw['amountOut']
-                changed = any(raw[name] != observed[name] for name in ('amountIn', 'amountOut'))
-                observed['qualification'] = 'sdk-and-quoter'
-                result = self.make_quote(request, branches, observed, rate, block, retained=retained)
-                if changed:
-                    await emit({'type': 'invalidated'})
-        except SnapshotChanged:
-            raise
-        except SdkWorkerError:
-            result['executionSimulationRequired'] = True
-        except InvalidPreview:
-            raise
-        except Exception as error:
-            if public_quote_error(error)['code'] == 'quote-contract-reverted':
-                original_remainder = raw.get('fullyFilled') is False and raw.get('settled') is True and all(
-                    row['originalInput'] for row in raw.get('residuals', []))
-                if not original_remainder:
-                    await emit({'type': 'invalidated'})
-                    raise
-                result['executionSimulationRequired'] = True
-            result['quoteVerificationUnavailable'] = public_quote_error(error)['code']
-        return result
+        """Apply fee and retained execution bounds to the SDK-priced route.
+
+        The shared engine proves settlement and exact-output fill. A real
+        wallet's signed full-call simulation remains a separate operation.
+        """
+        return self.make_quote(request, branches, raw, rate, block, retained=retained)
 
     @budget_entry
     async def get(self, request, on_update=None):
@@ -449,9 +419,8 @@ class MarketQuotes(RouteQuoteEngine):
                         score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
                         tie = json.dumps(branches, sort_keys=True)
                         if best is None or (score, tie) > best[0]:
-                            # Verify a prospective winner before publishing it;
-                            # do not force the App to retain optimistic SDK terms
-                            # after native Quoter repricing invalidates them.
+                            # The SDK result supplies the economic terms;
+                            # canonical context validation still precedes readiness.
                             result = await self.qualify_quote(request, branches, raw, rate, block, quote_amount, emit)
                             score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
                             if best is None or (score, tie) > best[0]:
@@ -544,13 +513,6 @@ class MarketQuotes(RouteQuoteEngine):
                 self.models.popitem(last=False)
             await emit({'type': 'model', 'value': self.packet(request)})
             return result
-
-def raw_mode(request):
-    return 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
-
-def os_environ(name, default):
-    import os
-    return os.environ.get(name) or default
 
 async def handle_market_quote(request, service, stream=False):
     if not stream:

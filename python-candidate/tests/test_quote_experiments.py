@@ -1,4 +1,5 @@
 """Experimental sharing lifetimes, cancellation and exact-result invariants."""
+from legacy_quote_wire_fixture import SharingQuoterRpc
 import asyncio
 from copy import deepcopy
 from fractions import Fraction as F
@@ -11,7 +12,7 @@ from unittest.mock import AsyncMock
 import httpx
 from web3 import AsyncWeb3
 
-from cybergold_candidate.quote_experiments import BasketMath, GrossSeeds, IntentSharing, SharingQuoterRpc, bracket_step, midpoint_step, ceil_scale_step, upper_secant_step, local_secant_step
+from cybergold_candidate.quote_experiments import BasketMath, GrossSeeds, IntentSharing, bracket_step, midpoint_step, ceil_scale_step, upper_secant_step, local_secant_step
 from cybergold_candidate.quote_correction import delayed_local_step
 from cybergold_candidate.quote_intent import QuoteIntent
 from cybergold_candidate.quote_models import LegModel, PoolBaseline, hybrid_legs

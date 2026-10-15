@@ -46,9 +46,9 @@ from .shared_market import SharedMarketCache
 from .basket_preview import BasketPreview
 from .token_preview import TokenPreview
 from .uniswap_quote import UniswapQuote
-from .route_search import RouteSearch
+from .route_search import RouteSearch, RouteSearchRpc
 from .quote_intent import QuoteIntent
-from .quote_cache import BasketMath, IntentSharing, SharingQuoterRpc, VerifiedGrossSeed
+from .quote_cache import BasketMath, IntentSharing, VerifiedGrossSeed
 from .quote_history import QuoteHistory
 from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
@@ -94,7 +94,7 @@ def create_configured_app(settings=None, database=None, client=None):
     pools = PoolProducer(settings)
     pool_reads = SharedReads()
     def route_rpc(value):
-        return SharingQuoterRpc(value, completed=True, pool_reads=pool_reads)
+        return RouteSearchRpc(value, pool_reads=pool_reads)
     routes = RouteSearch(settings, rpc_factory=route_rpc)
     history = QuoteHistory(settings)
     uniswap_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None

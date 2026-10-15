@@ -8,23 +8,19 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from fractions import Fraction
 import json
-import os
 
 from .basket_preview import InvalidPreview
-from .quote_errors import QuoteFailure, public_quote_error
+from .quote_errors import public_quote_error
 from .quote_models import PoolBaseline
 from .recovery_rpc import SnapshotChanged
 from .rpc_diagnostics import route_count
 from .route_scheduler import schedule_routes, raise_snapshot_disproof
-from .sdk_worker import SdkWorker, SdkWorkerError, MissingPoolState
+from .sdk_worker import SdkWorker, MissingPoolState
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
-    v3_path, pool_key, pool_identity, route_identity, v3_branches, initial_v3_branches, LEGACY_V3_ADAPTERS)
+    pool_identity, route_identity, v3_branches, initial_v3_branches, LEGACY_V3_ADAPTERS)
 from .uniswap_state import ZERO
 from .wallet_balances import TOKENS
 
-
-def os_environ(name, fallback):
-    return os.environ.get(name, fallback)
 
 
 class RouteQuoteEngine:
@@ -32,8 +28,6 @@ class RouteQuoteEngine:
         self.settings, self.registry = settings, registry
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
-        self.quoter_v4 = os_environ('NEXT_PUBLIC_UNISWAP_V4_QUOTER_ADDRESS',
-            '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203')
         self.semaphore = asyncio.Semaphore(8)
 
     async def close(self):
@@ -153,9 +147,8 @@ class RouteQuoteEngine:
             except SnapshotChanged:
                 raise
             except Exception:
-                # A failed optional lookup is unknown, not canonical absence.
-                # Retain a path-key candidate for the ordinary V3 Quoter even
-                # when local pool/model metadata is unavailable.
+                # Discovery failure is unknown, not canonical absence. Keep
+                # its execution identity for the SDK's on-demand acquisition.
                 a, b = (self.registry.token(token, 18) for token in pair)
                 pool = {'id': 'v3:'+':'.join((*pair, str(fee))), 'protocol': 'v3',
                     'token0': a, 'token1': b, 'feePips': fee,
@@ -178,45 +171,6 @@ class RouteQuoteEngine:
             outcomes = await asyncio.gather(*pending, return_exceptions=True)
             raise_snapshot_disproof(outcomes)
 
-    async def quote_hop(self, hop, mode, amount, block):
-        rpc = self.registry.get_rpc()
-        pool = hop['pool']
-        if pool['protocol'] == 'v2':
-            source, target = (pool['token0']['address'], pool['token1']['address']) if hop['zeroForOne'] else (
-                pool['token1']['address'], pool['token0']['address'])
-            router = os_environ('NEXT_PUBLIC_UNISWAP_V2_ROUTER_ADDRESS', '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D')
-            try:
-                method = 'getAmountsOut(uint256,address[])' if mode == 'exactIn' else 'getAmountsIn(uint256,address[])'
-                amounts, = await rpc.read_function(router, method, ['uint256', 'address[]'],
-                    [amount, [source, target]], ['uint256[]'], block)
-                return {'amountIn': str(amounts[0]), 'amountOut': str(amounts[-1]), 'qualification': 'quoter'}
-            except SnapshotChanged:
-                raise
-            except Exception:
-                snapshot = await self.registry.snapshot(pool, block)
-                value = await self.sdk.request({'operation': 'quote', 'mode': mode, 'amount': str(amount),
-                    'poolId': pool['id'], 'pools': [snapshot], 'zeroForOne': hop['zeroForOne']})
-                value['qualification'] = 'sdk'
-                return value
-        if pool['protocol'] == 'v3':
-            path = v3_path([hop], mode == 'exactOut')
-            method = 'quoteExactInput(bytes,uint256)' if mode == 'exactIn' else 'quoteExactOutput(bytes,uint256)'
-            value = await rpc.read_function(self.settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS,
-                method, ['bytes', 'uint256'], [bytes.fromhex(path[2:]), amount],
-                ['uint256', 'uint160[]', 'uint32[]', 'uint256'], block)
-            return {'amountIn': str(amount if mode == 'exactIn' else value[0]),
-                    'amountOut': str(value[0] if mode == 'exactIn' else amount), 'qualification': 'quoter'}
-        params = (pool_key(pool), hop['zeroForOne'], amount, b'')
-        method = 'quoteExactInputSingle' if mode == 'exactIn' else 'quoteExactOutputSingle'
-        types = '((address,address,uint24,int24,address),bool,uint128,bytes)'
-        value = await rpc.read_function(self.quoter_v4, method+'('+types+')', [types], [params],
-            ['uint256', 'uint256'], block)
-        return {'amountIn': str(amount if mode == 'exactIn' else value[0]),
-                'amountOut': str(value[0] if mode == 'exactIn' else amount), 'qualification': 'quoter',
-                # The pinned BaseV4Quoter rejects a specified-side partial
-                # delta; successful exact-output calls prove this target filled.
-                **({'fullyFilled': True} if mode == 'exactOut' else {})}
-
     def resolve_branches(self, branches, token_in, token_out, mode, amount):
         """Retain route/allocation intent, use server-owned pool identities."""
         try:
@@ -238,8 +192,8 @@ class RouteQuoteEngine:
                     if pool is None:
                         if hop['pool']['protocol'] != 'v3':
                             raise InvalidPreview('Retained pool identity is unavailable.')
-                        # Tokens/fees define the V3 execution path. Optional
-                        # local observations are not required by its Quoter.
+                        # Retain the V3 execution identity. The registry acquires
+                        # its required SDK state at the operation's pinned block.
                         pool = {name: deepcopy(hop['pool'][name]) for name in
                                 ('id', 'protocol', 'token0', 'token1', 'feePips')}
                     hop['pool'] = deepcopy(pool)
@@ -264,14 +218,7 @@ class RouteQuoteEngine:
 
     async def quote_branches(self, branches, mode, amount, block):
         branches = RouteQuoteEngine.enrich_branches(self, branches)
-        try:
-            value = await self.quote_sdk_branches(branches, mode, amount, block)
-        except SnapshotChanged:
-            raise
-        except Exception:
-            # Missing optional SDK observations use the ordinary contract
-            # Quoter; cancellation and canonical disproof retain their meaning.
-            return await self.quote_fallback_branches(branches, mode, amount, block)
+        value = await self.quote_sdk_branches(branches, mode, amount, block)
         if not value.get('settled', True):
             raise InvalidPreview('Unsettled current-operation intermediate currency.')
         if mode == 'exactOut' and not value.get('fullyFilled', True):
@@ -311,137 +258,59 @@ class RouteQuoteEngine:
             'pools': list(snapshots.values()), 'route': {'branches': [
                 {'amountIn': branch['amountIn'], 'hops': [{'poolId': hop['pool']['id'],
                     'zeroForOne': hop['zeroForOne']} for hop in branch['hops']]} for branch in branches]}}
-        try:
-            # Acquisition is on-demand and bounded per request. Ordinary Quoters
-            # still provide results when a long uncovered tick path is expensive.
-            for _ in range(4):
-                try:
-                    value = await self.sdk.request(payload)
-                    if candidate is not None:
-                        # Compact postState carries only changing fields. Keep
-                        # the canonical coverage in the isolated candidate bank.
-                        for post in value['postState']:
-                            candidate[post['id']] = {**snapshots[post['id']], **post}
-                    return value
-                except MissingPoolState as missing:
-                    for identity, snapshot in list(snapshots.items()):
-                        requests = [row for row in missing.requests if row.get('poolId', row.get('id')) == identity]
-                        if requests:
-                            observed = await self.registry.extend_ticks(canonical[identity], requests, block)
-                            canonical[identity] = observed
-                            snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
-                    payload['pools'] = list(snapshots.values())
-        except (SdkWorkerError, ValueError, TimeoutError):
-            pass
-        raise SdkWorkerError('SDK route state unavailable')
+        # Missing coverage is acquired only when the SDK requests it. The
+        # owning producer's existing selection deadline bounds the whole fill.
+        while True:
+            try:
+                value = await self.sdk.request(payload)
+                if candidate is not None:
+                    # Compact postState carries only changing fields. Keep
+                    # canonical coverage in this isolated candidate bank.
+                    for post in value['postState']:
+                        candidate[post['id']] = {**snapshots[post['id']], **post}
+                return value
+            except MissingPoolState as missing:
+                for identity, snapshot in list(snapshots.items()):
+                    requests = [row for row in missing.requests if row.get('poolId', row.get('id')) == identity]
+                    if requests:
+                        observed = await self.registry.extend_ticks(canonical[identity], requests, block)
+                        canonical[identity] = observed
+                        snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
+                payload['pools'] = list(snapshots.values())
 
     def v3_branches(self, path, mode, amount):
         return RouteQuoteEngine.enrich_branches(self,
             v3_branches(path, mode, amount, chain_id=self.registry.chain))
 
-    async def quote_v3_path(self, hops, mode, amount, block):
-        rpc = self.registry.get_rpc()
-        # Preserve the existing absent/zero-active-liquidity selector. Failed
-        # optional observations remain unknown and use the ordinary Quoter.
-        for hop in hops:
-            pool = hop['pool']
-            address = pool.get('address')
-            lookup_key = ('v3', tuple(sorted((pool['token0']['address'].lower(),
-                pool['token1']['address'].lower()))), int(pool['feePips']))
-            lookups = getattr(self.registry, 'lookups', {})
-            if lookup_key in lookups:
-                observed = lookups[lookup_key]
-                if observed is not None:
-                    address = observed.get('address') or address
-            if not address:
-                try:
-                    address, = await rpc.read_function(rpc.factory, 'getPool(address,address,uint24)',
-                        ['address', 'address', 'uint24'], [pool['token0']['address'],
-                            pool['token1']['address'], int(pool['feePips'])], ['address'], block)
-                except SnapshotChanged:
-                    raise
-                except Exception:
-                    address = None
-            if address is not None and address.lower() == ZERO:
-                raise QuoteFailure('quote-no-route')
-            if address:
-                try:
-                    liquidity, = await rpc.read_function(address, 'liquidity()', [], [], ['uint128'], block)
-                except SnapshotChanged:
-                    raise
-                except Exception:
-                    liquidity = None
-                if liquidity == 0:
-                    raise QuoteFailure('quote-no-route')
-        path = v3_path(hops, mode == 'exactOut')
-        method = 'quoteExactInput(bytes,uint256)' if mode == 'exactIn' else 'quoteExactOutput(bytes,uint256)'
-        value = await rpc.read_function(self.settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS,
-            method, ['bytes', 'uint256'], [bytes.fromhex(path[2:]), amount],
-            ['uint256', 'uint160[]', 'uint32[]', 'uint256'], block)
-        return {'amountIn': str(amount if mode == 'exactIn' else value[0]),
-                'amountOut': str(value[0] if mode == 'exactIn' else amount), 'qualification': 'quoter'}
-
     async def compose_core_rows(self, rows, mode, block, *, ordered_assets=None, issue=False):
         """Replay shared selected pools in BasketRouter's actual asset order."""
         prepared = []
-        try:
-            for index, row in enumerate(rows):
-                target, best = row['target'], row['best']
-                if not best or target['inputAsset'].lower() == target['outputAsset'].lower():
-                    continue
-                amount = int(target['amount'])
-                branches = best['routePlan']['branches'] if best.get('routePlan') else self.v3_branches(best['path'], mode, amount)
-                branches = self.resolve_branches(branches, target['inputAsset'], target['outputAsset'], mode, amount)
-                prepared.append((index, branches))
-            ids = [pool_identity(hop['pool']) for _, branches in prepared for branch in branches for hop in branch['hops']]
-            if len(ids) == len(set(ids)):
-                return rows
-            order = {asset.lower(): index for index, asset in enumerate(ordered_assets or [])}
-            prepared.sort(key=lambda item: order.get(rows[item[0]]['target']['outputAsset' if issue else 'inputAsset'].lower(), item[0]))
-            result = deepcopy(rows)
-            candidate, canonical = {}, {}
-            for index, branches in prepared:
-                target = rows[index]['target']
-                value = await self.quote_sdk_branches(branches, mode, int(target['amount']), block,
-                    candidate=candidate, canonical=canonical)
-                if not value.get('settled', True) or (mode == 'exactOut' and not value['fullyFilled']):
-                    raise InvalidPreview('Selected Core route cannot settle its required output.')
-                best = result[index]['best']
-                best['quote'] = value['amountOut' if mode == 'exactIn' else 'amountIn']
-                if best.get('routePlan'):
-                    best['routePlan'].update(branches=branches, inputAmount=value['amountIn'], outputAmount=value['amountOut'])
-            return result
-        except (SdkWorkerError, ValueError, TimeoutError, KeyError):
-            # An uncovered shared path uses the existing final Helpers preview.
-            # Never publish a partially replayed mixture as one exact model.
-            return rows
-
-    async def quote_fallback_branches(self, branches, mode, amount, block):
-        # Separate protocol calls are valid for pool-disjoint paths. Shared-pool
-        # split candidates require the SDK's sequential state, never independent
-        # summed quotes masquerading as a composed execution.
-        identities = [pool_identity(hop['pool']) for branch in branches for hop in branch['hops']]
-        if len(identities) != len(set(identities)):
-            raise SdkWorkerError('Composed shared-pool quote needs covered SDK state')
-        total_in = total_out = 0
-        sources = set()
-        for branch in branches:
-            current = int(branch['amountIn']) if mode == 'exactIn' else amount
-            if all(hop['pool']['protocol'] == 'v3' for hop in branch['hops']):
-                value = await RouteQuoteEngine.quote_v3_path(self, branch['hops'], mode, current, block)
-                total_in += int(value['amountIn'])
-                total_out += int(value['amountOut'])
-                sources.add('quoter')
+        for index, row in enumerate(rows):
+            target, best = row['target'], row['best']
+            if not best or target['inputAsset'].lower() == target['outputAsset'].lower():
                 continue
-            ordered = branch['hops'] if mode == 'exactIn' else list(reversed(branch['hops']))
-            for hop in ordered:
-                value = await self.quote_hop(hop, mode, current, block)
-                sources.add(value.get('qualification', 'sdk'))
-                current = int(value['amountOut' if mode == 'exactIn' else 'amountIn'])
-            total_in += int(branch['amountIn']) if mode == 'exactIn' else current
-            total_out += current if mode == 'exactIn' else amount
-        return {'amountIn': str(total_in), 'amountOut': str(total_out), 'qualification':
-            'sdk-and-quoter' if len(sources) > 1 else next(iter(sources), 'sdk')}
+            amount = int(target['amount'])
+            branches = best['routePlan']['branches'] if best.get('routePlan') else self.v3_branches(best['path'], mode, amount)
+            branches = self.resolve_branches(branches, target['inputAsset'], target['outputAsset'], mode, amount)
+            prepared.append((index, branches))
+        ids = [pool_identity(hop['pool']) for _, branches in prepared for branch in branches for hop in branch['hops']]
+        if len(ids) == len(set(ids)):
+            return rows
+        order = {asset.lower(): index for index, asset in enumerate(ordered_assets or [])}
+        prepared.sort(key=lambda item: order.get(rows[item[0]]['target']['outputAsset' if issue else 'inputAsset'].lower(), item[0]))
+        result = deepcopy(rows)
+        candidate, canonical = {}, {}
+        for index, branches in prepared:
+            target = rows[index]['target']
+            value = await self.quote_sdk_branches(branches, mode, int(target['amount']), block,
+                candidate=candidate, canonical=canonical)
+            if not value.get('settled', True) or (mode == 'exactOut' and not value['fullyFilled']):
+                raise InvalidPreview('Selected Core route cannot settle its required output.')
+            best = result[index]['best']
+            best['quote'] = value['amountOut' if mode == 'exactIn' else 'amountIn']
+            if best.get('routePlan'):
+                best['routePlan'].update(branches=branches, inputAmount=value['amountIn'], outputAmount=value['amountOut'])
+        return result
 
     def initial_v3_branches(self, target, mode):
         return initial_v3_branches(target, mode, chain_id=self.registry.chain)
@@ -467,8 +336,8 @@ class RouteQuoteEngine:
             except SnapshotChanged:
                 raise
             except Exception:
-                # Discovery supplies optional observations; native V3 paths
-                # remain executable without a database/catalog observation.
+                # Discovery supplies optional observations; V3 execution identities
+                # acquire SDK state without a database/catalog observation.
                 return
         def make_feeds(_expanded):
             pools = inventory()
