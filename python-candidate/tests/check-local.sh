@@ -53,6 +53,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_o
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_budget.py
 python-candidate/.venv/bin/python python-candidate/tests/test_budget_providers.py
+python-candidate/.venv/bin/python python-candidate/tests/test_budget_timeout_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_recipient_cache.py
