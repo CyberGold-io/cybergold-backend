@@ -1248,7 +1248,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         routes.rpc.assert_canonical = canonical
         async def search(value, on_update, *, block):
             async def update(amount):
-                rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
+                rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
                     'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
                 await on_update({'results': rows})
             await update(25)
@@ -1274,7 +1274,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             raise SnapshotChanged('Pinned pool observation was disproved', retry=1)
         routes.engine.compose_core_rows = compose
         async def search(value, on_update, *, block):
-            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '25'},
+            rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '25'},
                 'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
                 for target in value['targets']]
             await on_update({'results': rows})
@@ -1331,7 +1331,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     preview_cancelled.set()
                     raise
         async def search(value, on_update, *, block):
-            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+            rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
                 'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
             await on_update({'results': rows})
             await preview_started.wait()
@@ -1374,7 +1374,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                             raise
 
                 async def search(value, on_update, *, block):
-                    rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
+                    rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': '100'},
                         'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
                         for target in value['targets']]
                     try:

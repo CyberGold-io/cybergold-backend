@@ -1,4 +1,4 @@
-"""Canonical-context HTTP/Core facade and native V3 fallback transport."""
+"""Canonical-context HTTP/Core facade and shared pinned-state transport."""
 import asyncio
 import json
 import logging
@@ -14,13 +14,13 @@ from pydantic import BaseModel, TypeAdapter
 from web3 import Web3
 
 from .basket_preview import InvalidPreview, handle_basket_preview
-from .pool_producer import PoolRpc, ZERO
+from .pool_producer import PoolRpc
 from .shared_reads import SharedReads
-from .uniswap_quote import ABI, METHODS, UniswapQuoteRpc
+from .uniswap_quote import UniswapQuoteRpc
 from .wallet_balances import TOKENS
-from .quote_errors import QuoteFailure, rpc_failure, public_quote_error
+from .quote_errors import QuoteFailure, public_quote_error
 from .uniswap_routes import LEGACY_V3_ADAPTERS, initial_v3_branches, standalone_v3, v3_path
-from .rpc_diagnostics import (rpc_call, error_diagnostics, route_work_scope, route_subphase,
+from .rpc_diagnostics import (rpc_call, route_work_scope, route_subphase,
                               route_count, freeze_quote_work)
 
 WETH = next(address for name, address in TOKENS if name == 'weth')
@@ -115,83 +115,6 @@ class RouteSearchRpc(UniswapQuoteRpc):
         # only overlapping reads, never a completed pool observation.
         return await self.pool_reads.many(keys, produce, retain=self.chain_id == 1, counts=counts)
 
-    async def eligible_paths(self, paths, block):
-        # Reuse the previous route selector's absent/zero-active-liquidity rule.
-        # On Anvil an empty pool can exhaust upstream reads and fail a whole
-        # native batch. Observe only the fields needed for that existing rule.
-        requirements, by_path = {}, {}
-        for path in paths:
-            raw = bytes.fromhex(path[2:])
-            hops = []
-            for offset in range(20, len(raw), 23):
-                tokens = sorted(('0x' + raw[offset-20:offset].hex(),
-                                 '0x' + raw[offset+3:offset+23].hex()))
-                key = (*tokens, int.from_bytes(raw[offset:offset+3]))
-                requirements[key] = (self.pools.factory,
-                    self.pools.pool_contracts['factory'].encode_abi('getPool',
-                        args=[*(Web3.to_checksum_address(token) for token in tokens), key[2]]))
-                hops.append(key)
-            by_path[path] = hops
-        if not requirements:
-            return set(paths), {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-        reads = {'requested': len(requirements), 'issued': 0, 'coalesced': 0, 'reused': 0}
-        unusable, addresses = set(), {}
-        try:
-            rows, reads = await self.pool_batch(list(requirements.values()), block, reads)
-        except Exception:
-            # Failed observations are unknown, as in the previous selector;
-            # they do not establish that a route is unusable.
-            return set(paths), reads
-        for key, row in zip(requirements, rows, strict=True):
-            try:
-                address = Web3.to_checksum_address(self.w3.codec.decode(
-                    ['address'], bytes.fromhex(row['result'][2:]))[0])
-                if address == ZERO:
-                    unusable.add(key)
-                else:
-                    addresses.setdefault(address, []).append(key)
-            except Exception:
-                continue
-        if addresses:
-            calls = [(address, self.pools.pool_contracts['pool'].encode_abi('liquidity'))
-                     for address in addresses]
-            more = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-            try:
-                rows, more = await self.pool_batch(calls, block, more)
-            except Exception:
-                rows = []
-            reads = {key: reads[key] + more[key] for key in reads}
-            for address, row in zip(addresses, rows):
-                try:
-                    liquidity = self.w3.codec.decode(['uint128'], bytes.fromhex(row['result'][2:]))[0]
-                    if liquidity == 0:
-                        unusable.update(addresses[address])
-                except Exception:
-                    continue
-        return {path for path, hops in by_path.items() if not any(key in unusable for key in hops)}, reads
-
-    async def quote_batch(self, mode, data, block):
-        rows = await self.call_batch([(self.quoter, calldata) for calldata in data], block)
-        outputs = next(row for row in ABI if row['name'] == METHODS[mode])['outputs']
-        values = []
-        for row in rows:
-            if 'error' in row:
-                diagnostics = error_diagnostics(row['error'])
-                values.append({'status': 'failure', 'rpcCode': row['error']['code'],
-                               'code': rpc_failure(row['error']).code,
-                               **({'diagnostics': diagnostics} if diagnostics else {})})
-            else:
-                decoded = self.w3.codec.decode([part['type'] for part in outputs],
-                    bytes.fromhex(row['result'][2:]))
-                values.append({'status': 'success', 'amount': str(decoded[0])})
-        return values
-
-    async def quote_batch_counted(self, mode, data, block, counts):
-        values = await self.quote_batch(mode, data, block)
-        for name in ('requested', 'issued'):
-            counts[name] = counts.get(name, 0) + len(data)
-        return values
-
     async def close(self):
         if self.owns_pool_reads:
             await self.pool_reads.close()
@@ -281,7 +204,7 @@ class RouteSearch:
             return {'mode': request['mode'], 'quoter': self.rpc.quoter, 'results': public_rows(results),
                 'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
                             'blockHash': block['hash'], 'observedAt': self.now()},
-                # Engine state acquisition and native fallback are not counted
+                # Engine state acquisition and SDK IPC are not counted
                 # by this facade. Do not present coordinator reads as supplier
                 # cost or infer savings from removing the old V3 batch wave.
                 'metrics': {'candidateCalls': sum(row['attempted'] for row in results),

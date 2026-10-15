@@ -1,8 +1,8 @@
-"""Serving consumers share canonical routes, ordinary fallback and one budget.
+"""One engine/format/budget, with explicit controller-only SDK boundary values.
 
-Native Quoter replies are inert boundary values; Helpers previews use the
-existing shipped-ABI fixture. Existing SDK/provider tests own swap arithmetic,
-shared-pool execution ordering, native currency and the full 5/15 clock matrix.
+Programmable SDK replies below are opaque timing/economic fixtures, never AMM
+arithmetic evidence or contract pricing. The separate real SDK V2 test retains
+its actual worker, pinned pool state and Helpers ABI rounding assertions.
 """
 import asyncio
 from copy import deepcopy
@@ -26,14 +26,14 @@ from cybergold_candidate.uniswap_quote import UniswapQuote
 from cybergold_candidate.uniswap_routes import RoutePlan, v3_path
 from cybergold_candidate.uniswap_state import PoolRegistry, ZERO
 from test_quote_intent import (ADAPTER, ASSET_A, ASSET_B, CORE, HASH, SETTINGS,
-                               QuoteWire, request as core_request, service as core_service)
+                               request as core_request, service as core_service)
 from cybergold_candidate.route_search import WETH
 
 BLOCK = {'number': 101, 'hash': HASH}
 
 
-class NativeQuoterRpc:
-    """Successful V3 reads remain usable without optional registry metadata."""
+class PipelineFixtureRpc:
+    """State transport plus an explicitly programmable SDK price oracle."""
     chain_id = 1
     factory = '0x'+'6'*40
     v2_factory = '0x'+'7'*40
@@ -41,8 +41,7 @@ class NativeQuoterRpc:
 
     def __init__(self, *, held_tail=False):
         self.w3 = Web3()
-        self.wire = QuoteWire()
-        self.calls = []
+        self.calls, self.sdk_prices = [], []
         self.held_tail = held_tail
         self.release = asyncio.Event()
         self.fast, self.tail, self.typed = (asyncio.Event() for _ in range(3))
@@ -56,25 +55,26 @@ class NativeQuoterRpc:
         assert block == BLOCK
         self.canonical += 1
 
+    async def price_v3(self, path, mode, amount, block):
+        """Opaque SDK callback; never dispatched as a contract/RPC quote."""
+        assert block == BLOCK
+        self.sdk_prices.append((path, mode, amount))
+        if len(path) == 43 and int.from_bytes(path[20:23]) == 100:
+            self.fast.set()
+            return amount*2 if mode == 'exactIn' else (amount+1)//2
+        if self.held_tail:
+            self.tail.set()
+            try:
+                await self.release.wait()
+            finally:
+                self.drained.add('v3')
+        raise ValueError('No programmable SDK result for this fixture path')
+
     async def read_function(self, address, signature, inputs, args, outputs, block):
         assert block == BLOCK
         self.calls.append((address, signature, deepcopy(args)))
-        if signature in ('quoteExactInput(bytes,uint256)', 'quoteExactOutput(bytes,uint256)'):
-            path = args[0]
-            if len(path) == 43 and int.from_bytes(path[20:23]) == 100:
-                self.fast.set()
-                data = Web3.to_hex(Web3.keccak(text=signature)[:4] + self.w3.codec.encode(inputs, args))
-                response = await self.wire.send(httpx.Request('POST', 'http://fixture.invalid', json=[{
-                    'jsonrpc': '2.0', 'id': 0, 'method': 'eth_call', 'params': [
-                        {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}]}]))
-                return self.w3.codec.decode(outputs, bytes.fromhex(response.json()[0]['result'][2:]))
-            if self.held_tail:
-                self.tail.set()
-                try:
-                    await self.release.wait()
-                finally:
-                    self.drained.add('v3')
-            raise ValueError('No Quoter result for this fixture path')
+        if signature.startswith('quoteExact') or signature.startswith('getAmounts'):
+            raise AssertionError('Contract pricing is retired')
         if signature == 'getReserves()' and self.held_tail:
             self.typed.set()
             try:
@@ -83,18 +83,56 @@ class NativeQuoterRpc:
                 self.drained.add('typed')
         if signature == 'getPair(address,address)':
             return (ZERO,)
-        raise OSError('Optional fixture pool/token observation unavailable')
+        raise OSError('No fixture pool/token observation')
 
     async def close(self):
         self.release.set()
 
 
+class ProgrammablePipelineSdk:
+    """Controller tests inject results at the SDK worker boundary only."""
+    def __init__(self, rpc):
+        self.rpc, self.reply = rpc, None
+        self.payloads = []
+
+    async def request(self, payload):
+        self.payloads.append(deepcopy(payload))
+        if self.reply is not None:
+            return await self.reply(payload)
+        pools = {pool['id']: pool for pool in payload['pools']}
+        mode, total_in, total_out = payload['mode'], 0, 0
+        for branch in payload['route']['branches']:
+            hops = [{'pool': pools[hop['poolId']], 'zeroForOne': hop['zeroForOne']}
+                for hop in branch['hops']]
+            path = bytes.fromhex(v3_path(hops, mode == 'exactOut')[2:])
+            amount = int(branch['amountIn']) if mode == 'exactIn' else int(payload['amount'])
+            quoted = await self.rpc.price_v3(path, mode, amount, pools[hops[0]['pool']['id']]['_fixtureBlock'])
+            total_in += amount if mode == 'exactIn' else quoted
+            total_out += quoted if mode == 'exactIn' else amount
+        return {'amountIn': str(total_in), 'amountOut': str(total_out), 'settled': True,
+            'fullyFilled': True, 'postState': deepcopy(payload['pools'])}
+
+    async def close(self):
+        pass
+
+
+def install_programmable_sdk_snapshot(registry):
+    """Only controller fixtures use these opaque V3 state placeholders."""
+    snapshot = registry.snapshot
+    async def fixture(pool, block, **kwargs):
+        if pool['protocol'] == 'v3':
+            return {**deepcopy(pool), '_fixtureBlock': deepcopy(block)}
+        return await snapshot(pool, block, **kwargs)
+    registry.snapshot = fixture
+
+
 class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
     def engine(self, *, held_tail=False):
-        rpc = NativeQuoterRpc(held_tail=held_tail)
+        rpc = PipelineFixtureRpc(held_tail=held_tail)
         registry = PoolRegistry(SETTINGS, rpc=rpc)
         registry.inventory = {}
-        engine = MarketQuotes(SETTINGS, registry)
+        install_programmable_sdk_snapshot(registry)
+        engine = MarketQuotes(SETTINGS, registry, ProgrammablePipelineSdk(rpc))
         self.addAsyncCleanup(registry.close)
         self.addAsyncCleanup(engine.close)
         self.addAsyncCleanup(rpc.release.set)
@@ -125,6 +163,8 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
                 app = runtime.create_configured_app(settings, database, client)
             engine = services['market_quotes']
             self.assertIsInstance(engine, RouteQuoteEngine)
+            for retired in ('quote_hop', 'quote_v3_path', 'quote_fallback_branches'):
+                self.assertFalse(hasattr(engine, retired))
             self.assertIs(services['route_search'].engine, engine)
             self.assertIs(services['quote_intent'].service.routes.engine, engine)
             self.assertIs(services['trade_quotes'].market, engine)
@@ -133,7 +173,7 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
                 pass
         self.assertTrue(database.closed)
 
-    async def test_core_market_and_selected_direct_route_keep_canonical_plans_without_metadata(self):
+    async def test_core_market_and_selected_direct_route_keep_canonical_plans_through_sdk(self):
         engine, registry, rpc = self.engine()
         intent, provider, routes, _wire = core_service()
         routes.engine = engine
@@ -157,16 +197,16 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(encoded[0])
         selected = core['quotes'][0]['routePlan']
         path = v3_path(selected['branches'][0]['hops'])
-        before = len(rpc.calls)
+        before = len(rpc.sdk_prices)
         direct = UniswapQuote(SETTINGS, rpc, engine=engine)
         result = await direct.get({'mode': 'exact-in', 'path': path,
                                    'amount': selected['inputAmount']})
         self.assertEqual(result['result']['amount'], selected['outputAmount'])
         self.assertEqual(result['context']['blockHash'], HASH)
-        self.assertTrue(any(name == 'quoteExactInput(bytes,uint256)' for _, name, _ in rpc.calls[before:]))
+        self.assertGreater(len(rpc.sdk_prices), before)
 
     async def test_core_exact_output_preserves_sdk_overdelivery_without_raising_helpers_minimum(self):
-        class SdkRpc(NativeQuoterRpc):
+        class SdkRpc(PipelineFixtureRpc):
             async def read_function(self, address, signature, inputs, args, outputs, block):
                 if signature == 'getReserves()':
                     # Existing V2 fixture reserves, oriented WETH -> Core asset.

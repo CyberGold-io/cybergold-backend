@@ -10,7 +10,8 @@ from web3 import AsyncWeb3
 
 from test_basket_preview import HASH, Provider, REFERENCE
 from cybergold_candidate.app import create_app
-from cybergold_candidate.uniswap_quote import UniswapQuote, UniswapQuoteRpc
+from cybergold_candidate.uniswap_quote import UniswapQuote
+from legacy_quote_wire_fixture import ReferenceUniswapQuoteRpc as UniswapQuoteRpc
 from cybergold_candidate.uniswap_routes import v3_path
 
 

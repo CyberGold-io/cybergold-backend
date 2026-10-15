@@ -18,8 +18,8 @@ from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
 from .uniswap_routes import pool_key, v4_pool_id
 from .wallet_balances import TOKENS
-from .quote_errors import rpc_failure
-from .recovery_rpc import RecoveryApiError
+from .quote_errors import QuoteFailure, rpc_failure
+from .recovery_rpc import RecoveryApiError, SnapshotChanged
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
 
 ZERO = '0x'+'00'*20
@@ -52,6 +52,21 @@ EVENTS = {signature.split('(')[0]: topic(signature) for signature in (
     'ProtocolFeeUpdated(bytes32,uint24)', 'SetFeeProtocol(uint8,uint8,uint8,uint8)')}
 V3_SWAP = topic('Swap(address,address,int256,int256,uint160,uint128,int24)')
 V4_SWAP = topic('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)')
+
+
+async def owned_reads(*operations):
+    """Drain this acquisition's subscriptions; preserve canonical disproof."""
+    tasks = [asyncio.create_task(operation) for operation in operations]
+    try:
+        return await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+        if disproof is not None:
+            raise disproof
 
 
 class UniswapRpc(PoolRpc):
@@ -297,11 +312,14 @@ class PoolRegistry:
     async def token_metadata(self, address, block, *, publish=True):
         if address.lower() not in self.metadata:
             generation = self.generation
-            if address.lower() == ZERO:
-                value = 18  # The native currency has no ERC20 contract.
-            else:
-                value, = await self.get_rpc().read_function(address, 'decimals()', [], [], ['uint8'], block)
-            token = self.token(address, value)
+            async def produce():
+                if address.lower() == ZERO:
+                    value = 18  # The native currency has no ERC20 contract.
+                else:
+                    value, = await self.get_rpc().read_function(address, 'decimals()', [], [], ['uint8'], block)
+                return self.token(address, value)
+            token = deepcopy(await self.pending.one(
+                ('token-metadata', generation, address.lower(), block['hash']), produce))
             if publish and generation == self.generation:
                 self.metadata[address.lower()] = token
             return token
@@ -335,18 +353,44 @@ class PoolRegistry:
                 try:
                     state = await self.advance(pool, old, block)
                     return state
+                except SnapshotChanged:
+                    raise
                 except Exception:
                     pass  # Ordinary gap/reorg/read failure uses fresh getters.
             state = deepcopy(pool)
+            if pool['protocol'] == 'v3':
+                if not state.get('address'):
+                    address, = await rpc.read_function(rpc.factory, 'getPool(address,address,uint24)',
+                        ['address', 'address', 'uint24'], [pool['token0']['address'],
+                            pool['token1']['address'], int(pool['feePips'])], ['address'], block)
+                    if address.lower() == ZERO:
+                        raise QuoteFailure('quote-no-route')
+                    state['address'] = address
+                if state.get('tickSpacing') is None:
+                    state['tickSpacing'], = await rpc.read_function(state['address'],
+                        'tickSpacing()', [], [], ['int24'], block)
+            async def metadata(token):
+                if token.get('decimals') is not None:
+                    return {**token, 'chainId': self.chain}
+                try:
+                    return await self.token_metadata(token['address'], block)
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    # Integer swap arithmetic does not depend on display scale.
+                    # Preserve discovery's existing unknown-decimals contract.
+                    return {**self.token(token['address'], 18), 'decimalsKnown': False}
+            state['token0'], state['token1'] = await owned_reads(
+                metadata(state['token0']), metadata(state['token1']))
             if pool['protocol'] == 'v2':
                 r0, r1, _ = await rpc.read_function(pool['address'], 'getReserves()', [], [],
                     ['uint112', 'uint112', 'uint32'], block)
                 state.update(reserve0=str(r0), reserve1=str(r1))
             elif pool['protocol'] == 'v3':
-                slot, liquidity = await asyncio.gather(
-                    rpc.read_function(pool['address'], 'slot0()', [], [],
+                slot, liquidity = await owned_reads(
+                    rpc.read_function(state['address'], 'slot0()', [], [],
                         ['uint160', 'int24', 'uint16', 'uint16', 'uint16', 'uint8', 'bool'], block),
-                    rpc.read_function(pool['address'], 'liquidity()', [], [], ['uint128'], block))
+                    rpc.read_function(state['address'], 'liquidity()', [], [], ['uint128'], block))
                 state.update(sqrtRatioX96=str(slot[0]), tick=slot[1], liquidity=str(liquidity[0]),
                              protocolFee=slot[5], lpFee=int(pool['feePips']))
             else:
@@ -393,7 +437,7 @@ class PoolRegistry:
             else:
                 value, = await rpc.read_function(pool['address'], 'tickBitmap(int16)', ['int16'], [word], ['uint256'], block)
             return word, value
-        for word, bitmap in await asyncio.gather(*(read_word(word) for word in missing_words)):
+        for word, bitmap in await owned_reads(*(read_word(word) for word in missing_words)):
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
         needed = {int(tick) for request in requests for tick in request.get('ticks', [])}
         for word in requested_words:
@@ -407,7 +451,7 @@ class PoolRegistry:
                 value = await rpc.read_function(pool['address'], 'ticks(int24)', ['int24'], [index],
                     ['uint128', 'int128', 'uint256', 'uint256', 'int56', 'uint160', 'uint32', 'bool'], block)
             return {'index': index, 'liquidityGross': str(value[0]), 'liquidityNet': str(value[1])}
-        for row in await asyncio.gather(*(read_tick(index) for index in sorted(needed-ticks.keys()))):
+        for row in await owned_reads(*(read_tick(index) for index in sorted(needed-ticks.keys()))):
             ticks[row['index']] = row
         # Concurrent candidates can have requested different coverage from the
         # same observation. Merge their immutable tick observations at this hash.

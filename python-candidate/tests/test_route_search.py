@@ -1,4 +1,5 @@
 """Whole-wave quote coverage, wire batches, selection and ordinary recovery."""
+from legacy_quote_wire_fixture import ReferenceRouteSearchRpc as RouteSearchRpc
 import asyncio
 import json
 from types import SimpleNamespace
@@ -9,7 +10,7 @@ from web3 import AsyncWeb3, Web3
 from web3.providers import AsyncBaseProvider
 
 from cybergold_candidate.app import create_app
-from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH, candidates
+from cybergold_candidate.route_search import RouteSearch, WETH, candidates
 from cybergold_candidate.uniswap_routes import v3_path
 from route_engine_fixture import install_fixture_engine
 
@@ -196,7 +197,7 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['results'][2]['best']['quote'], rows[2]['amount'])
         self.assertTrue(all(path[:20] != path[-20:] for path in self.paths(wire)))
 
-    async def test_known_empty_pools_skip_native_quotes_without_rejecting_healthy_routes(self):
+    async def test_known_empty_pools_skip_sdk_simulation_without_rejecting_healthy_routes(self):
         search, _, wire = service()
         self.addAsyncCleanup(search.close)
         wire.pool_liquidity = lambda fee: 0 if fee in (100, 500) else 123
@@ -204,14 +205,16 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(row['best'] is not None for row in result['results']))
         self.assertEqual({int.from_bytes(path[20:23]) for path in self.paths(wire)}, {3000, 10000})
 
-    async def test_absence_is_skipped_but_failed_pool_observations_stay_unknown(self):
+    async def test_absence_and_failed_required_state_do_not_become_sdk_prices(self):
         search, _, wire = service()
         self.addAsyncCleanup(search.close)
         wire.missing_fees, wire.pool_errors = {100}, {500}
         wire.pool_liquidity = lambda fee: None if fee == 3000 else 123
         result = await search.get({'mode': 'exact-out', 'targets': [target(WETH)]})
         self.assertIsNotNone(result['results'][0]['best'])
-        self.assertEqual({int.from_bytes(path[20:23]) for path in self.paths(wire)}, {500, 3000, 10000})
+        self.assertEqual({int.from_bytes(path[20:23]) for path in self.paths(wire)}, {10000})
+        self.assertEqual(len(result['results'][0]['failures']), 3)
+        self.assertEqual([row['code'] for row in result['results'][0]['failures']].count('rpc-unavailable'), 2)
 
     async def test_completed_candidates_publish_while_an_earlier_v3_candidate_is_blocked(self):
         for mode in ('exact-in', 'exact-out'):

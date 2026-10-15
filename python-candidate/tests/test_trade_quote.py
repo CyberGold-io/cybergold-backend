@@ -227,7 +227,7 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
         routes.rpc.assert_canonical = canonical
         async def search(value, on_update, *, block):
             async def update(amount):
-                rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
+                rows = [{'target': target, 'best': {**candidates(target, value['mode'])[0], 'quote': str(amount)},
                     'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []} for target in value['targets']]
                 await on_update({'results': rows})
             await update(25)

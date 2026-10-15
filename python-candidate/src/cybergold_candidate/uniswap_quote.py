@@ -31,24 +31,7 @@ class UniswapQuoteRpc(RecoveryRpc):
         self.chain_id = int(settings.NEXT_PUBLIC_CHAIN_ID)
         self.quoter = Web3.to_checksum_address(settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS)
         self.w3 = w3 or AsyncWeb3(rpc_provider(settings.RPC_URL, settings.RPC_AUTHORIZATION))
-        self.contract = self.w3.eth.contract(abi=ABI)
 
-    def encode(self, request):
-        try:
-            return self.contract.encode_abi(METHODS[request['mode']],
-                args=[bytes.fromhex(request['path'].removeprefix('0x')), int(request['amount'])])
-        except Exception as error:
-            raise InvalidPreview('Invalid Uniswap quote input.') from error
-
-    async def quote(self, mode, data, block):
-        response = await self.w3.provider.make_request('eth_call', [
-            {'to': self.quoter, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
-        if 'error' in response:
-            raise ValueError('Uniswap quote contract read failed')
-        outputs = next(row for row in ABI if row['name'] == METHODS[mode])['outputs']
-        decoded = self.w3.codec.decode([row['type'] for row in outputs], bytes.fromhex(response['result'][2:]))
-        # Existing App consumers use tuple[0]; gas/tick arrays do not select routes.
-        return {'amount': str(decoded[0])}
 
 
 class UniswapQuote:

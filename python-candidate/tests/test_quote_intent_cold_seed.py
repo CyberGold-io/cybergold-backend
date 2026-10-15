@@ -11,7 +11,8 @@ from cybergold_candidate.sdk_worker import SdkWorkerError
 from cybergold_candidate.uniswap_routes import candidate_branches
 from cybergold_candidate.uniswap_state import PoolRegistry
 from test_quote_intent import service, request, ASSET_A, ASSET_B, ASSET_C, WETH
-from test_unified_route_pipeline import NativeQuoterRpc, SETTINGS
+from test_unified_route_pipeline import (PipelineFixtureRpc, ProgrammablePipelineSdk,
+    install_programmable_sdk_snapshot, SETTINGS)
 
 
 class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
@@ -25,37 +26,33 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             release_seed=asyncio.Event(), completed_update_returned=asyncio.Event(),
             forward=asyncio.Event(), release_forward=asyncio.Event(), forwards=[],
             forward_drained=set(), protected_count=0, composed=[], modes=[], frames=[])
-        class Rpc(NativeQuoterRpc):
-            async def read_function(self, address, signature, inputs, args, outputs, block):
-                if signature.startswith('quoteExact'):
-                    path = args[0]
-                    direct = len(path) == 43 and int.from_bytes(path[20:23]) == 100
-                    if direct and not shared and signature.startswith('quoteExactInput'):
-                        source = '0x'+path[:20].hex()
-                        state.forwards.append((source, args[1]))
-                        if hold_forward:
-                            state.forward.set()
-                            try:
-                                if disproof_during_drain and source.lower() == ASSET_B.lower():
-                                    raise SnapshotChanged('Selected forward read disproved')
-                                await state.release_forward.wait()
-                            finally:
-                                state.forward_drained.add(source.lower())
-                        if flat:
-                            return (100, [], [], 0)
-                    if shared and len(path) > 43:
-                        amount = args[1]
-                        return ((amount+1)//2 if signature.startswith('quoteExactOutput') else amount*2, [], [], 0)
-                    if shared and direct:
-                        # This fixture's observed liquidity exists only on the
-                        # two-hop graph; original direct seeds remain pending.
-                        self.tail.set()
+        class Rpc(PipelineFixtureRpc):
+            async def price_v3(self, path, mode, amount, block):
+                direct = len(path) == 43 and int.from_bytes(path[20:23]) == 100
+                if direct and not shared and mode == 'exactIn':
+                    source = '0x'+path[:20].hex()
+                    state.forwards.append((source, amount))
+                    if hold_forward:
+                        state.forward.set()
                         try:
-                            await self.release.wait()
+                            if disproof_during_drain and source.lower() == ASSET_B.lower():
+                                raise SnapshotChanged('Selected forward read disproved')
+                            await state.release_forward.wait()
                         finally:
-                            self.drained.add('v3')
-                        raise ValueError('No direct fixture pool')
-                return await super().read_function(address, signature, inputs, args, outputs, block)
+                            state.forward_drained.add(source.lower())
+                    if flat:
+                        return 100
+                if shared and len(path) > 43:
+                    return (amount+1)//2 if mode == 'exactOut' else amount*2
+                if shared and direct:
+                    # The opaque SDK fixture supports only its two-hop graph.
+                    self.tail.set()
+                    try:
+                        await self.release.wait()
+                    finally:
+                        self.drained.add('v3')
+                    raise ValueError('No direct fixture pool')
+                return await super().price_v3(path, mode, amount, block)
         rpc = Rpc(held_tail=True)
         registry = PoolRegistry(SETTINGS, rpc=rpc)
         registry.inventory = {}
@@ -68,7 +65,8 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 registry.inventory[identity] = {'id': identity, 'address': identity, 'protocol': 'v2',
                     'feePips': 3000, 'token0': {'address': left, 'decimals': 18, 'chainId': 31338},
                     'token1': {'address': right, 'decimals': 18, 'chainId': 31338}}
-        engine = MarketQuotes(SETTINGS, registry)
+        install_programmable_sdk_snapshot(registry)
+        engine = MarketQuotes(SETTINGS, registry, ProgrammablePipelineSdk(rpc))
         state.rpc, state.registry, state.engine = rpc, registry, engine
         connector_started, connector_drained = asyncio.Event(), asyncio.Event()
         state.connector_started, state.connector_drained = connector_started, connector_drained
@@ -92,6 +90,16 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             return await search(values, block, update if on_update else None)
         engine.search_routes = observed
         if shared:
+            from contextvars import ContextVar
+            composing = ContextVar('cold-seed-fixture-composition', default=False)
+            compose = engine.compose_core_rows
+            async def observed_composition(*args, **kwargs):
+                token = composing.set(True)
+                try:
+                    return await compose(*args, **kwargs)
+                finally:
+                    composing.reset(token)
+            engine.compose_core_rows = observed_composition
             def hop(source, destination, index):
                 left, right = sorted((source, destination), key=str.lower)
                 identity = '0x'+format(index, '040x')
@@ -103,19 +111,23 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             hop(ASSET_A, ASSET_C, 20)
             hop(ASSET_B, ASSET_C, 21)
             hop(ASSET_C, WETH, 22)
-            async def sdk(branches, mode, amount, block, *, candidate=None, canonical=None):
+            async def sdk(payload):
+                pools = {pool['id']: pool for pool in payload['pools']}
+                branches = payload['route']['branches']
                 if any(len(branch['hops']) == 1 for branch in branches):
                     raise SdkWorkerError('No direct fixture observation')
-                index = candidate.get('fixture-order', 0) if candidate is not None else 0
-                if candidate is not None:
-                    candidate['fixture-order'] = index+1
-                    first = branches[0]['hops'][0]
-                    source = first['pool']['token0' if first['zeroForOne'] else 'token1']['address']
+                mode, amount = payload['mode'], int(payload['amount'])
+                index = max((pool.get('_fixtureOrder', 0) for pool in pools.values()), default=0)
+                first = branches[0]['hops'][0]
+                pool = pools[first['poolId']]
+                source = pool['token0' if first['zeroForOne'] else 'token1']['address']
+                if composing.get():
                     state.composed.append((mode, source.lower(), amount, index))
                 return {'amountIn': str(amount if mode == 'exactIn' else (amount+1)//2+index),
                     'amountOut': str(amount*2-index if mode == 'exactIn' else amount),
-                    'settled': True, 'fullyFilled': True}
-            engine.quote_sdk_branches = sdk
+                    'settled': True, 'fullyFilled': True,
+                    'postState': [{**deepcopy(pool), '_fixtureOrder': index+1} for pool in pools.values()]}
+            engine.sdk.reply = sdk
         read = provider.make_request
         async def observed_read(method, params):
             function = None
@@ -200,7 +212,7 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 list(state.registry.inventory.values()), asset, WETH, 'exactOut', 100)])
         self.assertGreater(6+graph_count, 8)
         # Qualification used the completed slots first. Continuing exploration
-        # may now fill them with these held native/typed candidates.
+        # may now fill them with these held SDK/typed candidates.
         await self.ready(state.rpc.typed)
         await self.ready(state.rpc.tail)
         async with asyncio.timeout(2):

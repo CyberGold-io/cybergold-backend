@@ -9,7 +9,8 @@ import httpx
 from web3 import AsyncWeb3
 
 from cybergold_candidate.app import create_app
-from cybergold_candidate.route_search import RouteSearchRpc, reduce_results
+from cybergold_candidate.route_search import reduce_results
+from legacy_quote_wire_fixture import ReferenceRouteSearchRpc as RouteSearchRpc
 from cybergold_candidate.rpc_transport import rpc_provider
 
 

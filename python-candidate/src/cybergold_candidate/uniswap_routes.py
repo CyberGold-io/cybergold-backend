@@ -97,9 +97,8 @@ def initial_v3_branches(target, mode, chain_id=None):
 def v3_branches(path, mode, amount, chain_id=None):
     """Decode packed V3 input once; every internal hop runs input -> output.
 
-    Tokens and fee tiers are the executable pool identity. Optional pool and
-    token observations are acquired by the shared quote engine, never needed
-    just to retain, quote through a native fallback, or encode this route.
+    Tokens and fee tiers are the executable pool identity. Required pool state is acquired by the shared SDK quote engine. Optional
+    pool and token metadata are never needed just to retain or encode this route.
     """
     mode = route_mode(mode)
     raw = bytes.fromhex(path.removeprefix('0x')) if isinstance(path, str) else bytes(path)
