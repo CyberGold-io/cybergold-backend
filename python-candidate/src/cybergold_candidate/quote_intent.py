@@ -514,6 +514,18 @@ class QuoteIntent:
                     final = await preview(token, selected)
                     minimum = int(final['minimumAmountOut'])
                     if not early_display and not int(request['amount']) <= minimum <= ceil(int(request['amount']), slippage_bps):
+                        # A fresh protected point can refine the gross while
+                        # unrelated route coverage continues. Reprice the actual
+                        # new quantities before checking the full execution.
+                        if minimum > 0:
+                            target = int(request['amount'])
+                            next_gross = gross * target // minimum
+                            next_gross = next_gross if next_gross != gross else gross + (1 if minimum < target else -1)
+                            if next_gross > 0:
+                                revised = await redemption(next_gross, early_display=False, selected=selected['quotes'])
+                                revised_minimum = int(revised['preview']['minimumAmountOut'])
+                                if target <= revised_minimum <= ceil(target, slippage_bps):
+                                    return revised
                         raise InvalidPreview('Candidate is outside the minimum-output interval.')
                     return {'quotes': selected['quotes'], 'preview': final, 'initialPreview': None, 'basketPreview': required,
                             **({'expectedInputAmount': str(expected_input_gross)} if expected_input_gross is not None else {}),
@@ -525,7 +537,7 @@ class QuoteIntent:
                 rows = await search(targets, 'exact-in', 'execution', early,
                                     logical_phase='execution-search' if protect else 'expected-input-search')
             else:
-                quote_phase('expected-input-search')
+                quote_phase('execution-search' if protect else 'expected-input-search')
                 by_asset = {quote['inputAsset'].lower(): quote for quote in selected}
                 calls, paths = [], []
                 typed_rows = {}
@@ -534,7 +546,14 @@ class QuoteIntent:
                     if quote.get('routePlan'):
                         plan = deepcopy(quote['routePlan'])
                         plan['branches'] = resize_branches(plan['branches'], int(target['amount']))
-                        quoted = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
+                        if protect:
+                            async with multi_provider.semaphore:
+                                plan['branches'] = multi_provider.resolve_branches(plan['branches'], target['inputAsset'],
+                                    target['outputAsset'], 'exactIn', int(target['amount']))
+                                quoted = await multi_provider.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
+                            plan.update(inputAmount=quoted['amountIn'], outputAmount=quoted['amountOut'])
+                        else:
+                            quoted = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
                         typed_rows[len(paths)] = {'best': {'path': '0x', 'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}
                         paths.append(None)
                         continue
@@ -551,6 +570,11 @@ class QuoteIntent:
                         if row['status'] == 'success' else {'best': None, 'failures': [row]}
                         for path, row in zip((path for path in paths if path is not None), observed, strict=True)])
                 rows = [typed_rows[index] if index in typed_rows else next(ordinary) for index in range(len(paths))]
+                if protect and multi_provider:
+                    rows = [{**row, 'target': target} for target, row in zip(targets, rows, strict=True)]
+                    async with multi_provider.semaphore:
+                        rows = await multi_provider.compose_core_rows(rows, 'exactIn', block,
+                            ordered_assets=request['orderedAssets'], issue=False)
             selected = value(rows)
             quote_phase('final-preview')
             final = await preview(token, selected)
