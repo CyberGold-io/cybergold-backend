@@ -21,7 +21,7 @@ _quote_background = ContextVar('quote_background_work', default=False)
 _QUOTE_PHASES = {'context', 'initial-search', 'initial-preview', 'capacity', 'basket-preview',
                  'expected-input-search', 'execution-search', 'final-preview', 'canonicality',
                  'retained-validation'}
-_ROUTE_PHASES = {'context', 'eligibility', 'v3-coverage', 'typed-reserve', 'composition', 'canonicality'}
+_ROUTE_PHASES = {'context', 'eligibility', 'v3-coverage', 'typed-reserve', 'structured-search', 'composition', 'canonicality'}
 _stages = {'eth_chainId': 'chain-head', 'eth_blockNumber': 'chain-head', 'eth_getBlockByNumber': 'block-read',
            'eth_getBlockByHash': 'block-read', 'eth_call': 'contract-read',
            'eth_estimateGas': 'gas-estimation', 'eth_maxPriorityFeePerGas': 'priority-fee',

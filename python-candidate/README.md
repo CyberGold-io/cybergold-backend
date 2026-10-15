@@ -15,6 +15,31 @@ Activity/dashboard reads never initialize the schema. Pool-cache requests
 retain their existing schema bootstrap; worker initialization remains separate.
 Database connections are lazy.
 
+Core, Market, route search and caller-selected Uniswap quotes use one forward
+structured route model, `RouteQuoteEngine`, candidate scheduler and execution
+compiler. Original direct/via-WETH V3 skeletons can quote before optional pool
+discovery finishes. Each completed candidate can enter the owning producer's
+qualification while exploration continues; no full V3 wave precedes other
+routes. Pool-state simulation uses the installed Uniswap SDKs, with native
+Quoter pricing inside the same engine when required state is unavailable.
+Retained-plan checks and advisory history use that same route identity.
+
+Packed V3 input is normalized at API/retained-input boundaries. HTTP V3 path
+projections and the deployed adapter ABI are produced at their output
+boundaries. The compiler preserves Core's whole-path V3 execution and historical
+V3-only deployments, alongside the existing typed multi-protocol adapter;
+this source refactor changes no Solidity deployment. Core basket fees, asset
+order, shared-pool state replay, bounds and Helpers validation stay with Core.
+Market keeps its own fee and settlement economics over the shared engine.
+
+The existing producer owns selection time: search through five seconds, extend
+to fifteen only when none qualifies, then finish canonical validation and drain.
+Route/intent `rpcReadsScope: "coordinator"` marks their coordinator counters;
+they do not include every engine observation or supplier request. Candidate
+calls now count common-engine jobs rather than only the old V3 batch members.
+These counters alone cannot establish RPC savings. Smart Order Router/AlphaRouter
+is deferred until this pipeline provides a measured comparison baseline.
+
 Implemented and compared with the **actual retained Node implementation**:
 
 - Gold/FX strict provider/payload validation, timestamps, fallback and acquisition

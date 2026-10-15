@@ -6,7 +6,7 @@ import unittest
 
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.quote_cache import IntentSharing
-from cybergold_candidate.quote_errors import public_quote_error
+from cybergold_candidate.quote_errors import public_quote_error, QuoteFailure
 from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope
 from cybergold_candidate.trade_quote import TradeQuotes
 from test_quote_intent import service, request, ADAPTER, ASSET_A, ASSET_B
@@ -31,7 +31,7 @@ class BudgetTimeoutDiagnostics(unittest.IsolatedAsyncioTestCase):
                 cancelled.set()
                 raise
 
-        routes.rpc.quote_batch_counted = blocked
+        routes.engine.quote_branches = blocked
         if unified:
             async def head():
                 return await routes.rpc.block(None)
@@ -72,9 +72,9 @@ class BudgetTimeoutDiagnostics(unittest.IsolatedAsyncioTestCase):
         with budget_context(budget):
             return asyncio.create_task(capture())
 
-    def assert_search_timeout(self, outcome):
+    def assert_search_timeout(self, outcome, *, ordinary=False):
         error_type, payload = outcome
-        self.assertIs(error_type, TimeoutError)
+        self.assertIs(error_type, QuoteFailure if ordinary else TimeoutError)
         self.assertEqual(payload['code'], 'quote-timeout')
         self.assertIn('quoteDiagnostics', payload)
         logical = payload['quoteDiagnostics']
@@ -82,10 +82,13 @@ class BudgetTimeoutDiagnostics(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(logical['qualified'])
         self.assertEqual(logical['inversionIteration'], 0)
         self.assertEqual(logical['routeWave']['mode'], 'exact-in')
-        self.assertEqual(logical['routeWave']['subphase'], 'v3-coverage')
-        self.assertGreater(logical['routeWave']['legacyCandidates'], 0)
+        self.assertEqual(logical['routeWave']['subphase'], 'structured-search')
+        self.assertGreater(logical['routeWave']['typedEnumerated'], 0)
         self.assertEqual(logical['routeWave']['legacyCompleted'], 0)
-        self.assertEqual(logical['routeWave']['typedPending'], 0)
+        if ordinary:
+            self.assertEqual(logical['routeWave']['typedPending'], 0)
+        else:
+            self.assertGreater(logical['routeWave']['typedPending'], 0)
         self.assertGreaterEqual(logical['elapsedMs'], logical['routeWave']['elapsedMs'])
         self.assertNotIn('fixture.invalid', repr(payload))
         return payload
@@ -148,7 +151,7 @@ class BudgetTimeoutDiagnostics(unittest.IsolatedAsyncioTestCase):
 
     async def test_ordinary_provider_deadline_retains_existing_diagnostic_payload(self):
         fixture, frames, budget = self.fixture(unified=True, ordinary_deadline=True), [], QuoteBudget(5, 10)
-        payload = self.assert_search_timeout(await asyncio.wait_for(self.operation(fixture, budget, frames), 5))
+        payload = self.assert_search_timeout(await asyncio.wait_for(self.operation(fixture, budget, frames), 5), ordinary=True)
         self.assertEqual(payload['diagnostics']['stage'], 'route-search')
         self.assertEqual(payload['diagnostics']['failureType'], 'provider-timeout')
         self.assertIsNone(budget.reason)

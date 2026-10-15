@@ -737,7 +737,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Configured Quoter route search for all ordered targets in one wave. Direct and via-WETH candidates retain the existing fee policy, exact-output reversal and deterministic ties. Independent simulations are batched at one canonical block; ordinary member reverts remain partial failures. No pool preparation/persistence, caller-selected path, ABI, provider or target contract. Lossless amounts, no-store, existing deadline/cancellation and stage metrics. */
+        /** @description Route search for all ordered targets through one structured route engine and shared candidate scheduler. Preserves direct/via-WETH V3 fee coverage alongside the selected protocol inventory, using SDK pool math and ordinary native Quoter fallback at one canonical block. Exact-output path reversal is a compatibility projection; internal routes keep forward economic direction. Independent candidate failures remain partial failures. No caller-selected ABI, provider or target contract, wallet signing or submission. Lossless amounts, no-store and existing deadline/cancellation; RPC metrics marked coordinator are not supplier call totals. */
         post: operations["post__api_quotes_routes"];
         delete?: never;
         options?: never;
@@ -754,7 +754,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Newline-delimited progress snapshots as independent candidate reads settle at one shared block. Progress is provisional; only complete follows the existing canonicality check. Full candidate coverage, deterministic ties, deduplication, pool batches, ordinary member errors, deadline and cancellation are unchanged. Transport/reorg failure emits a redacted terminal error with optional observed RPC diagnostics. No caller-selected contract/provider or submission. */
+        /** @description Newline-delimited progress snapshots as candidates settle through the common structured route engine and scheduler. Known inventory overlaps discovery; provisional progress does not prove execution readiness, and only complete follows the existing canonicality check. Original V3 coverage and selected graph routes share SDK pricing, native fallback, candidate errors and owned-task cancellation/drain. Transport/reorg failure emits a redacted terminal error with optional observed RPC diagnostics. No caller-selected contract/provider or submission. */
         post: operations["post__api_quotes_routes_stream"];
         delete?: never;
         options?: never;
@@ -788,7 +788,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Configured QuoterV2 exact-input/output eth_call at a canonical block. Ordered path bytes and amount retain existing App route/tie/slippage semantics; only tuple[0] is consumed as a lossless amount. No caller-selected contract, ABI/provider, wallet signing or transaction submission. No additional hop, token or path policy. */
+        /** @description A caller-selected V3 path is normalized once to a forward structured route and priced by the same SDK quote engine and ordinary native Quoter fallback as route search, at one canonical block. Exact-output packed input retains its established reversed wire order; the result remains one lossless decimal amount. The returned Quoter address identifies the configured native reference, not the source of every successful computation. No caller-selected contract, ABI/provider, wallet signing or transaction submission, and no additional hop, token or path policy. */
         post: operations["post__api_quotes_uniswap"];
         delete?: never;
         options?: never;
@@ -1163,28 +1163,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -1211,28 +1190,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -1279,28 +1237,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1327,28 +1264,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1512,6 +1428,8 @@ export interface components {
                         rpcReadsRequested: number;
                         rpcReadsCoalesced: number;
                         rpcReadsReused: number;
+                        /** @constant */
+                        rpcReadsScope?: "coordinator";
                         candidateCalls: number;
                         iterations: number;
                         totalMs: number;
@@ -1557,28 +1475,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1670,28 +1567,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1758,6 +1634,32 @@ export interface components {
                     };
                 };
             };
+        };
+        RoutePoolRef: components["schemas"]["Omit<MarketPoolRef,\"token0\"|\"token1\">"] & {
+            /** @description Executable identity can precede optional SDK/display metadata acquisition. */
+            token0: {
+                address: string;
+                decimals?: number;
+                chainId?: number;
+                decimalsKnown?: boolean;
+            };
+            /** @description Executable identity can precede optional SDK/display metadata acquisition. */
+            token1: {
+                address: string;
+                decimals?: number;
+                chainId?: number;
+                decimalsKnown?: boolean;
+            };
+        };
+        "Omit<MarketPoolRef,\"token0\"|\"token1\">": {
+            address?: string;
+            id: string;
+            /** @enum {string} */
+            protocol: "v2" | "v3" | "v4";
+            feePips: number;
+            tickSpacing?: number;
+            poolManager?: string;
+            hooks?: string;
         };
         TradeQuote: ({
             /** @enum {string} */
@@ -1833,28 +1735,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1881,28 +1762,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1949,28 +1809,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -1997,28 +1836,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2182,6 +2000,8 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
@@ -2255,28 +2075,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2368,28 +2167,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2512,28 +2290,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -2649,28 +2406,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -2886,28 +2622,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -3013,28 +2728,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -4392,28 +4086,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4444,28 +4117,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4498,28 +4150,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4551,28 +4182,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4603,28 +4213,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4654,28 +4243,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4761,7 +4329,7 @@ export interface components {
                     path: string;
                     quote: string;
                     /** @enum {string} */
-                    route: "direct" | "mixed" | "viaWeth";
+                    route: "direct" | "identity" | "mixed" | "viaWeth";
                     feeInfo: string;
                     routePlan?: {
                         /** @constant */
@@ -4775,28 +4343,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -4853,7 +4400,7 @@ export interface components {
                         path: string;
                         quote: string;
                         /** @enum {string} */
-                        route: "direct" | "mixed" | "viaWeth";
+                        route: "direct" | "identity" | "mixed" | "viaWeth";
                         feeInfo: string;
                         routePlan?: {
                             /** @constant */
@@ -4867,28 +4414,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -4924,6 +4450,8 @@ export interface components {
                     candidateCalls: number;
                     rpcReads: number;
                     rpcReadsRequested: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
                     contextMs: number;
@@ -4986,28 +4514,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5147,28 +4654,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5195,28 +4681,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5380,6 +4845,8 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
@@ -5441,28 +4908,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5489,28 +4935,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5674,6 +5099,8 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
@@ -6133,28 +5560,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -6270,28 +5676,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -6381,28 +5766,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6494,28 +5858,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6614,28 +5957,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6676,28 +5998,7 @@ export interface components {
             branches: {
                 amountIn: string;
                 hops: {
-                    pool: {
-                        id: string;
-                        /** @enum {string} */
-                        protocol: "v2" | "v3" | "v4";
-                        token0: {
-                            address: string;
-                            decimals: number;
-                            chainId: number;
-                            decimalsKnown?: boolean;
-                        };
-                        token1: {
-                            address: string;
-                            decimals: number;
-                            chainId: number;
-                            decimalsKnown?: boolean;
-                        };
-                        address?: string;
-                        feePips: number;
-                        tickSpacing?: number;
-                        poolManager?: string;
-                        hooks?: string;
-                    };
+                    pool: components["schemas"]["RoutePoolRef"];
                     zeroForOne: boolean;
                 }[];
             }[];
@@ -7371,7 +6672,7 @@ export interface components {
                     path: string;
                     quote: string;
                     /** @enum {string} */
-                    route: "direct" | "mixed" | "viaWeth";
+                    route: "direct" | "identity" | "mixed" | "viaWeth";
                     feeInfo: string;
                     routePlan?: {
                         /** @constant */
@@ -7385,28 +6686,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7442,6 +6722,8 @@ export interface components {
                 candidateCalls: number;
                 rpcReads: number;
                 rpcReadsRequested: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
                 rpcReadsCoalesced: number;
                 rpcReadsReused: number;
                 contextMs: number;
@@ -7493,28 +6775,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7541,28 +6802,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7609,28 +6849,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -7657,28 +6876,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -7842,6 +7040,8 @@ export interface components {
                 rpcReadsRequested: number;
                 rpcReadsCoalesced: number;
                 rpcReadsReused: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
                 candidateCalls: number;
                 iterations: number;
                 totalMs: number;
@@ -7878,28 +7078,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];

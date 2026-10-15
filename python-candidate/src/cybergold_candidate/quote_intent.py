@@ -12,16 +12,16 @@ from pydantic import BaseModel, Field, TypeAdapter
 from web3 import Web3
 
 from .basket_preview import BasketPreviewRpc, InvalidPreview
-from .route_search import RouteSearchRpc, RouteTarget, candidates
+from .route_search import RouteSearchRpc, RouteTarget
 from .token_preview import TokenPreviewRpc
-from .quote_revalidation import RetainedPlanChanged, core_bounds, revalidate
+from .quote_revalidation import RetainedPlanChanged, core_bounds, revalidate, selected_route
 from .preview_errors import KnownPreviewError
 from .quote_errors import QuoteFailure, RpcTimeout, rpc_failure, public_quote_error
 from .quote_budget import current_budget, SearchStopped
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .issuance_capacity import capacity_amounts, read_capacity
-from .market_swap import encode_adapter
-from .uniswap_routes import resize_branches, uses_typed_adapter
+from .route_encoding import encode_route
+from .uniswap_routes import resize_branches, v3_plan
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
 from .rpc_diagnostics import (error_diagnostics, quote_work_scope, quote_background, quote_phase,
@@ -87,7 +87,9 @@ def validate(value):
             Web3.to_checksum_address(asset)
         Web3().codec.encode(['uint256', 'uint256'], [int(value['amount']), int(value['deadline'])])
         for target in value['targets']:
-            candidates(target, 'exact-in' if value['mode'] == 'issue-exact-in' else 'exact-out')
+            Web3.to_checksum_address(target['inputAsset'])
+            Web3.to_checksum_address(target['outputAsset'])
+            Web3().codec.encode(['uint256'], [int(target['amount'])])
     except Exception as error:
         raise InvalidPreview('Invalid quote input.') from error
 
@@ -101,6 +103,9 @@ def route_failure(row, *, fallback_code='quote-no-route'):
     for failure in row['failures']:
         if failure.get('code') in ('rpc-rate-limit', 'rpc-timeout', 'rpc-unavailable', 'rpc-access-denied'):
             return QuoteFailure(failure['code'], diagnostics=failure.get('diagnostics'))
+    for failure in row['failures']:
+        if failure.get('code') == 'quote-timeout':
+            return QuoteFailure('quote-timeout', diagnostics=failure.get('diagnostics'))
     failure = next(iter(row['failures']), {})
     return QuoteFailure(fallback_code, diagnostics=failure.get('diagnostics'))
 
@@ -133,9 +138,8 @@ class QuoteIntent:
         if self.routes.rpc is None:
             self.routes.rpc = RouteSearchRpc(self.settings)
         rpc = self.routes.rpc
-        if getattr(self.routes, 'multi_protocol', None):
-            rpc.multi_protocol = self.routes.multi_protocol
-        multi_provider = getattr(self.routes, 'multi_protocol', None) if uses_typed_adapter(request['adapter']) else None
+        engine = self.routes.engine
+        rpc.route_engine = engine
         basket = BasketPreviewRpc(self.settings, rpc.w3)
         token = TokenPreviewRpc(self.settings, rpc.w3)
         started = time.perf_counter()
@@ -148,11 +152,11 @@ class QuoteIntent:
             raise RpcTimeout('RPC context acquisition timed out') from None
         context = {'chainId': rpc.chain_id, 'blockNumber': str(block['number']),
                    'blockHash': block['hash'], 'observedAt': self.now()}
-        if self.history and epoch == self.history.epoch and multi_provider:
-            self.history.ensure_known_typed_pools(multi_provider, request, block, context)
+        if self.history and epoch == self.history.epoch:
+            self.history.ensure_known_routes(engine, request, block, context)
             self.history.ensure_state(rpc, block, context)
         metrics = {'rpcReads': 3, 'rpcReadsRequested': 3, 'rpcReadsCoalesced': 0,
-                   'rpcReadsReused': 0, 'candidateCalls': 0, 'iterations': 0}
+                   'rpcReadsReused': 0, 'rpcReadsScope': 'coordinator', 'candidateCalls': 0, 'iterations': 0}
         memo, estimates = {}, set()
         recovery = None
         waves = []
@@ -188,6 +192,16 @@ class QuoteIntent:
                 return int(value['preview']['minimumAmountOut']) > int(qualified['preview']['minimumAmountOut'])
             return int(value['executionAmount']) < int(qualified['executionAmount'])
 
+        async def invalidate_context(error):
+            nonlocal context_error, qualified, pending_qualification
+            context_error = error
+            if budget is not None:
+                budget.invalidated()
+            qualified = None
+            quote_qualified(False)
+            pending_qualification = None
+            await on_update({'type': 'invalidated', 'context': context, 'reason': 'snapshot-changed'})
+
         async def qualify():
             nonlocal pending_qualification, qualified, context_error
             while pending_qualification is not None:
@@ -211,13 +225,7 @@ class QuoteIntent:
                     # A disproved common snapshot is different from an
                     # unavailable prospective route. It also retires an
                     # earlier tuple and survives a later ordinary tail error.
-                    context_error = error
-                    if budget is not None:
-                        budget.invalidated()
-                    qualified = None
-                    quote_qualified(False)
-                    pending_qualification = None
-                    await on_update({'type': 'invalidated', 'context': context, 'reason': 'snapshot-changed'})
+                    await invalidate_context(error)
                     return
                 except Exception:
                     # An optional candidate failure does not replace ordinary
@@ -285,22 +293,31 @@ class QuoteIntent:
                 else:
                     limit = int(target['amount'])
                     bound = ceil(observed, slippage_bps) if protect else observed
-                route_plan = None
-                if best.get('routePlan'):
-                    route_plan = {**deepcopy(best['routePlan']), 'limit': str(limit), 'deadline': request['deadline']}
-                    data = encode_adapter(route_plan)
-                else:
-                    data = '0x' + rpc.w3.codec.encode(['bytes', 'uint256', 'uint256', 'bool'],
-                        [bytes.fromhex(best['path'][2:]), limit, int(request['deadline']), mode == 'exact-in']).hex()
-                leg = {'adapter': request['adapter'], 'minimumAmountOut': str(limit), 'data': data}
-                if route_plan:
-                    leg['routePlan'] = route_plan
+                route_plan = {**deepcopy(best['routePlan']), 'limit': str(limit), 'deadline': request['deadline']}
+                leg = {'adapter': request['adapter'], 'minimumAmountOut': str(limit),
+                    'routePlan': route_plan, 'data': encode_route(route_plan, request['adapter'])}
                 if redeem:
                     leg.update(inputAsset=target['inputAsset'], inputAmount=target['amount'])
                 else:
                     leg.update(outputAsset=target['outputAsset'], amountIn=target['amount'] if mode == 'exact-in' else str(bound))
                 values.append(leg)
             return values
+
+        def canonical_rows(rows, targets, mode):
+            """Normalize retained/injected route results at the service boundary."""
+            rows = deepcopy(rows)
+            for row, target in zip(rows, targets, strict=True):
+                best = row.get('best')
+                if best is None:
+                    continue
+                plan = best.get('routePlan')
+                if plan is None:
+                    plan = v3_plan(best['path'], mode, target['amount'], chain_id=rpc.chain_id)
+                    plan.update(inputAmount=str(target['amount'] if mode == 'exact-in' else best['quote']),
+                        outputAmount=str(best['quote'] if mode == 'exact-in' else target['amount']))
+                plan['executionContext'] = 'helpers-core'
+                best['routePlan'] = plan
+            return rows
 
         async def search(targets, mode, stage, early=None, *, logical_phase=None):
             quote_phase(logical_phase or ('initial-search' if stage == 'initial' else 'execution-search'))
@@ -319,39 +336,44 @@ class QuoteIntent:
                     try:
                         # Prospective shared-state replay uses the same budget
                         # as candidate quotes and cannot block search coverage.
-                        async with multi_provider.semaphore:
-                            rows = await multi_provider.compose_core_rows(rows,
+                        async with engine.semaphore:
+                            rows = await engine.compose_core_rows(rows,
                                 'exactIn' if mode == 'exact-in' else 'exactOut', block,
                                 ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
                         early(rows)
+                    except SnapshotChanged as error:
+                        await invalidate_context(error)
+                        return
                     except Exception:
                         # Final selection retains its ordinary errors. A failed
                         # prospective replay may be superseded by another route.
                         pass
             async def update(event):
                 nonlocal previous, pending_early, preparing
-                rows = event['results']
+                rows = canonical_rows(event['results'], targets, mode)
                 await on_update({'type': 'progress', 'stage': stage,
                     'completed': sum(row['attempted'] for row in rows), 'total': sum(row['total'] for row in rows)})
                 identity = json.dumps([row['best'] for row in rows], sort_keys=True)
                 if early and all(row['best'] for row in rows) and identity != previous:
                     previous = identity
-                    if multi_provider:
-                        pending_early = deepcopy(rows)
-                        if preparing is None or preparing.done():
-                            async def background():
-                                with quote_background():
-                                    await prepare_early()
-                            preparing = asyncio.create_task(background())
-                            estimates.add(preparing)
-                            preparing.add_done_callback(estimates.discard)
-                    else:
-                        early(rows)
-            search_request = {'mode': mode, 'targets': targets}
-            if getattr(self.routes, 'multi_protocol', None):
-                search_request['adapter'] = request['adapter']
+                    pending_early = deepcopy(rows)
+                    if preparing is None or preparing.done():
+                        async def background():
+                            with quote_background():
+                                await prepare_early()
+                        preparing = asyncio.create_task(background())
+                        estimates.add(preparing)
+                        preparing.add_done_callback(estimates.discard)
+            search_request = {'mode': mode, 'targets': targets, 'adapter': request['adapter']}
             try:
                 result = await self.routes.get(search_request, on_update=update, block=block)
+                # Candidate failures are isolated by the common scheduler. A
+                # deadline that leaves a required leg unquoted still belongs
+                # to this search, before any subsequent preview phase begins.
+                for row in result['results']:
+                    if row['best'] is None and any(failure.get('code') == 'quote-timeout'
+                            for failure in row['failures']):
+                        raise route_failure(row)
             except Exception as error:
                 freeze_quote_work(error)
                 # Freeze the route cause before this search's prospective
@@ -365,12 +387,12 @@ class QuoteIntent:
                 if preparing:
                     preparing.cancel()
                     await asyncio.gather(preparing, return_exceptions=True)
-            if multi_provider:
-                route_subphase('composition')
-                result['results'] = await multi_provider.compose_core_rows(result['results'],
+            route_subphase('composition')
+            async with engine.semaphore:
+                result['results'] = await engine.compose_core_rows(canonical_rows(result['results'], targets, mode),
                     'exactIn' if mode == 'exact-in' else 'exactOut', block,
                     ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
-                finish_route_work()
+            finish_route_work()
             for key in ('rpcReads', 'rpcReadsRequested', 'rpcReadsCoalesced', 'rpcReadsReused', 'candidateCalls'):
                 metrics[key] += result['metrics'][key]
             waves.append((mode, result['results'], result['context']))
@@ -415,24 +437,14 @@ class QuoteIntent:
                         net = int(provisional['netCygldOut'])
                         selected = []
                         for index, (target, row) in enumerate(zip(targets, rows, strict=True)):
-                            if row['best'].get('routePlan'):
-                                # Fresh revalidation resolves the same selected
-                                # pools, checks exact-output support and rebuilds
-                                # calldata after quantities/bounds are known.
-                                leg = deepcopy(value['quotes'][index])
-                                leg['routePlan']['mode'] = 'exactOut'
-                                for branch in leg['routePlan']['branches']:
-                                    branch['amountIn'] = '0'
-                                selected.append(leg)
-                                continue
-                            raw = bytes.fromhex(row['best']['path'][2:])
-                            tokens = [raw[:20]] + [raw[offset+3:offset+23] for offset in range(20,len(raw),23)]
-                            fees = [raw[offset:offset+3] for offset in range(20,len(raw),23)]
-                            reverse = tokens[-1] + b''.join(fee+asset for fee,asset in zip(reversed(fees),reversed(tokens[:-1]),strict=True))
-                            selected.append({'adapter': request['adapter'], 'outputAsset': target['outputAsset'],
-                                'amountIn': target['amount'], 'minimumAmountOut': '0',
-                                'data': '0x'+rpc.w3.codec.encode(['bytes','uint256','uint256','bool'],
-                                    [reverse, 0, int(request['deadline']), False]).hex()})
+                            # Fresh revalidation resolves the same selected
+                            # pools and rebuilds calldata after Core quantities
+                            # and exact-output bounds are known.
+                            leg = deepcopy(value['quotes'][index])
+                            leg['routePlan']['mode'] = 'exactOut'
+                            for branch in leg['routePlan']['branches']:
+                                branch['amountIn'] = '0'
+                            selected.append(leg)
                         result = await revalidate(request, {'executionAmount': str(net), 'maximumInputAmount': str(amount),
                             'quotes': selected, 'slippageBps': slippage_bps}, rpc, block, basket, token, preview, metrics)
                         result.update(initialPreview=provisional, displayAmount=provisional['netCygldOut'])
@@ -557,59 +569,33 @@ class QuoteIntent:
             else:
                 quote_phase('execution-search' if protect else 'expected-input-search')
                 by_asset = {quote['inputAsset'].lower(): quote for quote in selected}
-                calls, paths = [], []
-                typed_rows = {}
                 async def reprice(target):
                     quote = by_asset[target['inputAsset'].lower()]
-                    if quote.get('routePlan'):
-                        plan = deepcopy(quote['routePlan'])
-                        plan['branches'] = resize_branches(plan['branches'], int(target['amount']))
-                        if protect:
-                            async with multi_provider.semaphore:
-                                plan['branches'] = multi_provider.resolve_branches(plan['branches'], target['inputAsset'],
-                                    target['outputAsset'], 'exactIn', int(target['amount']))
-                                quoted = await multi_provider.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
-                            plan.update(inputAmount=quoted['amountIn'], outputAmount=quoted['amountOut'])
-                        else:
-                            quoted = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
-                        return None, {'best': {'path': '0x', 'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}, None
-                    path, _, _, _ = rpc.w3.codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(quote['data'][2:]))
-                    path = '0x' + path.hex()
-                    return path, None, rpc.encode({'mode': 'exact-in', 'path': path, 'amount': target['amount']})
+                    plan, _ = selected_route(quote, 'exactIn', int(target['amount']), rpc)
+                    async with engine.semaphore:
+                        plan['branches'] = engine.resolve_branches(plan['branches'], target['inputAsset'],
+                            target['outputAsset'], 'exactIn', int(target['amount']))
+                        quoted = await engine.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
+                    plan.update(inputAmount=quoted['amountIn'], outputAmount=quoted['amountOut'])
+                    return {'target': target, 'best': {'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}
                 if protect:
                     # Isolated leg observations can overlap. Consume in Core
                     # order so errors keep their previous precedence; the
                     # shared-pool execution replay below remains sequential.
                     tasks = [asyncio.create_task(reprice(target)) for target in targets]
                     try:
-                        repriced = [await task for task in tasks]
+                        rows = [await task for task in tasks]
                     finally:
                         for task in tasks:
                             if not task.done():
                                 task.cancel()
                         await asyncio.gather(*tasks, return_exceptions=True)
                 else:
-                    repriced = [await reprice(target) for target in targets]
-                for path, row, call in repriced:
-                    if row is not None:
-                        typed_rows[len(paths)] = row
-                    else:
-                        calls.append(call)
-                    paths.append(path)
-                counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-                observed = await rpc.quote_batch_counted('exact-in', calls, block, counts) if calls else []
-                for name, counter in (('rpcReads', 'issued'), ('rpcReadsRequested', 'requested'),
-                                      ('rpcReadsCoalesced', 'coalesced'), ('rpcReadsReused', 'reused')):
-                    metrics[name] += counts[counter]
-                metrics['candidateCalls'] += len(calls)
-                ordinary = iter([{'best': {'path': path, 'quote': row['amount']}, 'failures': []}
-                        if row['status'] == 'success' else {'best': None, 'failures': [row]}
-                        for path, row in zip((path for path in paths if path is not None), observed, strict=True)])
-                rows = [typed_rows[index] if index in typed_rows else next(ordinary) for index in range(len(paths))]
-                if protect and multi_provider:
-                    rows = [{**row, 'target': target} for target, row in zip(targets, rows, strict=True)]
-                    async with multi_provider.semaphore:
-                        rows = await multi_provider.compose_core_rows(rows, 'exactIn', block,
+                    rows = [await reprice(target) for target in targets]
+                metrics['candidateCalls'] += len(targets)
+                if protect:
+                    async with engine.semaphore:
+                        rows = await engine.compose_core_rows(rows, 'exactIn', block,
                             ordered_assets=request['orderedAssets'], issue=False)
             selected = value(rows)
             quote_phase('final-preview')
@@ -783,6 +769,8 @@ class QuoteIntent:
                     # A paid Core rejection invalidates this selected plan.
                     # Ordinary transport failures still retain prior display.
                     await on_update({'type': 'invalidated', 'context': context})
+                except SnapshotChanged:
+                    raise
                 except Exception as error:
                     code = public_quote_error(error)['code']
                     if code.startswith('rpc-') or code == 'quote-timeout':
@@ -792,36 +780,17 @@ class QuoteIntent:
                     # An unusable caller hint can use ordinary complete search.
             if result is not None:
                 if request['mode'] == 'issue-exact-in':
-                    reverse = []
                     selected = {leg['outputAsset'].lower(): leg for leg in result['quotes']}
-                    calls = []
-                    typed_observations = []
+                    observations = []
                     for target in request['targets']:
                         chosen = selected[target['outputAsset'].lower()]
-                        if chosen.get('routePlan'):
-                            plan = chosen['routePlan']
-                            branches = resize_branches(plan['branches'], int(target['amount']))
-                            value = await rpc.multi_protocol.quote_branches(branches, 'exactIn', int(target['amount']), block)
-                            typed_observations.append({'status': 'success', 'amount': value['amountOut']})
-                            continue
-                        path, _, _, _ = rpc.w3.codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(selected[target['outputAsset'].lower()]['data'][2:]))
-                        assets = [path[:20]] + [path[offset+3:offset+23] for offset in range(20, len(path), 23)]
-                        fees = [path[offset:offset+3] for offset in range(20, len(path), 23)]
-                        path = assets[-1] + b''.join(fee+asset for fee, asset in zip(reversed(fees), reversed(assets[:-1]), strict=True))
-                        reverse.append('0x' + path.hex())
-                        calls.append(rpc.encode({'mode': 'exact-in', 'path': reverse[-1], 'amount': target['amount']}))
-                    counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-                    observations = await rpc.quote_batch_counted('exact-in', calls, block, counts) if calls else []
-                    observations.extend(typed_observations)
-                    for name, counter in (('rpcReads', 'issued'), ('rpcReadsRequested', 'requested'),
-                                          ('rpcReadsCoalesced', 'coalesced'), ('rpcReadsReused', 'reused')):
-                        metrics[name] += counts[counter]
-                    metrics['candidateCalls'] += len(calls)
-                    rows = [{'best': {'quote': row['amount']}} for row in observations if row['status'] == 'success']
-                    if len(rows) != len(observations):
-                        failure = next(row for row in observations if row['status'] != 'success')
-                        raise QuoteFailure(failure.get('code', 'quote-unavailable'),
-                                           diagnostics=failure.get('diagnostics'))
+                        plan = chosen['routePlan']
+                        branches = resize_branches(plan['branches'], int(target['amount']))
+                        async with engine.semaphore:
+                            value = await engine.quote_branches(branches, 'exactIn', int(target['amount']), block)
+                        observations.append(value['amountOut'])
+                    metrics['candidateCalls'] += len(observations)
+                    rows = [{'best': {'quote': amount}} for amount in observations]
                     result.update(await capacity(rows))
                 elif request['mode'] == 'redeem-exact-out':
                     seed = prior.get('expectedInputAmount') or result['executionAmount']
@@ -882,10 +851,8 @@ class QuoteIntent:
                     self.history.ensure_state(rpc, block, context)
                     for mode, rows, _ in waves:
                         for row in rows:
-                            if row['best'] and row['best'].get('routePlan'):
-                                self.history.ensure_typed_pool(self.routes.multi_protocol, row['best']['routePlan'], block, context)
-                            elif row['best'] and row['best']['path'] != '0x':
-                                self.history.ensure_pool(rpc, row['best']['path'], mode, block, context)
+                            if row['best']:
+                                self.history.ensure_route(engine, row['best']['routePlan'], block, context)
             return result
         except Exception as error:
             freeze_quote_work(error)

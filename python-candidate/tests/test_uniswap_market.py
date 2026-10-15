@@ -682,9 +682,13 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         async def sdk(branches, _mode, amount, _block):
             if len(branches) != 1:
                 raise SdkWorkerError('Fixture exercises standalone candidate ranking')
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2/V4 only')
             is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
             return {'amountIn': str(amount), 'amountOut': '2000' if is_v4 else '1500', 'qualification': 'sdk'}
         async def quoter(branches, _mode, amount, _block):
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2/V4 only')
             is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
             checks.append(is_v4)
             return {'amountIn': str(amount), 'amountOut': '1000' if is_v4 else '1490', 'qualification': 'quoter'}
@@ -773,7 +777,12 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         second = await self.quotes._get({**self.request, 'amount': '2002'}, block={
             'number': 124, 'hash': '0x'+'cd'*32})
         self.assertNotEqual(first['netOutput'], second['netOutput'])
-        self.assertEqual(static, {name: reads.count(name) for name in static})
+        self.assertEqual(static['getPair(address,address)'], reads.count('getPair(address,address)'))
+        self.assertEqual(static['decimals()'], reads.count('decimals()'))
+        # Negative catalog observations are advisory; original V3 candidates
+        # recheck absence at the new quote block instead of inheriting a veto.
+        self.assertEqual(reads.count('getPool(address,address,uint24)'),
+                         static['getPool(address,address,uint24)']+13)
         self.assertEqual(reads.count('getReserves()'), 1)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
@@ -872,7 +881,7 @@ for line in sys.stdin:
         finally:
             await worker.close()
 
-    async def test_connector_failure_cancels_parallel_baseline(self):
+    async def test_optional_connector_failure_keeps_cached_quote_and_drains_parallel_baseline(self):
         started, stopped = asyncio.Event(), asyncio.Event()
         async def model(*_args, **_kwargs):
             started.set()
@@ -884,8 +893,8 @@ for line in sys.stdin:
             await started.wait()
             raise ValueError('Fixture connector error')
         self.quotes.get_model, self.quotes.connector_inventory = model, connectors
-        with self.assertRaises(ValueError):
-            await self.quotes._get(self.request, block=BLOCK)
+        result = await self.quotes._get(self.request, block=BLOCK)
+        self.assertGreater(int(result['netOutput']), 0)
         self.assertTrue(stopped.is_set())
 
     async def test_dense_graph_is_cooperatively_cancellable(self):
@@ -978,29 +987,30 @@ for line in sys.stdin:
         self.assertEqual(params[0][4], 1000)
         self.assertEqual(params[1][1][0], 1002)
 
-    async def test_historical_adapter_and_unversioned_route_search_keep_legacy_v3_encoding(self):
+    async def test_historical_adapter_uses_shared_engine_and_preserves_legacy_v3_encoding(self):
         from test_quote_intent import service, request
         legacy = '0x4edb8190232a47e45d861003672938eb7ee84a15'
         intent, _provider, routes, _wire = service()
-        routes.multi_protocol = self.quotes
-        reserve = AsyncMock(side_effect=AssertionError('Historical adapter cannot decode typed market routes'))
-        self.quotes.reserve_quotes = reserve
+        search = AsyncMock(wraps=routes.engine.search_routes)
+        routes.engine.search_routes = search
         try:
             value = request('issue-exact-out')
             value['adapter'] = legacy
             result = await intent.get(value, lambda _event: asyncio.sleep(0))
             self.assertTrue(result['quotes'])
             for leg in result['quotes']:
-                self.assertNotIn('routePlan', leg)
+                plan = leg['routePlan']
+                self.assertEqual(len(plan['branches']), 1)
+                self.assertTrue(all(hop['pool']['protocol'] == 'v3' for hop in plan['branches'][0]['hops']))
                 Web3().codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(leg['data'][2:]))
             await routes.get({'mode': 'exact-in', 'targets': value['targets']})
-            reserve.assert_not_awaited()
+            self.assertGreaterEqual(search.await_count, 2)
         finally:
             await routes.close()
 
     async def test_core_reserve_provider_is_fee_neutral_and_typed_revalidation_retains_limits(self):
         target = {'inputAsset': A, 'outputAsset': B, 'amount': '1000'}
-        rows = await self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': [target]}, BLOCK)
+        rows = await self.quotes.reserve_quotes({'mode': 'exact-in', 'adapter': C, 'targets': [target]}, BLOCK)
         self.assertEqual(rows[0]['best']['quote'], '1974')
         plan = rows[0]['best']['routePlan']
         self.assertEqual(plan['executionContext'], 'helpers-core')
@@ -1009,12 +1019,12 @@ for line in sys.stdin:
             'routePlan': plan, 'data': encode_adapter(plan)}
         outputs = [{'kind': 0, 'token': A, 'id': '0', 'amount': '1000'}]
         request = {'mode': 'redeem-exact-in', 'native': False, 'amount': '100',
-            'quoteToken': B, 'token': B, 'orderedAssets': [A], 'deadline': '10000000000', 'slippageBps': 50}
+            'quoteToken': B, 'token': B, 'adapter': C, 'orderedAssets': [A], 'deadline': '10000000000', 'slippageBps': 50}
         previous = {'executionAmount': '100', 'maximumInputAmount': '0', 'quotes': [leg],
             'expectedCoreOutputs': core_bounds(outputs, 50), 'preview': {'minimumAmountOut': '1900'}, 'slippageBps': 50}
         async def preview(service, _value):
             return {'projectedCoreOutputs': outputs, **({'minimumAmountOut': '1900'} if service == 'token' else {})}
-        self.rpc.multi_protocol = self.quotes
+        self.rpc.route_engine = self.quotes
         metrics = dict.fromkeys(('rpcReads', 'rpcReadsRequested', 'rpcReadsCoalesced', 'rpcReadsReused', 'candidateCalls'), 0)
         result = await revalidate(request, previous, self.rpc, BLOCK, 'basket', 'token', preview, metrics)
         changed = result['quotes'][0]
@@ -1052,6 +1062,8 @@ for line in sys.stdin:
                 async for branches in candidate_branches(pools, target['inputAsset'], B, 'exactIn', 1000)])
         async def quote(branches, mode, amount, block):
             nonlocal active, maximum
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2 only')
             source = branches[0]['hops'][0]['pool']['token0']['address']
             observed.append((source, json.dumps(branches, sort_keys=True)))
             active += 1
@@ -1067,7 +1079,7 @@ for line in sys.stdin:
             if all(row['best'] for row in rows):
                 ready.set()
         self.quotes.quote_branches = quote
-        operation = asyncio.create_task(self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': targets}, BLOCK, on_update=update))
+        operation = asyncio.create_task(self.quotes.reserve_quotes({'mode': 'exact-in', 'adapter': C, 'targets': targets}, BLOCK, on_update=update))
         try:
             await asyncio.wait_for(ready.wait(), 1)
             self.assertFalse(operation.done())
@@ -1077,7 +1089,7 @@ for line in sys.stdin:
             final = await operation
             self.assertCountEqual(observed, expected)
             self.assertLessEqual(maximum, 8)
-            self.assertEqual(sum(row['attempted'] for row in final), len(expected))
+            self.assertEqual(sum(row['attempted'] for row in final), len(expected)+26)
             self.assertEqual(sum(row['succeeded'] for row in final), len(expected))
             self.assertTrue(all(int(row['best']['quote']) > 2001 for row in final))
         finally:
@@ -1089,6 +1101,8 @@ for line in sys.stdin:
         started = {1000: asyncio.Event(), 2000: asyncio.Event()}
         stopped, release = set(), asyncio.Event()
         async def quote(branches, mode, amount, block):
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2 only')
             started[amount].set()
             try:
                 await release.wait()
@@ -1105,7 +1119,7 @@ for line in sys.stdin:
         async def search(amount):
             quote_phase('initial-search')
             try:
-                result = await ObservedReserve().get({'mode': 'exact-in', 'targets': [
+                result = await ObservedReserve().get({'mode': 'exact-in', 'adapter': C, 'targets': [
                     {'inputAsset': A, 'outputAsset': B, 'amount': str(amount)}]})
             except asyncio.CancelledError as error:
                 diagnostics[amount] = public_quote_error(error)['quoteDiagnostics']
@@ -1121,13 +1135,14 @@ for line in sys.stdin:
             await asyncio.gather(first, return_exceptions=True)
             self.assertTrue(first.cancelled())
             cancelled = diagnostics[1000]['routeWave']
-            self.assertEqual((cancelled['typedEnumerated'], cancelled['typedCompleted'], cancelled['typedPending']), (1, 0, 1))
+            self.assertEqual(cancelled['typedPending'], 1)
+            self.assertEqual(cancelled['typedEnumerated']-cancelled['typedCompleted'], 1)
             self.assertEqual(stopped, {1000})
             self.assertFalse(other.done())
             release.set()
             self.assertEqual((await other)[0]['best']['quote'], '4000')
             completed = diagnostics[2000]['routeWave']
-            self.assertEqual((completed['typedEnumerated'], completed['typedCompleted'], completed['typedPending']), (1, 1, 0))
+            self.assertEqual((completed['typedEnumerated'], completed['typedCompleted'], completed['typedPending']), (14, 14, 0))
             self.assertEqual(diagnostics[1000]['routeWave'], cancelled)
         finally:
             first.cancel(); other.cancel()
@@ -1276,7 +1291,7 @@ for line in sys.stdin:
             history.observe(request, result, [('exact-in', [{'target': target,
                 'best': {'path': legacy, 'quote': '1960'}}], context)])
             self.assertEqual(len(history.routes), 2)
-            self.assertEqual({len(key) for key in history.routes}, {2, 3})
+            self.assertEqual({len(key) for key in history.routes}, {3})
         finally:
             await history.close()
 

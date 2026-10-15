@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from cybergold_candidate.shared_reads import SharedReads
+from route_engine_fixture import install_fixture_engine
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH
 from test_route_search import Provider, Wire, service, target, ASSET_A, ASSET_B, ASSET_C, SETTINGS, HASH, candidates
 from cybergold_candidate.uniswap_state import UniswapRpc, PoolRegistry
@@ -303,8 +304,9 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             requests = [{'mode': 'exact-in', 'targets': [target(asset, amount=100 + i),
                 target(asset, ASSET_C, amount=200 + i)]} for i in range(5)]
             values = await asyncio.gather(*(search.get(request) for request in requests))
-            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), current)
-            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), shared)
+            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 15)
+            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 15)
+            self.assertTrue(all(value['metrics']['rpcReadsScope'] == 'coordinator' for value in values))
             self.assertTrue(all(value['metrics']['candidateCalls'] == (8 if asset == WETH else 26) for value in values))
             self.assertEqual(sum(len(batch) for batch in wire.batches) + 15, shared)
 
@@ -313,14 +315,20 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(search.close)
         async def quote(_path, amount): return amount + 777
         wire.on_quote = quote
+        def members():
+            return sum(len(batch) for batch in wire.batches)
         first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]})
+        first_members = members()
         second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]})
-        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (27, 11))
-        self.assertEqual(second['metrics']['rpcReadsReused'], 16)
+        second_members = members()-first_members
+        self.assertEqual((first_members, second_members), (24, 8))
+        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (3, 3))
+        self.assertEqual(second['metrics']['rpcReadsScope'], 'coordinator')
         self.assertEqual(int(second['results'][0]['best']['quote']), int(first['results'][0]['best']['quote']) + 1)
         provider.block_hash = '0x' + 'b' * 64
         third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]})
-        self.assertEqual(third['metrics']['rpcReads'], 27)
+        self.assertEqual(members()-first_members-second_members, 24)
+        self.assertEqual(third['metrics']['rpcReads'], 3)
         self.assertEqual(third['context']['blockHash'], provider.block_hash)
         provider.reorg = True
         with self.assertRaisesRegex(Exception, 'snapshot changed'):
@@ -331,14 +339,21 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         provider, wire = Provider(chain='0x7a6a'), Wire()
         search = RouteSearch(settings, RouteSearchRpc(settings, AsyncWeb3(provider),
             httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+        install_fixture_engine(search)
         self.addAsyncCleanup(search.close)
         wire.pool_liquidity = lambda _fee: 0
         first = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
-        self.assertEqual(first['metrics']['candidateCalls'], 0)
+        self.assertEqual(first['metrics']['candidateCalls'], 4)
+        self.assertFalse(any(row['params'][0]['data'][:10] in ('0xcdca1753', '0x2f80bb1d')
+            for batch in wire.batches for row in batch))
+        before = len(wire.batches)
         wire.pool_liquidity = lambda _fee: 123
         second = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
         self.assertEqual(second['context']['blockHash'], HASH)
         self.assertEqual(second['metrics']['candidateCalls'], 4)
+        native = [row for batch in wire.batches[before:] for row in batch
+            if row['params'][0]['data'][:10] not in ('0x1698ee82', '0x1a686502')]
+        self.assertEqual(len(native), 4)
         self.assertEqual(second['metrics']['rpcReadsReused'], 0)
 
 

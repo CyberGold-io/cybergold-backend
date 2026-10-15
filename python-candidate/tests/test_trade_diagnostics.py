@@ -171,13 +171,13 @@ class TradeDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
             started.set()
             await release.wait()
             raise physical
-        async def eligibility(*_args):
+        async def eligibility(*_args, **_kwargs):
             try:
                 return await bank.one('same-pool-eligibility-read', produce)
             except Exception as error:
                 raised_errors.append(error)
                 raise
-        routes.rpc.eligible_paths = eligibility
+        routes.engine.search_routes = eligibility
         sharing = IntentSharing(intent)
         app = create_app(quote_intent=sharing)
         async with app.router.lifespan_context(app), httpx.AsyncClient(
@@ -214,9 +214,9 @@ class TradeDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         intent, _provider, routes, _wire = intent_service()
         self.addAsyncCleanup(routes.close)
         physical = QuoteFailure('rpc-timeout', diagnostics={'rpcMethod': 'eth_call', 'elapsedMs': 8})
-        async def failed(*_args):
+        async def failed(*_args, **_kwargs):
             raise physical
-        routes.rpc.eligible_paths = failed
+        routes.engine.search_routes = failed
         engines = Engines()
         engines.quotes.core = intent
         app = create_app(trade_quotes=engines.quotes)

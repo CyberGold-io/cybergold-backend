@@ -115,7 +115,7 @@ def create_configured_app(settings=None, database=None, client=None):
     market_recipient = DailyRecipientCache(uniswap_store, settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
     market_quotes = MarketQuotes(settings, uniswap_registry, recipient_cache=market_recipient,
                                 request_resolver=configuration.resolve_request)
-    routes.multi_protocol = market_quotes
+    routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
@@ -183,7 +183,7 @@ def create_configured_app(settings=None, database=None, client=None):
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
                       token_preview=TokenPreview(settings),
-                      uniswap_quote=UniswapQuote(settings),
+                      uniswap_quote=UniswapQuote(settings, engine=market_quotes),
                       route_search=routes,
                       quote_intent=IntentSharing(core_quotes,
                           rpc_factory=route_rpc, request_resolver=configuration.resolve_request),

@@ -171,7 +171,7 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
             self.counts.rows['candidateGraphsStarted'] += 1
             async for branches in candidate_branches(*args):
                 yield branches
-        self.graph_patch = patch('cybergold_candidate.market_swap.candidate_branches', counted_graph)
+        self.graph_patch = patch('cybergold_candidate.route_quote_engine.candidate_branches', counted_graph)
         self.graph_patch.start()
 
     async def asyncTearDown(self):
@@ -183,7 +183,7 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
     async def whole_intent(self, *, expect_early, reorg=False, cancel=False, mode='redeem-exact-in'):
         intent, provider, routes, wire = service()
         provider.reorg = reorg
-        routes.multi_protocol = self.quotes
+        routes.engine = self.quotes
         wire.missing_fees = {100, 500, 3000, 10000}
         original_request, original_send = provider.make_request, wire.send
         async def counted_request(method, params):
@@ -307,6 +307,9 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
         self.registry.chain = self.rpc.chain_id = 31338
         self.quotes.connector_inventory = lambda *_args: asyncio.sleep(0)
         value = {'mode': 'exact-in', 'targets': [{'inputAsset': ASSET_A, 'outputAsset': WETH, 'amount': '1000'}]}
+        # Current V3 factory replies are zero; this special fixture uses a
+        # separate discovery barrier, so its RPC transport need not be held.
+        self.provider.release.set()
         first = await self.quotes.reserve_quotes(value, BLOCK)
         self.provider.reserves[POOLS[0]['id']] = (100_000, 100_000, 0)
         second = await self.quotes.reserve_quotes(value, BLOCK)
@@ -316,7 +319,7 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(third[0]['best'])
         self.assertEqual(third[0]['succeeded'], 0)
         self.registry.inventory.clear()
-        self.assertEqual((await self.quotes.reserve_quotes(value, BLOCK))[0]['attempted'], 0)
+        self.assertEqual((await self.quotes.reserve_quotes(value, BLOCK))[0]['attempted'], 4)
         RECORDS.append({'case': self._testMethodName, 'beforeMutationQuote': first[0]['best']['quote'],
                         'afterMutationQuote': second[0]['best']['quote'], 'removedPoolQuote': third[0]['best'],
                         'finished': self.counts.value()})
@@ -332,13 +335,14 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
 
     async def complete_expansion(self, input_mode, amount=1000):
         original = deepcopy(POOLS[0])
-        added = {**original, 'id': '0x'+'8'*40, 'address': '0x'+'8'*40}
+        added = [pool('0x'+'8'*40, ASSET_A, ASSET_B), pool('0x'+'9'*40, ASSET_B)]
         self.registry.inventory = {original['id']: original}
-        self.provider.reserves[added['id']] = self.provider.reserves[original['id']]
+        self.provider.reserves[added[0]['id']] = (100_000, 100_000, 0)
+        self.provider.reserves[added[1]['id']] = self.provider.reserves[original['id']]
         released = asyncio.Event()
         async def discovery(*_args):
             await released.wait()
-            self.registry.inventory[added['id']] = added
+            self.registry.inventory.update({row['id']: row for row in added})
         self.quotes.connector_inventory = discovery
         quote = self.quotes.quote_branches
         observed, frames = [], []
@@ -351,15 +355,20 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
             if rows[0]['best']:
                 released.set()
         value = {'mode': input_mode, 'targets': [{'inputAsset': ASSET_A, 'outputAsset': WETH, 'amount': str(amount)}]}
+        # Current V3 factory replies are zero; this special fixture uses a
+        # separate discovery barrier, so its RPC transport need not be held.
+        self.provider.release.set()
         final = await asyncio.wait_for(self.quotes.reserve_quotes(value, BLOCK, on_update=update), 5)
         expected = [json.dumps(branches, sort_keys=True) async for branches in candidate_branches(
-            [original, added], ASSET_A, WETH, 'exactIn' if input_mode == 'exact-in' else 'exactOut', amount)]
+            [original, *added], ASSET_A, WETH, 'exactIn' if input_mode == 'exact-in' else 'exactOut', amount)]
+        expected.extend(json.dumps(branches, sort_keys=True) for branches in
+            self.quotes.initial_v3_branches(value['targets'][0], 'exactIn' if input_mode == 'exact-in' else 'exactOut'))
         self.assertCountEqual(observed, expected)
         self.assertEqual(Counter(observed), Counter(expected))
         self.assertEqual(final[0]['attempted'], len(expected))
         first = next(frame[0]['best'] for frame in frames if frame[0]['best'])
-        # Split improvement remains selectable; equal standalone quote must
-        # retain the first incumbent under the existing strict comparison.
+        # The distinct two-hop path has the same marginal rate but more impact;
+        # split improvements remain selectable while equal terms keep the incumbent.
         self.assertEqual(first['routePlan']['branches'][0]['hops'][0]['pool']['id'], original['id'])
         if input_mode == 'exact-in':
             self.assertGreaterEqual(int(final[0]['best']['quote']), int(first['quote']))
