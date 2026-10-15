@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from functools import wraps
 from inspect import iscoroutine
 
-from .rpc_diagnostics import quote_owned_task
+from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics, quote_owned_task
 
 
 _budget = ContextVar('quote_selection_budget', default=None)
@@ -137,8 +137,10 @@ class QuoteBudget:
             if self.selected is None:
                 self.finish_selection('complete')
             return result
-        except SearchStopped:
-            raise TimeoutError('Quote selection budget exhausted') from None
+        except SearchStopped as stopped:
+            error = TimeoutError('Quote selection budget exhausted')
+            bind_quote_error(error, quote_error_diagnostics(stopped))
+            raise error from None
         finally:
             timer.cancel()
             await asyncio.gather(timer, return_exceptions=True)

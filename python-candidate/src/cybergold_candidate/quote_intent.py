@@ -838,9 +838,10 @@ class QuoteIntent:
             stopped = False
             try:
                 result = await budget.discovery(selection()) if budget is not None else await selection()
-            except SearchStopped:
+            except SearchStopped as error:
                 stopped = True
                 if qualified is None:
+                    freeze_quote_work(error)
                     raise
                 result = deepcopy(qualified)
             if budget is not None:

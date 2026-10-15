@@ -435,9 +435,10 @@ class TradeQuotes:
                 await publish({'type': 'qualified', 'value': quote})
                 terminal_candidates[strategy] = execution_value(quote)
                 evaluation[strategy] = 'complete'
-            except SearchStopped:
+            except SearchStopped as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = TimeoutError('Quote selection budget exhausted')
+                error_quote_diagnostics[strategy] = quote_error_diagnostics(error)
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
