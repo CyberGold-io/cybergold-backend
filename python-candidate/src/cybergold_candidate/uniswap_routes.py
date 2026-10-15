@@ -134,26 +134,31 @@ async def discover_routes_async(pools, token_in, token_out, max_hops=3):
 
 
 async def candidate_branches(pools, token_in, token_out, mode, amount):
-    """Complete standalone paths then lazy splits, bounded by the caller's budget."""
-    async def routes():
-        async for hops in discover_routes_async(pools, token_in, token_out):
-            if supported_route(hops, mode):
-                yield hops
-    async for hops in routes():
-        yield [{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': hops}]
+    """Complete standalone paths, then lazily replay their identities for splits."""
+    retained = []
+    async for hops in discover_routes_async(pools, token_in, token_out):
+        if supported_route(hops, mode):
+            if mode == 'exactIn':
+                # The original graph yields fresh hop dictionaries on every
+                # traversal, with the same underlying selected pool objects.
+                retained.append([dict(hop) for hop in hops])
+            yield [{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': hops}]
     if mode == 'exactIn':
-        left_index = 0
-        async for left in routes():
-            right_index = 0
-            async for right in routes():
+        for left_index, left in enumerate(retained):
+            await asyncio.sleep(0)
+            for right_index, right in enumerate(retained):
+                # Keep cooperative progress even when tiny raw amounts yield
+                # no split candidates; this is not a candidate selection rule.
+                if right_index % 64 == 0:
+                    await asyncio.sleep(0)
                 if right_index > left_index:
                     for percent in (25, 50, 75):
                         first = amount*percent//100
                         if first and amount-first:
-                            yield [{'amountIn': str(first), 'hops': left},
-                                {'amountIn': str(amount-first), 'hops': right}]
-                right_index += 1
-            left_index += 1
+                            yield [{'amountIn': str(first), 'hops': [dict(hop) for hop in left]},
+                                {'amountIn': str(amount-first), 'hops': [dict(hop) for hop in right]}]
+
+
 
 
 def v3_path(hops, exact_out=False):
