@@ -482,7 +482,8 @@ class QuoteIntent:
                     'expectedInputAmount': str(direct + sum(int(row['best']['quote']) for row in rows)),
                     'executionAmount': str(net), 'maximumInputAmount': str(maximum)}
 
-        async def redemption(gross, early_display=True, *, protect=True, selected=None, fallback_gross=None):
+        async def redemption(gross, early_display=True, *, protect=True, selected=None, fallback_gross=None,
+                             remaining_corrections=10):
             quote_phase('basket-preview')
             try:
                 required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
@@ -514,18 +515,29 @@ class QuoteIntent:
                     final = await preview(token, selected)
                     minimum = int(final['minimumAmountOut'])
                     if not early_display and not int(request['amount']) <= minimum <= ceil(int(request['amount']), slippage_bps):
-                        # A fresh protected point can refine the gross while
-                        # unrelated route coverage continues. Reprice the actual
-                        # new quantities before checking the full execution.
-                        if minimum > 0:
-                            target = int(request['amount'])
-                            next_gross = gross * target // minimum
-                            next_gross = next_gross if next_gross != gross else gross + (1 if minimum < target else -1)
-                            if next_gross > 0:
-                                revised = await redemption(next_gross, early_display=False, selected=selected['quotes'])
-                                revised_minimum = int(revised['preview']['minimumAmountOut'])
-                                if target <= revised_minimum <= ceil(target, slippage_bps):
-                                    return revised
+                        # Reuse the ordinary eleven forward evaluations while
+                        # unrelated route coverage continues. Each local slope
+                        # is a hint: new quantities are repriced, composed and
+                        # checked by the full Helpers preview before publishing.
+                        target = int(request['amount'])
+                        observed_gross, quotes = gross, selected['quotes']
+                        observations = [(observed_gross, minimum)]
+                        for _ in range(remaining_corrections):
+                            if minimum <= 0:
+                                break
+                            next_gross = observed_gross * target // minimum
+                            next_gross = next_gross if next_gross != observed_gross else observed_gross + (1 if minimum < target else -1)
+                            if self.correction:
+                                next_gross = self.correction(observations, target, next_gross)
+                            if next_gross <= 0:
+                                break
+                            revised = await redemption(next_gross, early_display=False, selected=quotes)
+                            observed_gross = int(revised['executionAmount'])
+                            minimum = int(revised['preview']['minimumAmountOut'])
+                            observations.append((observed_gross, minimum))
+                            if target <= minimum <= ceil(target, slippage_bps):
+                                return revised
+                            quotes = revised['quotes']
                         raise InvalidPreview('Candidate is outside the minimum-output interval.')
                     return {'quotes': selected['quotes'], 'preview': final, 'initialPreview': None, 'basketPreview': required,
                             **({'expectedInputAmount': str(expected_input_gross)} if expected_input_gross is not None else {}),
@@ -654,7 +666,8 @@ class QuoteIntent:
                 if gross <= 0:
                     raise InvalidPreview('Unable to compute a reliable quote for the entered amount.')
                 result = await redemption(gross, early_display=False,
-                    fallback_gross=expected_input_seed if iteration == 0 and gross != expected_input_seed else None)
+                    fallback_gross=expected_input_seed if iteration == 0 and gross != expected_input_seed else None,
+                    remaining_corrections=10-iteration)
                 gross = int(result['executionAmount'])
                 quoted = int(result['preview']['minimumAmountOut'])
                 observations.append((gross, quoted))
