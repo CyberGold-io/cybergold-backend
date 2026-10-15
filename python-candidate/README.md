@@ -337,10 +337,15 @@ failure can retain that checked tuple; reorgs and caller cancellation retire it.
 
 The early probe adds RPC and SDK work and can consume its one attempt on an
 unsupported or unfillable first route. It does not guarantee the exhaustive best
-route or fix every quote timeout. Mainnet keeps the probe disabled, and
-redeem exact-out and the other quote modes keep their existing search behavior.
-Sandbox transaction and frontend amount acceptance are recorded separately in
-the Ops regression workplan.
+route or fix every quote timeout. Mainnet keeps the issue probe disabled. Redemption exact-out can refine one
+fresh protected Helpers point outside the existing output interval using the
+ordinary integer gross correction. It freshly reprices the resized selected
+routes, composes shared pools in Core order and checks the full Helpers output
+and canonicality before retaining a quote. Full route coverage continues and can
+improve that quote; existing output bounds, deadlines and cancellation remain
+unchanged. The first usable quote can require more Core than the complete-search
+optimum, and the refinement can add RPC and SDK work. Sandbox transaction and
+frontend amount acceptance are recorded separately in the Ops regression workplan.
 
 The subsequent [unified trade coordinator](../docs/unified-trading.md) owns
 Core basket seed construction and compares complete qualified Core/market
