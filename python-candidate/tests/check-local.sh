@@ -51,6 +51,8 @@ export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_quote.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quote_budget.py
+python-candidate/.venv/bin/python python-candidate/tests/test_budget_providers.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_recipient_cache.py

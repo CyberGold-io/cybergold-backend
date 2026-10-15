@@ -1515,6 +1515,12 @@ export interface components {
                         candidateCalls: number;
                         iterations: number;
                         totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
                     };
                 };
             } | {
@@ -1743,6 +1749,12 @@ export interface components {
                     metrics: {
                         candidateCalls: number;
                         totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
                     };
                 };
             };
@@ -1768,6 +1780,12 @@ export interface components {
             metrics: {
                 totalMs: number;
                 targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         } & {
             /** @constant */
@@ -2167,6 +2185,12 @@ export interface components {
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
             };
         }) | ({
@@ -2190,6 +2214,12 @@ export interface components {
             metrics: {
                 totalMs: number;
                 targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         } & {
             /** @constant */
@@ -2417,6 +2447,12 @@ export interface components {
                 metrics: {
                     candidateCalls: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
             };
         });
@@ -3056,6 +3092,12 @@ export interface components {
                 metrics: {
                     candidateCalls: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
             };
         }) | ({
@@ -5341,6 +5383,12 @@ export interface components {
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
             };
         }) | ({
@@ -5629,6 +5677,12 @@ export interface components {
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
             };
         }) | ({
@@ -6519,6 +6573,12 @@ export interface components {
             metrics: {
                 candidateCalls: number;
                 totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         };
         MarketQuoteModelPacket: {
@@ -7785,6 +7845,12 @@ export interface components {
                 candidateCalls: number;
                 iterations: number;
                 totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         };
         /** @description Display-only source data. No transaction tuples or execution readiness. */

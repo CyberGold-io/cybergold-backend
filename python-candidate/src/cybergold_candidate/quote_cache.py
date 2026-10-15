@@ -16,6 +16,7 @@ from .route_search import RouteSearchRpc
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
 from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
+from .quote_budget import budget_entry, current_budget
 
 
 class SharingQuoterRpc(RouteSearchRpc):
@@ -212,9 +213,11 @@ class IntentSharing:
         self.request_resolver = request_resolver
         self.started, self.joined = 0, 0
 
+    @budget_entry
     async def get(self, request, on_update):
+        budget = current_budget()
         if self.request_resolver:
-            request = await self.request_resolver(request)
+            request = await budget.prepare(self.request_resolver(request))
         history = self.history
         epoch = history.epoch if history else None
         last_model = None
@@ -230,12 +233,12 @@ class IntentSharing:
         if history:
             # Historical display data does not depend on acquiring a new head.
             # Final validation still follows the ordinary producer below.
-            await emit({'type': 'model', 'value': history.packet(request)}, epoch)
+            await budget.prepare(emit({'type': 'model', 'value': history.packet(request)}, epoch))
         if self.service.routes.rpc is None:
             self.service.routes.rpc = self.rpc_factory(self.service.settings)
         rpc = self.service.routes.rpc
         try:
-            async with asyncio.timeout(15):
+            async with asyncio.timeout_at(budget.deadline):
                 block = await self.head() if self.head else await rpc.block(None)
         except RpcTimeout:
             raise
@@ -248,7 +251,7 @@ class IntentSharing:
         subscriber = Subscriber()
         if entry is None:
             entry = {'clients': {subscriber}, 'latest': {}, 'task': None, 'modelEpoch': epoch,
-                     'workId': str(uuid.uuid4())}
+                     'workId': str(uuid.uuid4()), 'budget': budget}
             self.pending[key] = entry
             self.started += 1
             async def update(frame):
@@ -259,7 +262,11 @@ class IntentSharing:
             async def produce():
                 try:
                     options = {'model_epoch': entry['modelEpoch']} if history else {}
-                    terminal = ('result', await self.service.get(request, update, block=block, **options))
+                    value = await budget.produce(self.service.get(request, update, block=block, **options))
+                    if isinstance(value, dict) and isinstance(value.get('metrics'), dict):
+                        value['metrics']['totalMs'] = round(budget.elapsed(), 3)
+                        value['metrics'].update(budget.metrics())
+                    terminal = ('result', value)
                 except BaseException as error:
                     entry['errorQuoteDiagnostics'] = quote_error_diagnostics(error)
                     terminal = ('error', error)

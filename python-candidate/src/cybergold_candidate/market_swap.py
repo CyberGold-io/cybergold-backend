@@ -21,6 +21,8 @@ from .basket_preview import InvalidPreview, handle_basket_preview
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .market_fee import get_market_fee_rate, gross_buy_target, quoted_fee, routed_sell_budget
 from .quote_errors import public_quote_error, QuoteFailure
+from .quote_budget import budget_entry, current_budget, SearchStopped
+from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
 from .sdk_worker import SdkWorker, SdkWorkerError, MissingPoolState
 from .uniswap_routes import RoutePlan, candidate_branches, supported_route, resize_branches, v3_path, pool_key
@@ -847,14 +849,17 @@ class MarketQuotes:
             result['quoteVerificationUnavailable'] = public_quote_error(error)['code']
         return result
 
+    @budget_entry
     async def get(self, request, on_update=None):
+        budget = current_budget()
         if self.request_resolver:
-            request = await self.request_resolver(request)
+            request = await budget.prepare(self.request_resolver(request))
         async def ignore(_frame):
             pass
         return await self.sharing.get(request, on_update or ignore)
 
     async def _get(self, request, on_update=None, *, block=None):
+        budget = current_budget()
         request = MarketQuoteRequest.model_validate(request).model_dump()
         try:
             for field in ('counterToken', 'adapter', 'recipient'):
@@ -868,10 +873,10 @@ class MarketQuotes:
         await emit({'type': 'model', 'value': self.packet(request)})
         started = time.perf_counter()
         model_generation = self.generation
-        await self.registry.ensure_loaded()
+        await budget.prepare(self.registry.ensure_loaded()) if budget is not None else await self.registry.ensure_loaded()
         rpc = self.registry.get_rpc()
         async with asyncio.timeout(45):
-            block = block or await rpc.block(None)
+            block = block or (await budget.prepare(rpc.block(None)) if budget is not None else await rpc.block(None))
             side, exact_in = request['side'], request['mode'] == 'exact-in'
             token_in, token_out = (request['counterToken'], self.registry.core) if side == 'buy' else (
                 self.registry.core, request['counterToken'])
@@ -882,7 +887,7 @@ class MarketQuotes:
             mode = 'exactIn' if exact_in else 'exactOut'
             retained = request.get('retainedPlan')
             if retained:
-                try:
+                async def retained_quote():
                     for name in ('side', 'mode', 'amount', 'slippageBps'):
                         if retained.get(name) != request[name]:
                             raise InvalidPreview('Retained market '+name+' changed.')
@@ -895,9 +900,16 @@ class MarketQuotes:
                     raw = await self.quote_branches(branches, mode, target, block)
                     result = await self.qualify_quote(request, branches, raw, retained['fee']['ratePpm'], block, target, emit, retained=retained)
                     await rpc.assert_canonical(block)
+                    if budget is not None:
+                        budget.canonical_done()
+                        budget.cleanup_done()
+                    if budget is not None and not budget.qualified():
+                        raise SearchStopped()
                     result['metrics'] = {'candidateCalls': 1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
                     await emit({'type': 'qualified', 'value': result})
                     return result
+                try:
+                    return await budget.discovery(retained_quote()) if budget is not None else await retained_quote()
                 except InvalidPreview:
                     await emit({'type': 'invalidated'})
             async def baseline_work():
@@ -909,22 +921,13 @@ class MarketQuotes:
                         await emit({'type': 'estimate', 'amount': estimate})
                 except Exception:
                     pass
-            baseline_task = asyncio.create_task(baseline_work())
-            try:
-                await self.connector_inventory(token_in, token_out, block)
-            except BaseException:
-                baseline_task.cancel()
-                await asyncio.gather(baseline_task, return_exceptions=True)
-                raise
-            pools = [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
-                pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000 and all(
-                    token['address'].lower() != ZERO for token in (pool['token0'], pool['token1'])))]
             completed = 0
             best = None
-            rpc_error = None
+            rpc_error, context_error = None, None
+            pools = []
             lock = asyncio.Lock()
             async def evaluate(branches):
-                nonlocal best, completed, rpc_error
+                nonlocal best, completed, rpc_error, context_error
                 try:
                     async with self.semaphore:
                         raw = await self.quote_branches(branches, mode, quote_amount, block)
@@ -939,9 +942,18 @@ class MarketQuotes:
                             result = await self.qualify_quote(request, branches, raw, rate, block, quote_amount, emit)
                             score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
                             if best is None or (score, tie) > best[0]:
+                                if budget is not None:
+                                    await rpc.assert_canonical(block)
+                                    if not budget.qualified():
+                                        return
                                 best = ((score, tie), result)
                                 await emit({'type': 'qualified', 'value': {**result,
                                     'metrics': {'candidateCalls': completed+1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}}})
+                except SnapshotChanged as error:
+                    context_error, best = error, None
+                    if budget is not None:
+                        budget.invalidated()
+                    raise
                 except Exception as error:
                     if public_quote_error(error)['code'].startswith('rpc-'):
                         rpc_error = error
@@ -949,33 +961,63 @@ class MarketQuotes:
                     async with lock:
                         completed += 1
                         await emit({'type': 'progress', 'completedCandidates': completed})
-            active = set()
+            async def search():
+                nonlocal pools
+                await self.connector_inventory(token_in, token_out, block)
+                pools = [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
+                    pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000 and all(
+                        token['address'].lower() != ZERO for token in (pool['token0'], pool['token1'])))]
+                active = set()
+                try:
+                    async for branches in candidate_branches(pools, token_in, token_out, mode, quote_amount):
+                        active.add(asyncio.create_task(evaluate(branches)))
+                        if len(active) >= 8:
+                            done, active = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
+                            await asyncio.gather(*done)
+                    await asyncio.gather(*active)
+                finally:
+                    for task in active:
+                        task.cancel()
+                    await asyncio.gather(*active, return_exceptions=True)
+            baseline_task = asyncio.create_task(baseline_work())
             try:
-                async for branches in candidate_branches(pools, token_in, token_out, mode, quote_amount):
-                    active.add(asyncio.create_task(evaluate(branches)))
-                    if len(active) >= 8:
-                        done, active = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
-                        await asyncio.gather(*done)
-                await asyncio.gather(*active)
+                try:
+                    await budget.discovery(search()) if budget is not None else await search()
+                except SearchStopped:
+                    if context_error is not None:
+                        raise context_error
+                    if best is None:
+                        raise
+                except Exception as error:
+                    if isinstance(error, SnapshotChanged) or context_error is not None or best is None:
+                        raise
+                    # An ordinary unfinished search cannot discard a checked
+                    # incumbent. Its terminal canonical validation still follows.
             finally:
-                for task in active:
-                    task.cancel()
-                await asyncio.gather(*active, return_exceptions=True)
                 if not baseline_task.done():
                     baseline_task.cancel()
                 await asyncio.gather(baseline_task, return_exceptions=True)
+                if budget is not None:
+                    budget.cleanup_done()
+            if context_error is not None:
+                raise context_error
             if best is None:
                 if rpc_error:
                     raise rpc_error
                 raise QuoteFailure('quote-no-route')
             await rpc.assert_canonical(block)
+            if budget is not None:
+                budget.canonical_done()
             result = best[1]
             result['metrics'] = {'candidateCalls': completed, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
             result['searchCoverage'] = {'scope': 'selected-inventory', 'maxHops': 3,
                 'splitPercentages': [25, 50, 75] if exact_in else [],
                 'inventoryPools': len(pools), 'catalogMonth': self.registry.discovery_month}
             if self.recipient_cache:
-                cached = await self.recipient_cache.load()
+                try:
+                    cached = await budget.discovery(self.recipient_cache.load()) if budget is not None else await self.recipient_cache.load()
+                except SearchStopped:
+                    cached = None
                 if cached:
                     result['feeBeneficiaryDisplay'] = {name: cached[name] for name in ('address', 'observedAt')}
             family = market_family(request, self.registry.chain, self.registry.core)

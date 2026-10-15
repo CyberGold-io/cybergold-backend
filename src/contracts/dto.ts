@@ -93,6 +93,11 @@ export type MarketRetainedPlan = {
   slippageBps: number; route: MarketRoutePlan; params: MarketSwapParams;
   fee: { asset: string; ratePpm: number; amount: string; basis: "quoted"; notional: string };
 };
+/** Producer selection includes context and first qualification; terminal work is measured separately. */
+type QuoteSelectionMetrics = {
+  firstQualifiedMs?: number; selectionMs?: number; canonicalCompletedMs?: number;
+  cleanupCompletedMs?: number; finalizationMs?: number;
+};
 export type MarketQuote = {
   operation: "market"; side: "buy" | "sell"; mode: "exact-in" | "exact-out";
   tokenIn: string; tokenOut: string; amountIn: string; amountOut: string;
@@ -108,7 +113,7 @@ export type MarketQuote = {
   executionSimulationRequired?: boolean; quoteVerificationUnavailable?: string;
   searchCoverage?: { scope: "selected-inventory"; maxHops: number; splitPercentages: number[];
     inventoryPools: number; catalogMonth: string | null };
-  metrics: { candidateCalls: number; totalMs: number };
+  metrics: { candidateCalls: number; totalMs: number } & QuoteSelectionMetrics;
 };
 export type MarketQuoteModelPacket = {
   namespace: "market"; family: string; context?: MarketQuote["context"];
@@ -395,7 +400,7 @@ export type QuoteIntent = {
   expectedOutputAmount?: string;
   expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
   metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number;
-    candidateCalls: number; iterations: number; totalMs: number };
+    candidateCalls: number; iterations: number; totalMs: number } & QuoteSelectionMetrics;
 };
 /** Display-only source data. No transaction tuples or execution readiness. */
 export type QuoteModelPacket = {
@@ -447,7 +452,7 @@ type TradeEconomics = {
   side: TradeModelRequest["side"]; mode: TradeModelRequest["mode"];
   tokenIn: string; tokenOut: string; quotedInput: string; quotedOutput: string;
   inputMaximum: string; outputMinimum: string; context: QuoteIntent["context"];
-  evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number };
+  evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number } & QuoteSelectionMetrics;
 };
 export type TradeQuote = TradeEconomics & (
   | { strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent }
