@@ -553,7 +553,7 @@ class QuoteIntent:
                 by_asset = {quote['inputAsset'].lower(): quote for quote in selected}
                 calls, paths = [], []
                 typed_rows = {}
-                for target in targets:
+                async def reprice(target):
                     quote = by_asset[target['inputAsset'].lower()]
                     if quote.get('routePlan'):
                         plan = deepcopy(quote['routePlan'])
@@ -566,12 +566,30 @@ class QuoteIntent:
                             plan.update(inputAmount=quoted['amountIn'], outputAmount=quoted['amountOut'])
                         else:
                             quoted = await rpc.multi_protocol.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
-                        typed_rows[len(paths)] = {'best': {'path': '0x', 'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}
-                        paths.append(None)
-                        continue
+                        return None, {'best': {'path': '0x', 'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}, None
                     path, _, _, _ = rpc.w3.codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(quote['data'][2:]))
-                    paths.append('0x' + path.hex())
-                    calls.append(rpc.encode({'mode': 'exact-in', 'path': paths[-1], 'amount': target['amount']}))
+                    path = '0x' + path.hex()
+                    return path, None, rpc.encode({'mode': 'exact-in', 'path': path, 'amount': target['amount']})
+                if protect:
+                    # Isolated leg observations can overlap. Consume in Core
+                    # order so errors keep their previous precedence; the
+                    # shared-pool execution replay below remains sequential.
+                    tasks = [asyncio.create_task(reprice(target)) for target in targets]
+                    try:
+                        repriced = [await task for task in tasks]
+                    finally:
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                else:
+                    repriced = [await reprice(target) for target in targets]
+                for path, row, call in repriced:
+                    if row is not None:
+                        typed_rows[len(paths)] = row
+                    else:
+                        calls.append(call)
+                    paths.append(path)
                 counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
                 observed = await rpc.quote_batch_counted('exact-in', calls, block, counts) if calls else []
                 for name, counter in (('rpcReads', 'issued'), ('rpcReadsRequested', 'requested'),

@@ -2069,5 +2069,119 @@ class RepeatedProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
             release.set()
 
 
+class SelectedRedemptionRepricingOverlapTests(unittest.IsolatedAsyncioTestCase):
+    concave_fixture = RepeatedProtectedRedemptionPointTests.concave_fixture
+    fixture = EarlyProtectedRedemptionPointTests.fixture
+    start = EarlyProtectedRedemptionPointTests.start
+    wait = EarlyProtectedRedemptionPointTests.wait
+
+    async def test_selected_token_and_native_legs_start_before_either_read_finishes(self):
+        for native in (False, True):
+            with self.subTest(native=native):
+                intent, _provider, control, value = self.concave_fixture(typed=True, native=native)
+                engine = intent.routes.multi_protocol
+                original = engine.quote_branches
+                entered, release = asyncio.Event(), asyncio.Event()
+                started = 0
+                async def quote(*args, entered=entered, release=release, original=original):
+                    nonlocal started
+                    started += 1
+                    if started <= 2:
+                        if started == 2:
+                            entered.set()
+                        await release.wait()
+                    return await original(*args)
+                engine.quote_branches = quote
+                task, frames, ready = self.start(intent, value)
+                try:
+                    try:
+                        await asyncio.wait_for(entered.wait(), 1)
+                    except TimeoutError:
+                        self.fail('The second selected leg did not start before the first was released.')
+                    self.assertEqual(started, 2)
+                    self.assertEqual(frames, [])
+                    release.set()
+                    await self.wait(ready)
+                    self.assertEqual((frames[0]['executionAmount'], frames[0]['preview']['minimumAmountOut']), ('230', '202'))
+                    self.assertEqual([leg['inputAmount'] for leg in frames[0]['quotes']], ['115', '115'])
+                    self.assertIn((115, 0), control.composed)
+                    self.assertIn((115, 1), control.composed)
+                    control.release.set()
+                    self.assertEqual((await task)['executionAmount'], '230')
+                finally:
+                    release.set()
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+    async def test_cancellation_drains_both_legs_without_cancelling_another_shared_read_user(self):
+        from cybergold_candidate.shared_reads import SharedReads
+        intent, _provider, _control, value = self.concave_fixture(typed=True)
+        engine = intent.routes.multi_protocol
+        bank = SharedReads()
+        self.addAsyncCleanup(bank.close)
+        entered, release = asyncio.Event(), asyncio.Event()
+        started = cancelled = 0
+        async def read():
+            await release.wait()
+            return 123
+        async def quote(*_args):
+            nonlocal started, cancelled
+            started += 1
+            if started == 2:
+                entered.set()
+            try:
+                await bank.one('shared-pool', read)
+            except asyncio.CancelledError:
+                cancelled += 1
+                raise
+        engine.quote_branches = quote
+        outside = asyncio.create_task(bank.one('shared-pool', read))
+        task, frames, _ready = self.start(intent, value)
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertEqual(cancelled, 2)
+            self.assertEqual(frames, [])
+            self.assertFalse(outside.done())
+            self.assertEqual(engine.semaphore._value, 8)
+            release.set()
+            self.assertEqual(await outside, 123)
+            self.assertEqual(bank.pending, {})
+        finally:
+            release.set()
+            await asyncio.gather(outside, return_exceptions=True)
+
+    async def test_failed_first_leg_drains_its_parallel_sibling_and_keeps_the_ordinary_tail_error(self):
+        intent, _provider, control, value = self.concave_fixture(typed=True)
+        engine = intent.routes.multi_protocol
+        entered, sibling_cancelled = asyncio.Event(), asyncio.Event()
+        started = 0
+        async def quote(*_args):
+            nonlocal started
+            started += 1
+            first = started == 1
+            if started == 2:
+                entered.set()
+            if first:
+                await entered.wait()
+                raise RpcTimeout()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                sibling_cancelled.set()
+                raise
+        engine.quote_branches = quote
+        task, frames, _ready = self.start(intent, value)
+        await asyncio.wait_for(sibling_cancelled.wait(), 1)
+        self.assertEqual(started, 2)
+        self.assertEqual(frames, [])
+        self.assertEqual(engine.semaphore._value, 8)
+        control.release.set()
+        with self.assertRaises(TimeoutError):
+            await task
+
+
 if __name__ == '__main__':
     unittest.main()
