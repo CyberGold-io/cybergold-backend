@@ -580,4 +580,3 @@ class RouteQuoteEngine:
 
     async def reserve_quotes(self, request, block, on_update=None):
         return await self.search_routes(request, block, on_update)
-
