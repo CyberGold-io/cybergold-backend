@@ -8906,38 +8906,63 @@
                             }
                           },
                           "metrics": {
-                            "type": "object",
-                            "properties": {
-                              "rpcReads": {
-                                "type": "number"
+                            "allOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "rpcReads": {
+                                    "type": "number"
+                                  },
+                                  "rpcReadsRequested": {
+                                    "type": "number"
+                                  },
+                                  "rpcReadsCoalesced": {
+                                    "type": "number"
+                                  },
+                                  "rpcReadsReused": {
+                                    "type": "number"
+                                  },
+                                  "candidateCalls": {
+                                    "type": "number"
+                                  },
+                                  "iterations": {
+                                    "type": "number"
+                                  },
+                                  "totalMs": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "candidateCalls",
+                                  "iterations",
+                                  "rpcReads",
+                                  "rpcReadsCoalesced",
+                                  "rpcReadsRequested",
+                                  "rpcReadsReused",
+                                  "totalMs"
+                                ]
                               },
-                              "rpcReadsRequested": {
-                                "type": "number"
-                              },
-                              "rpcReadsCoalesced": {
-                                "type": "number"
-                              },
-                              "rpcReadsReused": {
-                                "type": "number"
-                              },
-                              "candidateCalls": {
-                                "type": "number"
-                              },
-                              "iterations": {
-                                "type": "number"
-                              },
-                              "totalMs": {
-                                "type": "number"
+                              {
+                                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                                "type": "object",
+                                "properties": {
+                                  "firstQualifiedMs": {
+                                    "type": "number"
+                                  },
+                                  "selectionMs": {
+                                    "type": "number"
+                                  },
+                                  "canonicalCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "cleanupCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "finalizationMs": {
+                                    "type": "number"
+                                  }
+                                }
                               }
-                            },
-                            "required": [
-                              "candidateCalls",
-                              "iterations",
-                              "rpcReads",
-                              "rpcReadsCoalesced",
-                              "rpcReadsRequested",
-                              "rpcReadsReused",
-                              "totalMs"
                             ]
                           }
                         },
@@ -9800,18 +9825,43 @@
                             ]
                           },
                           "metrics": {
-                            "type": "object",
-                            "properties": {
-                              "candidateCalls": {
-                                "type": "number"
+                            "allOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "candidateCalls": {
+                                    "type": "number"
+                                  },
+                                  "totalMs": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "candidateCalls",
+                                  "totalMs"
+                                ]
                               },
-                              "totalMs": {
-                                "type": "number"
+                              {
+                                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                                "type": "object",
+                                "properties": {
+                                  "firstQualifiedMs": {
+                                    "type": "number"
+                                  },
+                                  "selectionMs": {
+                                    "type": "number"
+                                  },
+                                  "canonicalCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "cleanupCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "finalizationMs": {
+                                    "type": "number"
+                                  }
+                                }
                               }
-                            },
-                            "required": [
-                              "candidateCalls",
-                              "totalMs"
                             ]
                           }
                         },
@@ -9922,18 +9972,43 @@
                     "$ref": "#/components/schemas/TradeEvaluation"
                   },
                   "metrics": {
-                    "type": "object",
-                    "properties": {
-                      "totalMs": {
-                        "type": "number"
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "totalMs": {
+                            "type": "number"
+                          },
+                          "targetReads": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "targetReads",
+                          "totalMs"
+                        ]
                       },
-                      "targetReads": {
-                        "type": "number"
+                      {
+                        "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                        "type": "object",
+                        "properties": {
+                          "firstQualifiedMs": {
+                            "type": "number"
+                          },
+                          "selectionMs": {
+                            "type": "number"
+                          },
+                          "canonicalCompletedMs": {
+                            "type": "number"
+                          },
+                          "cleanupCompletedMs": {
+                            "type": "number"
+                          },
+                          "finalizationMs": {
+                            "type": "number"
+                          }
+                        }
                       }
-                    },
-                    "required": [
-                      "targetReads",
-                      "totalMs"
                     ]
                   }
                 },
@@ -11622,38 +11697,63 @@
                         }
                       },
                       "metrics": {
-                        "type": "object",
-                        "properties": {
-                          "rpcReads": {
-                            "type": "number"
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "rpcReads": {
+                                "type": "number"
+                              },
+                              "rpcReadsRequested": {
+                                "type": "number"
+                              },
+                              "rpcReadsCoalesced": {
+                                "type": "number"
+                              },
+                              "rpcReadsReused": {
+                                "type": "number"
+                              },
+                              "candidateCalls": {
+                                "type": "number"
+                              },
+                              "iterations": {
+                                "type": "number"
+                              },
+                              "totalMs": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "candidateCalls",
+                              "iterations",
+                              "rpcReads",
+                              "rpcReadsCoalesced",
+                              "rpcReadsRequested",
+                              "rpcReadsReused",
+                              "totalMs"
+                            ]
                           },
-                          "rpcReadsRequested": {
-                            "type": "number"
-                          },
-                          "rpcReadsCoalesced": {
-                            "type": "number"
-                          },
-                          "rpcReadsReused": {
-                            "type": "number"
-                          },
-                          "candidateCalls": {
-                            "type": "number"
-                          },
-                          "iterations": {
-                            "type": "number"
-                          },
-                          "totalMs": {
-                            "type": "number"
+                          {
+                            "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                            "type": "object",
+                            "properties": {
+                              "firstQualifiedMs": {
+                                "type": "number"
+                              },
+                              "selectionMs": {
+                                "type": "number"
+                              },
+                              "canonicalCompletedMs": {
+                                "type": "number"
+                              },
+                              "cleanupCompletedMs": {
+                                "type": "number"
+                              },
+                              "finalizationMs": {
+                                "type": "number"
+                              }
+                            }
                           }
-                        },
-                        "required": [
-                          "candidateCalls",
-                          "iterations",
-                          "rpcReads",
-                          "rpcReadsCoalesced",
-                          "rpcReadsRequested",
-                          "rpcReadsReused",
-                          "totalMs"
                         ]
                       }
                     },
@@ -11743,18 +11843,43 @@
                     "$ref": "#/components/schemas/TradeEvaluation"
                   },
                   "metrics": {
-                    "type": "object",
-                    "properties": {
-                      "totalMs": {
-                        "type": "number"
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "totalMs": {
+                            "type": "number"
+                          },
+                          "targetReads": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "targetReads",
+                          "totalMs"
+                        ]
                       },
-                      "targetReads": {
-                        "type": "number"
+                      {
+                        "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                        "type": "object",
+                        "properties": {
+                          "firstQualifiedMs": {
+                            "type": "number"
+                          },
+                          "selectionMs": {
+                            "type": "number"
+                          },
+                          "canonicalCompletedMs": {
+                            "type": "number"
+                          },
+                          "cleanupCompletedMs": {
+                            "type": "number"
+                          },
+                          "finalizationMs": {
+                            "type": "number"
+                          }
+                        }
                       }
-                    },
-                    "required": [
-                      "targetReads",
-                      "totalMs"
                     ]
                   }
                 },
@@ -12611,18 +12736,43 @@
                         ]
                       },
                       "metrics": {
-                        "type": "object",
-                        "properties": {
-                          "candidateCalls": {
-                            "type": "number"
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "candidateCalls": {
+                                "type": "number"
+                              },
+                              "totalMs": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "candidateCalls",
+                              "totalMs"
+                            ]
                           },
-                          "totalMs": {
-                            "type": "number"
+                          {
+                            "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                            "type": "object",
+                            "properties": {
+                              "firstQualifiedMs": {
+                                "type": "number"
+                              },
+                              "selectionMs": {
+                                "type": "number"
+                              },
+                              "canonicalCompletedMs": {
+                                "type": "number"
+                              },
+                              "cleanupCompletedMs": {
+                                "type": "number"
+                              },
+                              "finalizationMs": {
+                                "type": "number"
+                              }
+                            }
                           }
-                        },
-                        "required": [
-                          "candidateCalls",
-                          "totalMs"
                         ]
                       }
                     },
@@ -15199,18 +15349,43 @@
                         ]
                       },
                       "metrics": {
-                        "type": "object",
-                        "properties": {
-                          "candidateCalls": {
-                            "type": "number"
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "candidateCalls": {
+                                "type": "number"
+                              },
+                              "totalMs": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "candidateCalls",
+                              "totalMs"
+                            ]
                           },
-                          "totalMs": {
-                            "type": "number"
+                          {
+                            "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                            "type": "object",
+                            "properties": {
+                              "firstQualifiedMs": {
+                                "type": "number"
+                              },
+                              "selectionMs": {
+                                "type": "number"
+                              },
+                              "canonicalCompletedMs": {
+                                "type": "number"
+                              },
+                              "cleanupCompletedMs": {
+                                "type": "number"
+                              },
+                              "finalizationMs": {
+                                "type": "number"
+                              }
+                            }
                           }
-                        },
-                        "required": [
-                          "candidateCalls",
-                          "totalMs"
                         ]
                       }
                     },
@@ -24557,38 +24732,63 @@
                         }
                       },
                       "metrics": {
-                        "type": "object",
-                        "properties": {
-                          "rpcReads": {
-                            "type": "number"
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "rpcReads": {
+                                "type": "number"
+                              },
+                              "rpcReadsRequested": {
+                                "type": "number"
+                              },
+                              "rpcReadsCoalesced": {
+                                "type": "number"
+                              },
+                              "rpcReadsReused": {
+                                "type": "number"
+                              },
+                              "candidateCalls": {
+                                "type": "number"
+                              },
+                              "iterations": {
+                                "type": "number"
+                              },
+                              "totalMs": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "candidateCalls",
+                              "iterations",
+                              "rpcReads",
+                              "rpcReadsCoalesced",
+                              "rpcReadsRequested",
+                              "rpcReadsReused",
+                              "totalMs"
+                            ]
                           },
-                          "rpcReadsRequested": {
-                            "type": "number"
-                          },
-                          "rpcReadsCoalesced": {
-                            "type": "number"
-                          },
-                          "rpcReadsReused": {
-                            "type": "number"
-                          },
-                          "candidateCalls": {
-                            "type": "number"
-                          },
-                          "iterations": {
-                            "type": "number"
-                          },
-                          "totalMs": {
-                            "type": "number"
+                          {
+                            "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                            "type": "object",
+                            "properties": {
+                              "firstQualifiedMs": {
+                                "type": "number"
+                              },
+                              "selectionMs": {
+                                "type": "number"
+                              },
+                              "canonicalCompletedMs": {
+                                "type": "number"
+                              },
+                              "cleanupCompletedMs": {
+                                "type": "number"
+                              },
+                              "finalizationMs": {
+                                "type": "number"
+                              }
+                            }
                           }
-                        },
-                        "required": [
-                          "candidateCalls",
-                          "iterations",
-                          "rpcReads",
-                          "rpcReadsCoalesced",
-                          "rpcReadsRequested",
-                          "rpcReadsReused",
-                          "totalMs"
                         ]
                       }
                     },
@@ -25823,38 +26023,63 @@
                         }
                       },
                       "metrics": {
-                        "type": "object",
-                        "properties": {
-                          "rpcReads": {
-                            "type": "number"
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "rpcReads": {
+                                "type": "number"
+                              },
+                              "rpcReadsRequested": {
+                                "type": "number"
+                              },
+                              "rpcReadsCoalesced": {
+                                "type": "number"
+                              },
+                              "rpcReadsReused": {
+                                "type": "number"
+                              },
+                              "candidateCalls": {
+                                "type": "number"
+                              },
+                              "iterations": {
+                                "type": "number"
+                              },
+                              "totalMs": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "candidateCalls",
+                              "iterations",
+                              "rpcReads",
+                              "rpcReadsCoalesced",
+                              "rpcReadsRequested",
+                              "rpcReadsReused",
+                              "totalMs"
+                            ]
                           },
-                          "rpcReadsRequested": {
-                            "type": "number"
-                          },
-                          "rpcReadsCoalesced": {
-                            "type": "number"
-                          },
-                          "rpcReadsReused": {
-                            "type": "number"
-                          },
-                          "candidateCalls": {
-                            "type": "number"
-                          },
-                          "iterations": {
-                            "type": "number"
-                          },
-                          "totalMs": {
-                            "type": "number"
+                          {
+                            "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                            "type": "object",
+                            "properties": {
+                              "firstQualifiedMs": {
+                                "type": "number"
+                              },
+                              "selectionMs": {
+                                "type": "number"
+                              },
+                              "canonicalCompletedMs": {
+                                "type": "number"
+                              },
+                              "cleanupCompletedMs": {
+                                "type": "number"
+                              },
+                              "finalizationMs": {
+                                "type": "number"
+                              }
+                            }
                           }
-                        },
-                        "required": [
-                          "candidateCalls",
-                          "iterations",
-                          "rpcReads",
-                          "rpcReadsCoalesced",
-                          "rpcReadsRequested",
-                          "rpcReadsReused",
-                          "totalMs"
                         ]
                       }
                     },
@@ -29470,18 +29695,43 @@
             ]
           },
           "metrics": {
-            "type": "object",
-            "properties": {
-              "candidateCalls": {
-                "type": "number"
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "candidateCalls": {
+                    "type": "number"
+                  },
+                  "totalMs": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "candidateCalls",
+                  "totalMs"
+                ]
               },
-              "totalMs": {
-                "type": "number"
+              {
+                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                "type": "object",
+                "properties": {
+                  "firstQualifiedMs": {
+                    "type": "number"
+                  },
+                  "selectionMs": {
+                    "type": "number"
+                  },
+                  "canonicalCompletedMs": {
+                    "type": "number"
+                  },
+                  "cleanupCompletedMs": {
+                    "type": "number"
+                  },
+                  "finalizationMs": {
+                    "type": "number"
+                  }
+                }
               }
-            },
-            "required": [
-              "candidateCalls",
-              "totalMs"
             ]
           }
         },
@@ -34677,38 +34927,63 @@
             }
           },
           "metrics": {
-            "type": "object",
-            "properties": {
-              "rpcReads": {
-                "type": "number"
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "rpcReads": {
+                    "type": "number"
+                  },
+                  "rpcReadsRequested": {
+                    "type": "number"
+                  },
+                  "rpcReadsCoalesced": {
+                    "type": "number"
+                  },
+                  "rpcReadsReused": {
+                    "type": "number"
+                  },
+                  "candidateCalls": {
+                    "type": "number"
+                  },
+                  "iterations": {
+                    "type": "number"
+                  },
+                  "totalMs": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "candidateCalls",
+                  "iterations",
+                  "rpcReads",
+                  "rpcReadsCoalesced",
+                  "rpcReadsRequested",
+                  "rpcReadsReused",
+                  "totalMs"
+                ]
               },
-              "rpcReadsRequested": {
-                "type": "number"
-              },
-              "rpcReadsCoalesced": {
-                "type": "number"
-              },
-              "rpcReadsReused": {
-                "type": "number"
-              },
-              "candidateCalls": {
-                "type": "number"
-              },
-              "iterations": {
-                "type": "number"
-              },
-              "totalMs": {
-                "type": "number"
+              {
+                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                "type": "object",
+                "properties": {
+                  "firstQualifiedMs": {
+                    "type": "number"
+                  },
+                  "selectionMs": {
+                    "type": "number"
+                  },
+                  "canonicalCompletedMs": {
+                    "type": "number"
+                  },
+                  "cleanupCompletedMs": {
+                    "type": "number"
+                  },
+                  "finalizationMs": {
+                    "type": "number"
+                  }
+                }
               }
-            },
-            "required": [
-              "candidateCalls",
-              "iterations",
-              "rpcReads",
-              "rpcReadsCoalesced",
-              "rpcReadsRequested",
-              "rpcReadsReused",
-              "totalMs"
             ]
           }
         },

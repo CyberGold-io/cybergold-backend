@@ -17,6 +17,7 @@ from .token_preview import TokenPreviewRpc
 from .quote_revalidation import RetainedPlanChanged, core_bounds, revalidate
 from .preview_errors import KnownPreviewError
 from .quote_errors import QuoteFailure, RpcTimeout, rpc_failure, public_quote_error
+from .quote_budget import current_budget, SearchStopped
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .issuance_capacity import capacity_amounts, read_capacity
 from .market_swap import encode_adapter
@@ -123,6 +124,7 @@ class QuoteIntent:
 
     @quote_work_scope
     async def get(self, request, on_update, *, block=None, model_epoch=None, quoted_ranking=False):
+        budget = current_budget()
         validate(request)
         slippage_bps = request.get('slippageBps', DEFAULT_SLIPPAGE_BPS)
         epoch = self.history.epoch if self.history and model_epoch is None else model_epoch
@@ -139,7 +141,7 @@ class QuoteIntent:
         started = time.perf_counter()
         try:
             async with asyncio.timeout(15):
-                block = await rpc.block(None) if block is None else block
+                block = (await budget.prepare(rpc.block(None)) if budget is not None else await rpc.block(None)) if block is None else block
         except RpcTimeout:
             raise
         except TimeoutError:
@@ -200,6 +202,8 @@ class QuoteIntent:
                     metrics['rpcReadsRequested'] += 1
                     async with asyncio.timeout(15):
                         await rpc.assert_canonical(block)
+                    if budget is not None and not budget.qualified():
+                        continue
                     qualified = value
                     quote_qualified(True)
                     await on_update({'type': 'qualified', 'value': result_value(value)})
@@ -208,6 +212,8 @@ class QuoteIntent:
                     # unavailable prospective route. It also retires an
                     # earlier tuple and survives a later ordinary tail error.
                     context_error = error
+                    if budget is not None:
+                        budget.invalidated()
                     qualified = None
                     quote_qualified(False)
                     pending_qualification = None
@@ -738,8 +744,22 @@ class QuoteIntent:
                     raise
                 return deepcopy(qualified)
 
-        try:
-            retained_key = json.dumps({key: value for key, value in request.items() if key not in ('deadline', 'retainedPlan')}, sort_keys=True)
+        async def drain():
+            nonlocal pending_qualification, context_error
+            pending_qualification = None
+            tasks = list(estimates) + list(memo.values()) + ([recovery] if recovery else []) + ([capacity_state] if capacity_state else [])
+            for task in tasks:
+                task.cancel()
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+            if context_error is None:
+                context_error = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+            if budget is not None:
+                budget.cleanup_done()
+            if context_error is not None:
+                raise context_error
+
+        retained_key = json.dumps({key: value for key, value in request.items() if key not in ('deadline', 'retainedPlan')}, sort_keys=True)
+        async def selection():
             incumbent = self.retained.get(retained_key) if self.retain_plans and rpc.chain_id == 1 else None
             result = None
             prior = None
@@ -812,11 +832,30 @@ class QuoteIntent:
                 result = await discover(redemption(int(request['amount'])))
             else:
                 result = await discover(redeem_out())
+            return result
+
+        try:
+            stopped = False
+            try:
+                result = await budget.discovery(selection()) if budget is not None else await selection()
+            except SearchStopped:
+                stopped = True
+                if qualified is None:
+                    raise
+                result = deepcopy(qualified)
+            if budget is not None:
+                await drain()
             quote_phase('canonicality')
             async with asyncio.timeout(15):
                 await rpc.assert_canonical(block)
+            if budget is not None:
+                budget.canonical_done()
             if context_error is not None:
                 raise context_error
+            if budget is not None and not stopped and not budget.qualified():
+                if qualified is None:
+                    raise SearchStopped()
+                result = deepcopy(qualified)
             # Final completion supersedes any still-running display-only read.
             result.update(mode=request['mode'], slippageBps=slippage_bps, context=context,
                           metrics={**metrics, 'totalMs': round((time.perf_counter() - started) * 1000, 3)})
@@ -857,14 +896,7 @@ class QuoteIntent:
                     error.rpc_diagnostics = diagnostics
             raise
         finally:
-            for task in estimates:
-                task.cancel()
-            tasks = list(estimates) + list(memo.values()) + ([recovery] if recovery else []) + ([capacity_state] if capacity_state else [])
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            if context_error is not None:
-                raise context_error
+            await drain()
 
 
 async def handle_quote_intent(request, service):

@@ -31,6 +31,7 @@ from .wallet_balances import TOKENS
 from .uniswap_routes import uses_typed_adapter
 from .shared_reads import discard_pool_observation
 from .trade_observation import QuoteObservation
+from .quote_budget import budget_entry, current_budget, SearchStopped
 
 PAXG = next(address for name, address in TOKENS if name == 'paxg')
 
@@ -340,18 +341,21 @@ class TradeQuotes:
         block = await self.market.head()
         return await self.acquire_models(request, block)
 
+    @budget_entry
     async def get(self, request, on_update):
-        request = await self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump()))
-        await on_update({'type': 'model', 'value': self.packet(request)})
+        budget = current_budget()
+        request = await budget.prepare(self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump())))
+        await budget.prepare(on_update({'type': 'model', 'value': self.packet(request)}))
         return await self.sharing.get(request, on_update)
 
     async def _get(self, request, on_update, *, block):
         started, target_reads = time.perf_counter(), 0
+        budget = current_budget()
         retained = request.get('retainedPlan')
         strategies = [retained['strategy']] if retained else ['core', 'market']
         evaluation = {name: 'running' if name in strategies and (name == 'core' or self.supported_market(request)) else 'unsupported'
                       for name in ('core', 'market')}
-        candidates, winner, errors, context_error = {}, None, {}, None
+        candidates, terminal_candidates, winner, errors, context_error = {}, {}, None, {}, None
         error_quote_diagnostics = {}
         lock = asyncio.Lock()
 
@@ -375,25 +379,28 @@ class TradeQuotes:
             try:
                 if strategy == 'core':
                     epoch = self.history.epoch if self.history else None
-                    assets, weights, reads = await self.read_basis(block)
+                    operation = self.read_basis(block)
+                    assets, weights, reads = await budget.discovery(operation) if budget else await operation
                     target_reads += reads
                     if not self.history or self.history.epoch == epoch:
                         self.basis, self.basis_epoch = (assets, weights), epoch
                     adapted = core_request(request, assets, weights)
                 else:
                     adapted = market_request(request)
+                def execution_value(quote):
+                    counter = ZERO if request['native'] else request['counterToken']
+                    return {'strategy': strategy, 'side': request['side'], 'mode': request['mode'],
+                        'tokenIn': counter if request['side'] == 'buy' else self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
+                        'tokenOut': self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS if request['side'] == 'buy' else counter,
+                        **economics(strategy, request, quote), 'context': quote['context'],
+                        'providerRequest': deepcopy(adapted), 'providerQuote': deepcopy(quote)}
                 async def publish(frame):
                     nonlocal context_error
                     if frame['type'] == 'qualified':
                         if context_error is not None:
                             return
                         quote = frame['value']
-                        counter = ZERO if request['native'] else request['counterToken']
-                        value = {'strategy': strategy, 'side': request['side'], 'mode': request['mode'],
-                            'tokenIn': counter if request['side'] == 'buy' else self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
-                            'tokenOut': self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS if request['side'] == 'buy' else counter,
-                            **economics(strategy, request, quote), 'context': quote['context'],
-                            'providerRequest': deepcopy(adapted), 'providerQuote': deepcopy(quote)}
+                        value = execution_value(quote)
                         async with lock:
                             if context_error is not None:
                                 return
@@ -414,6 +421,8 @@ class TradeQuotes:
                                 if winner and winner['strategy'] == strategy:
                                     await on_update({'type': 'invalidated', 'strategy': strategy})
                                     await select()
+                            if budget:
+                                budget.ready = bool(candidates)
                     elif frame['type'] == 'model':
                         await on_update({'type': 'model', 'value': self.packet(request, {strategy: frame['value']})})
                     elif frame['type'] == 'progress':
@@ -424,7 +433,11 @@ class TradeQuotes:
                 quote = (await self.core.get(adapted, publish, block=block, quoted_ranking=True) if strategy == 'core'
                          else await self.market._get(adapted, publish, block=block))
                 await publish({'type': 'qualified', 'value': quote})
+                terminal_candidates[strategy] = execution_value(quote)
                 evaluation[strategy] = 'complete'
+            except SearchStopped:
+                evaluation[strategy] = 'unavailable'
+                errors[strategy] = TimeoutError('Quote selection budget exhausted')
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
@@ -451,8 +464,12 @@ class TradeQuotes:
                 bind_quote_error(context_error, next((error_quote_diagnostics[strategy]
                     for strategy, error in errors.items() if error is context_error), None))
                 raise context_error
-            if candidates:
-                winner = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
+            # Ordinary search errors retain the existing checked-incumbent
+            # fallback. A policy cutoff must obtain a provider terminal value,
+            # including its final canonical validation and owned-task drain.
+            final = terminal_candidates if budget and budget.stop.is_set() else candidates
+            if final:
+                winner = max(final.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
                 return decorate(winner)
             error = next(iter(errors.values()), QuoteFailure('quote-no-route'))
             bind_quote_error(error, next((error_quote_diagnostics[strategy]

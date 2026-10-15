@@ -215,6 +215,20 @@ def quote_background():
         _quote_background.reset(token)
 
 
+@contextmanager
+def quote_owned_task():
+    """Lend primary diagnostics to an awaited, operation-owned child task."""
+    current = _quote_scope.get()
+    previous = current.owner if current else None
+    if current:
+        current.owner = asyncio.current_task()
+    try:
+        yield
+    finally:
+        if current:
+            current.owner = previous
+
+
 def quote_phase(phase, *, iteration=None):
     current = _quote_scope.get()
     if current and current.owner is asyncio.current_task() and phase in _QUOTE_PHASES:
