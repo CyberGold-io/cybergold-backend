@@ -15,10 +15,11 @@ const errors:Record<number,string[]>={400:['INVALID_JSON','INVALID_REQUEST','INV
   401:['UNAUTHORIZED'],404:['NOT_FOUND'],405:['METHOD_NOT_ALLOWED'],408:['REQUEST_TIMEOUT'],
   409:['REQUEST_ID_CONFLICT','REQUEST_IN_PROGRESS','REQUEST_UNCERTAIN'],411:['LENGTH_REQUIRED'],
   413:['REQUEST_TOO_LARGE'],415:['UNSUPPORTED_MEDIA_TYPE'],
-  429:['ADDRESS_QUOTA_EXHAUSTED','IP_QUOTA_EXHAUSTED','GLOBAL_QUOTA_EXHAUSTED'],
+  429:['RATE_LIMITED','ADDRESS_QUOTA_EXHAUSTED','IP_QUOTA_EXHAUSTED','GLOBAL_QUOTA_EXHAUSTED'],
   500:['INTERNAL_ERROR'],502:['FUNDING_FAILED'],503:['CHAIN_UNAVAILABLE']};
 for(const [status,codes] of Object.entries(errors))for(const code of codes)
   cases.push({body,supplier:{status:Number(status),value:{error:{code,message:'fixture-private-detail'}},retry:'30'}});
+cases.push({body,supplier:{status:429,value:{error:{code:'RATE_LIMITED',message:'fixture-private-detail'}},retry:'900'}});
 for(const patch of [{dryRun:true},{ethWei:'01'},{ethWei:'-1'},{ethWei:(2n**256n).toString()},
   {address:'0x'+'b'.repeat(40)},{extra:true},{tokens:Array(17).fill({symbol:'PAXG',amount:'1'})},
   {tokens:[{symbol:'PAXG',amount:'1'},{symbol:'paxg',amount:'2'}]},
