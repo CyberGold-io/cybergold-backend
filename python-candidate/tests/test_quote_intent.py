@@ -1906,7 +1906,9 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
         return task, frames, qualified
 
     async def wait(self, event):
-        await asyncio.wait_for(event.wait(), 1)
+        # Readiness assertions are event-based; the watchdog follows the
+        # existing producer phase budget, including cold native ABI work.
+        await asyncio.wait_for(event.wait(), 15)
 
     async def test_legacy_token_and_native_lower_points_qualify_before_tail(self):
         for native in (False, True):
