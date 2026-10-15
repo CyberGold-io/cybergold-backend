@@ -3,6 +3,7 @@ import asyncio
 from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
+from itertools import combinations
 import json
 import os
 from pathlib import Path
@@ -92,6 +93,129 @@ class Store:
         for pool in pools:
             await self.save('inventory', pool['id'], pool)
         await self.save('cursor', protocol, cursor)
+
+
+class RouteIdentityReplay(unittest.IsolatedAsyncioTestCase):
+    def pools(self):
+        d = '0x'+'4'*40
+        return [{**POOL, 'id': '0x'+format(index+100, '040x'), 'protocol': protocol,
+                 'token0': token(left), 'token1': token(right)}
+            for index, (left, right, protocol) in enumerate([
+                (A, B, 'v2'), (A, C, 'v2'), (C, B, 'v3'),
+                (A, B, 'v3'), (A, d, 'v4'), (d, B, 'v4'), (A, B, 'v4')])]
+
+    def expected(self, pools, mode, amount):
+        paths = [path for path in discover_routes(pools, A, B) if supported_route(path, mode)]
+        rows = [[{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': path}]
+                for path in paths]
+        if mode == 'exactIn':
+            for left, right in combinations(paths, 2):
+                for percent in (25, 50, 75):
+                    first = amount*percent//100
+                    if first and amount-first:
+                        rows.append([{'amountIn': str(first), 'hops': left},
+                                     {'amountIn': str(amount-first), 'hops': right}])
+        return rows
+
+    async def test_matches_complete_mixed_graph_order_and_raw_allocations(self):
+        pools = self.pools()
+        for mode in ('exactIn', 'exactOut'):
+            for amount in (0, 1, 2, 3, 4, 101, 2**255):
+                with self.subTest(mode=mode, amount=amount):
+                    rows = [row async for row in candidate_branches(pools, A, B, mode, amount)]
+                    self.assertEqual(rows, self.expected(pools, mode, amount))
+                    if mode == 'exactIn':
+                        self.assertTrue(all(sum(int(branch['amountIn']) for branch in row) == amount for row in rows))
+
+    async def test_keeps_ordered_pair_directions_and_duplicate_raw_rounding(self):
+        pools = self.pools()
+        paths = [path async for path in discover_routes_async(pools, A, B)]
+        rows = [row async for row in candidate_branches(pools, A, B, 'exactIn', 2)]
+        splits = rows[len(paths):]
+        self.assertEqual(splits[:2], [[{'amountIn': '1', 'hops': paths[0]},
+                                      {'amountIn': '1', 'hops': paths[1]}]]*2)
+        self.assertEqual(len(splits), len(paths)*(len(paths)-1))
+
+    async def test_enumerates_selected_graph_once_for_all_split_pairs(self):
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', wraps=discover_routes_async) as discover:
+            rows = [row async for row in candidate_branches(self.pools(), A, B, 'exactIn', 101)]
+        self.assertTrue(any(len(row) == 2 for row in rows))
+        self.assertEqual(discover.call_count, 1)
+
+    async def test_first_candidate_remains_lazy_and_closing_prefix_stops_iterator(self):
+        seen = []
+        async def observed(*args, **kwargs):
+            async for path in discover_routes_async(*args, **kwargs):
+                seen.append(path)
+                yield path
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', observed):
+            iterator = candidate_branches(self.pools(), A, B, 'exactIn', 101)
+            first = await anext(iterator)
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(len(first), 1)
+            await iterator.aclose()
+            with self.assertRaises(StopAsyncIteration):
+                await anext(iterator)
+
+    async def test_standalone_consumer_cannot_mutate_replayed_hops(self):
+        pools = self.pools()
+        expected = self.expected(pools, 'exactIn', 101)
+        iterator = candidate_branches(pools, A, B, 'exactIn', 101)
+        first = await anext(iterator)
+        self.assertIs(first[0]['hops'][0]['pool'], pools[0])
+        first[0]['hops'][0]['zeroForOne'] = False
+        first[0]['hops'].append({'pool': {}, 'zeroForOne': False})
+        self.assertEqual([row async for row in iterator], expected[1:])
+
+    async def test_split_consumer_cannot_mutate_later_allocations(self):
+        pools = self.pools()
+        expected = self.expected(pools, 'exactIn', 101)
+        standalone = len(discover_routes(pools, A, B))
+        iterator = candidate_branches(pools, A, B, 'exactIn', 101)
+        for _ in range(standalone):
+            await anext(iterator)
+        first = await anext(iterator)
+        first[0]['hops'][0]['zeroForOne'] = False
+        first[0]['hops'].append({'pool': {}, 'zeroForOne': False})
+        self.assertEqual([row async for row in iterator], expected[standalone+1:])
+
+    async def test_zero_allocation_split_scan_remains_cancellable(self):
+        pools = [{**POOL, 'id': '0x'+format(index+100, '040x')} for index in range(100)]
+        graph_complete = asyncio.Event()
+        consumed = 0
+        async def observed(*args, **kwargs):
+            async for path in discover_routes_async(*args, **kwargs):
+                yield path
+            graph_complete.set()
+        async def consume():
+            nonlocal consumed
+            async for _row in candidate_branches(pools, A, B, 'exactIn', 1):
+                consumed += 1
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', observed):
+            task = asyncio.create_task(consume())
+            try:
+                await graph_complete.wait()
+                self.assertEqual(consumed, len(pools))
+                self.assertFalse(task.done())
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_graph_error_is_not_hidden_after_standalone_prefix(self):
+        error = ValueError('fixture graph failure')
+        path = [{'pool': self.pools()[0], 'zeroForOne': True}]
+        async def failing(*_args, **_kwargs):
+            yield path
+            raise error
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', failing):
+            iterator = candidate_branches(self.pools(), A, B, 'exactIn', 101)
+            await anext(iterator)
+            with self.assertRaises(ValueError) as raised:
+                await anext(iterator)
+            self.assertIs(raised.exception, error)
 
 
 class Fees(unittest.TestCase):
