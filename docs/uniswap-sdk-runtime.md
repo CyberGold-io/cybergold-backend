@@ -6,6 +6,16 @@ simulates ordered branches, and reports missing bitmap/tick coverage to Python.
 Candidate post-state is isolated from observed state; branches advance shared
 pools in execution order. Wire post-state omits unchanged tick coverage.
 
+Core, Market and direct Uniswap quotes use the same structured route engine
+and completion-driven scheduler. SDK simulation prices candidates and accounts
+for shared state and intermediate remainders; existing contract Quoters remain
+fallback/reference methods inside that engine. Cold exact-output redemption can
+freshly price and qualify a complete initial seed before unrelated candidates
+refill the released pricing slots. Its seed estimate alone never establishes
+execution terms. Native Core wrapping, adapter encoding, Helpers validation and
+the existing five-second search/fifteen-second maximum selection window retain
+their established behavior.
+
 The existing registry worker also retains pool activity in the existing
 `cybergold_uniswap_state` JSONB store. Normal monitoring reuses the canonical
 logs and header checks already acquired for state maintenance; quote/model

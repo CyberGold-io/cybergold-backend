@@ -2,6 +2,8 @@
 import asyncio
 from collections import Counter
 from copy import deepcopy
+import os
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -10,11 +12,11 @@ from cybergold_candidate.quote_errors import QuoteFailure, rpc_failure
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
-from cybergold_candidate.sdk_worker import SdkWorkerError
+from cybergold_candidate.sdk_worker import SdkWorker, SdkWorkerError
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_routes import (candidate_branches, route_identity,
     v3_branches, v3_path)
-from cybergold_candidate.uniswap_state import ZERO
+from cybergold_candidate.uniswap_state import PoolRegistry, ZERO
 
 A, B, C = ('0x'+str(i).rjust(40, '0') for i in (1, 2, 3))
 BLOCK = {'number': 1, 'hash': '0x'+'ab'*32}
@@ -125,6 +127,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SnapshotChanged):
             await self.engine.quote_branches(branches, 'exactIn', 10, BLOCK)
         self.assertEqual(self.registry.rpc.calls, [])
+
 
     async def test_advisory_negative_lookup_cannot_veto_fresh_canonical_pool(self):
         branches = v3_branches('0x'+A[2:]+'000064'+B[2:], 'exactIn', 10)
@@ -277,6 +280,91 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SdkWorkerError):
             await self.engine.quote_fallback_branches(branches+deepcopy(branches), 'exactIn', 10, BLOCK)
         self.assertEqual(self.registry.rpc.calls, [])
+
+
+class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        settings = SimpleNamespace(NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS=C,
+            NEXT_PUBLIC_CHAIN_ID=31338, NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=C)
+        self.rpc = Rpc()
+        self.registry = PoolRegistry(settings, self.rpc)
+        self.branches = v3_branches('0x'+A[2:]+'000064'+B[2:], 'exactIn', 1000)
+        pool = deepcopy(self.branches[0]['hops'][0]['pool'])
+        pool.update(id=C, address=C, tickSpacing=1)
+        for token in (pool['token0'], pool['token1']):
+            token.update(decimals=18, chainId=31338)
+        self.registry.inventory = {C: pool}
+        self.sdk = SdkWorker([os.environ.get('CYBERGOLD_TEST_NODE', 'node'),
+                             str(Path('src/uniswap-sdk/worker.ts').resolve())])
+        self.engine = RouteQuoteEngine(settings, self.registry, self.sdk)
+
+    async def asyncTearDown(self):
+        await self.engine.close()
+        await self.registry.pending.close()
+
+
+    async def test_rich_v3_uses_actual_sdk_and_fresh_ticks_before_native_reference(self):
+        native_calls = []
+        async def state(_address, signature, _types, _args, _outputs, _block):
+            if signature.startswith('quoteExact'):
+                native_calls.append(signature)
+                raise rpc_failure({'code': -32000, 'message': 'quoter unavailable'})
+            if signature == 'slot0()':
+                return (2**96, 0, 0, 0, 0, 0, True)
+            if signature == 'liquidity()':
+                return (10**15,)
+            if signature == 'tickBitmap(int16)':
+                return (0,)
+            raise AssertionError(signature)
+        self.rpc.read_function = state
+        for mode in ('exactIn', 'exactOut'):
+            value = await self.engine.quote_branches(self.branches, mode, 1000, BLOCK)
+            self.assertEqual(value['qualification'], 'sdk')
+            self.assertGreater(int(value['amountIn']), 0)
+            self.assertGreaterEqual(int(value['amountOut']), 1000 if mode == 'exactOut' else 1)
+            self.assertTrue(value['settled'])
+            self.assertTrue(value['fullyFilled'])
+        self.assertEqual(native_calls, [])
+
+    async def test_multihop_exact_input_keeps_actual_sdk_intermediate_settlement_rejection(self):
+        from cybergold_candidate.basket_preview import InvalidPreview
+        other, output = ('0x'+str(i).rjust(40, '0') for i in (4, 5))
+        branches = v3_branches('0x'+A[2:]+'000064'+B[2:]+'000064'+output[2:],
+                               'exactIn', 1000000)
+        states = {}
+        for index, hop in enumerate(branches[0]['hops']):
+            pool = deepcopy(hop['pool'])
+            pool.update(id=(C, other)[index], address=(C, other)[index], tickSpacing=1)
+            for token in (pool['token0'], pool['token1']):
+                token.update(decimals=18, chainId=31338)
+            self.registry.inventory[pool['id']] = deepcopy(pool)
+            # The second pool exhausts its active range at tick -10. Remaining
+            # words prove empty liquidity through the SDK's lower price limit.
+            pool.update(sqrtRatioX96=str(2**96), tick=0,
+                liquidity=str(10**15 if index == 0 else 10**9),
+                ticks=[] if index == 0 else [{'index': -10,
+                    'liquidityGross': str(10**9), 'liquidityNet': str(10**9)}],
+                bitmapWords=[{'wordPosition': position,
+                    'bitmap': str(1 << 246) if index == 1 and position == -1 else '0'}
+                    for position in (range(-3466, 1) if index == 1 else (-1, 0))])
+            states[pool['id']] = pool
+        async def snapshot(pool, _block):
+            return deepcopy(states[pool['id']])
+        observed, request = [], self.sdk.request
+        async def capture(payload):
+            result = await request(payload)
+            observed.append(deepcopy(result))
+            return result
+        self.registry.snapshot, self.sdk.request = snapshot, capture
+        with self.assertRaisesRegex(InvalidPreview, 'Unsettled current-operation intermediate'):
+            await self.engine.quote_branches(branches, 'exactIn', 1000000, BLOCK)
+        self.assertTrue(observed)
+        self.assertEqual(observed[-1]['amountOut'], '499850')
+        self.assertFalse(observed[-1]['settled'])
+        self.assertFalse(observed[-1]['fullyFilled'])
+        self.assertEqual(observed[-1]['residuals'], [
+            {'poolId': other, 'amount': '499747', 'originalInput': False}])
+        self.assertEqual(self.rpc.calls, [])
 
 class MarketEngineOwnership(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
