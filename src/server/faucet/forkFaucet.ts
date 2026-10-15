@@ -45,6 +45,7 @@ const ADAPTER_ERROR_CODES_BY_STATUS: Readonly<Record<number, readonly string[]>>
   413: ["REQUEST_TOO_LARGE"],
   415: ["UNSUPPORTED_MEDIA_TYPE"],
   429: [
+    "RATE_LIMITED",
     "ADDRESS_QUOTA_EXHAUSTED",
     "IP_QUOTA_EXHAUSTED",
     "GLOBAL_QUOTA_EXHAUSTED",
@@ -407,7 +408,7 @@ function errorFromAdapterStatus(response: Response, adapterCode: string) {
       );
     case 429:
       return new ForkFaucetError(
-        adapterCode as "ADDRESS_QUOTA_EXHAUSTED" | "IP_QUOTA_EXHAUSTED" | "GLOBAL_QUOTA_EXHAUSTED",
+        adapterCode as "RATE_LIMITED" | "ADDRESS_QUOTA_EXHAUSTED" | "IP_QUOTA_EXHAUSTED" | "GLOBAL_QUOTA_EXHAUSTED",
         parseRetryAfter(response.headers.get("retry-after")),
         requestIdDisposition
       );
