@@ -601,10 +601,10 @@ class MarketQuotes:
         """Core reserve legs share protocol providers, without market fees."""
         await self.registry.ensure_loaded()
         mode = 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
-        for target in request['targets']:
-            await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
-        pools = [pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
-            pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)]
+        def inventory():
+            return deepcopy([pool for pool in self.registry.inventory.values() if pool['protocol'] != 'v4' or (
+                pool.get('hooks', ZERO).lower() == ZERO and int(pool['feePips']) < 0x800000)])
+        pools = inventory()
         results = [{'target': target, 'best': None, 'attempted': 0, 'succeeded': 0, 'failures': [], 'total': 0}
             for target in request['targets']]
 
@@ -631,47 +631,81 @@ class MarketQuotes:
             finally:
                 result['attempted'] += 1
 
-        async def branches_for(target):
-            async for branches in candidate_branches(pools, target['inputAsset'], target['outputAsset'], mode, int(target['amount'])):
+        seen = [set() for _ in results]
+        async def branches_for(index, selected):
+            target = results[index]['target']
+            async for branches in candidate_branches(selected, target['inputAsset'], target['outputAsset'], mode, int(target['amount'])):
                 # The existing V3 search covers its original homogeneous paths.
                 if len(branches) == 1 and all(hop['pool']['protocol'] == 'v3' for hop in branches[0]['hops']):
                     continue
+                identity = json.dumps(branches, sort_keys=True)
+                if identity in seen[index]:
+                    continue
+                seen[index].add(identity)
                 yield branches
 
-        generators = [(result, branches_for(result['target'])) for result in results]
-        pending, active = list(generators), set()
-        async def completed():
-            nonlocal active
-            done, active = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
-            await asyncio.gather(*done)
-            if on_update:
+        async def discover():
+            for target in request['targets']:
+                await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
+
+        active = set()
+        discovery = asyncio.create_task(discover())
+        async def completed(*, during_discovery=False):
+            waiters = active | ({discovery} if during_discovery else set())
+            done, _ = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+            finished = done & active
+            active.difference_update(finished)
+            await asyncio.gather(*finished)
+            if on_update and finished:
                 await on_update(deepcopy(results))
-        try:
+
+        async def scan(selected, *, during_discovery=False):
+            generators = [(result, branches_for(index, selected)) for index, result in enumerate(results)]
+            pending = list(generators)
             # One candidate per leg per turn, with the existing global budget.
             # A slow connector tail must not hide another leg's cheap route.
-            while pending:
-                for entry in list(pending):
-                    result, generator = entry
-                    try:
-                        branches = await anext(generator)
-                    except StopAsyncIteration:
-                        pending.remove(entry)
-                        continue
-                    result['total'] += 1
-                    route_count('typedEnumerated')
-                    active.add(asyncio.create_task(evaluate(result, branches)))
-                    if len(active) >= 8:
-                        await completed()
+            try:
+                while pending:
+                    if during_discovery and discovery.done():
+                        return False
+                    for entry in list(pending):
+                        if during_discovery and discovery.done():
+                            return False
+                        result, generator = entry
+                        try:
+                            branches = await anext(generator)
+                        except StopAsyncIteration:
+                            pending.remove(entry)
+                            continue
+                        while len(active) >= 8:
+                            await completed()
+                        result['total'] += 1
+                        route_count('typedEnumerated')
+                        active.add(asyncio.create_task(evaluate(result, branches)))
+                return True
+            finally:
+                await asyncio.gather(*(generator.aclose() for _, generator in generators))
+
+        try:
+            exhausted = await scan(pools, during_discovery=True)
+            while active and not discovery.done():
+                await completed(during_discovery=True)
+            await discovery
+            expanded = inventory()
+            # Unchanged exhausted inventory needs no second graph traversal.
+            # Expanded coverage never executes an already scheduled candidate.
+            if not exhausted or expanded != pools:
+                await scan(expanded)
             while active:
                 await completed()
         except BaseException as error:
             freeze_quote_work(error)
             raise
         finally:
+            discovery.cancel()
             for task in active:
                 task.cancel()
-            await asyncio.gather(*active, return_exceptions=True)
-            await asyncio.gather(*(generator.aclose() for _, generator in generators))
+            await asyncio.gather(discovery, *active, return_exceptions=True)
         return results
 
     def make_quote(self, request, branches, raw, rate, block, *, retained=None):
