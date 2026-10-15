@@ -1778,5 +1778,221 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.gather(task, return_exceptions=True)
 
 
+class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
+    """Fresh protected points can qualify without awaiting unrelated coverage."""
+
+    def fixture(self, *, target=200, native=False, price=(3, 2), late_price=None,
+                typed=False, changed=False, rejected=False, reorg=False, zero_basket=False):
+        intent, provider, routes, wire = service(31338)
+        release, previewed, refined = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        control = SimpleNamespace(release=release, previewed=previewed, refined=refined,
+            fail_tail=True, first_gross=None, state_changed=False, calls=[], composed=[])
+        async def close():
+            release.set()
+            await intent.close()
+        self.addAsyncCleanup(close)
+        original_read = provider.make_request
+        async def read(method, params):
+            function, args = (None, None)
+            if method == 'eth_call' and params[0]['to'].lower() != CORE.lower():
+                function, args = provider.contract.decode_function_input(params[0]['data'])
+            token = function and function.fn_name in ('previewRedeemToTokenExactIn', 'previewRedeemToNativeExactIn')
+            gross = (args.get('grossCygldIn') if 'grossCygldIn' in args else args['params']['grossCygldIn']) if token else None
+            if token and rejected and control.first_gross is not None and gross != control.first_gross:
+                refined.set()
+                return {'jsonrpc': '2.0', 'id': 1, 'error': {'code': 3, 'message': 'Synthetic revised preview rejection'}}
+            response = await original_read(method, params)
+            if function and function.fn_name == 'previewRedeemToBasketExactIn' and zero_basket:
+                output = function.abi['outputs'][0]
+                prior = provider.contract.w3.codec.decode([collapse_if_tuple(output)], bytes.fromhex(response['result'][2:]))[0]
+                outputs = [(kind, token, identity, 0 if kind == 0 else amount) for kind, token, identity, amount in prior[0]]
+                response = {**response, 'result': '0x' + provider.contract.w3.codec.encode(
+                    [collapse_if_tuple(output)], [(outputs, prior[1])]).hex()}
+            if token:
+                if control.first_gross is None:
+                    control.first_gross = gross
+                    control.state_changed = changed
+                    previewed.set()
+                elif gross != control.first_gross:
+                    if reorg:
+                        provider.reorg = True
+                    refined.set()
+            return response
+        provider.make_request = read
+        def output(amount, *, complete=False):
+            numerator, denominator = (2, 1) if control.state_changed else late_price if complete and late_price else price
+            return amount * numerator // denominator
+        async def quoted(path, amount):
+            if path[:20] == bytes.fromhex(WETH[2:]):
+                return (amount + 1) // 2
+            fee = int.from_bytes(path[20:23])
+            if fee > 500:
+                await release.wait()
+                if control.fail_tail:
+                    raise TimeoutError('Ordinary unfinished coverage')
+            control.calls.append(('legacy', amount))
+            return output(amount, complete=release.is_set())
+        wire.on_quote = quoted
+        value = request('redeem-exact-out', native)
+        value['amount'] = str(target)
+        value['targets'] = [{'inputAsset': asset, 'outputAsset': WETH, 'amount': str(amount)}
+                           for asset, amount in zip((ASSET_A, ASSET_B), (target // 2, target - target // 2), strict=True) if amount]
+        if typed:
+            wire.missing_fees = {100, 500, 3000, 10000}
+            inventory, paths = {}, {}
+            def hop(source, destination, identity):
+                left, right = sorted((source, destination), key=str.lower)
+                pool = {'id': '0x' + f'{identity:040x}', 'address': '0x' + f'{identity:040x}', 'protocol': 'v2', 'feePips': 3000,
+                    'token0': {'address': left, 'decimals': 18, 'chainId': 31338},
+                    'token1': {'address': right, 'decimals': 18, 'chainId': 31338}}
+                inventory[pool['id']] = pool
+                return {'pool': pool, 'zeroForOne': left.lower() == source.lower()}
+            trunk = hop(ASSET_C, WETH, 20)
+            for index, asset in enumerate((ASSET_A, ASSET_B)):
+                paths[asset.lower()] = [hop(asset, ASSET_C, index + 30), deepcopy(trunk)]
+            engine = SimpleNamespace(semaphore=asyncio.Semaphore(8), registry=SimpleNamespace(inventory=inventory))
+            engine.resolve_branches = lambda *args: MarketQuotes.resolve_branches(engine, *args)
+            async def sdk(branches, mode, amount, block, **kwargs):
+                control.calls.append((mode, amount, deepcopy(branches)))
+                if isinstance(candidate := kwargs.get('candidate'), dict):
+                    index = candidate.get('fixture-order', 0)
+                    candidate['fixture-order'] = index + 1
+                    control.composed.append((amount, index))
+                return {'amountIn': str(amount if mode == 'exactIn' else (amount + 1) // 2),
+                    'amountOut': str(output(amount, complete=release.is_set()) if mode == 'exactIn' else amount),
+                    'settled': True, 'fullyFilled': True}
+            engine.quote_sdk_branches = sdk
+            async def quote(*args):
+                return await MarketQuotes.quote_branches(engine, *args)
+            engine.quote_branches = quote
+            async def compose(*args, **kwargs):
+                return await MarketQuotes.compose_core_rows(engine, *args, **kwargs)
+            engine.compose_core_rows = compose
+            async def reserve(values, block, on_update=None):
+                mode = 'exactIn' if values['mode'] == 'exact-in' else 'exactOut'
+                rows = []
+                for target in values['targets']:
+                    amount = int(target['amount'])
+                    hops = deepcopy(paths[target['inputAsset'].lower()])
+                    observed = output(amount, complete=release.is_set()) if mode == 'exactIn' else (amount + 1) // 2
+                    plan = {'version': 1, 'executionContext': 'helpers-core', 'mode': mode,
+                        'tokenIn': target['inputAsset'], 'tokenOut': target['outputAsset'],
+                        'inputAmount': str(amount if mode == 'exactIn' else observed), 'outputAmount': str(observed if mode == 'exactIn' else amount),
+                        'limit': '0', 'deadline': '0', 'branches': [{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': hops}]}
+                    rows.append({'target': target, 'best': {'path': '0x', 'quote': str(observed), 'routePlan': plan},
+                                 'attempted': 1, 'succeeded': 1, 'failures': [], 'total': 2})
+                if on_update:
+                    await on_update(rows)
+                if mode == 'exactIn':
+                    await release.wait()
+                    if control.fail_tail:
+                        raise TimeoutError('Ordinary unfinished typed reserve')
+                return rows
+            engine.reserve_quotes = reserve
+            routes.multi_protocol = engine
+        return intent, provider, control, value
+
+    def start(self, intent, value):
+        frames, qualified = [], asyncio.Event()
+        async def update(frame):
+            if frame['type'] == 'qualified':
+                frames.append(frame['value'])
+                qualified.set()
+        task = asyncio.create_task(intent.get(value, update))
+        async def cancel():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.addAsyncCleanup(cancel)
+        return task, frames, qualified
+
+    async def wait(self, event):
+        # Readiness assertions are event-based; the watchdog follows the
+        # existing producer phase budget, including cold native ABI work.
+        await asyncio.wait_for(event.wait(), 15)
+
+    async def test_legacy_token_and_native_lower_points_qualify_before_tail(self):
+        for native in (False, True):
+            with self.subTest(native=native):
+                intent, provider, control, value = self.fixture(native=native)
+                task, frames, ready = self.start(intent, value)
+                await self.wait(ready)
+                result = frames[0]
+                self.assertFalse(task.done())
+                self.assertEqual((result['executionAmount'], result['preview']['minimumAmountOut']), ('136', '200'))
+                self.assertEqual([leg['inputAmount'] for leg in result['quotes']], ['68', '68'])
+                self.assertIn(('legacy', 68), control.calls)
+                names = [name for name, _args, _block in provider.contract_calls]
+                self.assertIn('previewRedeemToNativeExactIn' if native else 'previewRedeemToTokenExactIn', names)
+                control.release.set()
+                self.assertEqual((await task)['executionAmount'], '136')
+
+    async def test_upper_point_and_rounding_gap_keep_the_existing_interval(self):
+        intent, _provider, control, value = self.fixture(target=100, price=(21, 10))
+        task, frames, ready = self.start(intent, value)
+        await self.wait(ready)
+        self.assertEqual((frames[0]['executionAmount'], frames[0]['preview']['minimumAmountOut']), ('49', '100'))
+        control.release.set()
+        await task
+        intent, _provider, control, value = self.fixture(price=(21, 10))
+        task, frames, _ready = self.start(intent, value)
+        await self.wait(control.refined)
+        control.release.set()
+        with self.assertRaises(TimeoutError):
+            await task
+        self.assertEqual(frames, [])
+
+    async def test_zero_helpers_output_has_no_division_or_executable_point(self):
+        intent, _provider, control, value = self.fixture(zero_basket=True)
+        task, frames, _ready = self.start(intent, value)
+        with self.assertRaises(InvalidPreview):
+            await task
+        self.assertEqual(frames, [])
+
+    async def test_fresh_state_helpers_rejection_and_reorg_do_not_publish(self):
+        for option in ('changed', 'rejected', 'reorg'):
+            with self.subTest(option=option):
+                intent, _provider, control, value = self.fixture(**{option: True})
+                task, frames, _ready = self.start(intent, value)
+                await self.wait(control.refined)
+                control.release.set()
+                with self.assertRaises(SnapshotChanged if option == 'reorg' else TimeoutError):
+                    await task
+                self.assertEqual(frames, [])
+
+    async def test_complete_coverage_can_improve_the_early_point(self):
+        intent, _provider, control, value = self.fixture(late_price=(2, 1))
+        task, frames, ready = self.start(intent, value)
+        await self.wait(ready)
+        self.assertEqual(frames[0]['executionAmount'], '136')
+        control.fail_tail = False
+        control.release.set()
+        result = await task
+        self.assertEqual((result['executionAmount'], result['preview']['minimumAmountOut']), ('102', '200'))
+
+    async def test_caller_cancellation_does_not_return_an_incumbent(self):
+        intent, _provider, _control, value = self.fixture()
+        task, frames, ready = self.start(intent, value)
+        await self.wait(ready)
+        self.assertTrue(frames)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+
+    async def test_typed_shared_legs_reprice_and_compose_new_quantities(self):
+        for native in (False, True):
+            with self.subTest(native=native):
+                intent, _provider, control, value = self.fixture(typed=True, native=native)
+                task, frames, ready = self.start(intent, value)
+                await self.wait(ready)
+                first = frames[0]
+                self.assertEqual((first['executionAmount'], first['preview']['minimumAmountOut']), ('136', '200'))
+                self.assertEqual([leg['routePlan']['inputAmount'] for leg in first['quotes']], ['68', '68'])
+                self.assertEqual([sum(int(branch['amountIn']) for branch in leg['routePlan']['branches']) for leg in first['quotes']], [68, 68])
+                self.assertIn((68, 0), control.composed)
+                self.assertIn((68, 1), control.composed)
+                control.release.set()
+                self.assertEqual((await task)['executionAmount'], '136')
+
+
 if __name__ == '__main__':
     unittest.main()
