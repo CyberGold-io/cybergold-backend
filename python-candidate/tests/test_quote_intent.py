@@ -16,6 +16,7 @@ from cybergold_candidate.app import create_app
 from cybergold_candidate.basket_preview import ABI as BASKET_ABI, InvalidPreview
 from cybergold_candidate.token_preview import TokenPreviewRpc
 from cybergold_candidate.quote_intent import QuoteIntent, REQUEST, issue_input_bounds, ceil
+from cybergold_candidate.quote_correction import delayed_local_step
 from cybergold_candidate.issuance_capacity import ABI as CAPACITY_ABI, READS as CAPACITY_READS, capacity_amounts
 from cybergold_candidate.quote_errors import QuoteFailure, RpcTimeout, public_quote_error
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH, candidates
@@ -1782,7 +1783,7 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
     """Fresh protected points can qualify without awaiting unrelated coverage."""
 
     def fixture(self, *, target=200, native=False, price=(3, 2), late_price=None,
-                typed=False, changed=False, rejected=False, reorg=False, zero_basket=False):
+                typed=False, changed=False, rejected=False, reorg=False, zero_basket=False, curve=None):
         intent, provider, routes, wire = service(31338)
         release, previewed, refined = asyncio.Event(), asyncio.Event(), asyncio.Event()
         control = SimpleNamespace(release=release, previewed=previewed, refined=refined,
@@ -1820,6 +1821,8 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
             return response
         provider.make_request = read
         def output(amount, *, complete=False):
+            if curve is not None:
+                return curve(amount)
             numerator, denominator = (2, 1) if control.state_changed else late_price if complete and late_price else price
             return amount * numerator // denominator
         async def quoted(path, amount):
@@ -1992,6 +1995,78 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn((68, 1), control.composed)
                 control.release.set()
                 self.assertEqual((await task)['executionAmount'], '136')
+
+
+class RepeatedProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
+    fixture = EarlyProtectedRedemptionPointTests.fixture
+    start = EarlyProtectedRedemptionPointTests.start
+    wait = EarlyProtectedRedemptionPointTests.wait
+
+    def concave_fixture(self, **options):
+        intent, provider, control, value = self.fixture(curve=lambda amount: 1000 * amount // (1000 + amount), **options)
+        intent.seeds = SimpleNamespace(suggest=lambda *_: 100, observe=lambda *_: None, fallback=False)
+        intent.correction = delayed_local_step
+        return intent, provider, control, value
+
+    async def test_concave_token_native_and_typed_shared_routes_qualify_after_multiple_fresh_points(self):
+        for typed in (False, True):
+            for native in (False, True):
+                with self.subTest(typed=typed, native=native):
+                    intent, provider, control, value = self.concave_fixture(typed=typed, native=native)
+                    task, frames, ready = self.start(intent, value)
+                    await self.wait(ready)
+                    self.assertFalse(task.done())
+                    result = frames[0]
+                    self.assertEqual((result['executionAmount'], result['preview']['minimumAmountOut']), ('230', '202'))
+                    self.assertEqual([leg['inputAmount'] for leg in result['quotes']], ['115', '115'])
+                    names = [name for name, _args, _block in provider.contract_calls]
+                    self.assertGreaterEqual(names.count('previewRedeemToNativeExactIn' if native else 'previewRedeemToTokenExactIn'), 5)
+                    if typed:
+                        self.assertIn((115, 0), control.composed)
+                        self.assertIn((115, 1), control.composed)
+                    control.release.set()
+                    self.assertEqual((await task)['executionAmount'], '230')
+
+    async def test_reorg_after_an_intermediate_point_cannot_publish_a_later_refinement(self):
+        intent, _provider, control, value = self.concave_fixture(reorg=True)
+        invalidated, frames = asyncio.Event(), []
+        async def update(frame):
+            if frame['type'] == 'invalidated':
+                invalidated.set()
+            elif frame['type'] == 'qualified':
+                frames.append(frame['value'])
+        task = asyncio.create_task(intent.get(value, update))
+        try:
+            await self.wait(invalidated)
+            self.assertEqual(frames, [])
+            control.release.set()
+            with self.assertRaises(SnapshotChanged):
+                await task
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_cancellation_during_an_additional_forward_check_does_not_publish(self):
+        intent, provider, _control, value = self.concave_fixture()
+        entered, release = asyncio.Event(), asyncio.Event()
+        original_read = provider.make_request
+        async def read(method, params):
+            if method == 'eth_call' and params[0]['to'].lower() != CORE.lower():
+                function, args = provider.contract.decode_function_input(params[0]['data'])
+                if function.fn_name == 'previewRedeemToTokenExactIn' and args['params']['grossCygldIn'] == 224:
+                    entered.set()
+                    await release.wait()
+            return await original_read(method, params)
+        provider.make_request = read
+        task, frames, _ready = self.start(intent, value)
+        try:
+            await self.wait(entered)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertEqual(frames, [])
+        finally:
+            release.set()
 
 
 if __name__ == '__main__':
