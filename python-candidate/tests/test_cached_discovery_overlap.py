@@ -210,7 +210,9 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
         try:
             await asyncio.wait_for(self.provider.discovery_started.wait(), 2)
             try:
-                await asyncio.wait_for(qualified.wait(), 2)
+                # Positive controls prove ordering, including cold SDK startup;
+                # this test watchdog is not a production quote budget.
+                await asyncio.wait_for(qualified.wait(), 10 if expect_early else 2)
                 early = True
             except TimeoutError:
                 early = False
@@ -222,6 +224,8 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
                 'beforeRelease': before})
             self.assertEqual(early, expect_early)
             if early:
+                self.assertFalse(self.provider.release.is_set())
+                self.assertGreater(self.counts.active['discovery'], 0)
                 first = next(row['value'] for row in events if row['type'] == 'qualified')
                 self.assertEqual(first['context']['blockHash'], HASH)
                 self.assertTrue(all(row.get('routePlan') for row in first['quotes']))
