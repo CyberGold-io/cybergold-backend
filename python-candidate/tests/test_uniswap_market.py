@@ -1392,5 +1392,213 @@ class CandidateAcquisition(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.sdk.payloads, [])
 
 
+class TickFillRpc:
+    """Controlled getter completion; no transport or chain."""
+    def __init__(self):
+        self.calls = Counter()
+        self.started, self.release = asyncio.Event(), asyncio.Event()
+        self.active = self.cancelled = 0
+        self.bitmap = 1
+        self.gross = 100
+        self.error = None
+
+    async def read_function(self, _address, signature, _inputs, args, _outputs, _block):
+        self.calls[signature] += 1
+        if signature == 'tickBitmap(int16)':
+            return (self.bitmap,)
+        assert signature == 'ticks(int24)'
+        self.active += 1
+        self.started.set()
+        try:
+            await self.release.wait()
+            if self.error:
+                raise self.error
+            return self.gross, args[0], 0, 0, 0, 0, 0, True
+        except asyncio.CancelledError:
+            self.cancelled += 1
+            raise
+        finally:
+            self.active -= 1
+
+    async def close(self):
+        pass
+
+
+class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.rpc = TickFillRpc()
+        settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A)
+        self.registry = PoolRegistry(settings, rpc=self.rpc)
+        self.addAsyncCleanup(self.registry.close)
+        self.snapshot = {**deepcopy(POOL), 'protocol': 'v3', 'tickSpacing': 10,
+            'sqrtRatioX96': str(1 << 96), 'tick': 1, 'liquidity': '1000',
+            'context': {'chainId': 31338, 'blockNumber': str(BLOCK['number']), 'blockHash': BLOCK['hash']},
+            'bitmapWords': [], 'ticks': []}
+        self.requests = [{'poolId': C, 'wordPositions': [0], 'ticks': []}]
+
+    async def start(self, snapshot=None, requests=None):
+        task = asyncio.create_task(self.registry.extend_ticks(
+            self.snapshot if snapshot is None else snapshot,
+            self.requests if requests is None else requests, BLOCK))
+        self.addAsyncCleanup(self.stop, task)
+        await asyncio.wait_for(self.rpc.started.wait(), 1)
+        return task
+
+    async def stop(self, task):
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    async def joined(self, users=2):
+        async def wait():
+            while not any(key[0] == 'tick-fill' and entry.users == users
+                          for key, entry in self.registry.pending.pending.items()):
+                await asyncio.sleep(0)
+        await asyncio.wait_for(wait(), 1)
+
+    async def test_staggered_identical_fill_shares_finished_bitmap_until_ticks_complete(self):
+        first = await self.start()
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+        await self.joined()
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(self.rpc.calls, Counter({'tickBitmap(int16)': 1, 'ticks(int24)': 1}))
+        self.assertEqual(a, b)
+        a['ticks'][0]['liquidityGross'] = '999'
+        self.assertEqual(b['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.registry.pending.completed, {})
+        self.assertEqual(self.registry.observed, {})
+
+    async def test_completed_fill_rereads_changed_sandbox_state_at_the_same_header(self):
+        self.rpc.release.set()
+        first = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.rpc.bitmap, self.rpc.gross = 2, 200
+        second = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(self.rpc.calls, Counter({'tickBitmap(int16)': 2, 'ticks(int24)': 2}))
+        self.assertEqual(first['ticks'], [{'index': 0, 'liquidityGross': '100', 'liquidityNet': '0'}])
+        self.assertEqual(second['ticks'], [{'index': 10, 'liquidityGross': '200', 'liquidityNet': '10'}])
+        self.assertEqual(self.registry.pending.completed, {})
+        self.assertEqual(self.registry.observed, {})
+
+    async def test_unequal_baseline_snapshots_do_not_share_a_fill(self):
+        first = await self.start()
+        changed = {**self.snapshot, 'liquidity': '2000'}
+        second = asyncio.create_task(self.registry.extend_ticks(changed, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await asyncio.sleep(0)
+        self.assertEqual(sum(key[0] == 'tick-fill' for key in self.registry.pending.pending), 2)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual((a['liquidity'], b['liquidity']), ('1000', '2000'))
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+    async def test_unequal_coverage_requests_keep_their_own_words_and_ticks(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(
+            self.snapshot, [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await asyncio.sleep(0)
+        self.assertEqual(sum(key[0] == 'tick-fill' for key in self.registry.pending.pending), 2)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual([row['wordPosition'] for row in a['bitmapWords']], [0])
+        self.assertEqual([row['wordPosition'] for row in b['bitmapWords']], [1])
+        self.assertEqual([row['index'] for row in a['ticks']], [0])
+        self.assertEqual([row['index'] for row in b['ticks']], [2560])
+
+    async def test_caller_mutation_cannot_replace_an_inflight_keyed_baseline_or_coverage(self):
+        original = deepcopy(self.snapshot)
+        first = await self.start()
+        self.snapshot['liquidity'] = '9000'
+        self.requests[0]['wordPositions'].append(1)
+        second = asyncio.create_task(self.registry.extend_ticks(original,
+            [{'poolId': C, 'wordPositions': [0], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(a, b)
+        self.assertEqual(a['liquidity'], '1000')
+        self.assertEqual([row['wordPosition'] for row in a['bitmapWords']], [0])
+
+    async def test_concurrent_mainnet_fills_publish_the_full_coverage_union_atomically(self):
+        self.registry.chain = 1
+        self.snapshot['context']['chainId'] = 1
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot,
+            [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        async def both_started():
+            while self.rpc.active != 2:
+                await asyncio.sleep(0)
+        await asyncio.wait_for(both_started(), 1)
+        self.rpc.release.set()
+        results = await asyncio.gather(first, second)
+        observed = self.registry.observed[C]
+        self.assertEqual({row['wordPosition'] for row in observed['bitmapWords']}, {0, 1})
+        self.assertEqual({row['index'] for row in observed['ticks']}, {0, 2560})
+        self.assertTrue(any({row['index'] for row in result['ticks']} == {0, 2560} for result in results))
+
+    async def test_one_cancelled_subscriber_does_not_stop_the_other_fill(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(self.rpc.cancelled, 0)
+        self.assertFalse(second.done())
+        self.rpc.release.set()
+        result = await second
+        self.assertEqual(result['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+
+    async def test_last_cancelled_subscriber_cancels_and_drains_the_owned_fill(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        first.cancel()
+        await asyncio.gather(first, return_exceptions=True)
+        second.cancel()
+        await asyncio.gather(second, return_exceptions=True)
+        self.assertEqual(self.rpc.cancelled, 1)
+        self.assertEqual(self.rpc.active, 0)
+        self.assertEqual(self.registry.pending.pending, {})
+
+    async def test_shared_ordinary_error_keeps_identity_and_next_call_is_fresh(self):
+        error = RuntimeError('public synthetic getter failure')
+        self.rpc.error = error
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.rpc.release.set()
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        self.assertTrue(all(result is error for result in results))
+        self.assertEqual(self.registry.pending.pending, {})
+        self.rpc.error = None
+        result = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(result['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+    async def test_existing_generation_reset_cancels_old_fill_before_a_fresh_read(self):
+        first = await self.start()
+        await self.registry.observe_generation('next')
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(self.rpc.cancelled, 1)
+        self.assertEqual(self.registry.pending.pending, {})
+        self.rpc.release.set()
+        await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+
 if __name__ == '__main__':
     unittest.main()
