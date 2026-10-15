@@ -24,6 +24,7 @@ from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.rpc_diagnostics import rpc_call, rpc_diagnostic_scope, error_diagnostics, quote_sdk_request
 from cybergold_candidate.market_swap import MarketQuotes
 from test_route_search import ASSET_A, ASSET_B, ASSET_C, HASH, Wire, wire_result
+from route_engine_fixture import install_fixture_engine
 
 CORE = '0x' + '4' * 40
 ADAPTER = '0x' + '5' * 40
@@ -190,6 +191,7 @@ def service(chain_id=1):
     settings = SimpleNamespace(**{**vars(SETTINGS), 'NEXT_PUBLIC_CHAIN_ID': str(chain_id)})
     route = RouteSearch(settings, RouteSearchRpc(settings, AsyncWeb3(provider),
                         httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+    install_fixture_engine(route)
     return QuoteIntent(settings, route), provider, route, wire
 
 
@@ -349,7 +351,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
             for row in rows:
                 row.update(attempted=2, total=2)
             return rows
-        typed.reserve_quotes = reserve
+        typed.search_routes = reserve
         routes.multi_protocol = typed
         return intent, provider, routes, control
 
@@ -597,7 +599,7 @@ class RetainedTypedRedemptionTests(unittest.IsolatedAsyncioTestCase):
                     if on_update:
                         await on_update(rows)
                     return rows
-                typed.reserve_quotes = reserve
+                typed.search_routes = reserve
                 routes.multi_protocol = typed
                 value = {**request('redeem-exact-out', native), 'slippageBps': 500}
                 first = await intent.get(value, lambda _frame: asyncio.sleep(0))
@@ -643,6 +645,13 @@ class RetainedTypedRedemptionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class IntentTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def quote_calls(wire):
+        selectors = {'0x' + Web3.keccak(text=f'{name}(bytes,uint256)')[:4].hex()
+                     for name in ('quoteExactInput', 'quoteExactOutput')}
+        return [row for batch in wire.batches for row in batch
+                if row['params'][0]['data'][:10] in selectors]
+
     def fail_quote_calls(self, route, wire, error_for_call):
         self.addAsyncCleanup(route.rpc.client.aclose)
         calls = []
@@ -730,8 +739,8 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn('diagnostics', payload)
 
     async def test_selected_plan_and_capacity_batch_failures_keep_rpc_diagnostics_without_research(self):
-        for mode, failing_mode, expected_calls in [('redeem-exact-in', 'exact-in', 2),
-                                                    ('issue-exact-in', 'exact-in', 2)]:
+        for mode, failing_mode, expected_calls in [('redeem-exact-in', 'exact-in', 1),
+                                                    ('issue-exact-in', 'exact-in', 1)]:
             with self.subTest(mode=mode):
                 intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
                 intent.qualification = False
@@ -750,7 +759,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(calls), expected_calls)
                 # Issuance revalidates its two selected exact-out calls before
                 # the failed two-call capacity observation; no routes are enumerated.
-                successful_quote_calls = sum(len(batch) for batch in wire.batches)
+                successful_quote_calls = len(self.quote_calls(wire))
                 self.assertEqual(successful_quote_calls, 2 if mode == 'issue-exact-in' else 0)
 
     async def test_custom_tolerance_changes_execution_limits_without_changing_expected_quotes(self):
@@ -928,7 +937,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(current['context']['blockHash'], provider.block_hash)
                         calls = 4 if mode in ('issue-exact-in', 'redeem-exact-out') else 2
                         self.assertEqual(current['metrics']['candidateCalls'], calls)
-                        self.assertEqual(sum(len(batch) for batch in wire.batches), calls)
+                        self.assertEqual(len(self.quote_calls(wire)), calls)
                         self.assertEqual(current['metrics']['iterations'], 0)
                         self.assertEqual(current['executionAmount'], first['executionAmount'])
                         self.assertLessEqual(int(current['maximumInputAmount']), int(first['maximumInputAmount']))
@@ -952,20 +961,19 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     async def changed(path, amount): return amount
                     wire.on_quote = changed
                 else:
-                    original, rejected = route.rpc.quote_batch_counted, False
-                    async def once(mode, calls, block, counts):
+                    original, rejected = route.engine.quote_branches, False
+                    async def once(*args, **kwargs):
                         nonlocal rejected
-                        rows = await original(mode, calls, block, counts)
                         if not rejected:
                             rejected = True
-                            rows[0] = {'status': 'failure', 'code': 'quote-contract-reverted'}
-                        return rows
-                    route.rpc.quote_batch_counted = once
+                            raise QuoteFailure('quote-contract-reverted')
+                        return await original(*args, **kwargs)
+                    route.engine.quote_branches = once
                 events = []
                 fresh = await intent.get({**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
                                          lambda frame: asyncio.sleep(0, result=events.append(frame)))
                 self.assertEqual(events[0]['type'], 'invalidated')
-                self.assertEqual(fresh['metrics']['candidateCalls'], 10)
+                self.assertEqual(fresh['metrics']['candidateCalls'], 9 if fault == 'route-revert' else 10)
                 self.assertEqual(intent.retained, {})
 
     async def test_sandbox_completed_plans_are_never_retained_under_unchanged_headers(self):
@@ -984,21 +992,19 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     intent.retain_plans = True
                     first = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
                     provider.block_hash = '0x'+'c'*64
-                    original, batches = route.rpc.quote_batch_counted, []
-                    async def transient(mode, calls, block, counts):
-                        batches.append(len(calls))
-                        rows = await original(mode, calls, block, counts)
-                        rows[0] = {'status': 'failure', 'code': code}
-                        return rows
-                    route.rpc.quote_batch_counted = transient
+                    original, batches = route.engine.quote_branches, []
+                    async def transient(*args, **kwargs):
+                        batches.append(args[1])
+                        raise QuoteFailure(code)
+                    route.engine.quote_branches = transient
                     events = []
                     next_request = {**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)}
                     with self.assertRaises(QuoteFailure) as raised:
                         await intent.get(next_request, lambda frame: asyncio.sleep(0, result=events.append(frame)))
                     self.assertEqual(raised.exception.code, code)
-                    self.assertEqual(batches, [2]) # No all-route fallback after a failed selected read.
+                    self.assertEqual(batches, ['exactIn']) # No all-route fallback after a failed selected read.
                     self.assertNotIn('invalidated', [event['type'] for event in events])
-                    route.rpc.quote_batch_counted = original
+                    route.engine.quote_branches = original
                     fresh = await intent.get(next_request, lambda frame: asyncio.sleep(0))
                     self.assertEqual(fresh['metrics']['candidateCalls'], 2)
                     self.assertEqual(fresh['preview']['minimumAmountOut'], first['preview']['minimumAmountOut'])
@@ -1023,6 +1029,22 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(public_quote_error(raised.exception)['code'], public_quote_error(error)['code'])
             self.assertEqual(wire.batches, [])
             self.assertNotIn('invalidated', [event['type'] for event in events])
+
+    async def test_selected_route_snapshot_disproof_does_not_restart_discovery(self):
+        intent, provider, route, _wire = service(31338)
+        self.addAsyncCleanup(route.close)
+        intent.retain_plans = True
+        first = await intent.get(request('redeem-exact-in'), lambda _: asyncio.sleep(0))
+        provider.block_hash = '0x'+'c'*64
+        async def changed(*_args, **_kwargs):
+            raise SnapshotChanged('Selected pool snapshot was disproved', retry=1)
+        async def forbidden(*_args, **_kwargs):
+            self.fail('A disproved selected snapshot restarted candidate discovery')
+        route.engine.quote_branches, route.engine.search_routes = changed, forbidden
+        with self.assertRaisesRegex(SnapshotChanged, 'Selected pool snapshot'):
+            await intent.get({**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
+                lambda _: asyncio.sleep(0))
+        self.assertEqual(route.engine.semaphore._value, 8)
 
     async def test_decoded_core_rejection_invalidates_retained_plan_before_normal_search(self):
         intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
@@ -1052,6 +1074,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             wire.provider = provider
             route = RouteSearch(SETTINGS, RouteSearchRpc(SETTINGS, AsyncWeb3(provider),
                 httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+            install_fixture_engine(route)
             self.addAsyncCleanup(route.close)
             value = {**request(mode), 'orderedAssets': [WETH], 'targets': [], 'adapter': ''}
             result = await QuoteIntent(SETTINGS, route).get(value, lambda event: asyncio.sleep(0))
@@ -1174,20 +1197,20 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 3)
 
     async def test_estimate_without_qualified_candidate_does_not_recover_timeout(self):
-        intent, _provider, routes, wire = service()
+        intent, _provider, routes, _wire = service()
         self.addAsyncCleanup(routes.close)
         intent.qualification = False
         estimated, events = asyncio.Event(), []
-        async def quote(path, amount):
-            if int.from_bytes(path[20:23]) >= 3000:
-                await estimated.wait()
-                raise TimeoutError('No executable candidate')
-            return amount*2
+        search = routes.engine.search_routes
+        async def held(*args, **kwargs):
+            await search(*args, **kwargs)
+            await estimated.wait()
+            raise TimeoutError('No executable candidate before producer deadline')
+        routes.engine.search_routes = held
         async def update(event):
             events.append(event)
             if event['type'] == 'estimate':
                 estimated.set()
-        wire.on_quote = quote
         with self.assertRaises(TimeoutError) as raised:
             await asyncio.wait_for(intent.get(request('issue-exact-in'), update), 2)
         self.assertTrue(estimated.is_set())
@@ -1242,6 +1265,31 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(intent.get(request('issue-exact-out'), publish), 2)
         invalidated = next(index for index, event in enumerate(events) if event['type'] == 'invalidated')
         self.assertFalse(any(event['type'] == 'qualified' for event in events[invalidated+1:]))
+
+    async def test_prospective_composition_disproof_survives_ordinary_search_tail(self):
+        intent, _provider, routes, _wire = service()
+        self.addAsyncCleanup(routes.close)
+        invalidated, frames = asyncio.Event(), []
+        async def compose(*_args, **_kwargs):
+            raise SnapshotChanged('Pinned pool observation was disproved', retry=1)
+        routes.engine.compose_core_rows = compose
+        async def search(value, on_update, *, block):
+            rows = [{'best': {**candidates(target, value['mode'])[0], 'quote': '25'},
+                'attempted': 1, 'total': 2, 'succeeded': 1, 'failures': []}
+                for target in value['targets']]
+            await on_update({'results': rows})
+            await invalidated.wait()
+            raise TimeoutError('Ordinary optimization tail')
+        routes.get = search
+        async def update(frame):
+            frames.append(frame)
+            if frame['type'] == 'invalidated':
+                invalidated.set()
+        with self.assertRaises(SnapshotChanged):
+            await asyncio.wait_for(intent.get(request('issue-exact-out'), update), 2)
+        self.assertTrue(invalidated.is_set())
+        self.assertFalse(any(frame['type'] in ('qualified', 'complete') for frame in frames))
+        self.assertEqual(routes.engine.semaphore._value, 8)
 
     async def test_caller_cancellation_does_not_complete_qualified_candidate(self):
         intent, _provider, routes, wire = service()
@@ -1362,50 +1410,32 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_initial_deadline_attributes_aggregate_subphase_separately_from_last_read(self):
         ordinary_timeout = asyncio.timeout
         for mode in ('issue-exact-in', 'redeem-exact-out'):
-            for subphase in ('eligibility', 'v3-coverage', 'typed-reserve'):
-                with self.subTest(mode=mode, subphase=subphase):
-                    intent, _provider, routes, _wire = service()
-                    self.addAsyncCleanup(routes.close)
-                    events = []
-                    async def blocked(*_args, **_kwargs):
-                        # Work already consumed part of the aggregate budget
-                        # before this final physical read starts.
-                        await asyncio.sleep(.02)
-                        with rpc_call('eth_call', stage='route-search'):
-                            await asyncio.Event().wait()
-                    if subphase == 'eligibility':
-                        routes.rpc.eligible_paths = blocked
-                    elif subphase == 'v3-coverage':
-                        routes.rpc.quote_batch_counted = blocked
-                    else:
-                        async def compose(rows, *_args, **_kwargs):
-                            with quote_sdk_request() as acquired:
-                                acquired()
-                                await asyncio.sleep(0)
-                                return rows
-                        routes.multi_protocol = SimpleNamespace(semaphore=asyncio.Semaphore(8),
-                            reserve_quotes=blocked, compose_core_rows=compose)
-                    async def publish(event):
-                        events.append(event)
-                    with rpc_diagnostic_scope(), patch('cybergold_candidate.route_search.asyncio.timeout',
-                            side_effect=lambda _seconds: ordinary_timeout(.08)):
-                        with self.assertRaises(TimeoutError) as raised:
-                            await intent.get(request(mode), publish)
-                        payload = public_quote_error(raised.exception)
-                    logical, physical = payload['quoteDiagnostics'], payload['diagnostics']
-                    self.assertEqual(payload['code'], 'quote-timeout')
-                    self.assertEqual(logical['phase'], 'initial-search')
-                    self.assertFalse(logical['qualified'])
-                    self.assertFalse(any(event['type'] == 'qualified' for event in events))
-                    self.assertEqual(logical['routeWave']['subphase'], subphase)
-                    self.assertGreater(logical['routeWave']['elapsedMs'], physical['elapsedMs'] + 10)
-                    wave = logical['routeWave']
-                    if subphase == 'typed-reserve':
-                        self.assertEqual(wave['sdkRequests'], 0)
-                        self.assertGreater(wave['legacyCompleted'], 0)
-                        self.assertEqual(wave['legacyCompleted'], wave['legacyCandidates'])
-                    else:
-                        self.assertEqual(wave['legacyCompleted'], 0)
+            with self.subTest(mode=mode):
+                intent, _provider, routes, _wire = service()
+                self.addAsyncCleanup(routes.close)
+                events = []
+                async def blocked(*_args, **_kwargs):
+                    # The common producer consumes part of the aggregate phase
+                    # before its final physical read begins.
+                    await asyncio.sleep(.02)
+                    with rpc_call('eth_call', stage='route-search'):
+                        await asyncio.Event().wait()
+                routes.engine.search_routes = blocked
+                async def publish(event):
+                    events.append(event)
+                with rpc_diagnostic_scope(), patch('cybergold_candidate.route_search.asyncio.timeout',
+                        side_effect=lambda _seconds: ordinary_timeout(.08)):
+                    with self.assertRaises(TimeoutError) as raised:
+                        await intent.get(request(mode), publish)
+                    payload = public_quote_error(raised.exception)
+                logical, physical = payload['quoteDiagnostics'], payload['diagnostics']
+                self.assertEqual(payload['code'], 'quote-timeout')
+                self.assertEqual(logical['phase'], 'initial-search')
+                self.assertFalse(logical['qualified'])
+                self.assertFalse(any(event['type'] == 'qualified' for event in events))
+                self.assertEqual(logical['routeWave']['subphase'], 'structured-search')
+                self.assertGreater(logical['routeWave']['elapsedMs'], physical['elapsedMs'] + 10)
+                self.assertEqual(logical['routeWave']['legacyCompleted'], 0)
 
     async def test_final_preview_failure_and_reorg_never_complete_after_estimate(self):
         for fault in ('fail_final','reorg','wrong_chain'):
@@ -1425,7 +1455,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         async def search(value, on_update, *, block):
             calls.append(value['mode'])
             if len(calls) == 2:
-                routes.rpc.quote_batch_counted = blocked
+                routes.engine.search_routes = blocked
             return await original(value, on_update, block=block)
         routes.get = search
         with rpc_diagnostic_scope():
@@ -1505,7 +1535,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             events.append(event)
             if event['type'] == 'qualified':
                 qualified.set()
-        typed.reserve_quotes, typed.compose_core_rows = reserve, compose
+        typed.search_routes, typed.compose_core_rows = reserve, compose
         routes.multi_protocol = typed
         operation = asyncio.create_task(intent.get(request('redeem-exact-in'), update))
         try:
@@ -1627,6 +1657,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
         settings = SimpleNamespace(**{**vars(SETTINGS), 'NEXT_PUBLIC_CHAIN_ID': '31338'})
         routes = RouteSearch(settings, RouteSearchRpc(settings, AsyncWeb3(provider),
             httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+        install_fixture_engine(routes)
         self.addAsyncCleanup(routes.close)
         intent = QuoteIntent(settings, routes)
         value = {**request('redeem-exact-out'), 'amount': str(amount), 'slippageBps': bps}
@@ -1891,7 +1922,7 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
                     if control.fail_tail:
                         raise TimeoutError('Ordinary unfinished typed reserve')
                 return rows
-            engine.reserve_quotes = reserve
+            engine.search_routes = reserve
             routes.multi_protocol = engine
         return intent, provider, control, value
 
@@ -1929,20 +1960,35 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
                 control.release.set()
                 self.assertEqual((await task)['executionAmount'], '136')
 
-    async def test_upper_point_and_rounding_gap_keep_the_existing_interval(self):
+    def assert_checked_points(self, provider, value, frames):
+        name = 'previewRedeemToNativeExactIn' if value['native'] else 'previewRedeemToTokenExactIn'
+        previews = [(args['grossCygldIn'] if value['native'] else args['params']['grossCygldIn'],
+                     tuple((leg['minimumAmountOut'], Web3.to_hex(leg['data']).lower()) for leg in args['legs']))
+                    for function, args, _block in provider.contract_calls if function == name]
+        for result in frames:
+            minimum = int(result['preview']['minimumAmountOut'])
+            self.assertLessEqual(int(value['amount']), minimum)
+            self.assertLessEqual(minimum, ceil(int(value['amount']), value.get('slippageBps', 100)))
+            self.assertIn((int(result['executionAmount']), tuple((int(leg['minimumAmountOut']),
+                leg['data'].lower()) for leg in result['quotes'])), previews)
+
+    async def test_upper_point_and_later_checked_rounding_point_keep_the_existing_interval(self):
         intent, _provider, control, value = self.fixture(target=100, price=(21, 10))
         task, frames, ready = self.start(intent, value)
         await self.wait(ready)
         self.assertEqual((frames[0]['executionAmount'], frames[0]['preview']['minimumAmountOut']), ('49', '100'))
         control.release.set()
         await task
-        intent, _provider, control, value = self.fixture(price=(21, 10))
+        intent, provider, control, value = self.fixture(price=(21, 10))
         task, frames, _ready = self.start(intent, value)
         await self.wait(control.refined)
         control.release.set()
-        with self.assertRaises(TimeoutError):
-            await task
-        self.assertEqual(frames, [])
+        # The old batch tail timeout cancelled97→98 before the next check.
+        # An isolated failed candidate leaves that fresh correction available.
+        result = await task
+        self.assertEqual((result['executionAmount'], result['preview']['minimumAmountOut']), ('98', '200'))
+        self.assertTrue(frames)
+        self.assert_checked_points(provider, value, frames)
 
     async def test_zero_helpers_output_has_no_division_or_executable_point(self):
         intent, _provider, control, value = self.fixture(zero_basket=True)
@@ -1951,16 +1997,57 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
             await task
         self.assertEqual(frames, [])
 
-    async def test_fresh_state_helpers_rejection_and_reorg_do_not_publish(self):
+    async def test_fresh_state_is_rechecked_and_helpers_rejection_or_reorg_do_not_complete(self):
         for option in ('changed', 'rejected', 'reorg'):
             with self.subTest(option=option):
-                intent, _provider, control, value = self.fixture(**{option: True})
+                intent, provider, control, value = self.fixture(**{option: True})
                 task, frames, _ready = self.start(intent, value)
                 await self.wait(control.refined)
                 control.release.set()
-                with self.assertRaises(SnapshotChanged if option == 'reorg' else TimeoutError):
-                    await task
-                self.assertEqual(frames, [])
+                if option == 'changed':
+                    result = await task
+                    self.assertEqual((result['executionAmount'], result['preview']['minimumAmountOut']), ('102', '200'))
+                    self.assertTrue(frames)
+                    self.assertTrue(all(frame['executionAmount'] != '136' for frame in frames))
+                    self.assert_checked_points(provider, value, frames)
+                else:
+                    # Per-candidate tail failures no longer replace a reached
+                    # Helpers rejection with the old whole-batch timeout.
+                    with self.assertRaises(SnapshotChanged if option == 'reorg' else QuoteFailure) as raised:
+                        await task
+                    if option == 'rejected':
+                        self.assertEqual(raised.exception.code, 'quote-contract-reverted')
+                    self.assertEqual(frames, [])
+
+    async def test_budget_timeout_while_next_rounding_check_is_held_does_not_qualify(self):
+        from cybergold_candidate.quote_budget import QuoteBudget, budget_context
+        intent, provider, control, value = self.fixture(price=(21, 10))
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = provider.make_request
+        async def read(method, params):
+            if method == 'eth_call' and params[0]['to'].lower() != CORE.lower():
+                function, args = provider.contract.decode_function_input(params[0]['data'])
+                if function.fn_name == 'previewRedeemToTokenExactIn' and args['params']['grossCygldIn'] == 98:
+                    entered.set()
+                    await release.wait()
+            return await original(method, params)
+        provider.make_request = read
+        frames = []
+        budget = QuoteBudget(.3, .3)
+        with budget_context(budget):
+            task = asyncio.create_task(budget.produce(intent.get(value,
+                lambda frame: asyncio.sleep(0, result=frames.append(frame)))))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            with self.assertRaises(TimeoutError):
+                await task
+            self.assertIsNone(budget.first_qualified)
+            self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
+        finally:
+            release.set()
+            control.release.set()
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     async def test_complete_coverage_can_improve_the_early_point(self):
         intent, _provider, control, value = self.fixture(late_price=(2, 1))

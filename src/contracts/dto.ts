@@ -42,6 +42,13 @@ export type MarketPoolRef = {
   token1: { address: string; decimals: number; chainId: number; decimalsKnown?: boolean };
   address?: string; feePips: number; tickSpacing?: number; poolManager?: string; hooks?: string;
 };
+/** Executable identity can precede optional SDK/display metadata acquisition. */
+export type RouteTokenRef = {
+  address: string; decimals?: number; chainId?: number; decimalsKnown?: boolean;
+};
+export type RoutePoolRef = Omit<MarketPoolRef, "token0" | "token1"> & {
+  token0: RouteTokenRef; token1: RouteTokenRef;
+};
 export type PoolIdentifier = { tokenA: string; tokenB: string; id?: string } & (
   | { protocol?: "v3"; fee: number }
   | { protocol: "v2"; fee?: number }
@@ -81,7 +88,7 @@ export type PoolActivity = { enabled: false; events: []; pools: [] } | {
 export type MarketRoutePlan = {
   version: 1; executionContext: "helpers-market" | "helpers-core";
   mode: "exactIn" | "exactOut"; tokenIn: string; tokenOut: string;
-  branches: { amountIn: string; hops: { pool: MarketPoolRef; zeroForOne: boolean }[] }[];
+  branches: { amountIn: string; hops: { pool: RoutePoolRef; zeroForOne: boolean }[] }[];
   inputAmount: string; outputAmount: string; limit: string; deadline: string;
 };
 export type MarketSwapParams = {
@@ -340,9 +347,9 @@ export type UniswapQuote = { context: BasketPreview["context"]; quoter: string;
 export type RouteSearchTarget = { inputAsset: string; outputAsset: string; amount: string };
 export type RouteSearchRequest = { mode: UniswapQuoteRequest["mode"]; targets: RouteSearchTarget[]; adapter?: string };
 export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; context: BasketPreview["context"];
-  results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed";
+  results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed" | "identity";
     feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }[] }[];
-  metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number;
+  metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number; rpcReadsScope?: "coordinator";
     rpcReadsCoalesced: number; rpcReadsReused: number; contextMs: number; quotesMs: number;
     canonicalityMs: number; totalMs: number } };
 
@@ -399,7 +406,7 @@ export type QuoteIntent = {
   remainingGrossCapacity?: string; remainingNetCapacity?: string;
   expectedOutputAmount?: string;
   expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
-  metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number;
+  metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number; rpcReadsScope?: "coordinator";
     candidateCalls: number; iterations: number; totalMs: number } & QuoteSelectionMetrics;
 };
 /** Display-only source data. No transaction tuples or execution readiness. */

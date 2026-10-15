@@ -3,12 +3,15 @@ from copy import deepcopy
 import asyncio
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from .app_tokens import TOKENS
 from .uniswap_v4 import v4_pool_id
 
 # Canonical historical deployment (Ops mainnet-app-contracts / Helpers release).
 # This is encoder dispatch, not an adapter approval or transaction admission check.
 LEGACY_V3_ADAPTERS = {'0x4edb8190232a47e45d861003672938eb7ee84a15'}
+V3_DIRECT_FEES = (100, 500, 3000, 10000)
+V3_VIA_FEES = (500, 3000, 10000)
 
 
 def uses_typed_adapter(address):
@@ -17,8 +20,10 @@ def uses_typed_adapter(address):
 
 class TokenRef(BaseModel):
     address: str
-    decimals: int
-    chainId: int
+    # Execution identity does not depend on optional SDK/display observations.
+    # A caller-selected V3 path is usable before token metadata is available.
+    decimals: int | None = None
+    chainId: int | None = None
     decimalsKnown: bool | None = None
 
 
@@ -55,6 +60,105 @@ class RoutePlan(BaseModel):
     outputAmount: str
     limit: str
     deadline: str
+
+
+def route_mode(mode):
+    return {'exact-in': 'exactIn', 'exact-out': 'exactOut',
+            'exactIn': 'exactIn', 'exactOut': 'exactOut'}[mode]
+
+
+def _v3_hop(source, target, fee, chain_id):
+    source, target = source.lower(), target.lower()
+    a, b = sorted((source, target))
+    token0, token1 = {'address': a}, {'address': b}
+    if chain_id is not None:
+        token0['chainId'] = token1['chainId'] = int(chain_id)
+    return {'pool': {'id': f'v3:{a}:{b}:{fee}', 'protocol': 'v3',
+        'token0': token0, 'token1': token1, 'feePips': fee}, 'zeroForOne': source == a}
+
+
+def initial_v3_branches(target, mode, chain_id=None):
+    """Original direct/via-WETH coverage, before optional state observations."""
+    mode = route_mode(mode)
+    source, output = target['inputAsset'], target['outputAsset']
+    if source.lower() == output.lower():
+        return
+    weth = dict(TOKENS)['weth']
+    paths = [([source, output], [fee]) for fee in V3_DIRECT_FEES]
+    if source.lower() != weth.lower() and output.lower() != weth.lower():
+        paths.extend(([source, weth, output], [a, b]) for a in V3_VIA_FEES for b in V3_VIA_FEES)
+    paths.sort(key=lambda row: (sum(row[1]), len(row[1]) > 1, '/'.join(map(str, row[1]))))
+    for tokens, fees in paths:
+        yield [{'amountIn': str(target['amount']) if mode == 'exactIn' else '0',
+            'hops': [_v3_hop(a, b, fee, chain_id)
+                for a, b, fee in zip(tokens[:-1], tokens[1:], fees, strict=True)]}]
+
+
+def v3_branches(path, mode, amount, chain_id=None):
+    """Decode packed V3 input once; every internal hop runs input -> output.
+
+    Tokens and fee tiers are the executable pool identity. Optional pool and
+    token observations are acquired by the shared quote engine, never needed
+    just to retain, quote through a native fallback, or encode this route.
+    """
+    mode = route_mode(mode)
+    raw = bytes.fromhex(path.removeprefix('0x')) if isinstance(path, str) else bytes(path)
+    if len(raw) < 43 or (len(raw)-20) % 23:
+        raise ValueError('Invalid packed V3 path.')
+    tokens = ['0x'+raw[:20].hex()]
+    fees = []
+    for offset in range(20, len(raw), 23):
+        fees.append(int.from_bytes(raw[offset:offset+3]))
+        tokens.append('0x'+raw[offset+3:offset+23].hex())
+    if mode == 'exactOut':
+        tokens.reverse()
+        fees.reverse()
+    hops = [_v3_hop(a, b, fee, chain_id)
+        for a, b, fee in zip(tokens[:-1], tokens[1:], fees, strict=True)]
+    return [{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': hops}]
+
+
+def v3_plan(path, mode, amount, *, chain_id=None, execution_context='helpers-core',
+            limit='0', deadline='0'):
+    """Normalize a selected legacy/API path without retaining a second format."""
+    mode = route_mode(mode)
+    branches = v3_branches(path, mode, amount, chain_id)
+    first, last = branches[0]['hops'][0], branches[0]['hops'][-1]
+    return {'version': 1, 'executionContext': execution_context, 'mode': mode,
+        'tokenIn': first['pool']['token0' if first['zeroForOne'] else 'token1']['address'],
+        'tokenOut': last['pool']['token1' if last['zeroForOne'] else 'token0']['address'],
+        'branches': branches, 'inputAmount': str(amount) if mode == 'exactIn' else '0',
+        'outputAmount': str(amount) if mode == 'exactOut' else '0',
+        'limit': str(limit), 'deadline': str(deadline)}
+
+
+def standalone_v3(plan):
+    branches = plan['branches']
+    return len(branches) == 1 and bool(branches[0]['hops']) and all(
+        hop['pool']['protocol'] == 'v3' for hop in branches[0]['hops'])
+
+
+def pool_identity(pool):
+    """Execution identity is stable when optional observed metadata arrives.
+
+    Chain, factory and V4 PoolManager come from the configured operation, not
+    from a candidate's enrichment. Within it these are the deployed routers'
+    pool keys, including the V4 fee/tick-spacing/hooks key.
+    """
+    protocol = pool['protocol']
+    tokens = tuple(sorted((pool['token0']['address'].lower(), pool['token1']['address'].lower())))
+    if protocol == 'v2':
+        return (protocol, *tokens)
+    if protocol == 'v3':
+        return (protocol, *tokens, int(pool['feePips']))
+    return (protocol, *tokens, int(pool['feePips']), int(pool['tickSpacing']),
+            (pool.get('hooks') or '0x'+'00'*20).lower())
+
+
+def route_identity(branches):
+    """Ordered execution/allocation key; optional pool observations are absent."""
+    return tuple((str(int(branch['amountIn'])), tuple((pool_identity(hop['pool']), hop['zeroForOne'])
+        for hop in branch['hops'])) for branch in branches)
 
 
 def pool_key(pool):

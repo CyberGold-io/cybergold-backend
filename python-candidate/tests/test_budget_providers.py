@@ -28,14 +28,14 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
     def tracked_fixture(self):
         intent, provider, routes, control = self.fixture()
         control.cancelled = asyncio.Event()
-        reserve = routes.multi_protocol.reserve_quotes
+        reserve = routes.engine.search_routes
         async def tracked(*args, **kwargs):
             try:
                 return await reserve(*args, **kwargs)
             except asyncio.CancelledError:
                 control.cancelled.set()
                 raise
-        routes.multi_protocol.reserve_quotes = tracked
+        routes.engine.search_routes = tracked
         return intent, provider, routes, control
 
     async def wait_qualified(self, budget):
@@ -62,7 +62,7 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue(control.cancelled.is_set())
                     self.assertFalse(control.release.is_set())
                     self.assertGreater(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), headers)
-                    self.assertEqual(routes.multi_protocol.semaphore._value, 8)
+                    self.assertEqual(routes.engine.semaphore._value, 8)
                 finally:
                     operation.cancel()
                     await asyncio.gather(operation, return_exceptions=True)
@@ -78,7 +78,7 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(SnapshotChanged):
                 await asyncio.wait_for(operation, 1)
             self.assertTrue(control.cancelled.is_set())
-            self.assertEqual(routes.multi_protocol.semaphore._value, 8)
+            self.assertEqual(routes.engine.semaphore._value, 8)
         finally:
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
@@ -113,13 +113,13 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
 
     async def test_core_snapshot_disproof_during_owned_tail_drain_survives_stop(self):
         intent, _provider, routes, _control = self.fixture()
-        reserve = routes.multi_protocol.reserve_quotes
+        reserve = routes.engine.search_routes
         async def changed_during_drain(*args, **kwargs):
             try:
                 return await reserve(*args, **kwargs)
             except asyncio.CancelledError:
                 raise SnapshotChanged('Disproved while stopping owned search') from None
-        routes.multi_protocol.reserve_quotes = changed_during_drain
+        routes.engine.search_routes = changed_during_drain
         budget, frames = QuoteBudget(), []
         operation = asyncio.create_task(self.run_core(intent, request('issue-exact-in'), frames, budget))
         try:
@@ -225,10 +225,12 @@ class MarketBudgetProviders(unittest.IsolatedAsyncioTestCase):
             except asyncio.CancelledError:
                 self.cancelled.set()
                 raise
-        self.patched = patch('cybergold_candidate.market_swap.candidate_branches', branches)
+        self.patched = patch('cybergold_candidate.route_quote_engine.candidate_branches', branches)
         self.patched.start()
         self.addCleanup(self.patched.stop)
         async def quote(_branches, _mode, amount, _block):
+            if any(hop['pool']['protocol'] == 'v3' for branch in _branches for hop in branch['hops']):
+                raise ValueError('Fixture liquidity is V2 only')
             return {'amountIn': str(amount), 'amountOut': str(amount * 2), 'qualification': 'quoter'}
         self.quotes.quote_branches = quote
         self.quotes.get_model = AsyncMock(return_value={})

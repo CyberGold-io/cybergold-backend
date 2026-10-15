@@ -6,15 +6,14 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, Mock
-from web3 import Web3
+from unittest.mock import AsyncMock
 
 from cybergold_candidate.basket_arithmetic import BasketArithmetic, wire
-from cybergold_candidate.quote_history import QuoteHistory, economic_path
+from cybergold_candidate.quote_history import QuoteHistory, economic_path, route_key
 from cybergold_candidate.quote_cache import VerifiedGrossSeed, IntentSharing
 from cybergold_candidate.quote_intent import QuoteIntent
 from cybergold_candidate.quote_models import PoolBaseline
-from cybergold_candidate.pool_producer import ABI as POOL_ABI
+from cybergold_candidate.uniswap_routes import v3_plan
 from test_quote_intent import SETTINGS, request, service
 
 
@@ -76,15 +75,12 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         rpc = SimpleNamespace(assert_canonical=canonical)
         await history.acquire_state(rpc, {'hash': 'hash'}, context, epoch)
         self.assertFalse(history.states)
-        contract = SimpleNamespace(encode_abi=Mock(return_value='0x'))
-        rpc = SimpleNamespace(assert_canonical=AsyncMock(),
-            w3=SimpleNamespace(codec=SimpleNamespace(decode=Mock(side_effect=[('0x'+'7'*40,),
-                (2**96, 0, 0, 0, 0, 0, False), (1_000_000,)]))),
-            pool_batch=AsyncMock(side_effect=[([{'result': '0x'}], {'issued': 1}),
-                ([{'result': '0x'}, {'result': '0x'}], {'issued': 2})]),
-            pools=SimpleNamespace(factory='0x'+'6'*40, pool_contracts={'factory': contract, 'pool': contract}))
+        rpc = SimpleNamespace(assert_canonical=AsyncMock())
+        provider = SimpleNamespace(route_baseline=AsyncMock(return_value=PoolBaseline(F(1), F(9995, 10000))),
+                                   registry=SimpleNamespace(get_rpc=lambda: rpc))
         tokens = [request('issue-exact-in')['quoteToken'].lower(), request('issue-exact-in')['orderedAssets'][0].lower()]
-        await history.acquire_pool(rpc, tokens, [500], {'hash': 'hash'}, context, (tuple(tokens), (500,), 'hash'), epoch)
+        plan = v3_plan('0x'+tokens[0][2:]+'0001f4'+tokens[1][2:], 'exact-in', 1)
+        await history.acquire_route(provider, plan, {'hash': 'hash'}, context, epoch)
         self.assertFalse(history.baselines)
 
     async def test_reset_retires_foreground_models_without_canceling_exact_quote(self):
@@ -95,7 +91,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         await history.observe_generation('old')
         intent.history = history
         history.acquire_state = AsyncMock()
-        history.acquire_pool = AsyncMock()
+        history.acquire_route = AsyncMock()
         provider.finish_final = asyncio.Event()
         frames = []
         task = asyncio.create_task(intent.get(request('issue-exact-in'),
@@ -121,19 +117,24 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         await history.observe_generation('old')
         intent.history = history
         history.acquire_state = AsyncMock()
-        history.acquire_pool = AsyncMock()
+        history.acquire_route = AsyncMock()
         models = []
         async def update(frame):
             if frame['type'] == 'model':
                 models.append(frame)
                 if len(models) == 2:
+                    # The unified provider may already have launched the same
+                    # optional early model work for a historical V3 adapter.
+                    # This assertion concerns scheduling after retirement.
+                    history.acquire_state.reset_mock()
+                    history.acquire_route.reset_mock()
                     await history.observe_generation('new')
         result = await intent.get(request('issue-exact-in'), update)
         self.assertEqual(result['displayAmount'], '200')
         self.assertFalse(history.families)
         self.assertFalse(history.tasks)
         history.acquire_state.assert_not_called()
-        history.acquire_pool.assert_not_called()
+        history.acquire_route.assert_not_called()
 
     async def test_reset_during_shared_head_wait_preserves_old_model_epoch(self):
         intent, provider, routes, _ = service()
@@ -193,41 +194,30 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         model.observe(50, 98)
         self.assertNotIn((1000, 1998), model.points)
 
-    async def test_pool_baseline_uses_real_factory_abi_checksums_and_batched_state(self):
+    async def test_route_baseline_uses_shared_engine_for_minimal_v3_and_other_protocols(self):
         history = QuoteHistory(SETTINGS)
-        w3 = Web3()
-        contracts = {key: w3.eth.contract(abi=value) for key, value in POOL_ABI.items()}
-        async def pool_batch(calls, _block, counts):
-            counts['issued'] = len(calls)
-            rows = []
-            for _, data in calls:
-                for contract in contracts.values():
-                    try:
-                        function, _ = contract.decode_function_input(data)
-                        break
-                    except ValueError:
-                        continue
-                outputs = function.abi['outputs']
-                if function.fn_name == 'getPool':
-                    values = ['0x'+'7'*40]
-                elif function.fn_name == 'liquidity':
-                    values = [1_000_000]
-                else:
-                    values = [2**96] + [False if output['type'] == 'bool' else 0 for output in outputs[1:]]
-                rows.append({'result': '0x'+w3.codec.encode([output['type'] for output in outputs], values).hex()})
-            return rows, counts
-        async def canonical(_):
-            pass
-        rpc = SimpleNamespace(w3=w3, pool_batch=pool_batch, assert_canonical=canonical,
-                              pools=SimpleNamespace(factory='0x'+'6'*40, pool_contracts=contracts))
+        rpc = SimpleNamespace(assert_canonical=AsyncMock())
+        baseline = PoolBaseline(F(2), F(9995, 10000), F(1, 1000))
+        provider = SimpleNamespace(route_baseline=AsyncMock(return_value=baseline),
+                                   registry=SimpleNamespace(get_rpc=lambda: rpc))
         tokens = [request('issue-exact-in')['quoteToken'].lower(), request('issue-exact-in')['orderedAssets'][0].lower()]
         context = {'chainId': 1, 'blockNumber': '1', 'blockHash': 'hash', 'observedAt': 'now'}
-        key = (tuple(tokens), (500,), 'hash')
-        await history.acquire_pool(rpc, tokens, [500], {'hash': 'hash'}, context, key)
-        self.assertEqual(history.baselines[key][0].exchange, F(1))
-        self.assertEqual(history.baselines[key][0].fee_retention, F(9995,10000))
-        self.assertEqual(history.reads, 3)
-        self.assertEqual(history.envelopes, 2)
+        for protocol in ('v3', 'v2', 'v4'):
+            plan = v3_plan('0x'+tokens[0][2:]+'0001f4'+tokens[1][2:], 'exact-in', 1)
+            pool = plan['branches'][0]['hops'][0]['pool']
+            pool['protocol'] = protocol
+            if protocol == 'v4':
+                pool.update(tickSpacing=10, hooks='0x'+'0'*40)
+            await history.acquire_route(provider, plan, {'hash': 'hash'}, context)
+            provider.route_baseline.assert_awaited_with(plan, {'hash': 'hash'})
+            key = (*route_key(plan), 'hash')
+            self.assertIs(history.baselines[key][0], baseline)
+            self.assertEqual(history.baselines[key][1], context)
+            self.assertEqual(history.routes[route_key(plan)]['routePlan'], plan)
+        self.assertEqual(rpc.assert_canonical.await_count, 3)
+        self.assertEqual(len(history.baselines), 3)
+        self.assertFalse(history.reads)
+        self.assertFalse(history.envelopes)
 
     async def test_historical_packet_does_not_wait_for_head_rpc(self):
         _, provider, routes, _ = service()
@@ -307,7 +297,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         async def optional(*_):
             await finish.wait()
         history.acquire_state = optional
-        history.acquire_pool = optional
+        history.acquire_route = optional
         intent = QuoteIntent(SETTINGS, routes, history=history)
         frames = []
         result = await asyncio.wait_for(intent.get(request('issue-exact-in'), lambda e: asyncio.sleep(0, result=frames.append(e))), 2)
@@ -332,7 +322,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         path = '0x'+a[2:]+'0001f4'+b[2:]
         tokens, fees = economic_path(path, 'exact-in')
         self.assertEqual(economic_path('0x'+b[2:]+'0001f4'+a[2:], 'exact-out'), (tokens, fees))
-        key = (tuple(tokens), tuple(fees), 'hash')
+        key = (*route_key(v3_plan(path, 'exact-in', 1)), 'hash')
         history.baselines[key] = (PoolBaseline(F(2), F(9995,10000)), context, 0)
         result = {'context': context, 'displayAmount': '100'}
         def wave(amount, output):
@@ -344,6 +334,150 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([(p['input'], p['output']) for p in packet['routes'][0]['points']], [('50', '80')])
         self.assertEqual(len(next(iter(history.routes.values()))['observations']), 2)
         self.assertEqual(packet['routes'][0]['exchangeRate'], {'numerator': '2', 'denominator': '1'})
+        self.assertNotIn('quotes', packet)
+
+
+class CanonicalHistoryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.history = QuoteHistory(SETTINGS)
+        self.addAsyncCleanup(self.history.close)
+        self.request = request('issue-exact-in')
+        self.a = self.request['quoteToken'].lower()
+        self.b = self.request['orderedAssets'][0].lower()
+        self.path = '0x'+self.a[2:]+'0001f4'+self.b[2:]
+        self.plan = v3_plan(self.path, 'exact-in', 100)
+        self.context = {'chainId': 31338, 'blockNumber': '100', 'blockHash': 'hash', 'observedAt': 'now'}
+        self.block = {'hash': 'hash', 'number': 100}
+        self.result = {'context': self.context, 'displayAmount': '100'}
+
+    def wave(self, plan, amount=100, output=190):
+        return [('exact-in', [{'target': {'amount': str(amount)},
+            'best': {'quote': str(output), 'routePlan': plan}}])]
+
+    def provider(self, baseline=None):
+        rpc = SimpleNamespace(assert_canonical=AsyncMock())
+        registry = SimpleNamespace(get_rpc=lambda: rpc)
+        provider = SimpleNamespace(registry=registry,
+            route_baseline=AsyncMock(return_value=baseline or PoolBaseline(F(2), F(9995, 10000))))
+        return provider, rpc
+
+    async def test_legacy_entry_and_enriched_canonical_plan_share_one_observed_route(self):
+        legacy = [('exact-in', [{'target': {'amount': '100'},
+            'best': {'path': self.path, 'quote': '190'}}])]
+        self.history.observe(self.request, self.result, legacy)
+        rich = deepcopy(self.plan)
+        pool = rich['branches'][0]['hops'][0]['pool']
+        pool.update(id='observed-registry-pool', address='0x'+'7'*40, tickSpacing=10)
+        pool['token0'].update(decimals=6, chainId=31338)
+        pool['token1'].update(decimals=18, chainId=31338)
+        rich['branches'][0]['amountIn'] = '50'
+        self.history.observe(self.request, self.result, self.wave(rich, 50, 80))
+        self.assertEqual(len(self.history.routes), 1)
+        entry = next(iter(self.history.routes.values()))
+        self.assertEqual(entry['routePlan'], rich)
+        self.assertEqual(entry['model'].points, [(50, 80)])
+        self.assertEqual(self.history.retired, 1)
+        self.assertEqual(len(entry['observations']), 2)
+        self.assertEqual(self.history.packet(self.request)['routes'][0]['protocols'], ['v3'])
+
+    def test_model_identity_keeps_allocation_proportions_and_protocols(self):
+        first = deepcopy(self.plan)
+        first['branches'][0]['amountIn'] = '25'
+        first['branches'].append(deepcopy(first['branches'][0]))
+        first['branches'][1]['amountIn'] = '75'
+        resized = deepcopy(first)
+        resized['branches'][0]['amountIn'] = '50'
+        resized['branches'][1]['amountIn'] = '150'
+        self.assertEqual(route_key(first), route_key(resized))
+        resized['branches'][0]['amountIn'] = '100'
+        self.assertNotEqual(route_key(first), route_key(resized))
+        other_protocol = deepcopy(self.plan)
+        other_protocol['branches'][0]['hops'][0]['pool']['protocol'] = 'v2'
+        self.assertNotEqual(route_key(self.plan), route_key(other_protocol))
+        exact_out = v3_plan('0x'+self.b[2:]+'0001f4'+self.a[2:], 'exact-out', 100)
+        self.assertEqual(route_key(self.plan), route_key(exact_out))
+
+    async def test_optional_baseline_coalesces_skeleton_and_rich_identity_without_mutation(self):
+        provider, rpc = self.provider()
+        started, finish = asyncio.Event(), asyncio.Event()
+        captured = []
+        async def baseline(plan, block):
+            captured.append(deepcopy(plan))
+            started.set()
+            await finish.wait()
+            return PoolBaseline(F(2), F(9995, 10000))
+        provider.route_baseline.side_effect = baseline
+        rich = deepcopy(self.plan)
+        rich['branches'][0]['hops'][0]['pool'].update(id='observed', address='0x'+'7'*40)
+        self.history.ensure_route(provider, self.plan, self.block, self.context)
+        self.history.ensure_route(provider, rich, self.block, self.context)
+        await started.wait()
+        self.plan['branches'][0]['hops'][0]['pool']['feePips'] = 10000
+        finish.set()
+        while self.history.tasks:
+            await asyncio.gather(*tuple(self.history.tasks.values()))
+        self.assertEqual(provider.route_baseline.await_count, 1)
+        self.assertEqual(captured[0]['branches'][0]['hops'][0]['pool']['feePips'], 500)
+        self.assertEqual(rpc.assert_canonical.await_count, 1)
+        self.assertEqual(len(self.history.baselines), 1)
+        self.assertNotIn('decimals', captured[0]['branches'][0]['hops'][0]['pool']['token0'])
+
+    async def test_legacy_ensure_pool_delegates_using_current_engine_binding(self):
+        provider, _ = self.provider()
+        rpc = SimpleNamespace(route_engine=provider)
+        self.history.ensure_pool(rpc, '0x'+self.b[2:]+'0001f4'+self.a[2:],
+            'exact-out', self.block, self.context)
+        while self.history.tasks:
+            await asyncio.gather(*tuple(self.history.tasks.values()))
+        self.assertEqual(provider.route_baseline.await_count, 1)
+        plan, block = provider.route_baseline.await_args.args
+        self.assertEqual((plan['mode'], plan['tokenIn'], plan['tokenOut']), ('exactOut', self.a, self.b))
+        self.assertEqual(block, self.block)
+        self.assertEqual(len(self.history.baselines), 1)
+
+    async def test_baseline_failure_is_optional_and_reorg_cannot_publish_a_model(self):
+        provider, rpc = self.provider()
+        provider.route_baseline.side_effect = ValueError('Optional state unavailable')
+        self.history.ensure_route(provider, self.plan, self.block, self.context)
+        while self.history.tasks:
+            await asyncio.gather(*tuple(self.history.tasks.values()))
+        self.assertFalse(self.history.baselines)
+        self.history.observe(self.request, self.result, self.wave(self.plan))
+        self.assertEqual(next(iter(self.history.routes.values()))['model'].points, [(100, 190)])
+        provider.route_baseline.side_effect = None
+        rpc.assert_canonical.side_effect = ValueError('changed canonical snapshot')
+        with self.assertRaisesRegex(ValueError, 'changed canonical'):
+            await self.history.acquire_route(provider, self.plan, self.block, self.context)
+        self.assertFalse(self.history.baselines)
+        self.assertIsNone(next(iter(self.history.routes.values()))['model'].baseline)
+
+    async def test_known_models_include_v3_and_legacy_adapter_keeps_only_executable_routes(self):
+        provider, _ = self.provider()
+        pools = []
+        for protocol in ('v2', 'v3', 'v4'):
+            pool = deepcopy(self.plan['branches'][0]['hops'][0]['pool'])
+            pool.update(protocol=protocol, id=protocol, tickSpacing=10)
+            pools.append(pool)
+        provider.registry.ensure_loaded = AsyncMock()
+        provider.registry.inventory = {pool['id']: pool for pool in pools}
+        self.history.ensure_known_routes(provider, self.request, self.block, self.context)
+        while self.history.tasks:
+            await asyncio.gather(*tuple(self.history.tasks.values()))
+        self.assertEqual(provider.route_baseline.await_count, 3)
+        self.assertEqual(len(self.history.routes), 3)
+        self.assertTrue(all(not entry['model'].points for entry in self.history.routes.values()))
+        legacy = {**self.request, 'adapter': '0x4edb8190232a47e45d861003672938eb7ee84a15'}
+        self.assertEqual(self.history.packet(legacy)['routes'][0]['protocols'], ['v3'])
+
+    def test_original_observation_context_survives_canonical_normalization(self):
+        source = {**self.context, 'blockHash': 'source-hash', 'observedAt': 'source-time'}
+        wave = self.wave(self.plan)[0]
+        self.history.observe(self.request, self.result, [(*wave, source)])
+        entry = next(iter(self.history.routes.values()))
+        self.assertEqual(entry['observations'][0]['context'], source)
+        self.assertEqual(entry['context'], self.context)
+        packet = self.history.packet(self.request)
+        self.assertEqual(packet['routes'][0]['points'][0]['context'], source)
         self.assertNotIn('quotes', packet)
 
 

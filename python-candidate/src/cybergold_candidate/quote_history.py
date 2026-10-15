@@ -11,21 +11,19 @@ from web3 import Web3
 
 from .basket_arithmetic import BasketArithmetic, ceil_div, wire
 from .protocol_facts import ABI as FACTS_ABI
-from .pool_producer import ABI as POOL_ABI
-from .quote_models import LegModel, PoolBaseline
+from .quote_models import LegModel
 from .recovery_rpc import ABI as RECOVERY_ABI, abi_value
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
-from .uniswap_routes import uses_typed_adapter
+from .uniswap_routes import route_identity, standalone_v3, uses_typed_adapter, v3_plan
 from .shared_reads import discard_pool_observation
 
 
 def economic_path(path, mode):
-    raw = bytes.fromhex(path[2:])
-    tokens = ['0x' + raw[offset:offset+20].hex() for offset in range(0, len(raw), 23)]
-    fees = [int.from_bytes(raw[offset:offset+3]) for offset in range(20, len(raw), 23)]
-    if mode == 'exact-out':
-        tokens, fees = list(reversed(tokens)), list(reversed(fees))
-    return tokens, fees
+    """Compatibility projection; packed input is normalized at this boundary."""
+    plan = v3_plan(path, mode, 0)
+    hops = plan['branches'][0]['hops']
+    return [plan['tokenIn']]+[hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
+                            for hop in hops], [hop['pool']['feePips'] for hop in hops]
 
 
 def fraction(value):
@@ -38,11 +36,10 @@ def family(request):
             request['native'], request['adapter'].lower(), tuple(a.lower() for a in request['orderedAssets']))
 
 
-def typed_route_key(plan):
+def route_key(plan):
     total = sum(int(branch['amountIn']) for branch in plan['branches'])
-    identity = tuple((str(F(int(branch['amountIn']), total)) if total else '1', tuple(
-        (hop['pool']['protocol'], hop['pool']['id'].lower(), hop['zeroForOne']) for hop in branch['hops']))
-        for branch in plan['branches'])
+    identity = tuple((str(F(int(amount), total)) if total else '1', hops)
+                     for amount, hops in route_identity(plan['branches']))
     if len(plan['branches']) == 1:
         hops = plan['branches'][0]['hops']
         tokens = (plan['tokenIn'].lower(),)+tuple(hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address'].lower() for hop in hops)
@@ -50,6 +47,10 @@ def typed_route_key(plan):
         tokens = (plan['tokenIn'].lower(), plan['tokenOut'].lower())
     fees = tuple(hop['pool']['feePips'] for branch in plan['branches'] for hop in branch['hops'])
     return tokens, fees, ('helpers-core', identity)
+
+
+# Existing callers can migrate independently without retaining another model.
+typed_route_key = route_key
 
 
 class QuoteHistory:
@@ -190,42 +191,37 @@ class QuoteHistory:
         self.trim(self.states)
         self.revision += 1
 
-    def ensure_pool(self, rpc, path, mode, block, context):
-        tokens, fees = economic_path(path, mode)
-        key = (tuple(tokens), tuple(fees), block['hash'].lower())
-        baseline = self.baselines.get(key)
-        if baseline:
-            return
-        epoch = self.epoch
-        self.launch(('pool', key), lambda: self.acquire_pool(rpc, tokens, fees, block, context, key, epoch))
-
-    def ensure_typed_pool(self, provider, plan, block, context):
-        route_key = typed_route_key(plan)
-        key = (*route_key, block['hash'].lower())
+    def ensure_route(self, provider, plan, block, context):
+        plan = deepcopy(plan)
+        key = (*route_key(plan), block['hash'].lower())
         if key in self.baselines:
             return
         epoch = self.epoch
-        async def acquire():
-            baseline = await provider.route_baseline(plan, block)
-            await provider.registry.get_rpc().assert_canonical(block)
-            if epoch != self.epoch:
-                return
-            self.baselines[key] = (baseline, deepcopy(context), time.monotonic())
-            entry = self.routes.setdefault(route_key, {'model': LegModel(), 'context': deepcopy(context),
-                'observations': [], 'routePlan': deepcopy(plan)})
-            if entry['context']['blockHash'] != context['blockHash'] or (
-                entry['model'].baseline is not None and entry['model'].baseline != baseline):
-                entry['model'] = LegModel()
-            entry['model'].baseline = baseline
-            entry['context'] = deepcopy(context)
-            entry['routePlan'] = deepcopy(plan)
-            self.routes.move_to_end(route_key)
-            self.trim(self.routes)
-            self.trim(self.baselines)
-            self.revision += 1
-        self.launch(('typed-pool', key), acquire)
+        self.launch(('route', key), lambda: self.acquire_route(provider, plan, block, context, epoch))
 
-    def ensure_known_typed_pools(self, provider, request, block, context):
+    async def acquire_route(self, provider, plan, block, context, epoch=None):
+        epoch = self.epoch if epoch is None else epoch
+        baseline = await provider.route_baseline(plan, block)
+        await provider.registry.get_rpc().assert_canonical(block)
+        if epoch != self.epoch:
+            return
+        key = route_key(plan)
+        self.baselines[(*key, block['hash'].lower())] = (baseline, deepcopy(context), time.monotonic())
+        entry = self.routes.setdefault(key, {'model': LegModel(), 'context': deepcopy(context),
+            'observations': [], 'routePlan': deepcopy(plan)})
+        if entry['context']['blockHash'] != context['blockHash'] or (
+            entry['model'].baseline is not None and entry['model'].baseline != baseline):
+            entry['model'] = LegModel()
+        entry['model'].baseline = baseline
+        entry['context'] = deepcopy(context)
+        entry['routePlan'] = deepcopy(plan)
+        self.routes.move_to_end(key)
+        self.baselines.move_to_end((*key, block['hash'].lower()))
+        self.trim(self.routes)
+        self.trim(self.baselines)
+        self.revision += 1
+
+    def ensure_known_routes(self, provider, request, block, context):
         """Known direct pool metadata can seed Core models without trade points."""
         epoch = self.epoch
         async def discover_known():
@@ -236,7 +232,7 @@ class QuoteHistory:
             for asset in request['orderedAssets']:
                 source, target = (request['quoteToken'], asset) if issue else (asset, request['quoteToken'])
                 for pool in list(provider.registry.inventory.values()):
-                    if pool['protocol'] == 'v3' or {source.lower(), target.lower()} != {
+                    if {source.lower(), target.lower()} != {
                         pool['token0']['address'].lower(), pool['token1']['address'].lower()}:
                         continue
                     plan = {'version': 1, 'executionContext': 'helpers-core',
@@ -245,51 +241,16 @@ class QuoteHistory:
                         'branches': [{'amountIn': '1', 'hops': [{'pool': deepcopy(pool),
                             'zeroForOne': source.lower() == pool['token0']['address'].lower()}]}],
                         'inputAmount': '0', 'outputAmount': '0', 'limit': '0', 'deadline': '0'}
-                    self.ensure_typed_pool(provider, plan, block, context)
-        self.launch(('known-typed', family(request), block['hash'].lower()), discover_known)
+                    self.ensure_route(provider, plan, block, context)
+        self.launch(('known-routes', family(request), block['hash'].lower()), discover_known)
 
-    async def acquire_pool(self, rpc, tokens, fees, block, context, key, epoch=None):
-        epoch = self.epoch if epoch is None else epoch
-        async def reads(group, address, names, arguments=()):
-            calls = [(address, rpc.pools.pool_contracts[group].encode_abi(name, args=list(arguments))) for name in names]
-            counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-            try:
-                rows, _ = await rpc.pool_batch(calls, block, counts)
-            finally:
-                self.reads += counts['issued']
-                self.envelopes += bool(counts['issued'])
-            result = []
-            for call, name, row in zip(calls, names, rows, strict=True):
-                if 'error' in row:
-                    raise ValueError('Optional pool state unavailable')
-                outputs = next(entry for entry in POOL_ABI[group] if entry.get('name') == name)['outputs']
-                try:
-                    decoded = rpc.w3.codec.decode([collapse_if_tuple(out) for out in outputs], bytes.fromhex(row['result'][2:]))
-                    result.append(decoded[0] if len(decoded) == 1 else decoded)
-                except Exception:
-                    discard_pool_observation(rpc, call, block)
-                    raise
-            return result
-        async def hop(token_in, token_out, fee):
-            ordered = sorted((token_in, token_out))
-            address = (await reads('factory', rpc.pools.factory, ('getPool',), (*map(Web3.to_checksum_address, ordered), fee)))[0]
-            slot, liquidity = await reads('pool', Web3.to_checksum_address(address), ('slot0', 'liquidity'))
-            return PoolBaseline.v3(int(slot[0]), int(liquidity), fee, token_in == ordered[0])
-        hops = await asyncio.gather(*(hop(a, b, f) for a, b, f in zip(tokens[:-1], tokens[1:], fees, strict=True)))
-        rate, retention, impact = F(1), F(1), F(0)
-        for baseline in hops:
-            if baseline.local_impact is None:
-                raise ValueError('Optional zero-liquidity model')
-            impact += baseline.local_impact * baseline.fee_retention * rate * retention
-            rate *= baseline.exchange
-            retention *= baseline.fee_retention
-        await rpc.assert_canonical(block)
-        if epoch != self.epoch:
-            return
-        self.baselines[key] = (PoolBaseline(rate, retention, impact/retention), {**deepcopy(context), 'observedAt': datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}, time.monotonic())
-        self.baselines.move_to_end(key)
-        self.trim(self.baselines)
-        self.revision += 1
+    # Compatibility adapters normalize at entry and delegate to the same engine.
+    ensure_typed_pool = ensure_route
+    ensure_known_typed_pools = ensure_known_routes
+
+    def ensure_pool(self, rpc, path, mode, block, context):
+        plan = v3_plan(path, mode, 0, chain_id=context['chainId'])
+        self.ensure_route(getattr(rpc, 'route_engine', rpc), plan, block, context)
 
     def observe(self, request, result, waves):
         context = result['context']
@@ -314,17 +275,19 @@ class QuoteHistory:
             source_context = wave[2] if len(wave) > 2 else context
             for row in rows:
                 best, target = row['best'], row['target']
-                if not best or (best['path'] == '0x' and not best.get('routePlan')):
+                if not best:
                     continue
                 plan = best.get('routePlan')
-                if plan:
-                    key = typed_route_key(plan)
-                else:
-                    tokens, fees = economic_path(best['path'], mode)
-                    key = (tuple(tokens), tuple(fees))
+                if plan is None:
+                    if best.get('path', '0x') == '0x':
+                        continue
+                    plan = v3_plan(best['path'], mode, target['amount'], chain_id=context['chainId'])
+                    plan['inputAmount' if mode == 'exact-out' else 'outputAmount'] = best['quote']
+                if not plan['branches']:
+                    continue
+                key = route_key(plan)
                 entry = self.routes.setdefault(key, {'model': LegModel(), 'context': context, 'observations': []})
-                if plan:
-                    entry['routePlan'] = deepcopy(plan)
+                entry['routePlan'] = deepcopy(plan)
                 self.routes.move_to_end(key)
                 baseline = self.baselines.get((*key, context['blockHash'].lower()))
                 model = entry['model']
@@ -373,7 +336,7 @@ class QuoteHistory:
                  (a.lower(), request['quoteToken'].lower()) for a in request['orderedAssets']}
         selected = {}
         for key, entry in reversed(self.routes.items()):
-            if len(key) > 2 and not uses_typed_adapter(request['adapter']):
+            if not uses_typed_adapter(request['adapter']) and not standalone_v3(entry['routePlan']):
                 continue
             tokens, fees = key[:2]
             pair = (tokens[0], tokens[-1])

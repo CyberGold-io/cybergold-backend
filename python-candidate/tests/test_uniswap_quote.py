@@ -11,12 +11,29 @@ from web3 import AsyncWeb3
 from test_basket_preview import HASH, Provider, REFERENCE
 from cybergold_candidate.app import create_app
 from cybergold_candidate.uniswap_quote import UniswapQuote, UniswapQuoteRpc
+from cybergold_candidate.uniswap_routes import v3_path
+
+
+class FixtureEngine:
+    """A shared-engine native fallback, retaining the historical wire fixture."""
+    def __init__(self, rpc):
+        self.rpc = rpc
+        self.semaphore = asyncio.Semaphore(8)
+
+    async def quote_branches(self, branches, mode, amount, block):
+        path = v3_path(branches[0]['hops'], mode == 'exactOut')
+        wire_mode = 'exact-in' if mode == 'exactIn' else 'exact-out'
+        value = await self.rpc.quote(wire_mode, self.rpc.encode({
+            'mode': wire_mode, 'path': path, 'amount': str(amount)}), block)
+        return {'amountIn': str(amount) if mode == 'exactIn' else value['amount'],
+                'amountOut': value['amount'] if mode == 'exactIn' else str(amount)}
 
 
 def service(provider):
     settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS=REFERENCE['helpers'],
                                RPC_URL='http://synthetic.invalid', RPC_AUTHORIZATION='Bearer fixture-only')
-    return UniswapQuote(settings, UniswapQuoteRpc(settings, AsyncWeb3(provider)), lambda: '2026-10-01T00:00:00.000Z')
+    rpc = UniswapQuoteRpc(settings, AsyncWeb3(provider))
+    return UniswapQuote(settings, rpc, lambda: '2026-10-01T00:00:00.000Z', engine=FixtureEngine(rpc))
 
 
 class UniswapQuoteTests(unittest.IsolatedAsyncioTestCase):

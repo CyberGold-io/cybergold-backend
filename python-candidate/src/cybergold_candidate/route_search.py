@@ -1,11 +1,11 @@
-"""All existing V3 candidates for a quote wave, at one canonical block."""
+"""Canonical-context HTTP/Core facade and native V3 fallback transport."""
 import asyncio
 import json
 import logging
 import uuid
+from copy import deepcopy
 from datetime import datetime, timezone
 import time
-from itertools import zip_longest
 from typing import Literal
 
 import httpx
@@ -18,10 +18,10 @@ from .pool_producer import PoolRpc, ZERO
 from .shared_reads import SharedReads
 from .uniswap_quote import ABI, METHODS, UniswapQuoteRpc
 from .wallet_balances import TOKENS
-from .quote_errors import rpc_failure, public_quote_error
+from .quote_errors import QuoteFailure, rpc_failure, public_quote_error
+from .uniswap_routes import LEGACY_V3_ADAPTERS, initial_v3_branches, standalone_v3, v3_path
 from .rpc_diagnostics import (rpc_call, error_diagnostics, route_work_scope, route_subphase,
                               route_count, freeze_quote_work)
-from .uniswap_routes import uses_typed_adapter
 
 WETH = next(address for name, address in TOKENS if name == 'weth')
 DIRECT_FEES = (100, 500, 3000, 10000)
@@ -43,7 +43,7 @@ class RouteSearchRequest(BaseModel):
 REQUEST = TypeAdapter(RouteSearchRequest)
 
 
-def candidates(target, mode):
+def validate_target(target):
     try:
         token_in = Web3.to_checksum_address(target['inputAsset'])
         token_out = Web3.to_checksum_address(target['outputAsset'])
@@ -52,27 +52,33 @@ def candidates(target, mode):
         Web3().codec.encode(['uint256'], [amount])
     except Exception as error:
         raise InvalidPreview('Invalid route search input.') from error
-    if token_in == token_out:
-        return []
-    rows = []
+    return token_in, token_out, amount
 
-    def add(tokens, fees, route):
-        if mode == 'exact-out':
-            tokens, fees = list(reversed(tokens)), list(reversed(fees))
-        path = '0x' + tokens[0][2:]
-        for fee, token in zip(fees, tokens[1:], strict=True):
-            path += f'{fee:06x}' + token[2:]
-        rows.append({'path': path.lower(), 'route': route,
-                     'feeInfo': '/'.join(map(str, reversed(fees) if mode == 'exact-out' else fees)),
-                     'totalFee': sum(fees)})
 
-    for fee in DIRECT_FEES:
-        add([token_in, token_out], [fee], 'direct')
-    if token_in != WETH and token_out != WETH:
-        for fee_in in VIA_FEES:
-            for fee_out in VIA_FEES:
-                add([token_in, WETH, token_out], [fee_in, fee_out], 'viaWeth')
-    return sorted(rows, key=lambda row: (row['totalFee'], row['route'] != 'direct', row['feeInfo']))
+def candidates(target, mode):
+    token_in, token_out, amount = validate_target(target)
+    # Compatibility projection for historical wire fixtures/benchmarks. The
+    # executable skeletons come from the one canonical candidate producer.
+    return [{'path': v3_path(branches[0]['hops'], mode == 'exact-out'),
+        'route': 'direct' if len(branches[0]['hops']) == 1 else 'viaWeth',
+        'feeInfo': '/'.join(str(hop['pool']['feePips']) for hop in branches[0]['hops']),
+        'totalFee': sum(hop['pool']['feePips'] for hop in branches[0]['hops'])}
+        for branches in initial_v3_branches({'inputAsset': token_in,
+            'outputAsset': token_out, 'amount': str(amount)}, mode)]
+
+
+def public_rows(rows):
+    """Keep packed V3 compatibility at the HTTP boundary only."""
+    result = deepcopy(rows)
+    for row in result:
+        best = row.get('best')
+        if best and best.get('routePlan') and standalone_v3(best['routePlan']):
+            plan = best['routePlan']
+            hops = plan['branches'][0]['hops']
+            best['path'] = v3_path(hops, plan['mode'] == 'exactOut')
+            if len(hops) == 2 and hops[0]['pool']['token1' if hops[0]['zeroForOne'] else 'token0']['address'].lower() == WETH.lower():
+                best['route'] = 'viaWeth'
+    return result
 
 
 class RouteSearchRpc(UniswapQuoteRpc):
@@ -223,129 +229,64 @@ def reduce_results(request, plans, outcomes):
 
 
 class RouteSearch:
-    def __init__(self, settings, rpc=None, now=None, direct_batch_size=2, *, remaining_batch_size=2, group_planner=None, rpc_factory=RouteSearchRpc, multi_protocol=None):
+    """HTTP/Core facade for the same engine used by Market and direct quotes."""
+    def __init__(self, settings, rpc=None, now=None, *, rpc_factory=RouteSearchRpc,
+                 engine=None, multi_protocol=None):
         self.settings, self.rpc = settings, rpc
-        self.direct_batch_size = direct_batch_size
-        self.remaining_batch_size = remaining_batch_size
-        self.group_planner = group_planner
         self.rpc_factory = rpc_factory
-        self.multi_protocol = multi_protocol
+        self.engine = engine if engine is not None else multi_protocol
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
+
+    @property
+    def multi_protocol(self):
+        # Retain the old injection name for callers without retaining a second
+        # route representation, quote producer, or scheduling path.
+        return self.engine
+
+    @multi_protocol.setter
+    def multi_protocol(self, value):
+        self.engine = value
 
     @route_work_scope
     async def get(self, request, on_update=None, *, block=None):
+        for target in request['targets']:
+            validate_target(target)
+        # The unversioned public endpoint historically enumerates V3 paths.
+        # Give that existing execution capability to the common planner too.
+        request = {**request, 'adapter': request.get('adapter') or next(iter(LEGACY_V3_ADAPTERS))}
         if self.rpc is None:
             self.rpc = self.rpc_factory(self.settings)
-        if self.multi_protocol:
-            self.rpc.multi_protocol = self.multi_protocol
-        provider = self.multi_protocol if uses_typed_adapter(request.get('adapter')) else None
+        self.rpc.route_engine = self.engine
         started = time.perf_counter()
-        plans, calls, call_paths, indices = [], [], [], {}
-        for target in request['targets']:
-            rows = candidates(target, request['mode'])
-            for row in rows:
-                key = (row['path'], int(target['amount']))
-                if key not in indices:
-                    indices[key] = len(calls)
-                    calls.append(self.rpc.encode({'mode': request['mode'], 'path': row['path'],
-                                                  'amount': target['amount']}))
-                    call_paths.append(row['path'])
-                row['callIndex'] = indices[key]
-            plans.append(rows)
         async with asyncio.timeout(15):
             owns_context = block is None
             block = await self.rpc.block(None) if owns_context else block
             context_done = time.perf_counter()
-            route_subphase('eligibility')
-            eligible, pool_reads = await self.rpc.eligible_paths(list(dict.fromkeys(call_paths)), block)
-            selected = [index for index, path in enumerate(call_paths) if path in eligible]
-            route_count('legacyCandidates', len(selected))
-            route_subphase('v3-coverage')
-            outcomes = {}
-            quote_reads = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-            if on_update is None:
-                quoted = await self.rpc.quote_batch_counted(request['mode'], [calls[index] for index in selected], block, quote_reads) if selected else []
-                outcomes = dict(zip(selected, quoted, strict=True))
-                route_count('legacyCompleted', len(outcomes))
-            else:
-                async def snapshot():
-                    results = reduce_results(request, plans, outcomes)
-                    for row, plan in zip(results, plans, strict=True):
-                        row['total'] = sum(candidate['callIndex'] in selected for candidate in plan)
-                    await on_update({'type': 'progress', 'results': results})
-
-                async def quote_group(group):
-                    values = await self.rpc.quote_batch_counted(request['mode'], [calls[index] for index in group], block, quote_reads)
-                    return dict(zip(group, values, strict=True))
-
-                # Small concurrent batches preserve complete coverage and avoid
-                # serial upstream compatibility fanout dominating one large tail.
-                direct_rows = [[row['callIndex'] for row in plan if row['route'] == 'direct'
-                                and row['callIndex'] in selected] for plan in plans]
-                direct, groups = set(), []
-                for wave in zip_longest(*direct_rows):
-                    group = list(dict.fromkeys(index for index in wave if index is not None and index not in direct))
-                    direct.update(group)
-                    groups.extend(group[offset:offset + self.direct_batch_size]
-                                  for offset in range(0, len(group), self.direct_batch_size))
-                remaining = [index for index in selected if index not in direct]
-                if remaining:
-                    size = self.remaining_batch_size or len(remaining)
-                    groups.extend(remaining[offset:offset+size] for offset in range(0, len(remaining), size))
-                if self.group_planner:
-                    groups = self.group_planner.groups(request, plans, groups)
-                tasks = [asyncio.create_task(quote_group(group)) for group in groups]
-                try:
-                    await snapshot()
-                    for task in asyncio.as_completed(tasks):
-                        completed = await task
-                        outcomes.update(completed)
-                        route_count('legacyCompleted', len(completed))
-                        await snapshot()
-                except BaseException as error:
-                    freeze_quote_work(error)
-                    raise
-                finally:
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
+            route_subphase('structured-search')
+            async def progress(rows):
+                if on_update:
+                    await on_update({'type': 'progress', 'results': public_rows(rows)})
+            results = await self.engine.search_routes(request, block, on_update=progress)
+            failures = [failure for row in results for failure in row['failures']]
+            if results and not any(row['best'] for row in results) and failures and all(
+                    failure.get('code', '').startswith('rpc-') for failure in failures):
+                first = failures[0]
+                raise QuoteFailure(first['code'], diagnostics=first.get('diagnostics'))
             quotes_done = time.perf_counter()
-            results = reduce_results(request, plans, outcomes)
-            if provider:
-                route_subphase('typed-reserve')
-                def combined(extended):
-                    rows = reduce_results(request, plans, outcomes)
-                    for row, extra, plan in zip(rows, extended, plans, strict=True):
-                        row['attempted'] += extra['attempted']
-                        row['succeeded'] += extra['succeeded']
-                        row['failures'].extend(extra['failures'])
-                        row['total'] = sum(candidate['callIndex'] in selected for candidate in plan) + extra.get('total', extra['attempted'])
-                        other = extra['best']
-                        if other and (row['best'] is None or (int(other['quote']) > int(row['best']['quote'])
-                            if request['mode'] == 'exact-in' else int(other['quote']) < int(row['best']['quote']))):
-                            row['best'] = other
-                    return rows
-                async def update_extended(extended):
-                    await on_update({'type': 'progress', 'results': combined(extended)})
-                extended = await provider.reserve_quotes(request, block, **(
-                    {'on_update': update_extended} if on_update else {}))
-                results = combined(extended)
-                for row in results:
-                    row.pop('total', None)
             if owns_context:
                 route_subphase('canonicality')
                 await self.rpc.assert_canonical(block)
-            if self.group_planner:
-                self.group_planner.observe(request, results)
             finished = time.perf_counter()
-            return {'mode': request['mode'], 'quoter': self.rpc.quoter, 'results': results,
+            context_reads = 3 if owns_context else 0
+            return {'mode': request['mode'], 'quoter': self.rpc.quoter, 'results': public_rows(results),
                 'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
                             'blockHash': block['hash'], 'observedAt': self.now()},
-                'metrics': {'candidateCalls': len(selected),
-                    'rpcReads': quote_reads['issued'] + pool_reads['issued'] + (3 if owns_context else 0),
-                    'rpcReadsRequested': quote_reads['requested'] + pool_reads['requested'] + (3 if owns_context else 0),
-                    'rpcReadsCoalesced': quote_reads['coalesced'] + pool_reads['coalesced'],
-                    'rpcReadsReused': quote_reads['reused'] + pool_reads['reused'],
+                # Engine state acquisition and native fallback are not counted
+                # by this facade. Do not present coordinator reads as supplier
+                # cost or infer savings from removing the old V3 batch wave.
+                'metrics': {'candidateCalls': sum(row['attempted'] for row in results),
+                    'rpcReads': context_reads, 'rpcReadsRequested': context_reads,
+                    'rpcReadsCoalesced': 0, 'rpcReadsReused': 0, 'rpcReadsScope': 'coordinator',
                     'contextMs': round((context_done - started) * 1000, 3),
                     'quotesMs': round((quotes_done - context_done) * 1000, 3),
                     'canonicalityMs': round((finished - quotes_done) * 1000, 3),
@@ -365,7 +306,7 @@ async def handle_route_stream(request, service):
     try:
         value = REQUEST.validate_python(await request.json()).model_dump()
         for target in value['targets']:
-            candidates(target, value['mode'])
+            validate_target(target)
     except ValueError:
         return JSONResponse({'error': 'Invalid route search input.'}, status_code=400,
                             headers={'Cache-Control': 'no-store'})
