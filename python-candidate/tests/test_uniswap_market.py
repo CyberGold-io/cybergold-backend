@@ -1636,6 +1636,64 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.registry.pending.completed, {})
         self.assertEqual(self.registry.observed, {})
 
+    async def test_old_coverage_rows_stay_private_across_shared_fill_consumers(self):
+        self.snapshot['bitmapWords'] = [{'wordPosition': 9, 'bitmap': '1'}]
+        self.snapshot['ticks'] = [{'index': 23040, 'liquidityGross': '7', 'liquidityNet': '3'}]
+        original = deepcopy(self.snapshot)
+        one = self.registry.pending.one
+        first_mutated = asyncio.Event()
+        sequence = 0
+
+        async def delayed_one(key, produce):
+            nonlocal sequence
+            sequence += 1
+            position = sequence
+            value = await one(key, produce)
+            if position == 2:
+                await first_mutated.wait()
+            return value
+        self.registry.pending.one = delayed_one
+
+        async def first_consumer():
+            value = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+            word = next(row for row in value['bitmapWords'] if row['wordPosition'] == 9)
+            tick = next(row for row in value['ticks'] if row['index'] == 23040)
+            self.assertEqual((word['bitmap'], tick['liquidityGross']), ('1', '7'))
+            word['bitmap'] = tick['liquidityGross'] = '999'
+            first_mutated.set()
+            return value
+
+        first = asyncio.create_task(first_consumer())
+        self.addAsyncCleanup(self.stop, first)
+        await asyncio.wait_for(self.rpc.started.wait(), 1)
+        second = asyncio.create_task(self.registry.extend_ticks(original, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.snapshot['bitmapWords'][0]['bitmap'] = '888'
+        self.snapshot['ticks'][0]['liquidityGross'] = '888'
+        self.rpc.release.set()
+        _, result = await asyncio.gather(first, second)
+        self.assertEqual(next(row for row in result['bitmapWords'] if row['wordPosition'] == 9)['bitmap'], '1')
+        self.assertEqual(next(row for row in result['ticks'] if row['index'] == 23040)['liquidityGross'], '7')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+
+    async def test_unequal_prior_coverage_stays_distinct_at_the_same_header(self):
+        with_extra = deepcopy(self.snapshot)
+        with_extra['bitmapWords'] = [{'wordPosition': 9, 'bitmap': '0'}]
+        first = await self.start(with_extra)
+        self.rpc.bitmap = 2
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        async def both_started():
+            while self.rpc.active != 2:
+                await asyncio.sleep(0)
+        await asyncio.wait_for(both_started(), 1)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(next(row for row in a['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '1')
+        self.assertEqual(next(row for row in b['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '2')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
     async def test_unequal_baseline_snapshots_do_not_share_a_fill(self):
         first = await self.start()
         changed = {**self.snapshot, 'liquidity': '2000'}
