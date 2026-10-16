@@ -3,8 +3,10 @@ from copy import deepcopy
 
 from .basket_preview import InvalidPreview
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
+from .route_work_slots import engine_work
 from .uniswap_routes import resize_branches, v3_plan
 from .route_encoding import encode_route
+from .recovery_rpc import SnapshotChanged
 
 
 class RetainedPlanChanged(InvalidPreview):
@@ -69,32 +71,61 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
     plans, values = [], []
     mode = 'exactOut' if issue else 'exactIn'
     provider = rpc.route_engine
-    for asset, raw in targets:
-        leg = selected[asset.lower()]
-        plan, limit = selected_route(leg, mode, raw, rpc)
+    def resolve_selected(*args):
         try:
-            branches = provider.resolve_branches(plan['branches'], request['quoteToken'] if issue else asset,
-                asset if issue else request['quoteToken'], plan['mode'], raw)
+            return provider.resolve_branches(*args)
         except InvalidPreview as error:
             raise RetainedPlanChanged(str(error)) from error
-        try:
-            metrics['candidateCalls'] += 1
-            async with provider.semaphore:
-                result = await provider.quote_branches(branches, mode, raw, block)
-        except Exception as error:
-            from .quote_errors import public_quote_error
-            if public_quote_error(error)['code'] == 'quote-contract-reverted':
-                raise RetainedPlanChanged('Retained route no longer quotes.') from error
-            raise
-        observed = result['amountIn' if issue else 'amountOut']
-        plan.update(branches=branches, inputAmount=result['amountIn'], outputAmount=result['amountOut'])
-        plans.append((leg, asset, raw, limit))
-        values.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
-            'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
-            'best': {'quote': observed, 'routePlan': plan}})
-    async with provider.semaphore:
-        values = await provider.compose_core_rows(values, mode, block,
-            ordered_assets=request['orderedAssets'], issue=issue)
+
+    planned = None
+    try:
+        planned = []
+        for asset, raw in targets:
+            leg = selected[asset.lower()]
+            plan, limit = selected_route(leg, mode, raw, rpc)
+            plans.append((leg, asset, raw, limit))
+            planned.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
+                'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
+                'best': {'quote': '0', 'routePlan': plan}})
+        quote_shared = provider.quote_shared_core_rows
+    except SnapshotChanged:
+        raise
+    except Exception:
+        # Selected normalization remains owned by the ordinary sequential path
+        # if this optional work dispatch cannot prepare its input.
+        planned = None
+    values = await quote_shared(planned, mode, block, ordered_assets=request['orderedAssets'],
+        issue=issue, resolve=resolve_selected) if planned is not None else None
+    if values is not None:
+        metrics['candidateCalls'] += len(targets)
+    else:
+        plans, values = [], []
+        for asset, raw in targets:
+            leg = selected[asset.lower()]
+            plan, limit = selected_route(leg, mode, raw, rpc)
+            try:
+                branches = provider.resolve_branches(plan['branches'], request['quoteToken'] if issue else asset,
+                    asset if issue else request['quoteToken'], plan['mode'], raw)
+            except InvalidPreview as error:
+                raise RetainedPlanChanged(str(error)) from error
+            try:
+                metrics['candidateCalls'] += 1
+                async with engine_work(provider.semaphore):
+                    result = await provider.quote_branches(branches, mode, raw, block)
+            except Exception as error:
+                from .quote_errors import public_quote_error
+                if public_quote_error(error)['code'] == 'quote-contract-reverted':
+                    raise RetainedPlanChanged('Retained route no longer quotes.') from error
+                raise
+            observed = result['amountIn' if issue else 'amountOut']
+            plan.update(branches=branches, inputAmount=result['amountIn'], outputAmount=result['amountOut'])
+            plans.append((leg, asset, raw, limit))
+            values.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
+                'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
+                'best': {'quote': observed, 'routePlan': plan}})
+        async with engine_work(provider.semaphore):
+            values = await provider.compose_core_rows(values, mode, block,
+                ordered_assets=request['orderedAssets'], issue=issue)
     quotes = []
     expected_surplus = 0
     expected_input = 0

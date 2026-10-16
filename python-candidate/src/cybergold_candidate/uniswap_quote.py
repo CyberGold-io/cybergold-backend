@@ -11,6 +11,7 @@ from web3 import AsyncWeb3, Web3
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .recovery_rpc import RecoveryRpc
 from .rpc_transport import rpc_provider
+from .route_work_slots import engine_work
 from .uniswap_routes import v3_plan
 
 ABI = json.loads(Path(__file__).with_name('uniswap-quote-abi.json').read_text())
@@ -55,7 +56,7 @@ class UniswapQuote:
             self.rpc = UniswapQuoteRpc(self.settings)
         async with asyncio.timeout(15):
             block = await self.rpc.block(None)
-            async with self.engine.semaphore:
+            async with engine_work(self.engine.semaphore):
                 value = await self.engine.quote_branches(plan['branches'], plan['mode'], amount, block)
             await self.rpc.assert_canonical(block)
             result = {'amount': str(value['amountOut' if plan['mode'] == 'exactIn' else 'amountIn'])}

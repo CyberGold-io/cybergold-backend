@@ -21,6 +21,7 @@ from .quote_budget import current_budget, SearchStopped
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .issuance_capacity import capacity_amounts, read_capacity
 from .route_encoding import encode_route
+from .route_work_slots import engine_work
 from .uniswap_routes import resize_branches, v3_plan
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
@@ -336,7 +337,7 @@ class QuoteIntent:
                     try:
                         # Prospective replay shares candidate pricing slots
                         # and the producer's existing selection budget.
-                        async with engine.semaphore:
+                        async with engine_work(engine.semaphore):
                             rows = await engine.compose_core_rows(rows,
                                 'exactIn' if mode == 'exact-in' else 'exactOut', block,
                                 ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
@@ -400,7 +401,7 @@ class QuoteIntent:
                     preparing.cancel()
                     await asyncio.gather(preparing, return_exceptions=True)
             route_subphase('composition')
-            async with engine.semaphore:
+            async with engine_work(engine.semaphore):
                 result['results'] = await engine.compose_core_rows(canonical_rows(result['results'], targets, mode),
                     'exactIn' if mode == 'exact-in' else 'exactOut', block,
                     ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
@@ -559,13 +560,35 @@ class QuoteIntent:
                 async def reprice(target):
                     quote = by_asset[target['inputAsset'].lower()]
                     plan, _ = selected_route(quote, 'exactIn', int(target['amount']), rpc)
-                    async with engine.semaphore:
+                    async with engine_work(engine.semaphore):
                         plan['branches'] = engine.resolve_branches(plan['branches'], target['inputAsset'],
                             target['outputAsset'], 'exactIn', int(target['amount']))
                         quoted = await engine.quote_branches(plan['branches'], 'exactIn', int(target['amount']), block)
                     plan.update(inputAmount=quoted['amountIn'], outputAmount=quoted['amountOut'])
                     return {'target': target, 'best': {'quote': quoted['amountOut'], 'routePlan': plan}, 'failures': []}
+                composed = None
+                planned = None
                 if protect:
+                    try:
+                        planned = []
+                        for target in targets:
+                            plan, _ = selected_route(by_asset[target['inputAsset'].lower()],
+                                'exactIn', int(target['amount']), rpc)
+                            planned.append({'target': target, 'best': {'quote': '0', 'routePlan': plan},
+                                'failures': []})
+                        quote_shared = engine.quote_shared_core_rows
+                    except SnapshotChanged:
+                        raise
+                    except Exception:
+                        # The ordinary caller path owns malformed plans and
+                        # legacy receivers without the optional shared method.
+                        planned = None
+                if planned is not None:
+                    composed = await quote_shared(planned, 'exactIn', block,
+                        ordered_assets=request['orderedAssets'], issue=False)
+                    if composed is not None:
+                        rows = composed
+                if composed is None and protect:
                     # Isolated leg observations can overlap. Consume in Core
                     # order so errors keep their previous precedence; the
                     # shared-pool execution replay below remains sequential.
@@ -580,11 +603,11 @@ class QuoteIntent:
                         disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
                         if disproof is not None:
                             raise disproof
-                else:
+                elif composed is None:
                     rows = [await reprice(target) for target in targets]
                 metrics['candidateCalls'] += len(targets)
-                if protect:
-                    async with engine.semaphore:
+                if protect and composed is None:
+                    async with engine_work(engine.semaphore):
                         rows = await engine.compose_core_rows(rows, 'exactIn', block,
                             ordered_assets=request['orderedAssets'], issue=False)
             selected = value(rows)
@@ -821,7 +844,7 @@ class QuoteIntent:
                         chosen = selected[target['outputAsset'].lower()]
                         plan = chosen['routePlan']
                         branches = resize_branches(plan['branches'], int(target['amount']))
-                        async with engine.semaphore:
+                        async with engine_work(engine.semaphore):
                             value = await engine.quote_branches(branches, 'exactIn', int(target['amount']), block)
                         observations.append(value['amountOut'])
                     metrics['candidateCalls'] += len(observations)

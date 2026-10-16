@@ -32,13 +32,152 @@ async def until(predicate):
 
 
 class RouteWorkSlotsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_direct_no_lease_retains_the_original_semaphore(self):
+    async def test_standalone_scope_yields_only_its_original_engine_permit(self):
         semaphore=asyncio.Semaphore(1)
+        self.assertIsNone(work._current.get())
         async with work.engine_work(semaphore):
+            lease=work._current.get()
+            self.assertIs(lease.owner,asyncio.current_task())
+            self.assertIsNone(lease.slots)
+            self.assertIsNone(lease.changed)
             self.assertTrue(semaphore.locked())
             async with work.required_state_wait():
-                self.assertTrue(semaphore.locked())
+                self.assertFalse(semaphore.locked())
+                self.assertFalse(lease.owned)
+            self.assertTrue(semaphore.locked())
+            self.assertTrue(lease.owned)
+        self.assertTrue(lease.closed)
+        self.assertEqual(lease.engines,[])
+        self.assertIsNone(work._current.get())
         self.assertEqual(semaphore._value,1)
+
+    async def test_nested_engine_scopes_share_owned_permits_and_restore_context(self):
+        first,second=asyncio.Semaphore(1),asyncio.Semaphore(1)
+        async with work.engine_work(first):
+            lease=work._current.get()
+            async with work.engine_work(second):
+                self.assertIs(work._current.get(),lease)
+                async with work.required_state_wait():
+                    self.assertEqual((first._value,second._value),(1,1))
+                self.assertEqual((first._value,second._value),(0,0))
+            self.assertEqual((first._value,second._value),(0,1))
+            self.assertFalse(lease.closed)
+        self.assertEqual((first._value,second._value),(1,1))
+        self.assertTrue(lease.closed)
+        self.assertIsNone(work._current.get())
+
+    async def test_foreign_child_engine_scope_owns_only_its_new_permit(self):
+        parent_engine,child_engine=asyncio.Semaphore(1),asyncio.Semaphore(1)
+        async with work.engine_work(parent_engine):
+            parent=work._current.get()
+            async def child():
+                self.assertIs(work._current.get(),parent)
+                async with work.engine_work(child_engine):
+                    own=work._current.get()
+                    self.assertIsNot(own,parent)
+                    self.assertIs(own.owner,asyncio.current_task())
+                    async with work.required_state_wait():
+                        self.assertEqual((parent_engine._value,child_engine._value),(0,1))
+                        self.assertTrue(parent.owned)
+                    self.assertEqual(child_engine._value,0)
+                self.assertTrue(own.closed)
+                self.assertIs(work._current.get(),parent)
+                async with work.required_state_wait():
+                    self.assertEqual(parent_engine._value,0)
+            await asyncio.create_task(child())
+            self.assertIs(work._current.get(),parent)
+        self.assertEqual((parent_engine._value,child_engine._value),(1,1))
+
+    async def test_pricing_inside_parked_callback_gets_fresh_no_slot_lease(self):
+        outer_engine,inner_engine=asyncio.Semaphore(1),asyncio.Semaphore(1)
+        async def evaluate(index,value):
+            async with work.engine_work(outer_engine):
+                outer=work._current.get()
+                async with work.required_state_wait():
+                    self.assertFalse(outer.owned)
+                    async with work.engine_work(inner_engine):
+                        inner=work._current.get()
+                        self.assertIsNot(inner,outer)
+                        self.assertIsNone(inner.slots)
+                        async with work.required_state_wait():
+                            self.assertEqual((outer_engine._value,inner_engine._value),(1,1))
+                            self.assertFalse(outer.owned)
+                        self.assertEqual(inner_engine._value,0)
+                    self.assertTrue(inner.closed)
+                    self.assertIs(work._current.get(),outer)
+                    self.assertFalse(outer.owned)
+                self.assertTrue(outer.owned)
+                self.assertEqual(outer_engine._value,0)
+        with leases() as rows:
+            await schedule_routes(lambda _:[feed([1])],evaluate,limit=1)
+        self.assertEqual((rows[0].slots._value,outer_engine._value,inner_engine._value),(1,1,1))
+        self.assertIsNone(work._current.get())
+
+    async def standalone_first_acquire_cancel(self,after_grant):
+        semaphore=asyncio.Semaphore(0)
+        restored=[]
+        async def blocked():
+            try:
+                async with work.engine_work(semaphore):
+                    self.fail('Cancelled acquisition must not enter pricing')
+            finally:
+                restored.append(work._current.get())
+        task=asyncio.create_task(blocked())
+        await until(lambda:bool(semaphore._waiters))
+        if after_grant:semaphore.release()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):await task
+        self.assertEqual(restored,[None])
+        self.assertEqual(semaphore._value,int(after_grant))
+
+    async def test_standalone_cancel_before_first_engine_grant_resets_context(self):
+        await self.standalone_first_acquire_cancel(False)
+
+    async def test_standalone_cancel_after_first_engine_grant_resets_context(self):
+        await self.standalone_first_acquire_cancel(True)
+
+    async def test_standalone_partial_nested_reacquire_drains_only_owned_grants(self):
+        first,second=asyncio.Semaphore(1),asyncio.Semaphore(1)
+        parked,release=asyncio.Event(),asyncio.Event();captured=[]
+        async def price():
+            async with work.engine_work(first):
+                captured.append(work._current.get())
+                async with work.engine_work(second):
+                    async with work.required_state_wait():
+                        parked.set();await release.wait()
+        task=asyncio.create_task(price())
+        try:
+            await parked.wait();await second.acquire()
+            release.set();await until(lambda:bool(second._waiters))
+            self.assertEqual(first._value,0,'Engine entry order must reacquire first before second')
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):await task
+            self.assertEqual((first._value,second._value),(1,0))
+            self.assertTrue(captured[0].closed)
+            self.assertFalse(captured[0].owned)
+            self.assertEqual(captured[0].engines,[])
+        finally:
+            release.set();task.cancel();await asyncio.gather(task,return_exceptions=True)
+            second.release()
+        self.assertEqual((first._value,second._value),(1,1))
+
+    async def test_cancelled_nested_entry_keeps_active_outer_permit(self):
+        first,second=asyncio.Semaphore(1),asyncio.Semaphore(0)
+        captured=[]
+        async def price():
+            async with work.engine_work(first):
+                lease=work._current.get();captured.append(lease)
+                try:
+                    async with work.engine_work(second):self.fail('No second permit is available')
+                except asyncio.CancelledError:
+                    self.assertIs(work._current.get(),lease)
+                    self.assertFalse(lease.closed)
+                    self.assertTrue(lease.owned)
+                    self.assertEqual(first._value,0)
+                    self.assertEqual(len(lease.engines),1)
+        task=asyncio.create_task(price());await until(lambda:bool(second._waiters));task.cancel();await task
+        self.assertEqual((first._value,second._value),(1,0))
+        self.assertTrue(captured[0].closed)
 
     async def test_zero_limit_retains_no_work_termination(self):
         called=[]
