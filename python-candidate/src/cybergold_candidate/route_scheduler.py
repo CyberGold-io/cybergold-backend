@@ -3,6 +3,7 @@ import asyncio
 
 from .rpc_diagnostics import freeze_quote_work
 from .recovery_rpc import SnapshotChanged
+from .route_work_slots import CandidateWork, run_candidate
 
 
 def raise_snapshot_disproof(outcomes):
@@ -16,11 +17,14 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
     """Interleave leg feeds without waiting for one discovery/quote tail.
 
     One prefetched candidate per leg keeps slow graph enumeration separate from
-    completed quote delivery. The existing eight-job allowance bounds pricing;
-    cancellation drains only tasks created here, leaving shared read ownership
+    completed quote delivery. The limit bounds held pricing-work permits;
+    additional parked candidate tasks remain owned and drained. Cancellation
+    drains only tasks created here, leaving shared read ownership
     to the engine's ordinary subscription contract.
     """
     feeds, pending_next, ready, active = [], {}, {}, set()
+    slots, changed = asyncio.Semaphore(limit), asyncio.Event()
+    capacity = None
     discovery = asyncio.create_task(discover()) if discover is not None else None
     expanded = discovery is None
     cursor = 0
@@ -49,12 +53,16 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
         start_feeds()
         while active or pending_next or ready or (discovery is not None and not expanded):
             # Each leg gets one turn before another candidate from that leg.
-            while ready and len(active) < limit:
+            while ready and not slots.locked():
                 for offset in range(len(feeds)):
                     index = (cursor + offset) % len(feeds)
                     if index in ready:
                         candidate = ready.pop(index)
-                        active.add(asyncio.create_task(evaluate(index, candidate)))
+                        await slots.acquire()
+                        lease = CandidateWork(slots, changed)
+                        task = asyncio.create_task(run_candidate(lease, evaluate, index, candidate))
+                        task.add_done_callback(lambda _task, owned=lease: owned.close())
+                        active.add(task)
                         next_candidate(index)
                         cursor = (index + 1) % len(feeds)
                         break
@@ -63,7 +71,15 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
                 waiters.add(discovery)
             if not waiters:
                 break
+            if active:
+                if capacity is None:
+                    changed.clear()
+                    capacity = asyncio.create_task(changed.wait())
+                waiters.add(capacity)
             done, _ = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+            if capacity in done:
+                await capacity
+                capacity = None
             completed = active & done
             if completed:
                 outcomes = await asyncio.gather(*completed, return_exceptions=True)
@@ -92,11 +108,14 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
         freeze_quote_work(error)
         raise
     finally:
+        if capacity is not None:
+            capacity.cancel()
         for task in active:
             task.cancel()
         if discovery is not None:
             discovery.cancel()
-        outcomes = await asyncio.gather(*active, *([discovery] if discovery is not None else []),
+        outcomes = await asyncio.gather(*active, *([capacity] if capacity is not None else []),
+                                        *([discovery] if discovery is not None else []),
                                         return_exceptions=True)
         try:
             await close_feeds()

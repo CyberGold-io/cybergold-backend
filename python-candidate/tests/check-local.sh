@@ -51,6 +51,8 @@ export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_scheduler.py
+python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.py
+python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_overlap.py
