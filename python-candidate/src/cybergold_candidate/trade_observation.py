@@ -6,6 +6,7 @@ import uuid
 
 from .diagnostics import project
 from .quote_errors import public_quote_error
+from .rpc_diagnostics import quote_failure_context
 from .telemetry import observe
 
 
@@ -28,6 +29,9 @@ def failure(request, error, context, *, strategy=None, work_id=None, payload=Non
               'errorClassification': payload.get('code', context+'-unavailable'), 'component': 'api'}
     if error is not None:
         record['exceptionType'] = type(error).__name__
+        details = quote_failure_context(error) or {}
+        if 'pendingSdk' in details:
+            record['pendingSdk'] = details['pendingSdk']
     if strategy:
         record['strategy'] = strategy
     observe(lambda: logging.getLogger('cybergold.candidate').error(json.dumps(record)))

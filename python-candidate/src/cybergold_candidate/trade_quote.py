@@ -23,7 +23,7 @@ from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
 from .quote_errors import QuoteFailure, public_quote_error
-from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
+from .rpc_diagnostics import bind_quote_error, quote_failure_context
 from .quote_models import LegModel, PoolBaseline
 from .recovery_rpc import SnapshotChanged
 from .route_search import WETH
@@ -438,11 +438,11 @@ class TradeQuotes:
             except SearchStopped as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = TimeoutError('Quote selection budget exhausted')
-                error_quote_diagnostics[strategy] = quote_error_diagnostics(error)
+                error_quote_diagnostics[strategy] = quote_failure_context(error)
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
-                error_quote_diagnostics[strategy] = quote_error_diagnostics(error)
+                error_quote_diagnostics[strategy] = quote_failure_context(error)
                 if isinstance(error, SnapshotChanged):
                     async with lock:
                         context_error = error

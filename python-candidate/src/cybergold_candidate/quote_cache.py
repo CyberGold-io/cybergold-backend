@@ -15,7 +15,7 @@ import time
 from .route_search import RouteSearchRpc
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
-from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics
+from .rpc_diagnostics import bind_quote_error, quote_failure_context
 from .quote_budget import budget_entry, current_budget
 
 
@@ -218,7 +218,7 @@ class IntentSharing:
                         value['metrics'].update(budget.metrics())
                     terminal = ('result', value)
                 except BaseException as error:
-                    entry['errorQuoteDiagnostics'] = quote_error_diagnostics(error)
+                    entry['errorQuoteDiagnostics'] = quote_failure_context(error)
                     terminal = ('error', error)
                 finally:
                     if self.pending.get(key) is entry:

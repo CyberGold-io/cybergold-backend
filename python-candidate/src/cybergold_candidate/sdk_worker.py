@@ -4,7 +4,7 @@ import json
 import os
 import shlex
 from copy import deepcopy
-from .rpc_diagnostics import quote_sdk_request, freeze_quote_work
+from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
 
 
 class SdkWorkerError(RuntimeError):
@@ -28,13 +28,14 @@ class SdkWorker:
 
     async def request(self, payload, on_state=None):
         payload = deepcopy(payload)
+        observation = quote_sdk_session(payload)
         process = request_id = None
         terminal, coverage = False, None
         try:
             while True:
                 # Each start/resume is one serialized exchange. Required chain
                 # observations run outside this lock and its diagnostics scope.
-                with quote_sdk_request() as acquired:
+                with quote_sdk_request(observation) as acquired:
                     async with self.lock:
                         acquired()
                         if process is not None and (self.process is not process or process.returncode is not None):
@@ -76,6 +77,7 @@ class SdkWorker:
                 if response.get('stateRequest'):
                     if on_state is None:
                         raise MissingPoolState(response['stateRequest'])
+                    observation.call('missing', response['stateRequest'])
                     observed = await on_state(response['stateRequest'])
                     coverage = []
                     for pool in observed:
@@ -88,6 +90,7 @@ class SdkWorker:
                         ticks.update({int(row['index']): row for row in added_ticks})
                         original['bitmapWords'], original['ticks'] = list(words.values()), list(ticks.values())
                         coverage.append({'id': pool['id'], 'bitmapWords': added_words, 'ticks': added_ticks})
+                    observation.call('observed', coverage)
                     continue
                 terminal = True
                 if response.get('missingState'):
@@ -95,7 +98,11 @@ class SdkWorker:
                 if response.get('error'):
                     raise SdkWorkerError('SDK quote unavailable')
                 return value
+        except asyncio.CancelledError as error:
+            observation.call('freeze', error)
+            raise
         finally:
+            observation.call('close')
             if not terminal and process is not None and self.process is process and process.returncode is None:
                 # A complete synchronous JSONL write cannot interleave bytes.
                 # One-way cancellation must not wait on another client's lock.

@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from functools import wraps
 from inspect import iscoroutine
 
-from .rpc_diagnostics import bind_quote_error, quote_error_diagnostics, quote_owned_task
+from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_owned_task
 
 
 _budget = ContextVar('quote_selection_budget', default=None)
@@ -139,7 +139,7 @@ class QuoteBudget:
             return result
         except SearchStopped as stopped:
             error = TimeoutError('Quote selection budget exhausted')
-            bind_quote_error(error, quote_error_diagnostics(stopped))
+            bind_quote_error(error, quote_failure_context(stopped))
             raise error from None
         finally:
             timer.cancel()
