@@ -77,7 +77,7 @@ class ProgrammableSdk:
     async def close(self):
         pass
 
-    async def request(self, payload):
+    async def request(self, payload, on_state=None):
         pools = {pool['id']: pool for pool in payload['pools']}
         if any(int(pool['liquidity']) == 0 for pool in pools.values()):
             raise QuoteFailure('quote-no-route')

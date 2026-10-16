@@ -6,6 +6,14 @@ simulates ordered branches, and reports missing bitmap/tick coverage to Python.
 Candidate post-state is isolated from observed state; branches advance shared
 pools in execution order. Wire post-state omits unchanged tick coverage.
 
+Route simulations suspend the SDK swap when required tick or bitmap coverage
+is missing. Python acquires that coverage outside the serialized bridge
+exchange, then resumes the same request-local calculation. Resumption adds
+observed coverage without replacing advanced price, tick or liquidity state.
+Cancellation retires owned continuations; losing their worker remains an SDK
+error. SDK diagnostics count each start/resume exchange, rather than counting
+only fresh swap simulations, and exclude the intervening Python state reads.
+
 Core, Market and direct Uniswap quotes use the same structured route engine
 and completion-driven scheduler. Every swap candidate uses the pinned SDK
 simulation: V2, V3, V4, mixed and split routes, plus retained-route revalidation

@@ -72,7 +72,7 @@ class Sdk:
         self.payloads = []
     async def close(self):
         pass
-    async def request(self, payload):
+    async def request(self, payload, on_state=None):
         self.payloads.append(deepcopy(payload))
         return {'amountIn': payload['amount'] if payload['mode'] == 'exactIn' else '200',
             'amountOut': '200' if payload['mode'] == 'exactIn' else payload['amount'],
@@ -113,7 +113,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
     async def test_sdk_failure_propagates_without_contract_pricing_fallback(self):
         branches = v3_branches('0x'+A[2:]+'000064'+B[2:], 'exactIn', 10)
         expected = SdkWorkerError('worker unavailable')
-        async def failed(_payload):
+        async def failed(_payload, on_state=None):
             raise expected
         self.engine.sdk.request = failed
         with self.assertRaises(SdkWorkerError) as caught:
@@ -138,7 +138,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
     async def test_tick_fill_uses_existing_producer_budget_instead_of_four_round_limit(self):
         branches = v3_branches('0x'+A[2:]+'000064'+B[2:], 'exactIn', 10)
         requests, fills = [], []
-        async def sdk(payload):
+        async def sdk(payload, on_state=None):
             requests.append(deepcopy(payload))
             if len(requests) <= 6:
                 raise MissingPoolState([{'poolId': payload['pools'][0]['id'],
@@ -158,7 +158,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tick_fill_preserves_known_rpc_cause_and_context_disproof(self):
         branches = v3_branches('0x'+A[2:]+'000064'+B[2:], 'exactIn', 10)
-        async def missing(payload):
+        async def missing(payload, on_state=None):
             raise MissingPoolState([{'poolId': payload['pools'][0]['id'], 'wordPositions': [0]}])
         self.engine.sdk.request = missing
         for expected in (rpc_failure({'code': -32005, 'message': 'rate limit'}),
@@ -275,7 +275,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
         alias = deepcopy(branches)
         alias[0]['hops'][0]['pool']['id'] = 'optional-alias'
         calls = []
-        async def failed(payload):
+        async def failed(payload, on_state=None):
             calls.append(payload)
             raise SdkWorkerError('SDK unavailable')
         self.engine.sdk.request = failed
@@ -294,7 +294,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
         async def snapshot(pool, _block):
             snapshots.append(pool['id'])
             return {**pool, 'liquidity': '100', 'tick': 0}
-        async def sdk(payload):
+        async def sdk(payload, on_state=None):
             payloads.append(deepcopy(payload))
             return {'amountIn': '10', 'amountOut': '19', 'settled': True,
                 'postState': [{'id': payload['pools'][0]['id'], 'liquidity': '90'}]}
@@ -314,7 +314,7 @@ class RouteQuoteEngineTests(unittest.IsolatedAsyncioTestCase):
         rows = [{'target': {'inputAsset': A, 'outputAsset': B, 'amount': '5'},
             'best': {'quote': '200', 'routePlan': {'branches': deepcopy(branches)}}} for _ in range(2)]
         expected = SdkWorkerError('shared pool replay unavailable')
-        async def failed(_payload):
+        async def failed(_payload, on_state=None):
             raise expected
         self.engine.sdk.request = failed
         with self.assertRaises(SdkWorkerError) as caught:
@@ -344,6 +344,36 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.engine.close()
         await self.registry.pending.close()
+
+    async def test_sparse_liquidity_resumes_one_sdk_calculation_with_only_required_reads(self):
+        original_read, original_request = self.rpc.read_function, self.sdk.request
+        words, ticks, calculations = [], [], []
+        async def read(address, signature, inputs, args, outputs, block):
+            self.assertEqual(block, BLOCK)
+            if signature == 'liquidity()':
+                return (0,)
+            if signature == 'tickBitmap(int16)':
+                word = args[0]
+                words.append(word)
+                return (sum(1 << (index % 256) for index in (-24*256, -44*256)
+                    if index//256 == word),)
+            if signature == 'ticks(int24)':
+                ticks.append(args[0])
+                return 10**12, -10**12 if args[0] == -24*256 else 10**12, 0, 0, 0, 0, 0, True
+            return await original_read(address, signature, inputs, args, outputs, block)
+        async def request(payload, **kwargs):
+            calculations.append(deepcopy(payload))
+            return await original_request(payload, **kwargs)
+        self.rpc.read_function, self.sdk.request = read, request
+        for repeat in range(2):
+            value = await self.engine.quote_branches(self.branches, 'exactOut', 1000, BLOCK)
+            self.assertEqual((value['amountIn'], value['amountOut']), ('1850', '1000'))
+            self.assertTrue(value['fullyFilled'] and value['settled'])
+            self.assertEqual(len(calculations), repeat+1)
+            self.assertEqual(words[repeat*26:], list(range(0, -26, -1)))
+            self.assertEqual(ticks, [-24*256]*(repeat+1))
+            self.assertEqual(self.registry.observed, {})
+            self.assertEqual(self.registry.pending.pending, {})
 
 
     async def test_rich_v3_uses_actual_sdk_and_fresh_ticks_without_contract_pricing(self):
@@ -394,8 +424,8 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
         async def snapshot(pool, _block):
             return deepcopy(states[pool['id']])
         observed, request = [], self.sdk.request
-        async def capture(payload):
-            result = await request(payload)
+        async def capture(payload, **kwargs):
+            result = await request(payload, **kwargs)
             observed.append(deepcopy(result))
             return result
         self.registry.snapshot, self.sdk.request = snapshot, capture
@@ -412,9 +442,9 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
     async def test_minimal_v3_seed_acquires_pinned_sdk_state_and_preserves_forward_identity(self):
         self.registry.inventory.clear()
         payloads, request = [], self.sdk.request
-        async def capture(payload):
+        async def capture(payload, **kwargs):
             payloads.append(deepcopy(payload))
-            return await request(payload)
+            return await request(payload, **kwargs)
         self.sdk.request = capture
         for mode in ('exactIn', 'exactOut'):
             value = await self.engine.quote_branches(self.branches, mode, 1000, BLOCK)
@@ -490,9 +520,9 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
             if signature == 'decimals()':
                 raise OSError('metadata unavailable')
             return await original(address, signature, types, args, outputs, block)
-        async def capture(payload):
+        async def capture(payload, **kwargs):
             payloads.append(deepcopy(payload))
-            return await request(payload)
+            return await request(payload, **kwargs)
         self.rpc.read_function, self.sdk.request = unknown, capture
         value = await self.engine.quote_branches(self.branches, 'exactIn', 1000, BLOCK)
         self.assertEqual(value['qualification'], 'sdk')
