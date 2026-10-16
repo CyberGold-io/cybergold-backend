@@ -161,6 +161,9 @@ class _QuoteWork:
                   'qualified': self.qualified, 'inversionIteration': self.iteration}
         if self.wave is not None:
             result['routeWave'] = self.wave.snapshot()
+            pending = _pending_sdk(self.wave)
+            if pending:
+                result['pendingSdk'] = pending
         return result
 
 
@@ -174,6 +177,7 @@ class _RouteWork:
         # SDK waits/exchanges accumulate across candidates and can exceed the
         # wave's wall time. They are never added to the aggregate elapsed time.
         self.sdk_wait, self.sdk_exchange, self.sdk_active = 0, 0, {}
+        self.sdk_sessions, self.sdk_sequence = {}, 0
 
     def snapshot(self):
         if self.frozen is not None:
@@ -320,15 +324,193 @@ def bind_quote_error(error, snapshot):
         pass
 
 
+_SDK_STATES = {'initial-queued', 'resume-queued', 'exchange', 'required-read'}
+_SDK_ROWS, _SDK_MEMBERS = 8, 16
+
+
+def _bounded_integer(value, low=0, high=10**12):
+    return type(value) is int and low <= value <= high
+
+
+def _pool_identity(value):
+    if not isinstance(value, str):
+        return None
+    if re.fullmatch(r'0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})', value):
+        return value.lower()
+    matched = re.fullmatch(r'v3:(0x[0-9a-fA-F]{40}):(0x[0-9a-fA-F]{40}):([0-9]{1,7})', value)
+    if matched and int(matched[3]) <= 10**6:
+        return value.lower()
+    return None
+
+
+def _sdk_members(value, low, high):
+    if not isinstance(value, list):
+        return [], 0
+    members = [item for item in value[:_SDK_MEMBERS] if _bounded_integer(item, low, high)]
+    return members, len(value)
+
+
+def _project_pending_sdk(value):
+    """Failure-log fields only; this never projects arbitrary SDK/client data."""
+    if not isinstance(value, dict) or not _bounded_integer(value.get('count')):
+        return None
+    rows = []
+    for source in value.get('rows', [])[:_SDK_ROWS] if isinstance(value.get('rows'), list) else ():
+        if not isinstance(source, dict) or source.get('state') not in _SDK_STATES:
+            continue
+        row = {'state': source['state']}
+        for name in ('session', 'stateWaits', 'wordsReturned', 'emptyWords', 'wordCount', 'tickCount',
+                     'wordsOmitted', 'ticksOmitted'):
+            if _bounded_integer(source.get(name)):
+                row[name] = source[name]
+        if source.get('mode') in ('exactIn', 'exactOut'):
+            row['mode'] = source['mode']
+        if source.get('protocol') in ('v2', 'v3', 'v4'):
+            row['protocol'] = source['protocol']
+        identity = _pool_identity(source.get('poolId'))
+        if identity:
+            row['poolId'] = identity
+        address = source.get('poolAddress')
+        if isinstance(address, str) and re.fullmatch(r'0x[0-9a-fA-F]{40}', address):
+            row['poolAddress'] = address.lower()
+        for name, low, high in (('wordPositions', -32768, 32767), ('ticks', -887272, 887272)):
+            if isinstance(source.get(name), list):
+                row[name] = [item for item in source[name][:_SDK_MEMBERS] if _bounded_integer(item, low, high)]
+        rows.append(row)
+    result = {'count': value['count'], 'rows': rows}
+    if _bounded_integer(value.get('omittedRows')):
+        result['omittedRows'] = value['omittedRows']
+    return result
+
+
+class _SdkSession:
+    """One SDK request/calculation, distinct from its serialized exchanges."""
+    def __init__(self, payload):
+        current = _quote_scope.get()
+        self.wave = current.wave if current and not _quote_background.get() else None
+        self.state, self.requests = 'initial-queued', None
+        self.waits = self.words = self.empty = 0
+        if self.wave is None or self.wave.frozen is not None:
+            self.wave = None
+            return
+        self.pools = {row['id']: {name: row.get(name) for name in ('id', 'address', 'protocol')}
+                      for row in payload.get('pools', []) if isinstance(row, dict) and isinstance(row.get('id'), str)}
+        self.mode = payload.get('mode')
+        if self.wave and self.wave.frozen is None:
+            self.wave.sdk_sequence += 1
+            self.sequence = self.wave.sdk_sequence
+            self.wave.sdk_sessions[self] = self
+        else:
+            self.wave = None
+
+    def queued(self):
+        self.state = 'initial-queued' if self.requests is None else 'resume-queued'
+
+    def acquired(self):
+        self.state = 'exchange'
+
+    def missing(self, requests):
+        self.state, self.waits = 'required-read', self.waits+1
+        rows = []
+        if isinstance(requests, list):
+            for needed in requests[:_SDK_ROWS]:
+                if not isinstance(needed, dict):
+                    continue
+                pool = self.pools.get(needed.get('poolId'), {})
+                words, word_count = _sdk_members(needed.get('wordPositions'), -32768, 32767)
+                ticks, tick_count = _sdk_members(needed.get('ticks'), -887272, 887272)
+                rows.append((pool, words, word_count, ticks, tick_count))
+        self.requests = rows
+        self.request_count = len(requests) if isinstance(requests, list) else 0
+
+    def observed(self, coverage):
+        # The bridge already computes newly added coverage. Count only the
+        # current required observations, never scan or copy the accumulated prefix.
+        wanted = {pool.get('id'): set(words) for pool, words, _, _, _ in self.requests or []}
+        for pool in coverage:
+            needed = wanted.get(pool.get('id'), ())
+            for row in pool.get('bitmapWords', []):
+                if int(row['wordPosition']) in needed:
+                    self.words += 1
+                    self.empty += int(row['bitmap']) == 0
+
+    def snapshot(self):
+        selected = self.requests if self.requests is not None else [(pool, [], 0, [], 0) for pool in self.pools.values()]
+        rows = []
+        for pool, words, word_count, ticks, tick_count in selected[:_SDK_ROWS]:
+            row = {'session': self.sequence, 'mode': self.mode, 'state': self.state,
+                   'protocol': pool.get('protocol'), 'poolId': pool.get('id'),
+                   'poolAddress': pool.get('address'), 'wordPositions': list(words), 'ticks': list(ticks),
+                   'wordCount': word_count, 'tickCount': tick_count,
+                   'stateWaits': self.waits, 'wordsReturned': self.words, 'emptyWords': self.empty}
+            if word_count > len(words):
+                row['wordsOmitted'] = word_count-len(words)
+            if tick_count > len(ticks):
+                row['ticksOmitted'] = tick_count-len(ticks)
+            rows.append(row)
+        count = self.request_count if self.requests is not None else len(self.pools)
+        return rows, count
+
+    def freeze(self, error):
+        current = _quote_scope.get()
+        if self.wave and current and current.wave is self.wave and not _quote_background.get():
+            freeze_quote_work(error)
+
+    def close(self):
+        if self.wave:
+            self.wave.sdk_sessions.pop(self, None)
+
+
+class _SdkObservation:
+    """Diagnostic callbacks cannot replace an operation result or exception."""
+    def __init__(self, payload):
+        try:
+            self.session = _SdkSession(payload)
+        except Exception:
+            self.session = None
+
+    def call(self, name, *args):
+        try:
+            if self.session:
+                return getattr(self.session, name)(*args)
+        except Exception:
+            pass
+
+
+def quote_sdk_session(payload):
+    return _SdkObservation(payload)
+
+
+def _pending_sdk(wave):
+    try:
+        rows, count = [], 0
+        for session in wave.sdk_sessions.values():
+            observed, size = session.snapshot()
+            count += size
+            rows.extend(observed[:max(0, _SDK_ROWS-len(rows))])
+        if not wave.sdk_sessions:
+            return None
+        value = {'count': len(wave.sdk_sessions), 'rows': rows}
+        if count > len(rows):
+            value['omittedRows'] = count-len(rows)
+        return _project_pending_sdk(value)
+    except Exception:
+        return None
+
+
 @contextmanager
-def quote_sdk_request():
+def quote_sdk_request(session=None):
     current = _quote_scope.get()
     wave = current.wave if current and not _quote_background.get() else None
     key = object()
+    if session:
+        session.call('queued')
     if wave and wave.frozen is None:
         route_count('sdkRequests')
         wave.sdk_active[key] = (perf_counter(), None)
     def acquired():
+        if session:
+            session.call('acquired')
         if wave and key in wave.sdk_active:
             queued, _ = wave.sdk_active[key]
             wave.sdk_active[key] = (queued, perf_counter())
@@ -346,16 +528,30 @@ def quote_sdk_request():
                 wave.sdk_exchange += (end - locked) * 1000
 
 
+def _quote_error_source(error):
+    owners, owner = getattr(error, '_quote_work_by_owner', None), _quote_owner()
+    source = owners.get(owner) if isinstance(owners, WeakKeyDictionary) and owner is not None else None
+    # A shared physical error never supplies another producer's owned snapshot.
+    return source if source is not None else getattr(error, 'quote_diagnostics', None)
+
+
+def quote_failure_context(error):
+    """Internal transfer/log projection; pending SDK state stays off the wire."""
+    result = quote_error_diagnostics(error)
+    try:
+        source = _quote_error_source(error)
+        pending = _project_pending_sdk(source.get('pendingSdk')) if isinstance(source, dict) else None
+        if pending:
+            result = {**(result or {}), 'pendingSdk': pending}
+    except Exception:
+        pass
+    return result
+
+
 def quote_error_diagnostics(error):
     """Closed projection: diagnostic payloads cannot contain request data."""
     try:
-        owners, owner = getattr(error, '_quote_work_by_owner', None), _quote_owner()
-        source = owners.get(owner) if isinstance(owners, WeakKeyDictionary) and owner is not None else None
-        if source is None:
-            # Explicit/manual diagnostics remain supported. Produced logical
-            # snapshots live only in the owner association: a shared physical
-            # exception never supplies another producer's phase or counters.
-            source = getattr(error, 'quote_diagnostics', None)
+        source = _quote_error_source(error)
         if not isinstance(source, dict):
             return None
         result = {}
