@@ -111,8 +111,11 @@ class SdkWorkerRouteLeaseLifecycle(unittest.IsolatedAsyncioTestCase):
     def assert_permits_restored(self):
         self.assertTrue(self.leases)
         self.assertTrue(all(lease.closed and not lease.owned and not lease.engines for lease in self.leases))
-        self.assertEqual(self.leases[0].slots._value, 1)
+        self.assert_local_slots_restored()
         self.assertEqual(self.engine._value, 1)
+
+    def assert_local_slots_restored(self):
+        self.assertEqual(self.leases[0].slots._value, 1)
 
     async def stats(self):
         return await self.worker.request({'operation': 'stats'})
@@ -221,7 +224,7 @@ class SdkWorkerRouteLeaseLifecycle(unittest.IsolatedAsyncioTestCase):
                 task.cancel()
                 with self.assertRaises(asyncio.CancelledError):
                     await asyncio.wait_for(task, 3)
-                self.assertEqual(self.leases[0].slots._value, 1)
+                self.assert_local_slots_restored()
                 self.assertEqual(self.engine._value, 0)  # Preserve the independent test holder.
                 self.assertEqual(wave.sdk_sessions, {})
             else:
@@ -275,6 +278,45 @@ class SdkWorkerRouteLeaseLifecycle(unittest.IsolatedAsyncioTestCase):
         stats = await self.assert_clean_child(process)
         self.assertEqual([row['operation'] for row in stats['events']], ['simulateRoute', 'resume', 'cancel', 'stats'])
         self.assertTrue(stats['events'][2]['acknowledge'])
+
+
+class SdkWorkerStandaloneLeaseLifecycle(SdkWorkerRouteLeaseLifecycle):
+    """The same real-child lifecycle contract without a route scheduler."""
+    def schedule(self, evaluate, values=('one',), diagnostics=False):
+        async def owned(value):
+            async with work.engine_work(self.engine):
+                lease = work._current.get()
+                self.assertIs(lease.owner, asyncio.current_task())
+                self.assertIsNone(lease.slots)
+                self.assertIsNone(lease.changed)
+                self.leases.append(lease)
+                return await evaluate(value)
+        async def run():
+            tasks = [asyncio.create_task(owned(value)) for value in values]
+            try:
+                return await asyncio.gather(*tasks)
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+        if diagnostics:
+            class Routes:
+                @diag.route_work_scope
+                async def get(inner, request):
+                    return await run()
+            @diag.quote_work_scope
+            async def quote():
+                return await Routes().get({'mode': 'exact-out'})
+            coroutine = quote()
+        else:
+            coroutine = run()
+        task = asyncio.create_task(coroutine)
+        self.tasks.append(task)
+        return task
+
+    def assert_local_slots_restored(self):
+        self.assertTrue(all(lease.slots is None and lease.changed is None for lease in self.leases))
 
 
 if __name__ == '__main__':

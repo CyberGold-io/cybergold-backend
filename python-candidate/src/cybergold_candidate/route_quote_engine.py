@@ -289,8 +289,9 @@ class RouteQuoteEngine:
         return RouteQuoteEngine.enrich_branches(self,
             v3_branches(path, mode, amount, chain_id=self.registry.chain))
 
-    async def compose_core_rows(self, rows, mode, block, *, ordered_assets=None, issue=False):
-        """Replay shared selected pools in BasketRouter's actual asset order."""
+    def prepare_core_rows(self, rows, mode, *, resolve=None):
+        """Resolve selected routes and identify existing shared-pool replay work."""
+        resolver = self.resolve_branches if resolve is None else resolve
         prepared = []
         for index, row in enumerate(rows):
             target, best = row['target'], row['best']
@@ -298,11 +299,42 @@ class RouteQuoteEngine:
                 continue
             amount = int(target['amount'])
             branches = best['routePlan']['branches'] if best.get('routePlan') else self.v3_branches(best['path'], mode, amount)
-            branches = self.resolve_branches(branches, target['inputAsset'], target['outputAsset'], mode, amount)
+            branches = resolver(branches, target['inputAsset'], target['outputAsset'], mode, amount)
             prepared.append((index, branches))
         ids = [pool_identity(hop['pool']) for _, branches in prepared for branch in branches for hop in branch['hops']]
-        if len(ids) == len(set(ids)):
+        return prepared, len(ids) != len(set(ids))
+
+    async def quote_shared_core_rows(self, rows, mode, block, *, ordered_assets=None, issue=False, resolve=None):
+        """Price a fixed selected vector once when its pools require replay.
+
+        Ordinary probe failure and disjoint vectors retain caller pricing.
+        Prepared branches never cross the pricing-permit await as authority.
+        """
+        try:
+            _prepared, shared = RouteQuoteEngine.prepare_core_rows(self, rows, mode, resolve=resolve)
+        except SnapshotChanged:
+            raise
+        except Exception:
+            return None
+        if not shared:
+            return None
+        async with engine_work(self.semaphore):
+            prepared, shared = RouteQuoteEngine.prepare_core_rows(self, rows, mode, resolve=resolve)
+            if not shared:
+                return None
+            return await RouteQuoteEngine.compose_prepared_core_rows(self, rows, prepared, mode, block,
+                ordered_assets=ordered_assets, issue=issue)
+
+    async def compose_core_rows(self, rows, mode, block, *, ordered_assets=None, issue=False):
+        """Replay shared selected pools in BasketRouter's actual asset order."""
+        prepared, shared = RouteQuoteEngine.prepare_core_rows(self, rows, mode)
+        if not shared:
             return rows
+        return await RouteQuoteEngine.compose_prepared_core_rows(self, rows, prepared, mode, block,
+            ordered_assets=ordered_assets, issue=issue)
+
+    async def compose_prepared_core_rows(self, rows, prepared, mode, block, *, ordered_assets=None, issue=False):
+        """Execute the already-resolved vector in the ordinary Core order."""
         order = {asset.lower(): index for index, asset in enumerate(ordered_assets or [])}
         prepared.sort(key=lambda item: order.get(rows[item[0]]['target']['outputAsset' if issue else 'inputAsset'].lower(), item[0]))
         result = deepcopy(rows)

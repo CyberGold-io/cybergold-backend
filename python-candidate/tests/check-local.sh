@@ -212,6 +212,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_alias_canonical.py
 python-candidate/.venv/bin/python python-candidate/tests/test_audit_remediations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_search.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_intent.py
+python-candidate/.venv/bin/python python-candidate/tests/test_selected_forward_replay.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_intent_cold_seed.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_experiments.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_history.py

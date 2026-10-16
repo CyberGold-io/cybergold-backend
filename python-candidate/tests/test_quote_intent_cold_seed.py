@@ -92,14 +92,16 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
         if shared:
             from contextvars import ContextVar
             composing = ContextVar('cold-seed-fixture-composition', default=False)
-            compose = engine.compose_core_rows
+            quote = engine.quote_sdk_branches
             async def observed_composition(*args, **kwargs):
-                token = composing.set(True)
+                # Observe the actual ordered replay, shared by both entry
+                # points, rather than one coordinator wrapper.
+                token = composing.set(isinstance(kwargs.get('candidate'), dict))
                 try:
-                    return await compose(*args, **kwargs)
+                    return await quote(*args, **kwargs)
                 finally:
                     composing.reset(token)
-            engine.compose_core_rows = observed_composition
+            engine.quote_sdk_branches = observed_composition
             def hop(source, destination, index):
                 left, right = sorted((source, destination), key=str.lower)
                 identity = '0x'+format(index, '040x')

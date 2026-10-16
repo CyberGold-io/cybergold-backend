@@ -1,4 +1,4 @@
-"""Candidate-owned pricing permits, released only at required-state suspension."""
+"""Task-owned pricing permits, released only at required-state suspension."""
 import asyncio
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -21,11 +21,9 @@ class _EnginePermit:
             self.semaphore.release()
 
 
-class CandidateWork:
-    """One live evaluation; a parked evaluation still belongs to its scheduler."""
-    def __init__(self, slots, changed):
-        # The scheduler reserves this permit before creating the task. Closing
-        # a cancelled-before-first-turn task must release that reservation too.
+class _PricingWork:
+    """One task's engine permits, with an optional real scheduler reservation."""
+    def __init__(self, slots=None, changed=None):
         self.slots, self.changed = slots, changed
         self.owner, self.owned, self.closed = None, True, False
         self.engines = []
@@ -35,12 +33,14 @@ class CandidateWork:
             permit.release()
         if self.owned:
             self.owned = False
-            self.slots.release()
-            self.changed.set()
+            if self.slots is not None:
+                self.slots.release()
+                self.changed.set()
 
     async def acquire(self):
         try:
-            await self.slots.acquire()
+            if self.slots is not None:
+                await self.slots.acquire()
             self.owned = True
             for permit in self.engines:
                 await permit.acquire()
@@ -48,13 +48,22 @@ class CandidateWork:
             self.release()
             # Semaphore restores a grant cancelled before acquire returns, even
             # though this lease never owned it. Wake admission for that capacity.
-            self.changed.set()
+            if self.changed is not None:
+                self.changed.set()
             raise
 
     def close(self):
         if not self.closed:
             self.closed = True
             self.release()
+
+
+class CandidateWork(_PricingWork):
+    """One evaluation; its scheduler retains the parked task's ownership."""
+    def __init__(self, slots, changed):
+        # The scheduler reserves this permit before creating the task. Closing
+        # a cancelled-before-first-turn task must release that reservation too.
+        super().__init__(slots, changed)
 
 
 async def run_candidate(lease, evaluate, index, candidate):
@@ -76,18 +85,28 @@ def _owned():
 @asynccontextmanager
 async def engine_work(semaphore):
     lease = _owned()
-    if lease is None:
-        async with semaphore:
-            yield
-        return
+    token = None
+    if lease is None or not lease.owned:
+        # A foreign task or a callback inside parked work owns no parent
+        # permits. Give this pricing scope only its own engine ownership.
+        lease = _PricingWork()
+        lease.owner = asyncio.current_task()
+        token = _current.set(lease)
     permit = _EnginePermit(semaphore)
-    await permit.acquire()
-    lease.engines.append(permit)
     try:
-        yield
+        # The standalone scope must close/reset even if its first acquisition
+        # is cancelled before or immediately after a semaphore grant.
+        await permit.acquire()
+        lease.engines.append(permit)
+        try:
+            yield
+        finally:
+            permit.release()
+            lease.engines.remove(permit)
     finally:
-        permit.release()
-        lease.engines.remove(permit)
+        if token is not None:
+            lease.close()
+            _current.reset(token)
 
 
 @asynccontextmanager
