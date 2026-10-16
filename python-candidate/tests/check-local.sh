@@ -60,6 +60,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_budget_providers.p
 python-candidate/.venv/bin/python python-candidate/tests/test_budget_timeout_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_lifecycle.py
+python-candidate/.venv/bin/python python-candidate/tests/test_pending_sdk.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_recipient_cache.py
 python-candidate/.venv/bin/python python-candidate/tests/test_protocol_configuration.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market.py "$candidate_reference_dir/market.json"
