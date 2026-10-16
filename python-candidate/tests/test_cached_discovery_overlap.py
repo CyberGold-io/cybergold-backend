@@ -149,8 +149,8 @@ class CountedSdk:
                 lock.release()
         self.inner.lock = ObservedLock()
 
-    async def request(self, payload):
-        return await self.counts.run('sdkRequests', lambda: self.inner.request(payload))
+    async def request(self, payload, on_state=None):
+        return await self.counts.run('sdkRequests', lambda: self.inner.request(payload, on_state=on_state))
 
     async def close(self):
         await self.inner.close()

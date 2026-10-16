@@ -111,7 +111,7 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             hop(ASSET_A, ASSET_C, 20)
             hop(ASSET_B, ASSET_C, 21)
             hop(ASSET_C, WETH, 22)
-            async def sdk(payload):
+            async def sdk(payload, on_state=None):
                 pools = {pool['id']: pool for pool in payload['pools']}
                 branches = payload['route']['branches']
                 if any(len(branch['hops']) == 1 for branch in branches):
@@ -359,8 +359,8 @@ class ActualSdkColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 discovery_drained.set()
         engine.connector_inventory = connectors
         request_sdk = sdk.request
-        async def actual_sdk(payload):
-            value = await request_sdk(payload)
+        async def actual_sdk(payload, **kwargs):
+            value = await request_sdk(payload, **kwargs)
             sdk_values.append((payload['mode'], deepcopy(value)))
             return value
         sdk.request = actual_sdk

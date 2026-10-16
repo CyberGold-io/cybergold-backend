@@ -258,11 +258,21 @@ class RouteQuoteEngine:
             'pools': list(snapshots.values()), 'route': {'branches': [
                 {'amountIn': branch['amountIn'], 'hops': [{'poolId': hop['pool']['id'],
                     'zeroForOne': hop['zeroForOne']} for hop in branch['hops']]} for branch in branches]}}
-        # Missing coverage is acquired only when the SDK requests it. The
-        # owning producer's existing selection deadline bounds the whole fill.
+        async def acquire(requests):
+            observations = []
+            for identity, snapshot in list(snapshots.items()):
+                needed = [row for row in requests if row.get('poolId', row.get('id')) == identity]
+                if needed:
+                    observed = await self.registry.extend_ticks(canonical[identity], needed, block)
+                    canonical[identity] = observed
+                    snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
+                    observations.append({'id': identity, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']})
+            return observations
+        # The SDK pauses at its exact missing observation instead of replaying
+        # completed swaps. The existing producer budget still owns every fill.
         while True:
             try:
-                value = await self.sdk.request(payload)
+                value = await self.sdk.request(payload, on_state=acquire)
                 if candidate is not None:
                     # Compact postState carries only changing fields. Keep
                     # canonical coverage in this isolated candidate bank.
@@ -270,12 +280,8 @@ class RouteQuoteEngine:
                         candidate[post['id']] = {**snapshots[post['id']], **post}
                 return value
             except MissingPoolState as missing:
-                for identity, snapshot in list(snapshots.items()):
-                    requests = [row for row in missing.requests if row.get('poolId', row.get('id')) == identity]
-                    if requests:
-                        observed = await self.registry.extend_ticks(canonical[identity], requests, block)
-                        canonical[identity] = observed
-                        snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
+                # Direct/legacy SDK clients retain their ordinary state request.
+                await acquire(missing.requests)
                 payload['pools'] = list(snapshots.values())
 
     def v3_branches(self, path, mode, amount):

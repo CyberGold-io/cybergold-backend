@@ -522,9 +522,9 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.quotes.quote_fallback_branches = reference
         sdk = self.sdk.request
         calls = []
-        async def priced(payload):
+        async def priced(payload, **kwargs):
             calls.append(deepcopy(payload))
-            return await sdk(payload)
+            return await sdk(payload, **kwargs)
         self.sdk.request = priced
         repeated = await self.quotes.get({**self.request, 'retainedPlan': quote['plan'], 'deadline': '10000000000'})
         reference.assert_not_awaited()
@@ -695,8 +695,8 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
         self.quotes.quote_fallback_branches = reference
         sdk, prices = self.sdk.request, []
-        async def priced(payload):
-            value = await sdk(payload)
+        async def priced(payload, **kwargs):
+            value = await sdk(payload, **kwargs)
             prices.append(({pool['protocol'] for pool in payload.get('pools', [])}, deepcopy(value)))
             return value
         self.sdk.request = priced
@@ -1375,7 +1375,7 @@ class AcquisitionSdk:
     def __init__(self):
         self.payloads = []
 
-    async def request(self, payload):
+    async def request(self, payload, on_state=None):
         self.payloads.append(deepcopy(payload))
         return {'amountIn': '1000', 'amountOut': '1900', 'settled': True, 'fullyFilled': True,
                 'postState': [{'id': row['id'], 'reserve0': '101000'} for row in payload['pools']]}

@@ -27,9 +27,11 @@ export interface PoolSnapshot {
 
 export interface RouteHop { poolId: string; zeroForOne: boolean }
 export interface RouteBranch { amountIn: string; hops: RouteHop[] }
+export type PoolCoverage = Pick<PoolSnapshot, "id" | "ticks" | "bitmapWords">;
+export type StateLoader = (request: MissingPoolState) => Promise<PoolCoverage[]>;
 export interface SdkRequest {
   id: string | number;
-  operation: "quote" | "simulateRoute" | "cancel";
+  operation: "quote" | "simulateRoute" | "cancel" | "resume";
   mode?: "exactIn" | "exactOut";
   amount?: string;
   poolId?: string;
@@ -37,6 +39,9 @@ export interface SdkRequest {
   sqrtPriceLimitX96?: string;
   pools?: PoolSnapshot[];
   route?: { branches: RouteBranch[] };
+  continueState?: boolean;
+  coverage?: PoolCoverage[];
+  acknowledge?: boolean;
 }
 
 export interface SwapResult {

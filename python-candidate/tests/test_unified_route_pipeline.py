@@ -95,7 +95,7 @@ class ProgrammablePipelineSdk:
         self.rpc, self.reply = rpc, None
         self.payloads = []
 
-    async def request(self, payload):
+    async def request(self, payload, on_state=None):
         self.payloads.append(deepcopy(payload))
         if self.reply is not None:
             return await self.reply(payload)
