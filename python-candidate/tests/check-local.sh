@@ -55,6 +55,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.p
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py
+python-candidate/.venv/bin/python python-candidate/tests/test_snapshot_copy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_budget.py

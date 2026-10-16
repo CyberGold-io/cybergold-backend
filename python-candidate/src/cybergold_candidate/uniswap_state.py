@@ -54,6 +54,20 @@ V3_SWAP = topic('Swap(address,address,int256,int256,uint160,uint128,int24)')
 V4_SWAP = topic('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)')
 
 
+def copy_pool_snapshot(snapshot):
+    """Own canonical scalar coverage rows and deep-copy all pool metadata.
+
+    Bitmap/tick producers below and their persisted observations contain only
+    scalar row values. Lists and row dictionaries still belong to each caller.
+    """
+    coverage = ('bitmapWords', 'ticks')
+    result = deepcopy({key: value for key, value in snapshot.items() if key not in coverage})
+    for key in coverage:
+        if key in snapshot:
+            result[key] = [dict(row) for row in snapshot[key]]
+    return {key: result[key] for key in snapshot}
+
+
 async def owned_reads(*operations):
     """Drain this acquisition's subscriptions; preserve canonical disproof."""
     tasks = [asyncio.create_task(operation) for operation in operations]
@@ -408,7 +422,7 @@ class PoolRegistry:
         return state
 
     async def extend_ticks(self, snapshot, requests, block):
-        snapshot, requests = deepcopy(snapshot), deepcopy(requests)
+        snapshot, requests = copy_pool_snapshot(snapshot), deepcopy(requests)
         generation = self.generation
         # Share only an identical fill that is still acquiring its coverage.
         # Completed Sandbox observations remain fresh on the next call, even
@@ -417,7 +431,7 @@ class PoolRegistry:
                json.dumps(snapshot, sort_keys=True), json.dumps(requests, sort_keys=True))
         async def produce():
             return await self._extend_ticks(snapshot, requests, block, generation)
-        result = deepcopy(await self.pending.one(key, produce))
+        result = copy_pool_snapshot(await self.pending.one(key, produce))
         return result
 
     async def _extend_ticks(self, snapshot, requests, block, generation):
