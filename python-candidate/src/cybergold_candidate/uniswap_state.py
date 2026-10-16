@@ -459,7 +459,9 @@ class PoolRegistry:
         if current and current['context']['blockHash'] == block['hash']:
             words.update({int(row['wordPosition']): row for row in current.get('bitmapWords', [])})
             ticks.update({int(row['index']): row for row in current.get('ticks', [])})
-        result = {**deepcopy(snapshot), 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
+        # extend_ticks owns the snapshot; coverage below replaces its old rows.
+        # Subscriber, observed-state and persistence copies remain independent.
+        result = {**snapshot, 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
         if generation == self.generation:
             if self.chain == 1:
                 self.observed[pool['id']] = deepcopy(result)
