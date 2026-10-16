@@ -4,6 +4,7 @@ SDK pricing is deliberately distinct from a real wallet's signed
 permit-and-swap simulation. Fees are first-party pricing facts, not signatures.
 """
 import asyncio
+from .route_work_slots import engine_work
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -379,7 +380,7 @@ class MarketQuotes(RouteQuoteEngine):
                     target = int(retained['params']['routedInput']) if side == 'sell' and exact_in else (
                         amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else amount)
                     branches = self.resolve_branches(retained['route']['branches'], token_in, token_out, mode, target)
-                    async with self.semaphore:
+                    async with engine_work(self.semaphore):
                         raw = await self.quote_branches(branches, mode, target, block)
                     result = await self.qualify_quote(request, branches, raw, retained['fee']['ratePpm'], block, target, emit, retained=retained)
                     await rpc.assert_canonical(block)
@@ -412,7 +413,7 @@ class MarketQuotes(RouteQuoteEngine):
             async def evaluate(branches):
                 nonlocal best, completed, rpc_error, context_error
                 try:
-                    async with self.semaphore:
+                    async with engine_work(self.semaphore):
                         raw = await self.quote_branches(branches, mode, quote_amount, block)
                         result = self.make_quote(request, branches, raw, rate, block)
                     async with lock:

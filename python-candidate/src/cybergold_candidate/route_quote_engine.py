@@ -4,6 +4,7 @@ Core, Market and direct Uniswap consumers share one runtime instance. Protocol
 pricing methods are implementation details of a canonical forward route.
 """
 import asyncio
+from .route_work_slots import engine_work
 from copy import deepcopy
 from datetime import datetime, timezone
 from fractions import Fraction
@@ -423,7 +424,7 @@ class RouteQuoteEngine:
             target = result['target']
             result['total'] += 1
             try:
-                async with self.semaphore:
+                async with engine_work(self.semaphore):
                     value = await self.quote_branches(branches, mode, int(target['amount']), block)
                 observed = int(value['amountOut' if mode == 'exactIn' else 'amountIn'])
                 plan = {'version': 1, 'executionContext': request.get('executionContext', 'helpers-core'), 'mode': mode,

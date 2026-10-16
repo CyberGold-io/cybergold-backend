@@ -5,6 +5,7 @@ import os
 import shlex
 from copy import deepcopy
 from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
+from .route_work_slots import required_state_wait
 
 
 class SdkWorkerError(RuntimeError):
@@ -78,7 +79,9 @@ class SdkWorker:
                     if on_state is None:
                         raise MissingPoolState(response['stateRequest'])
                     observation.call('missing', response['stateRequest'])
-                    observed = await on_state(response['stateRequest'])
+                    async with required_state_wait():
+                        observed = await on_state(response['stateRequest'])
+                        observation.call('queued')
                     coverage = []
                     for pool in observed:
                         original = next(row for row in payload['pools'] if row['id'] == pool['id'])
