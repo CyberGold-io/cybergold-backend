@@ -91,6 +91,11 @@ class SharedReads:
             for task in tasks:
                 if not task.done() and not any(entry.users for entry in self.pending.values()
                                               if entry.task is task):
+                    # New callers must not join work already being cancelled.
+                    # The old producer's identity check preserves replacements.
+                    for key, entry in list(self.pending.items()):
+                        if entry.task is task:
+                            del self.pending[key]
                     task.cancel()
                     await asyncio.gather(task, return_exceptions=True)
 

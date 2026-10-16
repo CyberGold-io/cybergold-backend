@@ -270,6 +270,64 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(cancelled.is_set())
         self.assertEqual(reads.pending, {})
 
+    async def test_replacement_reads_do_not_join_cancelled_producer_during_its_drain(self):
+        for keys in (['same'], ['a', 'b']):
+            with self.subTest(keys=keys):
+                reads = SharedReads()
+                started, cancelling, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                fresh_started, release = asyncio.Event(), asyncio.Event()
+                calls, tasks = [], []
+                async def original(_keys):
+                    started.set()
+                    try:
+                        await asyncio.Event().wait()
+                    except asyncio.CancelledError:
+                        cancelling.set()
+                        await drained.wait()
+                        raise
+                async def fresh(selected):
+                    calls.append(list(selected))
+                    fresh_started.set()
+                    await release.wait()
+                    return [{'result': key} for key in selected]
+                try:
+                    first = asyncio.create_task(reads.many(keys, original))
+                    tasks.append(first)
+                    await asyncio.wait_for(started.wait(), 1)
+                    first.cancel()
+                    await asyncio.wait_for(cancelling.wait(), 1)
+                    replacement = asyncio.create_task(reads.many(keys, fresh, retain=True))
+                    tasks.append(replacement)
+                    await asyncio.wait_for(fresh_started.wait(), 1)
+                    entries = dict(reads.pending)
+                    drained.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await first
+                    # Finishing the retired producer cannot remove fresh work.
+                    self.assertEqual(reads.pending, entries)
+                    sibling = asyncio.create_task(reads.many(keys, fresh, retain=True))
+                    tasks.append(sibling)
+                    async def joined():
+                        while not all(reads.pending[key].users == 2 for key in keys):
+                            await asyncio.sleep(0)
+                    await asyncio.wait_for(joined(), 1)
+                    release.set()
+                    (values, counts), (shared, shared_counts) = await asyncio.gather(replacement, sibling)
+                    self.assertEqual(values, [{'result': key} for key in keys])
+                    self.assertEqual(shared, values)
+                    self.assertEqual(calls, [keys])
+                    self.assertEqual(counts['issued'], len(keys))
+                    self.assertEqual(shared_counts['coalesced'], len(keys))
+                    self.assertEqual(reads.pending, {})
+                    self.assertEqual(reads.completed, dict(zip(keys, values, strict=True)))
+                finally:
+                    drained.set(); release.set()
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    await reads.close()
+
     async def test_partially_overlapping_batches_share_members_and_errors_are_not_retained(self):
         reads = SharedReads()
         self.addAsyncCleanup(reads.close)
