@@ -12,7 +12,7 @@ from web3 import Web3
 from cybergold_candidate.app import create_app
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.shared_reads import SharedReads
-from cybergold_candidate.trade_quote import (PAXG, ZERO, TradeQuotes, core_request,
+from cybergold_candidate.trade_quote import (PAXG, ZERO, TradeQuotes, core_request, handle_trade_quote,
     economics, model_estimate)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.protocol_facts import ABI as FACTS_ABI
@@ -315,6 +315,68 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(second, return_exceptions=True)
         self.assertTrue(engines.core_cancelled.is_set())
         self.assertTrue(engines.market_cancelled.is_set())
+
+    async def test_replacement_stream_during_last_intent_drain_starts_fresh_work(self):
+        engines = self.engines()
+        sharing = engines.quotes.sharing
+        started, cancelling, drained, fresh_started, release = (asyncio.Event() for _ in range(5))
+        calls, frames, tasks = [], [], []
+        async def producer(value, publish, *, block):
+            calls.append(value)
+            if len(calls) == 1:
+                started.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    cancelling.set()
+                    await drained.wait()
+                    raise
+            fresh_started.set()
+            await release.wait()
+            return {'exact': True}
+        # Isolate the whole-intent lifecycle from the independently tested
+        # Core/Market selection, while retaining the real stream handler.
+        sharing.service = SimpleNamespace(settings=SETTINGS,
+            routes=sharing.service.routes, get=producer)
+        async def input_json():
+            return request()
+        incoming = SimpleNamespace(json=input_json)
+        first = await handle_trade_quote(incoming, engines.quotes)
+        stream = first.body_iterator
+        try:
+            self.assertEqual(json.loads(await anext(stream))['type'], 'model')
+            await asyncio.wait_for(started.wait(), 1)
+            closing = asyncio.create_task(stream.aclose())
+            tasks.append(closing)
+            await asyncio.wait_for(cancelling.wait(), 1)
+            replacement = await handle_trade_quote(incoming, engines.quotes)
+            async def consume():
+                async for frame in replacement.body_iterator:
+                    frames.append(json.loads(frame))
+            consumer = asyncio.create_task(consume())
+            tasks.append(consumer)
+            await asyncio.wait_for(fresh_started.wait(), 1)
+            entries = dict(sharing.pending)
+            drained.set()
+            await closing
+            self.assertEqual(sharing.pending, entries)
+            release.set()
+            await consumer
+            self.assertFalse(consumer.cancelled())
+            self.assertEqual(consumer.cancelling(), 0)
+            self.assertEqual([f['type'] for f in frames if f['type'] in ('complete', 'error')], ['complete'])
+            self.assertEqual(frames[-1]['value'], {'exact': True})
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(sharing.started, 2)
+            self.assertEqual(sharing.joined, 0)
+            self.assertEqual(sharing.pending, {})
+        finally:
+            drained.set(); release.set()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await stream.aclose()
 
     async def test_real_basis_decoder_reads_only_order_and_weights_at_injected_hash(self):
         engines = self.engines()

@@ -248,6 +248,8 @@ class IntentSharing:
         finally:
             entry['clients'].discard(subscriber)
             if not entry['clients'] and not entry['task'].done():
+                if self.pending.get(key) is entry:
+                    del self.pending[key]
                 entry['task'].cancel()
                 await asyncio.gather(entry['task'], return_exceptions=True)
 
