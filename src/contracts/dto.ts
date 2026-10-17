@@ -375,6 +375,17 @@ export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exce
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
   | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable";
 
+/** Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+export type QuoteWorkDiagnostics = {
+  phase?: string; elapsedMs?: number; qualified?: boolean; inversionIteration?: number;
+  routeWave?: {
+    elapsedMs?: number; subphaseElapsedMs?: number; subphase?: string; mode?: string;
+    legacyCandidates?: number; legacyCompleted?: number;
+    typedEnumerated?: number; typedCompleted?: number; typedPending?: number;
+    sdkRequests?: number; sdkWaiting?: number; sdkLockWaitMs?: number; sdkExchangeMs?: number;
+  };
+};
+
 export type QuoteIntentRequest = {
   mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
   token: string; quoteToken: string; native: boolean; amount: string; adapter?: string;
@@ -461,10 +472,29 @@ type TradeEconomics = {
   inputMaximum: string; outputMinimum: string; context: QuoteIntent["context"];
   evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number } & QuoteSelectionMetrics;
 };
-export type TradeQuote = TradeEconomics & (
-  | { strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent }
-  | { strategy: "market"; providerRequest: MarketQuoteRequest; providerQuote: MarketQuote }
-);
+/** One complete provider plan, without recursive provider evidence maps. */
+export type CoreTradeProviderCandidate = TradeEconomics & {
+  strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent;
+};
+export type MarketTradeProviderCandidate = TradeEconomics & {
+  strategy: "market"; providerRequest: MarketQuoteRequest; providerQuote: MarketQuote;
+};
+export type TradeProviderCandidate = CoreTradeProviderCandidate | MarketTradeProviderCandidate;
+export type TradeProviderAssessment = {
+  availability: "pending" | "qualified" | "unavailable" | "unsupported" | "not-run";
+  searchOutcome: "running" | "complete" | "timeout" | "error" | "cancelled" | "not-run";
+  error?: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
+};
+export type TradeProviderAssessments = Record<"core" | "market", TradeProviderAssessment>;
+export type TradeProviderCandidates = {
+  core?: CoreTradeProviderCandidate;
+  market?: MarketTradeProviderCandidate;
+};
+/** Additive maps are optional for compatibility with prior served responses. */
+export type TradeQuote = TradeProviderCandidate & {
+  providerAssessments?: TradeProviderAssessments;
+  providerCandidates?: TradeProviderCandidates;
+};
 export type TradeQuoteModelPacket = {
   namespace: "trade"; intent: TradeModelRequest;
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
@@ -474,10 +504,13 @@ export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: TradeQuoteModelPacket }
   | { type: "estimate"; strategy: "core" | "market"; amount: string }
   | { type: "qualified" | "complete"; value: TradeQuote }
+  | { type: "provider-qualified"; strategy: "core" | "market"; value: TradeProviderCandidate }
+  | { type: "provider-assessment"; strategy: "core" | "market"; value: TradeProviderAssessment }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
   | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }
   | { type: "invalidated"; strategy: "core" | "market" }
-  | { type: "error"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics });
+  | { type: "error"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics;
+      providerAssessments?: TradeProviderAssessments; providerCandidates?: TradeProviderCandidates });
 
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
 export interface ContractSchemas {
@@ -485,6 +518,10 @@ export interface ContractSchemas {
   TradeModelRequest: TradeModelRequest;
   TradeQuoteRequest: TradeQuoteRequest;
   TradeQuote: TradeQuote;
+  TradeProviderCandidate: TradeProviderCandidate;
+  TradeProviderAssessment: TradeProviderAssessment;
+  TradeProviderAssessments: TradeProviderAssessments;
+  TradeProviderCandidates: TradeProviderCandidates;
   TradeQuoteEvent: TradeQuoteEvent;
   TradeQuoteModelPacket: TradeQuoteModelPacket;
   ProtocolConfiguration: ProtocolConfiguration;

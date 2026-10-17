@@ -9531,6 +9531,7 @@
         ]
       },
       "TradeQuote": {
+        "description": "Additive maps are optional for compatibility with prior served responses.",
         "anyOf": [
           {
             "allOf": [
@@ -11088,6 +11089,26 @@
                   "providerRequest",
                   "strategy"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "providerAssessments": {
+                    "$ref": "#/components/schemas/TradeProviderAssessments"
+                  },
+                  "providerCandidates": {
+                    "type": "object",
+                    "properties": {
+                      "core": {
+                        "description": "One complete provider plan, without recursive provider evidence maps.",
+                        "$ref": "#/components/schemas/CoreTradeProviderCandidate"
+                      },
+                      "market": {
+                        "$ref": "#/components/schemas/MarketTradeProviderCandidate"
+                      }
+                    }
+                  }
+                }
               }
             ]
           },
@@ -11960,6 +11981,26 @@
                   "providerRequest",
                   "strategy"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "providerAssessments": {
+                    "$ref": "#/components/schemas/TradeProviderAssessments"
+                  },
+                  "providerCandidates": {
+                    "type": "object",
+                    "properties": {
+                      "core": {
+                        "description": "One complete provider plan, without recursive provider evidence maps.",
+                        "$ref": "#/components/schemas/CoreTradeProviderCandidate"
+                      },
+                      "market": {
+                        "$ref": "#/components/schemas/MarketTradeProviderCandidate"
+                      }
+                    }
+                  }
+                }
               }
             ]
           }
@@ -11990,6 +12031,2758 @@
         "required": [
           "core",
           "market"
+        ]
+      },
+      "TradeProviderAssessments": {
+        "type": "object",
+        "properties": {
+          "core": {
+            "type": "object",
+            "properties": {
+              "availability": {
+                "enum": [
+                  "not-run",
+                  "pending",
+                  "qualified",
+                  "unavailable",
+                  "unsupported"
+                ],
+                "type": "string"
+              },
+              "searchOutcome": {
+                "enum": [
+                  "cancelled",
+                  "complete",
+                  "error",
+                  "not-run",
+                  "running",
+                  "timeout"
+                ],
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "code": {
+                "enum": [
+                  "insufficient-protocol-supply",
+                  "issuance-cap-exceeded",
+                  "quote-contract-reverted",
+                  "quote-no-route",
+                  "quote-timeout",
+                  "quote-unavailable",
+                  "rpc-access-denied",
+                  "rpc-rate-limit",
+                  "rpc-timeout",
+                  "rpc-unavailable"
+                ],
+                "type": "string"
+              },
+              "diagnostics": {
+                "description": "Optional observed RPC failure context; provider text is sanitized before publication.",
+                "type": "object",
+                "properties": {
+                  "rpcMethod": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "elapsedMs": {
+                    "type": "number"
+                  },
+                  "upstreamErrorCode": {
+                    "type": "number"
+                  },
+                  "providerMessage": {
+                    "type": "string"
+                  },
+                  "httpStatus": {
+                    "type": "number"
+                  },
+                  "failureType": {
+                    "enum": [
+                      "backend-deadline",
+                      "http-error",
+                      "provider-timeout",
+                      "rpc-error",
+                      "transport-error"
+                    ],
+                    "type": "string"
+                  },
+                  "errorSelector": {
+                    "type": "string"
+                  },
+                  "errorName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "quoteDiagnostics": {
+                "description": "Existing public quote-work projection; aggregate waits are not wall-clock partitions.",
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string"
+                  },
+                  "elapsedMs": {
+                    "type": "number"
+                  },
+                  "qualified": {
+                    "type": "boolean"
+                  },
+                  "inversionIteration": {
+                    "type": "number"
+                  },
+                  "routeWave": {
+                    "type": "object",
+                    "properties": {
+                      "elapsedMs": {
+                        "type": "number"
+                      },
+                      "subphaseElapsedMs": {
+                        "type": "number"
+                      },
+                      "subphase": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "legacyCandidates": {
+                        "type": "number"
+                      },
+                      "legacyCompleted": {
+                        "type": "number"
+                      },
+                      "typedEnumerated": {
+                        "type": "number"
+                      },
+                      "typedCompleted": {
+                        "type": "number"
+                      },
+                      "typedPending": {
+                        "type": "number"
+                      },
+                      "sdkRequests": {
+                        "type": "number"
+                      },
+                      "sdkWaiting": {
+                        "type": "number"
+                      },
+                      "sdkLockWaitMs": {
+                        "type": "number"
+                      },
+                      "sdkExchangeMs": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "availability",
+              "searchOutcome"
+            ]
+          },
+          "market": {
+            "type": "object",
+            "properties": {
+              "availability": {
+                "enum": [
+                  "not-run",
+                  "pending",
+                  "qualified",
+                  "unavailable",
+                  "unsupported"
+                ],
+                "type": "string"
+              },
+              "searchOutcome": {
+                "enum": [
+                  "cancelled",
+                  "complete",
+                  "error",
+                  "not-run",
+                  "running",
+                  "timeout"
+                ],
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "code": {
+                "enum": [
+                  "insufficient-protocol-supply",
+                  "issuance-cap-exceeded",
+                  "quote-contract-reverted",
+                  "quote-no-route",
+                  "quote-timeout",
+                  "quote-unavailable",
+                  "rpc-access-denied",
+                  "rpc-rate-limit",
+                  "rpc-timeout",
+                  "rpc-unavailable"
+                ],
+                "type": "string"
+              },
+              "diagnostics": {
+                "description": "Optional observed RPC failure context; provider text is sanitized before publication.",
+                "type": "object",
+                "properties": {
+                  "rpcMethod": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "elapsedMs": {
+                    "type": "number"
+                  },
+                  "upstreamErrorCode": {
+                    "type": "number"
+                  },
+                  "providerMessage": {
+                    "type": "string"
+                  },
+                  "httpStatus": {
+                    "type": "number"
+                  },
+                  "failureType": {
+                    "enum": [
+                      "backend-deadline",
+                      "http-error",
+                      "provider-timeout",
+                      "rpc-error",
+                      "transport-error"
+                    ],
+                    "type": "string"
+                  },
+                  "errorSelector": {
+                    "type": "string"
+                  },
+                  "errorName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "quoteDiagnostics": {
+                "description": "Existing public quote-work projection; aggregate waits are not wall-clock partitions.",
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string"
+                  },
+                  "elapsedMs": {
+                    "type": "number"
+                  },
+                  "qualified": {
+                    "type": "boolean"
+                  },
+                  "inversionIteration": {
+                    "type": "number"
+                  },
+                  "routeWave": {
+                    "type": "object",
+                    "properties": {
+                      "elapsedMs": {
+                        "type": "number"
+                      },
+                      "subphaseElapsedMs": {
+                        "type": "number"
+                      },
+                      "subphase": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "legacyCandidates": {
+                        "type": "number"
+                      },
+                      "legacyCompleted": {
+                        "type": "number"
+                      },
+                      "typedEnumerated": {
+                        "type": "number"
+                      },
+                      "typedCompleted": {
+                        "type": "number"
+                      },
+                      "typedPending": {
+                        "type": "number"
+                      },
+                      "sdkRequests": {
+                        "type": "number"
+                      },
+                      "sdkWaiting": {
+                        "type": "number"
+                      },
+                      "sdkLockWaitMs": {
+                        "type": "number"
+                      },
+                      "sdkExchangeMs": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "availability",
+              "searchOutcome"
+            ]
+          }
+        },
+        "required": [
+          "core",
+          "market"
+        ]
+      },
+      "CoreTradeProviderCandidate": {
+        "description": "One complete provider plan, without recursive provider evidence maps.",
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "side": {
+                "enum": [
+                  "buy",
+                  "sell"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "exact-in",
+                  "exact-out"
+                ],
+                "type": "string"
+              },
+              "tokenIn": {
+                "type": "string"
+              },
+              "tokenOut": {
+                "type": "string"
+              },
+              "quotedInput": {
+                "type": "string"
+              },
+              "quotedOutput": {
+                "type": "string"
+              },
+              "inputMaximum": {
+                "type": "string"
+              },
+              "outputMinimum": {
+                "type": "string"
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "chainId": {
+                    "type": "number"
+                  },
+                  "blockNumber": {
+                    "type": "string"
+                  },
+                  "blockHash": {
+                    "type": "string"
+                  },
+                  "observedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "blockHash",
+                  "blockNumber",
+                  "chainId",
+                  "observedAt"
+                ]
+              },
+              "evaluation": {
+                "$ref": "#/components/schemas/TradeEvaluation"
+              },
+              "metrics": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "totalMs": {
+                        "type": "number"
+                      },
+                      "targetReads": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "targetReads",
+                      "totalMs"
+                    ]
+                  },
+                  {
+                    "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                    "type": "object",
+                    "properties": {
+                      "firstQualifiedMs": {
+                        "type": "number"
+                      },
+                      "selectionMs": {
+                        "type": "number"
+                      },
+                      "canonicalCompletedMs": {
+                        "type": "number"
+                      },
+                      "cleanupCompletedMs": {
+                        "type": "number"
+                      },
+                      "finalizationMs": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "required": [
+              "context",
+              "evaluation",
+              "inputMaximum",
+              "metrics",
+              "mode",
+              "outputMinimum",
+              "quotedInput",
+              "quotedOutput",
+              "side",
+              "tokenIn",
+              "tokenOut"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "strategy": {
+                "type": "string",
+                "const": "core"
+              },
+              "providerRequest": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "issue-exact-in",
+                      "issue-exact-out",
+                      "redeem-exact-in",
+                      "redeem-exact-out"
+                    ],
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "quoteToken": {
+                    "type": "string"
+                  },
+                  "native": {
+                    "type": "boolean"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "adapter": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  },
+                  "orderedAssets": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "targets": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "inputAsset": {
+                          "type": "string"
+                        },
+                        "outputAsset": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "inputAsset",
+                        "outputAsset"
+                      ]
+                    }
+                  },
+                  "slippageBps": {
+                    "description": "Execution tolerance in basis points; omitted defaults to 100 (1%).",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000,
+                    "default": 100
+                  },
+                  "retainedPlan": {
+                    "type": "object",
+                    "properties": {
+                      "slippageBps": {
+                        "type": "number"
+                      },
+                      "expectedInputAmount": {
+                        "type": "string"
+                      },
+                      "executionAmount": {
+                        "type": "string"
+                      },
+                      "maximumInputAmount": {
+                        "type": "string"
+                      },
+                      "minimumAmountOut": {
+                        "type": "string"
+                      },
+                      "quotes": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "allOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "adapter": {
+                                      "type": "string"
+                                    },
+                                    "amountIn": {
+                                      "type": "string"
+                                    },
+                                    "minimumAmountOut": {
+                                      "type": "string"
+                                    },
+                                    "data": {
+                                      "type": "string"
+                                    },
+                                    "routePlan": {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "executionContext": {
+                                          "enum": [
+                                            "helpers-core",
+                                            "helpers-market"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        "mode": {
+                                          "enum": [
+                                            "exactIn",
+                                            "exactOut"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        "tokenIn": {
+                                          "type": "string"
+                                        },
+                                        "tokenOut": {
+                                          "type": "string"
+                                        },
+                                        "branches": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "amountIn": {
+                                                "type": "string"
+                                              },
+                                              "hops": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "pool": {
+                                                      "$ref": "#/components/schemas/RoutePoolRef"
+                                                    },
+                                                    "zeroForOne": {
+                                                      "type": "boolean"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "pool",
+                                                    "zeroForOne"
+                                                  ]
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "amountIn",
+                                              "hops"
+                                            ]
+                                          }
+                                        },
+                                        "inputAmount": {
+                                          "type": "string"
+                                        },
+                                        "outputAmount": {
+                                          "type": "string"
+                                        },
+                                        "limit": {
+                                          "type": "string"
+                                        },
+                                        "deadline": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "branches",
+                                        "deadline",
+                                        "executionContext",
+                                        "inputAmount",
+                                        "limit",
+                                        "mode",
+                                        "outputAmount",
+                                        "tokenIn",
+                                        "tokenOut",
+                                        "version"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "adapter",
+                                    "amountIn",
+                                    "data",
+                                    "minimumAmountOut"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "outputAsset": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "outputAsset"
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "allOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "adapter": {
+                                      "type": "string"
+                                    },
+                                    "minimumAmountOut": {
+                                      "type": "string"
+                                    },
+                                    "data": {
+                                      "type": "string"
+                                    },
+                                    "routePlan": {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "executionContext": {
+                                          "enum": [
+                                            "helpers-core",
+                                            "helpers-market"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        "mode": {
+                                          "enum": [
+                                            "exactIn",
+                                            "exactOut"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        "tokenIn": {
+                                          "type": "string"
+                                        },
+                                        "tokenOut": {
+                                          "type": "string"
+                                        },
+                                        "branches": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "amountIn": {
+                                                "type": "string"
+                                              },
+                                              "hops": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "pool": {
+                                                      "$ref": "#/components/schemas/RoutePoolRef"
+                                                    },
+                                                    "zeroForOne": {
+                                                      "type": "boolean"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "pool",
+                                                    "zeroForOne"
+                                                  ]
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "amountIn",
+                                              "hops"
+                                            ]
+                                          }
+                                        },
+                                        "inputAmount": {
+                                          "type": "string"
+                                        },
+                                        "outputAmount": {
+                                          "type": "string"
+                                        },
+                                        "limit": {
+                                          "type": "string"
+                                        },
+                                        "deadline": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "branches",
+                                        "deadline",
+                                        "executionContext",
+                                        "inputAmount",
+                                        "limit",
+                                        "mode",
+                                        "outputAmount",
+                                        "tokenIn",
+                                        "tokenOut",
+                                        "version"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "adapter",
+                                    "data",
+                                    "minimumAmountOut"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "inputAsset": {
+                                      "type": "string"
+                                    },
+                                    "inputAmount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "inputAmount",
+                                    "inputAsset"
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "expectedCoreOutputs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "number"
+                            },
+                            "token": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "minimumAmount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "minimumAmount",
+                            "token"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "executionAmount",
+                      "expectedCoreOutputs",
+                      "maximumInputAmount",
+                      "minimumAmountOut",
+                      "quotes"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "deadline",
+                  "mode",
+                  "native",
+                  "orderedAssets",
+                  "quoteToken",
+                  "targets",
+                  "token"
+                ]
+              },
+              "providerQuote": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "issue-exact-in",
+                      "issue-exact-out",
+                      "redeem-exact-in",
+                      "redeem-exact-out"
+                    ],
+                    "type": "string"
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "chainId": {
+                        "type": "number"
+                      },
+                      "blockNumber": {
+                        "type": "string"
+                      },
+                      "blockHash": {
+                        "type": "string"
+                      },
+                      "observedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "blockHash",
+                      "blockNumber",
+                      "chainId",
+                      "observedAt"
+                    ]
+                  },
+                  "quotes": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "adapter": {
+                                  "type": "string"
+                                },
+                                "amountIn": {
+                                  "type": "string"
+                                },
+                                "minimumAmountOut": {
+                                  "type": "string"
+                                },
+                                "data": {
+                                  "type": "string"
+                                },
+                                "routePlan": {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "number",
+                                      "const": 1
+                                    },
+                                    "executionContext": {
+                                      "enum": [
+                                        "helpers-core",
+                                        "helpers-market"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "mode": {
+                                      "enum": [
+                                        "exactIn",
+                                        "exactOut"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "tokenIn": {
+                                      "type": "string"
+                                    },
+                                    "tokenOut": {
+                                      "type": "string"
+                                    },
+                                    "branches": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "amountIn": {
+                                            "type": "string"
+                                          },
+                                          "hops": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "pool": {
+                                                  "$ref": "#/components/schemas/RoutePoolRef"
+                                                },
+                                                "zeroForOne": {
+                                                  "type": "boolean"
+                                                }
+                                              },
+                                              "required": [
+                                                "pool",
+                                                "zeroForOne"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "amountIn",
+                                          "hops"
+                                        ]
+                                      }
+                                    },
+                                    "inputAmount": {
+                                      "type": "string"
+                                    },
+                                    "outputAmount": {
+                                      "type": "string"
+                                    },
+                                    "limit": {
+                                      "type": "string"
+                                    },
+                                    "deadline": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "branches",
+                                    "deadline",
+                                    "executionContext",
+                                    "inputAmount",
+                                    "limit",
+                                    "mode",
+                                    "outputAmount",
+                                    "tokenIn",
+                                    "tokenOut",
+                                    "version"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "adapter",
+                                "amountIn",
+                                "data",
+                                "minimumAmountOut"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "outputAsset": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "outputAsset"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "adapter": {
+                                  "type": "string"
+                                },
+                                "minimumAmountOut": {
+                                  "type": "string"
+                                },
+                                "data": {
+                                  "type": "string"
+                                },
+                                "routePlan": {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "number",
+                                      "const": 1
+                                    },
+                                    "executionContext": {
+                                      "enum": [
+                                        "helpers-core",
+                                        "helpers-market"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "mode": {
+                                      "enum": [
+                                        "exactIn",
+                                        "exactOut"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "tokenIn": {
+                                      "type": "string"
+                                    },
+                                    "tokenOut": {
+                                      "type": "string"
+                                    },
+                                    "branches": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "amountIn": {
+                                            "type": "string"
+                                          },
+                                          "hops": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "pool": {
+                                                  "$ref": "#/components/schemas/RoutePoolRef"
+                                                },
+                                                "zeroForOne": {
+                                                  "type": "boolean"
+                                                }
+                                              },
+                                              "required": [
+                                                "pool",
+                                                "zeroForOne"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "amountIn",
+                                          "hops"
+                                        ]
+                                      }
+                                    },
+                                    "inputAmount": {
+                                      "type": "string"
+                                    },
+                                    "outputAmount": {
+                                      "type": "string"
+                                    },
+                                    "limit": {
+                                      "type": "string"
+                                    },
+                                    "deadline": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "branches",
+                                    "deadline",
+                                    "executionContext",
+                                    "inputAmount",
+                                    "limit",
+                                    "mode",
+                                    "outputAmount",
+                                    "tokenIn",
+                                    "tokenOut",
+                                    "version"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "adapter",
+                                "data",
+                                "minimumAmountOut"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "inputAsset": {
+                                  "type": "string"
+                                },
+                                "inputAmount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "inputAmount",
+                                "inputAsset"
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "preview": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "netCygldOut": {
+                            "type": "string"
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "netCygldOut",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "minimumAmountOut": {
+                            "type": "string"
+                          },
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "minimumAmountOut",
+                          "projectedCoreOutputs"
+                        ]
+                      }
+                    ]
+                  },
+                  "initialPreview": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "netCygldOut": {
+                            "type": "string"
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "amountsInExact": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "amountsInExact",
+                          "fees",
+                          "netCygldOut",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "amountsInExact": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "amountsInExact",
+                          "fees",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "projectedCoreOutputs"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "grossCygldIn": {
+                            "type": "string"
+                          },
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "grossCygldIn",
+                          "projectedCoreOutputs"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "netCygldOut": {
+                            "type": "string"
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "netCygldOut",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "minimumAmountOut": {
+                            "type": "string"
+                          },
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "minimumAmountOut",
+                          "projectedCoreOutputs"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "basketPreview": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "netCygldOut": {
+                            "type": "string"
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "amountsInExact": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "amountsInExact",
+                          "fees",
+                          "netCygldOut",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          },
+                          "amountsInExact": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderedCoreAssets": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "amountsInExact",
+                          "fees",
+                          "orderedCoreAssets"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "projectedCoreOutputs"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "grossCygldIn": {
+                            "type": "string"
+                          },
+                          "projectedCoreOutputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "number"
+                                },
+                                "token": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "id",
+                                "kind",
+                                "token"
+                              ]
+                            }
+                          },
+                          "fees": {
+                            "type": "object",
+                            "properties": {
+                              "protocolFeeCygld": {
+                                "type": "string"
+                              },
+                              "helperFeeCygld": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "helperFeeCygld",
+                              "protocolFeeCygld"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fees",
+                          "grossCygldIn",
+                          "projectedCoreOutputs"
+                        ]
+                      }
+                    ]
+                  },
+                  "displayAmount": {
+                    "type": "string"
+                  },
+                  "executionAmount": {
+                    "type": "string"
+                  },
+                  "maximumInputAmount": {
+                    "type": "string"
+                  },
+                  "slippageBps": {
+                    "type": "number"
+                  },
+                  "expectedInputAmount": {
+                    "description": "Expected input before execution cushions, including direct basket input.",
+                    "type": "string"
+                  },
+                  "requestedGrossCygldOut": {
+                    "type": "string"
+                  },
+                  "requestedNetCygldOut": {
+                    "type": "string"
+                  },
+                  "remainingGrossCapacity": {
+                    "type": "string"
+                  },
+                  "remainingNetCapacity": {
+                    "type": "string"
+                  },
+                  "expectedOutputAmount": {
+                    "type": "string"
+                  },
+                  "expectedCoreOutputs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "minimumAmount": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "minimumAmount",
+                        "token"
+                      ]
+                    }
+                  },
+                  "metrics": {
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "rpcReads": {
+                            "type": "number"
+                          },
+                          "rpcReadsRequested": {
+                            "type": "number"
+                          },
+                          "rpcReadsCoalesced": {
+                            "type": "number"
+                          },
+                          "rpcReadsReused": {
+                            "type": "number"
+                          },
+                          "rpcReadsScope": {
+                            "const": "coordinator",
+                            "type": "string"
+                          },
+                          "candidateCalls": {
+                            "type": "number"
+                          },
+                          "iterations": {
+                            "type": "number"
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "candidateCalls",
+                          "iterations",
+                          "rpcReads",
+                          "rpcReadsCoalesced",
+                          "rpcReadsRequested",
+                          "rpcReadsReused",
+                          "totalMs"
+                        ]
+                      },
+                      {
+                        "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                        "type": "object",
+                        "properties": {
+                          "firstQualifiedMs": {
+                            "type": "number"
+                          },
+                          "selectionMs": {
+                            "type": "number"
+                          },
+                          "canonicalCompletedMs": {
+                            "type": "number"
+                          },
+                          "cleanupCompletedMs": {
+                            "type": "number"
+                          },
+                          "finalizationMs": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "basketPreview",
+                  "context",
+                  "displayAmount",
+                  "executionAmount",
+                  "initialPreview",
+                  "maximumInputAmount",
+                  "metrics",
+                  "mode",
+                  "preview",
+                  "quotes"
+                ]
+              }
+            },
+            "required": [
+              "providerQuote",
+              "providerRequest",
+              "strategy"
+            ]
+          }
+        ]
+      },
+      "MarketTradeProviderCandidate": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "side": {
+                "enum": [
+                  "buy",
+                  "sell"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "exact-in",
+                  "exact-out"
+                ],
+                "type": "string"
+              },
+              "tokenIn": {
+                "type": "string"
+              },
+              "tokenOut": {
+                "type": "string"
+              },
+              "quotedInput": {
+                "type": "string"
+              },
+              "quotedOutput": {
+                "type": "string"
+              },
+              "inputMaximum": {
+                "type": "string"
+              },
+              "outputMinimum": {
+                "type": "string"
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "chainId": {
+                    "type": "number"
+                  },
+                  "blockNumber": {
+                    "type": "string"
+                  },
+                  "blockHash": {
+                    "type": "string"
+                  },
+                  "observedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "blockHash",
+                  "blockNumber",
+                  "chainId",
+                  "observedAt"
+                ]
+              },
+              "evaluation": {
+                "$ref": "#/components/schemas/TradeEvaluation"
+              },
+              "metrics": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "totalMs": {
+                        "type": "number"
+                      },
+                      "targetReads": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "targetReads",
+                      "totalMs"
+                    ]
+                  },
+                  {
+                    "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                    "type": "object",
+                    "properties": {
+                      "firstQualifiedMs": {
+                        "type": "number"
+                      },
+                      "selectionMs": {
+                        "type": "number"
+                      },
+                      "canonicalCompletedMs": {
+                        "type": "number"
+                      },
+                      "cleanupCompletedMs": {
+                        "type": "number"
+                      },
+                      "finalizationMs": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "required": [
+              "context",
+              "evaluation",
+              "inputMaximum",
+              "metrics",
+              "mode",
+              "outputMinimum",
+              "quotedInput",
+              "quotedOutput",
+              "side",
+              "tokenIn",
+              "tokenOut"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "strategy": {
+                "type": "string",
+                "const": "market"
+              },
+              "providerRequest": {
+                "description": "Market swaps transfer existing CYGLD; never use Core basket economics.",
+                "type": "object",
+                "properties": {
+                  "side": {
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ],
+                    "type": "string"
+                  },
+                  "mode": {
+                    "enum": [
+                      "exact-in",
+                      "exact-out"
+                    ],
+                    "type": "string"
+                  },
+                  "counterToken": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "adapter": {
+                    "type": "string"
+                  },
+                  "recipient": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  },
+                  "slippageBps": {
+                    "type": "number"
+                  },
+                  "retainedPlan": {
+                    "type": "object",
+                    "properties": {
+                      "side": {
+                        "enum": [
+                          "buy",
+                          "sell"
+                        ],
+                        "type": "string"
+                      },
+                      "mode": {
+                        "enum": [
+                          "exact-in",
+                          "exact-out"
+                        ],
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "slippageBps": {
+                        "type": "number"
+                      },
+                      "route": {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": "number",
+                            "const": 1
+                          },
+                          "executionContext": {
+                            "enum": [
+                              "helpers-core",
+                              "helpers-market"
+                            ],
+                            "type": "string"
+                          },
+                          "mode": {
+                            "enum": [
+                              "exactIn",
+                              "exactOut"
+                            ],
+                            "type": "string"
+                          },
+                          "tokenIn": {
+                            "type": "string"
+                          },
+                          "tokenOut": {
+                            "type": "string"
+                          },
+                          "branches": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "amountIn": {
+                                  "type": "string"
+                                },
+                                "hops": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "pool": {
+                                        "$ref": "#/components/schemas/RoutePoolRef"
+                                      },
+                                      "zeroForOne": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "pool",
+                                      "zeroForOne"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "amountIn",
+                                "hops"
+                              ]
+                            }
+                          },
+                          "inputAmount": {
+                            "type": "string"
+                          },
+                          "outputAmount": {
+                            "type": "string"
+                          },
+                          "limit": {
+                            "type": "string"
+                          },
+                          "deadline": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "branches",
+                          "deadline",
+                          "executionContext",
+                          "inputAmount",
+                          "limit",
+                          "mode",
+                          "outputAmount",
+                          "tokenIn",
+                          "tokenOut",
+                          "version"
+                        ]
+                      },
+                      "params": {
+                        "type": "object",
+                        "properties": {
+                          "side": {
+                            "enum": [
+                              0,
+                              1
+                            ],
+                            "type": "number"
+                          },
+                          "counterToken": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "bound": {
+                            "type": "string"
+                          },
+                          "routedInput": {
+                            "type": "string"
+                          },
+                          "feeCygld": {
+                            "type": "string"
+                          },
+                          "recipient": {
+                            "type": "string"
+                          },
+                          "deadline": {
+                            "type": "string"
+                          },
+                          "adapter": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "adapter",
+                          "amount",
+                          "bound",
+                          "counterToken",
+                          "data",
+                          "deadline",
+                          "feeCygld",
+                          "recipient",
+                          "routedInput",
+                          "side"
+                        ]
+                      },
+                      "fee": {
+                        "type": "object",
+                        "properties": {
+                          "asset": {
+                            "type": "string"
+                          },
+                          "ratePpm": {
+                            "type": "number"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "basis": {
+                            "type": "string",
+                            "const": "quoted"
+                          },
+                          "notional": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "asset",
+                          "basis",
+                          "notional",
+                          "ratePpm"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "amount",
+                      "fee",
+                      "mode",
+                      "params",
+                      "route",
+                      "side",
+                      "slippageBps"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "counterToken",
+                  "deadline",
+                  "mode",
+                  "recipient",
+                  "side"
+                ]
+              },
+              "providerQuote": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "market"
+                  },
+                  "side": {
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ],
+                    "type": "string"
+                  },
+                  "mode": {
+                    "enum": [
+                      "exact-in",
+                      "exact-out"
+                    ],
+                    "type": "string"
+                  },
+                  "tokenIn": {
+                    "type": "string"
+                  },
+                  "tokenOut": {
+                    "type": "string"
+                  },
+                  "amountIn": {
+                    "type": "string"
+                  },
+                  "amountOut": {
+                    "type": "string"
+                  },
+                  "totalInput": {
+                    "type": "string"
+                  },
+                  "netOutput": {
+                    "type": "string"
+                  },
+                  "grossOutput": {
+                    "type": "string"
+                  },
+                  "routedAmountIn": {
+                    "type": "string"
+                  },
+                  "inputMaximum": {
+                    "type": "string"
+                  },
+                  "outputMinimum": {
+                    "type": "string"
+                  },
+                  "refundDust": {
+                    "type": "string"
+                  },
+                  "outputRefundEstimate": {
+                    "type": "string"
+                  },
+                  "fee": {
+                    "type": "object",
+                    "properties": {
+                      "asset": {
+                        "type": "string"
+                      },
+                      "ratePpm": {
+                        "type": "number"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "basis": {
+                        "type": "string",
+                        "const": "quoted"
+                      },
+                      "notional": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "amount",
+                      "asset",
+                      "basis",
+                      "notional",
+                      "ratePpm"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "side": {
+                        "enum": [
+                          0,
+                          1
+                        ],
+                        "type": "number"
+                      },
+                      "counterToken": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "bound": {
+                        "type": "string"
+                      },
+                      "routedInput": {
+                        "type": "string"
+                      },
+                      "feeCygld": {
+                        "type": "string"
+                      },
+                      "recipient": {
+                        "type": "string"
+                      },
+                      "deadline": {
+                        "type": "string"
+                      },
+                      "adapter": {
+                        "type": "string"
+                      },
+                      "data": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "adapter",
+                      "amount",
+                      "bound",
+                      "counterToken",
+                      "data",
+                      "deadline",
+                      "feeCygld",
+                      "recipient",
+                      "routedInput",
+                      "side"
+                    ]
+                  },
+                  "adapterData": {
+                    "type": "string"
+                  },
+                  "plan": {
+                    "type": "object",
+                    "properties": {
+                      "side": {
+                        "enum": [
+                          "buy",
+                          "sell"
+                        ],
+                        "type": "string"
+                      },
+                      "mode": {
+                        "enum": [
+                          "exact-in",
+                          "exact-out"
+                        ],
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "slippageBps": {
+                        "type": "number"
+                      },
+                      "route": {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": "number",
+                            "const": 1
+                          },
+                          "executionContext": {
+                            "enum": [
+                              "helpers-core",
+                              "helpers-market"
+                            ],
+                            "type": "string"
+                          },
+                          "mode": {
+                            "enum": [
+                              "exactIn",
+                              "exactOut"
+                            ],
+                            "type": "string"
+                          },
+                          "tokenIn": {
+                            "type": "string"
+                          },
+                          "tokenOut": {
+                            "type": "string"
+                          },
+                          "branches": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "amountIn": {
+                                  "type": "string"
+                                },
+                                "hops": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "pool": {
+                                        "$ref": "#/components/schemas/RoutePoolRef"
+                                      },
+                                      "zeroForOne": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "pool",
+                                      "zeroForOne"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "amountIn",
+                                "hops"
+                              ]
+                            }
+                          },
+                          "inputAmount": {
+                            "type": "string"
+                          },
+                          "outputAmount": {
+                            "type": "string"
+                          },
+                          "limit": {
+                            "type": "string"
+                          },
+                          "deadline": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "branches",
+                          "deadline",
+                          "executionContext",
+                          "inputAmount",
+                          "limit",
+                          "mode",
+                          "outputAmount",
+                          "tokenIn",
+                          "tokenOut",
+                          "version"
+                        ]
+                      },
+                      "params": {
+                        "type": "object",
+                        "properties": {
+                          "side": {
+                            "enum": [
+                              0,
+                              1
+                            ],
+                            "type": "number"
+                          },
+                          "counterToken": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "bound": {
+                            "type": "string"
+                          },
+                          "routedInput": {
+                            "type": "string"
+                          },
+                          "feeCygld": {
+                            "type": "string"
+                          },
+                          "recipient": {
+                            "type": "string"
+                          },
+                          "deadline": {
+                            "type": "string"
+                          },
+                          "adapter": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "adapter",
+                          "amount",
+                          "bound",
+                          "counterToken",
+                          "data",
+                          "deadline",
+                          "feeCygld",
+                          "recipient",
+                          "routedInput",
+                          "side"
+                        ]
+                      },
+                      "fee": {
+                        "type": "object",
+                        "properties": {
+                          "asset": {
+                            "type": "string"
+                          },
+                          "ratePpm": {
+                            "type": "number"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "basis": {
+                            "type": "string",
+                            "const": "quoted"
+                          },
+                          "notional": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "asset",
+                          "basis",
+                          "notional",
+                          "ratePpm"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "amount",
+                      "fee",
+                      "mode",
+                      "params",
+                      "route",
+                      "side",
+                      "slippageBps"
+                    ]
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "chainId": {
+                        "type": "number"
+                      },
+                      "blockNumber": {
+                        "type": "string"
+                      },
+                      "blockHash": {
+                        "type": "string"
+                      },
+                      "observedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "blockHash",
+                      "blockNumber",
+                      "chainId",
+                      "observedAt"
+                    ]
+                  },
+                  "feeBeneficiaryDisplay": {
+                    "type": "object",
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "observedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "address",
+                      "observedAt"
+                    ]
+                  },
+                  "priceImpactPpm": {
+                    "description": "AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline.",
+                    "type": "string"
+                  },
+                  "qualification": {
+                    "enum": [
+                      "quoter",
+                      "sdk",
+                      "sdk-and-quoter"
+                    ],
+                    "type": "string"
+                  },
+                  "executionSimulationRequired": {
+                    "type": "boolean"
+                  },
+                  "quoteVerificationUnavailable": {
+                    "type": "string"
+                  },
+                  "searchCoverage": {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "const": "selected-inventory"
+                      },
+                      "maxHops": {
+                        "type": "number"
+                      },
+                      "splitPercentages": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      },
+                      "inventoryPools": {
+                        "type": "number"
+                      },
+                      "catalogMonth": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "catalogMonth",
+                      "inventoryPools",
+                      "maxHops",
+                      "scope",
+                      "splitPercentages"
+                    ]
+                  },
+                  "metrics": {
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "candidateCalls": {
+                            "type": "number"
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "candidateCalls",
+                          "totalMs"
+                        ]
+                      },
+                      {
+                        "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                        "type": "object",
+                        "properties": {
+                          "firstQualifiedMs": {
+                            "type": "number"
+                          },
+                          "selectionMs": {
+                            "type": "number"
+                          },
+                          "canonicalCompletedMs": {
+                            "type": "number"
+                          },
+                          "cleanupCompletedMs": {
+                            "type": "number"
+                          },
+                          "finalizationMs": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "adapterData",
+                  "amountIn",
+                  "amountOut",
+                  "context",
+                  "fee",
+                  "grossOutput",
+                  "inputMaximum",
+                  "metrics",
+                  "mode",
+                  "netOutput",
+                  "operation",
+                  "outputMinimum",
+                  "params",
+                  "plan",
+                  "qualification",
+                  "refundDust",
+                  "routedAmountIn",
+                  "side",
+                  "tokenIn",
+                  "tokenOut",
+                  "totalInput"
+                ]
+              }
+            },
+            "required": [
+              "providerQuote",
+              "providerRequest",
+              "strategy"
+            ]
+          }
+        ]
+      },
+      "TradeProviderCandidate": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CoreTradeProviderCandidate",
+            "description": "One complete provider plan, without recursive provider evidence maps."
+          },
+          {
+            "$ref": "#/components/schemas/MarketTradeProviderCandidate"
+          }
         ]
       },
       "TradeQuoteEvent": {
@@ -12960,6 +15753,245 @@
                 "properties": {
                   "type": {
                     "type": "string",
+                    "const": "provider-qualified"
+                  },
+                  "strategy": {
+                    "enum": [
+                      "core",
+                      "market"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "$ref": "#/components/schemas/TradeProviderCandidate"
+                  }
+                },
+                "required": [
+                  "strategy",
+                  "type",
+                  "value"
+                ]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "description": "Optional subscriber references; workId belongs to shared producer work.",
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "attemptId": {
+                    "type": "string"
+                  },
+                  "correlationId": {
+                    "type": "string"
+                  },
+                  "workId": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "provider-assessment"
+                  },
+                  "strategy": {
+                    "enum": [
+                      "core",
+                      "market"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "object",
+                    "properties": {
+                      "availability": {
+                        "enum": [
+                          "not-run",
+                          "pending",
+                          "qualified",
+                          "unavailable",
+                          "unsupported"
+                        ],
+                        "type": "string"
+                      },
+                      "searchOutcome": {
+                        "enum": [
+                          "cancelled",
+                          "complete",
+                          "error",
+                          "not-run",
+                          "running",
+                          "timeout"
+                        ],
+                        "type": "string"
+                      },
+                      "error": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "enum": [
+                          "insufficient-protocol-supply",
+                          "issuance-cap-exceeded",
+                          "quote-contract-reverted",
+                          "quote-no-route",
+                          "quote-timeout",
+                          "quote-unavailable",
+                          "rpc-access-denied",
+                          "rpc-rate-limit",
+                          "rpc-timeout",
+                          "rpc-unavailable"
+                        ],
+                        "type": "string"
+                      },
+                      "diagnostics": {
+                        "description": "Optional observed RPC failure context; provider text is sanitized before publication.",
+                        "type": "object",
+                        "properties": {
+                          "rpcMethod": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string"
+                          },
+                          "elapsedMs": {
+                            "type": "number"
+                          },
+                          "upstreamErrorCode": {
+                            "type": "number"
+                          },
+                          "providerMessage": {
+                            "type": "string"
+                          },
+                          "httpStatus": {
+                            "type": "number"
+                          },
+                          "failureType": {
+                            "enum": [
+                              "backend-deadline",
+                              "http-error",
+                              "provider-timeout",
+                              "rpc-error",
+                              "transport-error"
+                            ],
+                            "type": "string"
+                          },
+                          "errorSelector": {
+                            "type": "string"
+                          },
+                          "errorName": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "quoteDiagnostics": {
+                        "description": "Existing public quote-work projection; aggregate waits are not wall-clock partitions.",
+                        "type": "object",
+                        "properties": {
+                          "phase": {
+                            "type": "string"
+                          },
+                          "elapsedMs": {
+                            "type": "number"
+                          },
+                          "qualified": {
+                            "type": "boolean"
+                          },
+                          "inversionIteration": {
+                            "type": "number"
+                          },
+                          "routeWave": {
+                            "type": "object",
+                            "properties": {
+                              "elapsedMs": {
+                                "type": "number"
+                              },
+                              "subphaseElapsedMs": {
+                                "type": "number"
+                              },
+                              "subphase": {
+                                "type": "string"
+                              },
+                              "mode": {
+                                "type": "string"
+                              },
+                              "legacyCandidates": {
+                                "type": "number"
+                              },
+                              "legacyCompleted": {
+                                "type": "number"
+                              },
+                              "typedEnumerated": {
+                                "type": "number"
+                              },
+                              "typedCompleted": {
+                                "type": "number"
+                              },
+                              "typedPending": {
+                                "type": "number"
+                              },
+                              "sdkRequests": {
+                                "type": "number"
+                              },
+                              "sdkWaiting": {
+                                "type": "number"
+                              },
+                              "sdkLockWaitMs": {
+                                "type": "number"
+                              },
+                              "sdkExchangeMs": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "availability",
+                      "searchOutcome"
+                    ]
+                  }
+                },
+                "required": [
+                  "strategy",
+                  "type",
+                  "value"
+                ]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "description": "Optional subscriber references; workId belongs to shared producer work.",
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "attemptId": {
+                    "type": "string"
+                  },
+                  "correlationId": {
+                    "type": "string"
+                  },
+                  "workId": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "const": "progress"
                   },
                   "strategy": {
@@ -13223,6 +16255,21 @@
                       },
                       "errorName": {
                         "type": "string"
+                      }
+                    }
+                  },
+                  "providerAssessments": {
+                    "$ref": "#/components/schemas/TradeProviderAssessments"
+                  },
+                  "providerCandidates": {
+                    "type": "object",
+                    "properties": {
+                      "core": {
+                        "description": "One complete provider plan, without recursive provider evidence maps.",
+                        "$ref": "#/components/schemas/CoreTradeProviderCandidate"
+                      },
+                      "market": {
+                        "$ref": "#/components/schemas/MarketTradeProviderCandidate"
                       }
                     }
                   }
@@ -25577,6 +28624,168 @@
           "native",
           "side"
         ]
+      },
+      "TradeProviderAssessment": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "enum": [
+              "not-run",
+              "pending",
+              "qualified",
+              "unavailable",
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "searchOutcome": {
+            "enum": [
+              "cancelled",
+              "complete",
+              "error",
+              "not-run",
+              "running",
+              "timeout"
+            ],
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "enum": [
+              "insufficient-protocol-supply",
+              "issuance-cap-exceeded",
+              "quote-contract-reverted",
+              "quote-no-route",
+              "quote-timeout",
+              "quote-unavailable",
+              "rpc-access-denied",
+              "rpc-rate-limit",
+              "rpc-timeout",
+              "rpc-unavailable"
+            ],
+            "type": "string"
+          },
+          "diagnostics": {
+            "description": "Optional observed RPC failure context; provider text is sanitized before publication.",
+            "type": "object",
+            "properties": {
+              "rpcMethod": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "elapsedMs": {
+                "type": "number"
+              },
+              "upstreamErrorCode": {
+                "type": "number"
+              },
+              "providerMessage": {
+                "type": "string"
+              },
+              "httpStatus": {
+                "type": "number"
+              },
+              "failureType": {
+                "enum": [
+                  "backend-deadline",
+                  "http-error",
+                  "provider-timeout",
+                  "rpc-error",
+                  "transport-error"
+                ],
+                "type": "string"
+              },
+              "errorSelector": {
+                "type": "string"
+              },
+              "errorName": {
+                "type": "string"
+              }
+            }
+          },
+          "quoteDiagnostics": {
+            "description": "Existing public quote-work projection; aggregate waits are not wall-clock partitions.",
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string"
+              },
+              "elapsedMs": {
+                "type": "number"
+              },
+              "qualified": {
+                "type": "boolean"
+              },
+              "inversionIteration": {
+                "type": "number"
+              },
+              "routeWave": {
+                "type": "object",
+                "properties": {
+                  "elapsedMs": {
+                    "type": "number"
+                  },
+                  "subphaseElapsedMs": {
+                    "type": "number"
+                  },
+                  "subphase": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "string"
+                  },
+                  "legacyCandidates": {
+                    "type": "number"
+                  },
+                  "legacyCompleted": {
+                    "type": "number"
+                  },
+                  "typedEnumerated": {
+                    "type": "number"
+                  },
+                  "typedCompleted": {
+                    "type": "number"
+                  },
+                  "typedPending": {
+                    "type": "number"
+                  },
+                  "sdkRequests": {
+                    "type": "number"
+                  },
+                  "sdkWaiting": {
+                    "type": "number"
+                  },
+                  "sdkLockWaitMs": {
+                    "type": "number"
+                  },
+                  "sdkExchangeMs": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "availability",
+          "searchOutcome"
+        ]
+      },
+      "TradeProviderCandidates": {
+        "type": "object",
+        "properties": {
+          "core": {
+            "description": "One complete provider plan, without recursive provider evidence maps.",
+            "$ref": "#/components/schemas/CoreTradeProviderCandidate"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketTradeProviderCandidate"
+          }
+        }
       },
       "TradeQuoteModelPacket": {
         "type": "object",
