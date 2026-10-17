@@ -416,5 +416,117 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second['metrics']['rpcReadsReused'], 0)
 
 
+    async def _singleton_until(self, predicate):
+        async with asyncio.timeout(3):
+            while not predicate():
+                await asyncio.sleep(0)
+
+    async def test_singleton_await_cancel_before_first_turn_before_delivery_and_after_completion(self):
+        bank, called = SharedReads(), []
+        async def produce():
+            called.append(True)
+            return {'result': 'value'}
+        early = asyncio.create_task(bank.one('early', produce))
+        early.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await early
+        self.assertEqual(called, [])
+        started, release = asyncio.Event(), asyncio.Event()
+        async def pending():
+            started.set()
+            await release.wait()
+            return {'result': 'value'}
+        task = asyncio.create_task(bank.one('delivery', pending))
+        await started.wait()
+        bank.pending['delivery'].future.add_done_callback(lambda future: task.cancel())
+        release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(bank.pending, {})
+        late = asyncio.create_task(bank.one('late', produce))
+        self.assertEqual(await late, {'result': 'value'})
+        self.assertFalse(late.cancel())
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_partial_batch_foreign_singleton_preserves_producer(self):
+        bank = SharedReads()
+        started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def batch(keys):
+            self.assertEqual(keys, ['a', 'b'])
+            started.set()
+            try:
+                await release.wait()
+                return [{'result': key} for key in keys]
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+        async def unexpected(keys):
+            self.fail('A joining subscriber must not produce another read')
+        first = asyncio.create_task(bank.many(['a', 'b'], batch))
+        await started.wait()
+        second = asyncio.create_task(bank.many(['a'], unexpected))
+        await self._singleton_until(lambda: bank.pending['a'].users == 2)
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertFalse(cancelled.is_set())
+        self.assertEqual((bank.pending['a'].users, bank.pending['b'].users), (1, 0))
+        release.set()
+        self.assertEqual(await second,
+            ([{'result': 'a'}], {'requested': 1, 'issued': 0, 'coalesced': 1, 'reused': 0}))
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_last_cancel_drains_before_return_and_replacement_is_independent(self):
+        bank = SharedReads()
+        started, cleaning, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def produce():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleaning.set()
+                await finish.wait()
+        first = asyncio.create_task(bank.one('same', produce))
+        await started.wait()
+        first.cancel()
+        await cleaning.wait()
+        self.assertFalse(first.done())
+        self.assertNotIn('same', bank.pending)
+        self.assertEqual(await bank.one('same', lambda: asyncio.sleep(0, result={'result': 'new'})),
+                         {'result': 'new'})
+        finish.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_exception_identity_snapshot_disproof_and_cardinality_errors(self):
+        from cybergold_candidate.recovery_rpc import SnapshotChanged
+        for error in (ValueError('ordinary'), SnapshotChanged('canonical disproof')):
+            with self.subTest(error=type(error).__name__):
+                bank, started, release = SharedReads(), asyncio.Event(), asyncio.Event()
+                async def produce():
+                    started.set()
+                    await release.wait()
+                    raise error
+                first = asyncio.create_task(bank.one('same', produce))
+                await started.wait()
+                second = asyncio.create_task(bank.one('same', produce))
+                await self._singleton_until(lambda: bank.pending['same'].users == 2)
+                release.set()
+                outcomes = await asyncio.gather(first, second, return_exceptions=True)
+                self.assertTrue(all(value is error for value in outcomes))
+                self.assertEqual(bank.pending, {})
+                self.assertEqual(bank.completed, {})
+                await bank.close()
+        bank = SharedReads()
+        with self.assertRaises(ValueError):
+            await bank.many(['missing'], lambda keys: asyncio.sleep(0, result=[]))
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+
 if __name__ == '__main__':
     unittest.main()
