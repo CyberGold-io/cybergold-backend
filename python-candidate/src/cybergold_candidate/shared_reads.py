@@ -76,8 +76,11 @@ class SharedReads:
             for _, entry in new:
                 entry.task = task
         try:
-            values = await asyncio.gather(*(asyncio.shield(entry.future)
-                if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))
+            if len(selected) == 1 and selected[0][1] is not None:
+                values = [await asyncio.shield(selected[0][1].future)]
+            else:
+                values = await asyncio.gather(*(asyncio.shield(entry.future)
+                    if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))
             return values, counts
         finally:
             tasks = set()
