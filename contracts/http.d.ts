@@ -1661,6 +1661,7 @@ export interface components {
             poolManager?: string;
             hooks?: string;
         };
+        /** @description Additive maps are optional for compatibility with prior served responses. */
         TradeQuote: ({
             /** @enum {string} */
             side: "buy" | "sell";
@@ -2013,6 +2014,13 @@ export interface components {
                     finalizationMs?: number;
                 };
             };
+        } & {
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
+            };
         }) | ({
             /** @enum {string} */
             side: "buy" | "sell";
@@ -2233,6 +2241,13 @@ export interface components {
                     finalizationMs?: number;
                 };
             };
+        } & {
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
+            };
         });
         TradeEvaluation: {
             /** @enum {string} */
@@ -2240,6 +2255,672 @@ export interface components {
             /** @enum {string} */
             market: "complete" | "running" | "unavailable" | "unsupported";
         };
+        TradeProviderAssessments: {
+            core: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    phase?: string;
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        subphase?: string;
+                        mode?: string;
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                    };
+                };
+            };
+            market: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    phase?: string;
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        subphase?: string;
+                        mode?: string;
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                    };
+                };
+            };
+        };
+        /** @description One complete provider plan, without recursive provider evidence maps. */
+        CoreTradeProviderCandidate: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "core";
+            providerRequest: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                token: string;
+                quoteToken: string;
+                native: boolean;
+                amount: string;
+                adapter?: string;
+                deadline: string;
+                orderedAssets: string[];
+                targets: {
+                    inputAsset: string;
+                    outputAsset: string;
+                    amount: string;
+                }[];
+                /**
+                 * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                 * @default 100
+                 */
+                slippageBps: number;
+                retainedPlan?: {
+                    slippageBps?: number;
+                    expectedInputAmount?: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    minimumAmountOut: string;
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    expectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                };
+            };
+            providerQuote: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                quotes: (({
+                    adapter: string;
+                    amountIn: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    outputAsset: string;
+                }) | ({
+                    adapter: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    inputAsset: string;
+                    inputAmount: string;
+                }))[];
+                preview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                initialPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | null;
+                basketPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                displayAmount: string;
+                executionAmount: string;
+                maximumInputAmount: string;
+                slippageBps?: number;
+                /** @description Expected input before execution cushions, including direct basket input. */
+                expectedInputAmount?: string;
+                requestedGrossCygldOut?: string;
+                requestedNetCygldOut?: string;
+                remainingGrossCapacity?: string;
+                remainingNetCapacity?: string;
+                expectedOutputAmount?: string;
+                expectedCoreOutputs?: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    minimumAmount: string;
+                }[];
+                metrics: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            };
+        };
+        MarketTradeProviderCandidate: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "market";
+            /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
+            providerRequest: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                counterToken: string;
+                amount: string;
+                adapter?: string;
+                recipient: string;
+                deadline: string;
+                slippageBps?: number;
+                retainedPlan?: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+            };
+            providerQuote: {
+                /** @constant */
+                operation: "market";
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                amountIn: string;
+                amountOut: string;
+                totalInput: string;
+                netOutput: string;
+                grossOutput: string;
+                routedAmountIn: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                refundDust: string;
+                outputRefundEstimate?: string;
+                fee: {
+                    asset: string;
+                    ratePpm: number;
+                    amount: string;
+                    /** @constant */
+                    basis: "quoted";
+                    notional: string;
+                };
+                params: {
+                    /** @enum {number} */
+                    side: 0 | 1;
+                    counterToken: string;
+                    amount: string;
+                    bound: string;
+                    routedInput: string;
+                    feeCygld: string;
+                    recipient: string;
+                    deadline: string;
+                    adapter: string;
+                    data: string;
+                };
+                adapterData: string;
+                plan: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                feeBeneficiaryDisplay?: {
+                    address: string;
+                    observedAt: string;
+                };
+                /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                priceImpactPpm?: string;
+                /** @enum {string} */
+                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                executionSimulationRequired?: boolean;
+                quoteVerificationUnavailable?: string;
+                searchCoverage?: {
+                    /** @constant */
+                    scope: "selected-inventory";
+                    maxHops: number;
+                    splitPercentages: number[];
+                    inventoryPools: number;
+                    catalogMonth: null | string;
+                };
+                metrics: {
+                    candidateCalls: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            };
+        };
+        TradeProviderCandidate: components["schemas"]["CoreTradeProviderCandidate"] | components["schemas"]["MarketTradeProviderCandidate"];
         TradeQuoteEvent: ({
             requestId?: string;
             attemptId?: string;
@@ -2469,6 +3150,71 @@ export interface components {
             workId?: string;
         } & {
             /** @constant */
+            type: "provider-qualified";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            value: components["schemas"]["TradeProviderCandidate"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "provider-assessment";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            value: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    phase?: string;
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        subphase?: string;
+                        mode?: string;
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                    };
+                };
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
             type: "progress";
             /** @enum {string} */
             strategy: "core" | "market";
@@ -2538,6 +3284,12 @@ export interface components {
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
                 errorSelector?: string;
                 errorName?: string;
+            };
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
             };
         });
         "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
@@ -5517,6 +6269,55 @@ export interface components {
             native: boolean;
             amount: string;
             slippageBps?: number;
+        };
+        TradeProviderAssessment: {
+            /** @enum {string} */
+            availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+            /** @enum {string} */
+            searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+            error?: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                phase?: string;
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    subphase?: string;
+                    mode?: string;
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                };
+            };
+        };
+        TradeProviderCandidates: {
+            /** @description One complete provider plan, without recursive provider evidence maps. */
+            core?: components["schemas"]["CoreTradeProviderCandidate"];
+            market?: components["schemas"]["MarketTradeProviderCandidate"];
         };
         TradeQuoteModelPacket: {
             /** @constant */

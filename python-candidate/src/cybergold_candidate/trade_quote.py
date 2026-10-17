@@ -357,11 +357,42 @@ class TradeQuotes:
                       for name in ('core', 'market')}
         candidates, terminal_candidates, winner, errors, context_error = {}, {}, None, {}, None
         error_quote_diagnostics = {}
+        search_outcomes = {name: 'running' if evaluation[name] == 'running' else 'not-run'
+                           for name in ('core', 'market')}
+        provider_errors = {}
         lock = asyncio.Lock()
 
-        def decorate(value):
+        def candidate_value(value):
             return {**deepcopy(value), 'evaluation': deepcopy(evaluation),
                     'metrics': {'totalMs': round((time.perf_counter()-started)*1000, 3), 'targetReads': target_reads}}
+
+        def assessments(pool):
+            result = {}
+            for name in ('core', 'market'):
+                availability = ('not-run' if name not in strategies else
+                                'unsupported' if evaluation[name] == 'unsupported' else
+                                'unavailable' if context_error is not None else
+                                'qualified' if name in pool else
+                                'pending' if search_outcomes[name] == 'running' else 'unavailable')
+                result[name] = {'availability': availability, 'searchOutcome': search_outcomes[name],
+                                **deepcopy(provider_errors.get(name, {}))}
+            return result
+
+        def decorate(value, pool=None):
+            pool = candidates if pool is None else pool
+            return {**candidate_value(value), 'providerAssessments': assessments(pool),
+                    'providerCandidates': {name: candidate_value(row) for name, row in pool.items()}}
+
+        async def evidence(frame):
+            try:
+                await on_update(frame)
+            except Exception:
+                # Additive observations never change ordinary selection/errors.
+                pass
+
+        async def assessment(name, pool=None):
+            await evidence({'type': 'provider-assessment', 'strategy': name,
+                            'value': assessments(candidates if pool is None else pool)[name]})
 
         async def select():
             nonlocal winner
@@ -408,6 +439,10 @@ class TradeQuotes:
                             if old is None or score(request, value) >= score(request, old):
                                 candidates[strategy] = value
                                 await select()
+                                if old != value:
+                                    await evidence({'type': 'provider-qualified', 'strategy': strategy,
+                                                    'value': candidate_value(value)})
+                                    await assessment(strategy)
                     elif frame['type'] == 'invalidated':
                         async with lock:
                             if frame.get('reason') == 'snapshot-changed':
@@ -423,6 +458,8 @@ class TradeQuotes:
                                     await select()
                             if budget:
                                 budget.ready = bool(candidates)
+                            for name in (('core', 'market') if context_error is not None else (strategy,)):
+                                await assessment(name)
                     elif frame['type'] == 'model':
                         await on_update({'type': 'model', 'value': self.packet(request, {strategy: frame['value']})})
                     elif frame['type'] == 'progress':
@@ -435,14 +472,30 @@ class TradeQuotes:
                 await publish({'type': 'qualified', 'value': quote})
                 terminal_candidates[strategy] = execution_value(quote)
                 evaluation[strategy] = 'complete'
+                search_outcomes[strategy] = 'complete'
+                await assessment(strategy)
             except SearchStopped as error:
                 evaluation[strategy] = 'unavailable'
+                search_outcomes[strategy] = 'timeout'
                 errors[strategy] = TimeoutError('Quote selection budget exhausted')
                 error_quote_diagnostics[strategy] = quote_failure_context(error)
+                provider_errors[strategy] = public_quote_error(errors[strategy])
+                await assessment(strategy)
+            except asyncio.CancelledError:
+                evaluation[strategy] = 'unavailable'
+                search_outcomes[strategy] = 'cancelled'
+                try:
+                    await assessment(strategy)
+                finally:
+                    raise
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
                 error_quote_diagnostics[strategy] = quote_failure_context(error)
+                provider_errors[strategy] = public_quote_error(error)
+                code = provider_errors[strategy]['code']
+                search_outcomes[strategy] = ('timeout' if code in ('quote-timeout', 'rpc-timeout') else
+                                             'complete' if code == 'quote-no-route' else 'error')
                 if isinstance(error, SnapshotChanged):
                     async with lock:
                         context_error = error
@@ -451,12 +504,16 @@ class TradeQuotes:
                         candidates.clear()
                         await select()
                 await on_update({'type': 'provider-error', 'strategy': strategy, **public_quote_error(error)})
+                for name in (('core', 'market') if context_error is not None else (strategy,)):
+                    await assessment(name)
 
         async def models():
             value = await self.acquire_models(request, block)
             await on_update({'type': 'model', 'value': value})
             if value.get('estimate'):
                 await on_update({'type': 'estimate', **value['estimate']})
+        for strategy in ('core', 'market'):
+            await assessment(strategy)
         model_task = asyncio.create_task(models())
         tasks = [asyncio.create_task(run(strategy)) for strategy in strategies]
         try:
@@ -469,9 +526,11 @@ class TradeQuotes:
             # fallback. A policy cutoff must obtain a provider terminal value,
             # including its final canonical validation and owned-task drain.
             final = terminal_candidates if budget and budget.stop.is_set() else candidates
+            for strategy in ('core', 'market'):
+                await assessment(strategy, final)
             if final:
                 winner = max(final.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
-                return decorate(winner)
+                return decorate(winner, final)
             error = next(iter(errors.values()), QuoteFailure('quote-no-route'))
             bind_quote_error(error, next((error_quote_diagnostics[strategy]
                 for strategy, value in errors.items() if value is error), None))
@@ -500,13 +559,24 @@ async def handle_trade_quote(request, service, *, model=False):
                                 status_code=503, headers={'Cache-Control': 'no-store'})
     async def events():
         queue = asyncio.Queue()
+        provider_assessments, provider_candidates = {}, {}
         async def publish(frame):
+            if frame['type'] == 'provider-assessment':
+                provider_assessments[frame['strategy']] = deepcopy(frame['value'])
+                if frame['value']['availability'] != 'qualified':
+                    provider_candidates.pop(frame['strategy'], None)
+            elif frame['type'] == 'provider-qualified':
+                provider_candidates[frame['strategy']] = deepcopy(frame['value'])
             await queue.put(observation.event(frame))
         async def produce():
             try:
                 await publish({'type': 'complete', 'value': await service.get(value, publish)})
             except Exception as error:
-                await publish(observation.error(error))
+                payload = observation.error(error)
+                if provider_assessments:
+                    payload.update(providerAssessments=deepcopy(provider_assessments),
+                                   providerCandidates=deepcopy(provider_candidates))
+                await publish(payload)
             finally:
                 await queue.put(None)
         task = asyncio.create_task(produce())

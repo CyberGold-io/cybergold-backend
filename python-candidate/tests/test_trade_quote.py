@@ -22,6 +22,7 @@ from cybergold_candidate.route_search import RouteSearchRpc
 from web3 import AsyncWeb3
 from test_quote_intent import service, SETTINGS, ASSET_A, ASSET_B, ADAPTER, HASH, Provider, request as old_request
 from cybergold_candidate.route_search import WETH, candidates
+from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context
 
 BLOCK = {'hash': HASH, 'number': 101}
 CONTEXT = {'chainId': 1, 'blockNumber': '101', 'blockHash': HASH, 'observedAt': '2026-10-11T00:00:00Z'}
@@ -638,6 +639,237 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
                 for k in ('side', 'mode', 'counterToken', 'native', 'amount', 'slippageBps')})
             self.assertEqual(model.status_code, 200)
             self.assertEqual(model.json()['namespace'], 'trade')
+
+
+class ProviderEvidenceTests(unittest.IsolatedAsyncioTestCase):
+    def engines(self, *args):
+        engines = Engines(*args)
+        self.addAsyncCleanup(engines.close)
+        return engines
+
+    async def test_independent_integer_ranking_retains_both_complete_plans(self):
+        # Literal net economics are the oracle, never the production score().
+        # First row: Core200 less3 fees=197; Market199 less1=198.
+        cases = [
+            ('buy', 'exact-in', core_quote(amount_out=197), market_quote(amount_out=198), 'market', '198'),
+            ('buy', 'exact-out', core_quote('buy', 'exact-out', expected_input=95, maximum=200),
+             market_quote(amount_in=96, maximum=100), 'core', '95'),
+            ('sell', 'exact-in', core_quote('sell', amount_out=197), market_quote(amount_out=198), 'market', '198'),
+            ('sell', 'exact-out', core_quote('sell', 'exact-out', amount_in=105, expected_input=95),
+             market_quote(amount_in=100), 'market', '100'),
+            ('buy', 'exact-in', core_quote(amount_out=9007199254740993),
+             market_quote(amount_out=9007199254740992), 'core', '9007199254740993'),
+        ]
+        for side, mode, core, market, winner, amount in cases:
+            with self.subTest(side=side, mode=mode, amount=amount):
+                engines = self.engines(core, market)
+                result = await engines.quotes.get(request(side, mode), lambda _: asyncio.sleep(0))
+                self.assertEqual(result['strategy'], winner)
+                self.assertEqual(result['quotedOutput' if mode == 'exact-in' else 'quotedInput'], amount)
+                self.assertEqual(result['providerAssessments'], {
+                    name: {'availability': 'qualified', 'searchOutcome': 'complete'} for name in ('core', 'market')})
+                for name, quote in (('core', core), ('market', market)):
+                    candidate = result['providerCandidates'][name]
+                    self.assertEqual(candidate['strategy'], name)
+                    self.assertEqual(candidate['providerQuote'], quote)
+                    self.assertEqual(candidate['context'], CONTEXT)
+                    self.assertNotIn('providerCandidates', candidate)
+                    self.assertNotIn('providerAssessments', candidate)
+
+    async def test_first_qualification_improvements_and_losing_provider_updates(self):
+        engines = self.engines(core_quote(amount_out=200))
+        engines.hold_core = asyncio.Event()
+        first, core_ready, improve = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        frames = []
+        async def market(value, publish, *, block):
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=181)})
+            first.set()
+            await improve.wait()
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=205)})
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=175)})
+            return market_quote(amount_out=205)
+        async def publish(frame):
+            frames.append(frame)
+            if frame['type'] == 'provider-qualified' and frame['strategy'] == 'core':
+                core_ready.set()
+        engines.market._get = market
+        task = asyncio.create_task(engines.quotes.get(request(), publish))
+        try:
+            await asyncio.wait_for(first.wait(), 1)
+            self.assertEqual([f['value']['strategy'] for f in frames if f['type'] == 'qualified'], ['market'])
+            self.assertFalse(task.done())
+            engines.hold_core.set()
+            await asyncio.wait_for(core_ready.wait(), 1)
+            improve.set()
+            result = await asyncio.wait_for(task, 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertEqual([f['value']['strategy'] for f in frames if f['type'] == 'qualified'], ['market', 'core', 'market'])
+        self.assertEqual([f['value']['quotedOutput'] for f in frames
+                          if f['type'] == 'provider-qualified' and f['strategy'] == 'market'], ['181', '205'])
+        self.assertEqual(result['providerCandidates']['core']['quotedOutput'], '200')
+        self.assertEqual(result['providerCandidates']['market']['quotedOutput'], '205')
+
+    async def test_qualified_plan_and_later_search_failure_are_independent(self):
+        for name in ('core', 'market'):
+            for error, outcome, code in ((TimeoutError(), 'timeout', 'quote-timeout'),
+                                         (QuoteFailure('rpc-rate-limit'), 'error', 'rpc-rate-limit'),
+                                         (QuoteFailure('quote-no-route'), 'complete', 'quote-no-route')):
+                with self.subTest(provider=name, outcome=outcome):
+                    engines = self.engines()
+                    other = 'market' if name == 'core' else 'core'
+                    setattr(engines, other+'_error', QuoteFailure('quote-no-route'))
+                    async def tail(value, publish, **kwargs):
+                        await publish({'type': 'qualified', 'value': deepcopy(getattr(engines, name+'_value'))})
+                        raise error
+                    if name == 'core':
+                        engines.core.get = tail
+                    else:
+                        engines.market._get = tail
+                    result = await engines.quotes.get(request(), lambda _: asyncio.sleep(0))
+                    self.assertEqual(result['strategy'], name)
+                    observed = result['providerAssessments'][name]
+                    self.assertEqual((observed['availability'], observed['searchOutcome'], observed['code']),
+                                     ('qualified', outcome, code))
+                    self.assertEqual(result['providerCandidates'][name]['providerQuote'], getattr(engines, name+'_value'))
+                    self.assertEqual(result['evaluation'][name], 'unavailable')
+
+    async def test_invalidated_family_can_qualify_lower_without_retaining_old_plan(self):
+        engines = self.engines()
+        frames = []
+        async def market(value, publish, *, block):
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=210)})
+            await publish({'type': 'invalidated'})
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=180)})
+            return market_quote(amount_out=180)
+        engines.market._get = market
+        result = await engines.quotes.get(request(), lambda f: asyncio.sleep(0, result=frames.append(f)))
+        self.assertEqual(result['providerCandidates']['market']['quotedOutput'], '180')
+        self.assertTrue(any(f['type'] == 'provider-assessment' and f['strategy'] == 'market'
+                            and f['value']['availability'] == 'pending' for f in frames))
+        self.assertEqual(result['strategy'], 'core')
+
+    async def test_unsupported_and_retained_unselected_providers_are_distinct(self):
+        engines = self.engines()
+        native = await engines.quotes.get(request(native=True), lambda _: asyncio.sleep(0))
+        self.assertEqual(native['providerAssessments']['market'],
+                         {'availability': 'unsupported', 'searchOutcome': 'not-run'})
+        initial = await engines.quotes.get(request(), lambda _: asyncio.sleep(0))
+        retained = {'strategy': 'core', 'request': initial['providerRequest'], 'quote': initial['providerQuote']}
+        value = await engines.quotes.get(request(retainedPlan=retained), lambda _: asyncio.sleep(0))
+        self.assertEqual(value['providerAssessments']['market'],
+                         {'availability': 'not-run', 'searchOutcome': 'not-run'})
+        self.assertEqual(set(value['providerCandidates']), {'core'})
+
+    async def test_terminal_http_error_keeps_both_assessments_and_no_candidate(self):
+        engines = self.engines()
+        engines.core_error, engines.market_error = TimeoutError('private endpoint text'), QuoteFailure('quote-no-route')
+        app = create_app(trade_quotes=engines.quotes)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+            response = await client.post('/api/quotes/trade/stream', json=request())
+        frames = [json.loads(line) for line in response.text.splitlines()]
+        terminal = frames[-1]
+        self.assertEqual(terminal['type'], 'error')
+        self.assertEqual(terminal['providerCandidates'], {})
+        self.assertEqual(terminal['providerAssessments']['core']['searchOutcome'], 'timeout')
+        self.assertEqual(terminal['providerAssessments']['market']['searchOutcome'], 'complete')
+        self.assertTrue(all(row['availability'] == 'unavailable' for row in terminal['providerAssessments'].values()))
+        self.assertNotIn('private endpoint text', response.text)
+
+    async def test_snapshot_disproof_removes_both_http_candidate_tuples(self):
+        engines = self.engines()
+        core_ready, invalidated, finish_core = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        invalidated_core = []
+        original_assessment = engines.quotes._get
+        async def core(value, publish, **kwargs):
+            await publish({'type': 'qualified', 'value': core_quote()})
+            core_ready.set()
+            await finish_core.wait()
+            return core_quote()
+        async def market(value, publish, *, block):
+            await core_ready.wait()
+            await publish({'type': 'qualified', 'value': market_quote(amount_out=210)})
+            raise SnapshotChanged('Recovery snapshot changed; restart discovery', retry=1)
+        async def observe(request, publish, *, block):
+            async def capture(frame):
+                if frame['type'] == 'provider-assessment' and frame['strategy'] == 'core' \
+                        and frame['value']['availability'] == 'unavailable' and not invalidated.is_set():
+                    invalidated_core.append(deepcopy(frame['value']))
+                    invalidated.set()
+                    finish_core.set()
+                await publish(frame)
+            return await original_assessment(request, capture, block=block)
+        engines.core.get, engines.market._get = core, market
+        engines.quotes.sharing.service.get = observe
+        app = create_app(trade_quotes=engines.quotes)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+            response = await client.post('/api/quotes/trade/stream', json=request())
+        frames = [json.loads(line) for line in response.text.splitlines()]
+        self.assertEqual(frames[-1]['type'], 'error')
+        self.assertTrue(invalidated.is_set())
+        self.assertEqual(invalidated_core[0]['searchOutcome'], 'running')
+        self.assertEqual(frames[-1]['providerCandidates'], {})
+        self.assertTrue(all(row['availability'] == 'unavailable' for row in frames[-1]['providerAssessments'].values()))
+
+    async def test_observer_cannot_mutate_retained_candidate_or_change_winner(self):
+        engines = self.engines()
+        async def mutate(frame):
+            if frame['type'] == 'provider-qualified':
+                frame['value']['context']['blockHash'] = 'mutated'
+                frame['value']['providerQuote'].clear()
+        result = await engines.quotes.get(request(), mutate)
+        self.assertEqual(result['strategy'], 'core')
+        for name in ('core', 'market'):
+            self.assertEqual(result['providerCandidates'][name]['context'], CONTEXT)
+            self.assertTrue(result['providerCandidates'][name]['providerQuote'])
+
+    async def test_additive_producer_observation_failure_preserves_selection(self):
+        engines = self.engines()
+        async def unavailable(frame):
+            if frame['type'] in ('provider-assessment', 'provider-qualified'):
+                raise RuntimeError('optional producer observation failed')
+        # Subscriber callbacks keep their ordinary exception contract. This
+        # control isolates the new producer-side additive observation seam.
+        result = await engines.quotes._get({**request(), 'adapter': ADAPTER}, unavailable, block=BLOCK)
+        self.assertEqual(result['strategy'], 'core')
+        self.assertEqual(set(result['providerCandidates']), {'core', 'market'})
+
+    async def test_cancellation_reports_owned_searches_and_preserves_drain(self):
+        engines = self.engines()
+        engines.hold_core, engines.hold_market = asyncio.Event(), asyncio.Event()
+        frames = []
+        task = asyncio.create_task(engines.quotes._get({**request(), 'adapter': ADAPTER},
+            lambda f: asyncio.sleep(0, result=frames.append(f)), block=BLOCK))
+        await asyncio.wait_for(engines.core_started.wait(), 1)
+        await asyncio.wait_for(engines.market_started.wait(), 1)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(engines.core_cancelled.is_set() and engines.market_cancelled.is_set())
+        self.assertEqual({f['strategy'] for f in frames if f['type'] == 'provider-assessment'
+                          and f['value']['searchOutcome'] == 'cancelled'}, {'core', 'market'})
+
+    async def test_cutoff_alternatives_use_existing_terminal_candidate_requirement(self):
+        engines = self.engines()
+        market_complete = asyncio.Event()
+        budget = QuoteBudget(initial=60, extension=60)
+        async def core(value, publish, **kwargs):
+            await publish({'type': 'qualified', 'value': core_quote(amount_out=200)})
+            await market_complete.wait()
+            budget.finish_selection('controlled-cutoff')
+            raise SearchStopped()
+        async def publish(frame):
+            if frame['type'] == 'provider-assessment' and frame['strategy'] == 'market' \
+                    and frame['value']['searchOutcome'] == 'complete':
+                market_complete.set()
+        engines.core.get = core
+        with budget_context(budget):
+            result = await engines.quotes._get({**request(), 'adapter': ADAPTER}, publish, block=BLOCK)
+        self.assertEqual(result['strategy'], 'market')
+        self.assertEqual(set(result['providerCandidates']), {'market'})
+        self.assertEqual(result['providerAssessments']['core']['availability'], 'unavailable')
+        self.assertEqual(result['providerAssessments']['core']['searchOutcome'], 'timeout')
 
 
 class ArithmeticTests(unittest.TestCase):
