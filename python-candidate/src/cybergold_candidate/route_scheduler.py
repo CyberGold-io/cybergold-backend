@@ -71,7 +71,7 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
                 waiters.add(discovery)
             if not waiters:
                 break
-            if active:
+            if active and ready:
                 if capacity is None:
                     changed.clear()
                     capacity = asyncio.create_task(changed.wait())
