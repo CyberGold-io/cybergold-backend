@@ -15,6 +15,17 @@ existing three-hop bound. Discovery retains selected V2/V3/V4 inventory and
 direct/via-WETH V3 connector identities; this is not a claim that every V4 pool
 has been discovered. Another CYGLD pool cannot replace the canonical edge.
 
+A cold API can also try direct PAXG/counter-token hookless V4 keys for the
+common fee/spacing pairs `100/1`, `500/10`, `3000/60` and `10000/200`.
+StateView initialization and the existing SDK quote establish whether each
+candidate exists and executes; a guessed key is not an existing pool. Successful
+identities retain a canonical acquisition anchor for reuse and reorg recovery.
+The worker separately catches up PAXG V4 Initialize events in bounded ranges
+from the PoolManager's deployment, with its own `v4-paxg` cursor. The older
+Core-only cursor cannot establish that coverage. Other acquired fee/spacing
+keys stay eligible; no negative seed observation prunes them. Catalog catch-up
+and complete directional liquidity/tick coverage remain different facts.
+
 Mixed-protocol exact-input routes use the existing measured per-hop adapter.
 Exact-output routes remain homogeneous: the canonical V4 edge therefore needs
 an all-V4 connector path. Mixed-protocol exact-output paths remain excluded;

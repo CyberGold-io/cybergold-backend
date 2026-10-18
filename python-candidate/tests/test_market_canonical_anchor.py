@@ -90,12 +90,63 @@ class CanonicalGraphTests(unittest.IsolatedAsyncioTestCase):
         for source, output in ((CORE, COUNTER), (COUNTER, CORE)):
             target = {'inputAsset': source, 'outputAsset': output, 'amount': '100'}
             rows = list(initial_market_branches(anchor, CORE, target, 'exactIn', 31338))
-            self.assertEqual(len(rows), 13)
+            self.assertEqual(len(rows), 17)
             self.assertTrue(all(len(row[0]['hops']) <= 3 for row in rows))
-            self.assertEqual(list(initial_market_branches(anchor, CORE, target, 'exactOut', 31338)), [])
+            outputs = list(initial_market_branches(anchor, CORE, target, 'exactOut', 31338))
+            self.assertEqual(len(outputs), 4)
+            self.assertTrue(all({hop['pool']['protocol'] for hop in row[0]['hops']} == {'v4'} for row in outputs))
 
 
 class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cold_v4_keys_use_real_stateview_producer_sdk_and_retained_revalidation(self):
+        from cybergold_candidate.uniswap_v4 import STATE_VIEW, POOL_MANAGER
+        tail = pool(PAXG, COUNTER, 'v4', 500)
+        tail['tickSpacing'] = 10
+        tail['id'] = v4_pool_id((tail['token0']['address'], tail['token1']['address'], 500, 10, ZERO))
+        class Rpc:
+            chain_id, state_view, pool_manager, w3 = 31338, STATE_VIEW, POOL_MANAGER, Web3()
+            def __init__(self):
+                self.calls, self.known = [], {}
+            async def block(self, _): return deepcopy(BLOCK)
+            async def assert_canonical(self, block): assert block == BLOCK
+            async def close(self): pass
+            async def read_function(self, address, signature, inputs, args, outputs, block):
+                assert block == BLOCK
+                self.calls.append((signature, deepcopy(args)))
+                if signature == 'decimals()': return (18,)
+                identity = '0x'+args[0].hex()
+                known = self.known.get(identity)
+                if signature == 'getSlot0(bytes32)':
+                    return (1 << 96, 0, 0, known['feePips']) if known else (0, 0, 0, 0)
+                if signature == 'getLiquidity(bytes32)': return (10**18 if known else 0,)
+                if signature == 'getTickBitmap(bytes32,int16)':
+                    return (1 << (196 if args[1] == -1 else 60),)
+                if signature == 'getTickLiquidity(bytes32,int24)':
+                    return (10**18, 10**18 if args[1] < 0 else -10**18)
+                raise AssertionError(signature)
+        rpc = Rpc()
+        registry = PoolRegistry(SETTINGS, rpc=rpc)
+        rpc.known = {registry.seed['id']: registry.seed, tail['id']: tail}
+        registry.ensure_loaded = lambda **_: asyncio.sleep(0)
+        self.assertEqual(list(registry.inventory), [registry.seed['id']])
+        sdk = SdkWorker([os.environ.get('CYBERGOLD_TEST_NODE', 'node'), str(Path('src/uniswap-sdk/worker.ts').resolve())])
+        quotes = MarketQuotes(SETTINGS, registry, sdk)
+        self.addAsyncCleanup(quotes.close)
+        self.addAsyncCleanup(registry.close)
+        for side in ('sell', 'buy'):
+            request = {'side': side, 'mode': 'exact-out', 'counterToken': COUNTER, 'amount': '1000000',
+                'adapter': ADAPTER, 'recipient': COUNTER, 'deadline': '2000000000', 'slippageBps': 100}
+            result = await quotes.get(request)
+            self.assertEqual(result['qualification'], 'sdk')
+            self.assertTrue(any(hop['pool']['id'] == tail['id'] for hop in result['plan']['route']['branches'][0]['hops']))
+            self.assertIn(tail['id'], registry.inventory)
+            self.assertEqual(registry.inventory[tail['id']]['acquisition'], {'blockNumber': '123', 'blockHash': BLOCK['hash']})
+            retained = await quotes.get({**request, 'retainedPlan': result['plan']})
+            self.assertEqual(retained['params']['bound'], result['params']['bound'])
+        self.assertEqual(set(registry.inventory), {registry.seed['id'], tail['id']})
+        probed = {args[0].hex() for signature, args in rpc.calls if signature == 'getSlot0(bytes32)'}
+        self.assertGreater(len(probed), 2, 'Uninitialized candidate keys must be observed, not fabricated as pools')
+
     async def fixture(self, tail_protocol):
         class Rpc:
             chain_id = 31338

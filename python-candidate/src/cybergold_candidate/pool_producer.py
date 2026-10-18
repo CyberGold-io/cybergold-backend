@@ -272,9 +272,7 @@ class PoolProducer:
                 anchor = {'blockNumber': str(block['number']), 'blockHash': block['hash']}
                 if pool and value['exists']:
                     if pool['id'] not in registry.inventory:
-                        pool = {**pool, 'acquisition': anchor}
-                        registry.inventory[pool['id']] = deepcopy(pool)
-                        registry.persist('inventory', pool['id'], pool)
+                        pool = registry.acquire_pool(pool, block)
                     for token in (pool['token0'], pool['token1']):
                         if token.get('decimalsKnown') is not False:
                             registry.metadata[token['address'].lower()] = deepcopy(token)

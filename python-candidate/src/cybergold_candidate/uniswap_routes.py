@@ -5,13 +5,16 @@ from typing import Literal
 
 from pydantic import BaseModel
 from .app_tokens import TOKENS
-from .uniswap_v4 import v4_pool_id
+from .uniswap_v4 import v4_pool_id, POOL_MANAGER
 
 # Canonical historical deployment (Ops mainnet-app-contracts / Helpers release).
 # This is encoder dispatch, not an adapter approval or transaction admission check.
 LEGACY_V3_ADAPTERS = {'0x4edb8190232a47e45d861003672938eb7ee84a15'}
 V3_DIRECT_FEES = (100, 500, 3000, 10000)
 V3_VIA_FEES = (500, 3000, 10000)
+# Bounded hookless PoolKey candidates, not an inventory/existence assertion.
+# V4 permits other fee/spacing combinations; catalog paths retain those keys.
+V4_CONNECTOR_KEYS = ((100, 1), (500, 10), (3000, 60), (10000, 200))
 
 
 def uses_typed_adapter(address):
@@ -221,8 +224,9 @@ def anchor_market_hops(hops, anchor, sale):
     return [deepcopy(anchor), *hops] if sale else [*hops, deepcopy(anchor)]
 
 
-def initial_market_branches(pool, core, target, mode, chain_id=None):
+def initial_market_branches(pool, core, target, mode, chain_id=None, pool_manager=POOL_MANAGER):
     """Retain direct/via-WETH connector coverage around the canonical edge."""
+    pool_manager = pool_manager or POOL_MANAGER
     anchor, (source, output), sale = market_anchor(pool, core, target['inputAsset'], target['outputAsset'])
     if source.lower() == output.lower():
         yield [{'amountIn': str(target['amount']) if mode == 'exactIn' else '0', 'hops': [anchor]}]
@@ -232,6 +236,19 @@ def initial_market_branches(pool, core, target, mode, chain_id=None):
         hops = anchor_market_hops(branches[0]['hops'], anchor, sale)
         if supported_route(hops, mode):
             yield [{**branches[0], 'hops': hops}]
+    # V4 has no pair factory getter: a complete hookless PoolKey determines its
+    # StateView identity. The ordinary snapshot/SDK path proves initialization
+    # and quotes it at the pinned block, including on a cold API without a DB.
+    a, b = sorted((source.lower(), output.lower()))
+    for fee, spacing in V4_CONNECTOR_KEYS:
+        tokens = [{'address': value, **({'chainId': int(chain_id)} if chain_id is not None else {})}
+                  for value in (a, b)]
+        connector_pool = {'id': v4_pool_id((a, b, fee, spacing, '0x'+'00'*20)), 'protocol': 'v4',
+            'token0': tokens[0], 'token1': tokens[1], 'feePips': fee, 'tickSpacing': spacing,
+            'hooks': '0x'+'00'*20, 'poolManager': pool_manager}
+        hops = anchor_market_hops([{'pool': connector_pool, 'zeroForOne': source.lower() == a}], anchor, sale)
+        if supported_route(hops, mode):
+            yield [{'amountIn': str(target['amount']) if mode == 'exactIn' else '0', 'hops': hops}]
 
 
 async def market_routes(pools, token_in, token_out, core, pool, max_hops=3):

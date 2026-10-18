@@ -397,7 +397,8 @@ class RouteQuoteEngine:
                 seen = {}
                 market = request.get('executionContext') == 'helpers-market'
                 anchor = self.registry.seed if market else None
-                seed = iter(initial_market_branches(anchor, self.registry.core, target, mode, self.registry.chain)
+                seed = iter(initial_market_branches(anchor, self.registry.core, target, mode, self.registry.chain,
+                    getattr(self.registry.get_rpc(), 'pool_manager', anchor.get('poolManager')))
                     if market else self.initial_v3_branches(target, mode))
                 graph = candidate_branches(pools, target['inputAsset'], target['outputAsset'],
                     mode, int(target['amount']), **({'anchor': anchor, 'core': self.registry.core} if market else {}))

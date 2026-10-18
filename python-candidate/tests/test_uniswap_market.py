@@ -21,7 +21,7 @@ from cybergold_candidate.market_fee import quoted_fee, gross_buy_target, routed_
 from cybergold_candidate.market_swap import MarketQuotes, DailyRecipientCache, encode_adapter, ADAPTER_TYPE
 from cybergold_candidate.sdk_worker import SdkWorker, SdkWorkerError
 from cybergold_candidate.uniswap_routes import candidate_branches, discover_routes, discover_routes_async, supported_route, v3_path, v4_pool_id
-from cybergold_candidate.uniswap_state import PoolRegistry, EVENTS, DISCOVERY, ZERO, V3_SWAP
+from cybergold_candidate.uniswap_state import PoolRegistry, EVENTS, DISCOVERY, ZERO, V3_SWAP, PAXG
 from cybergold_candidate.uniswap_v4 import STATE_VIEW
 from cybergold_candidate.helpers_execution import ABI, argument
 from cybergold_candidate.quote_revalidation import revalidate, core_bounds
@@ -258,6 +258,11 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 self.v2_factory, self.factory, self.pool_manager = (addresses[p] for p in ('v2', 'v3', 'v4'))
                 self.queries = []
 
+            @property
+            def core_queries(self):
+                padded = '0x'+PAXG[2:].lower().rjust(64, '0')
+                return [query for query in self.queries if padded not in query['topics']]
+
             async def block(self, number):
                 return {'number': number, 'hash': '0x'+hex(number)[2:].rjust(64, '0')}
 
@@ -289,15 +294,73 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 registry, rpc = self.fixture(chain)
                 try:
                     await registry.discover(await rpc.block(21_688_331), max_blocks=2)
-                    self.assertEqual(len(rpc.queries), 6)
+                    self.assertEqual(len(rpc.core_queries), 6)
                     for _protocol, (address, birth) in self.deployments.items():
-                        queries = [row for row in rpc.queries if row['address'] == address]
+                        queries = [row for row in rpc.core_queries if row['address'] == address]
                         self.assertEqual([int(row['fromBlock'], 16) for row in queries], [birth, birth])
                     pool = registry.inventory[v4_pool_id((A, B, 100, 1, ZERO))]
                     self.assertEqual(pool['discovery']['blockNumber'], '21688329')
                     self.assertEqual(pool['token0']['chainId'], chain)
                 finally:
                     await registry.close()
+
+    async def test_paxg_v4_catalog_has_own_birth_cursor_persists_custom_keys_and_rewinds(self):
+        store = Store()
+        registry, rpc = self.fixture(store=store)
+        birth = self.deployments['v4'][1]
+        checkpoint = await rpc.block(birth+1)
+        # A completed Core-only cursor cannot attest to historical PAXG coverage.
+        await store.save('cursor', 'v4', {'blockNumber': str(birth+2), 'checkpoints': [
+            {'rangeStart': str(birth), 'blockNumber': str(birth+1), 'blockHash': checkpoint['hash']}]})
+        padded = '0x'+PAXG[2:].lower().rjust(64, '0')
+        a, b = sorted((PAXG.lower(), B.lower()))
+        identity = v4_pool_id((a, b, 777, 7, ZERO))
+        original = rpc.logs
+        async def logs(query):
+            if padded not in query['topics']:
+                return await original(query)
+            rpc.queries.append(deepcopy(query))
+            if not int(query['fromBlock'], 16) <= birth <= int(query['toBlock'], 16):
+                return []
+            return [{'topics': [DISCOVERY['v4'], identity, '0x'+a[2:].rjust(64, '0'), '0x'+b[2:].rjust(64, '0')],
+                'data': Web3.to_hex(rpc.w3.codec.encode(['uint24', 'int24', 'address', 'uint160', 'int24'],
+                    [777, 7, ZERO, 1 << 96, 0])), 'transactionHash': '0x'+'12'*32,
+                'blockNumber': hex(birth), 'logIndex': '0x0'}]
+        rpc.logs = logs
+        try:
+            await registry.discover(checkpoint, max_blocks=2)
+            selected = [query for query in rpc.queries if padded in query['topics']]
+            self.assertEqual(len(selected), 2)
+            self.assertEqual({int(query['fromBlock'], 16) for query in selected}, {birth})
+            self.assertEqual(registry.inventory[identity]['feePips'], 777)
+            self.assertEqual(registry.inventory[identity]['tickSpacing'], 7)
+            self.assertEqual(registry.inventory[identity]['discovery']['scope'], 'v4-paxg')
+            self.assertEqual(registry.cursors['v4-paxg']['blockNumber'], str(birth+2))
+            self.assertEqual(store.data['cursor']['v4']['blockNumber'], str(birth+2))
+            restarted, _ = self.fixture(store=store)
+            try:
+                await restarted.ensure_loaded(wait=True)
+                self.assertIn(identity, restarted.inventory)
+                self.assertEqual(restarted.cursors['v4-paxg'], registry.cursors['v4-paxg'])
+            finally:
+                await restarted.close()
+            # Only this scope's orphaned creation suffix is removed; its rewind
+            # is persisted and ordinary bounded discovery can reacquire it.
+            registry.cursors['v4-paxg']['checkpoints'][0]['blockHash'] = '0x'+'f'*64
+            canonical = rpc.assert_canonical
+            async def reorg(block):
+                if block['hash'] == '0x'+'f'*64:
+                    from cybergold_candidate.recovery_rpc import SnapshotChanged
+                    raise SnapshotChanged('fixture orphan')
+                await canonical(block)
+            rpc.assert_canonical = reorg
+            self.assertTrue(await registry.recover_catalog())
+            self.assertNotIn(identity, registry.inventory)
+            self.assertNotIn(identity, store.data['inventory'])
+            self.assertEqual(registry.cursors['v4-paxg']['blockNumber'], str(birth))
+            self.assertTrue(registry.cursors['v4-paxg']['pending'])
+        finally:
+            await registry.close()
 
     async def test_saved_cursors_resume_literally_across_restart_below_and_above_floor(self):
         starts = {'v2': 10_000_830, 'v3': 12_369_630, 'v4': 21_688_330}
@@ -311,7 +374,7 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
             await registry.discover(await rpc.block(21_688_335), max_blocks=2)
             for protocol, start in starts.items():
                 address = self.deployments[protocol][0]
-                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.queries if row['address'] == address], [start, start])
+                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.core_queries if row['address'] == address], [start, start])
                 self.assertEqual(registry.cursors[protocol]['blockNumber'], str(start+2))
                 self.assertEqual(len(registry.cursors[protocol]['checkpoints']), 2)
         finally:
@@ -321,7 +384,7 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
             await restarted.discover(await rpc.block(21_688_335), max_blocks=2)
             for protocol, start in starts.items():
                 address = self.deployments[protocol][0]
-                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.queries if row['address'] == address], [start+2, start+2])
+                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.core_queries if row['address'] == address], [start+2, start+2])
                 self.assertEqual(len(restarted.cursors[protocol]['checkpoints']), 3)
         finally:
             await restarted.close()
@@ -333,8 +396,8 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 registry, rpc = self.fixture(chain, addresses)
                 try:
                     await registry.discover(await rpc.block(21_688_330), max_blocks=2)
-                    self.assertEqual(len(rpc.queries), 6)
-                    self.assertTrue(all(row['fromBlock'] == '0x0' for row in rpc.queries))
+                    self.assertEqual(len(rpc.core_queries), 6)
+                    self.assertTrue(all(row['fromBlock'] == '0x0' for row in rpc.core_queries))
                 finally:
                     await registry.close()
 
@@ -345,27 +408,27 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
         with patch('cybergold_candidate.uniswap_state.datetime') as clock:
             clock.now.return_value = datetime(2026, 10, 1, tzinfo=timezone.utc)
             await registry.discover(await rpc.block(2), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 6)
+            self.assertEqual(len(rpc.core_queries), 6)
             self.assertEqual(registry.discovery_month, '2026-10')
             await registry.discover(await rpc.block(5), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 6)
+            self.assertEqual(len(rpc.core_queries), 6)
             await registry.discover(await rpc.block(5), force=True, max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[6:]], [(3, 5)] * 6)
+                for q in rpc.core_queries[6:]], [(3, 5)] * 6)
             clock.now.return_value = datetime(2026, 11, 1, tzinfo=timezone.utc)
             await registry.discover(await rpc.block(8), max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[12:]], [(6, 8)] * 6)
+                for q in rpc.core_queries[12:]], [(6, 8)] * 6)
             await asyncio.gather(*tuple(registry.background))
             restarted, _ = self.fixture(addresses={'v2': A, 'v3': B, 'v4': C}, store=store)
             restarted.rpc = rpc
             self.addAsyncCleanup(restarted.close)
             await restarted.discover(await rpc.block(9), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 18)
+            self.assertEqual(len(rpc.core_queries), 18)
             clock.now.return_value = datetime(2026, 12, 1, tzinfo=timezone.utc)
             await restarted.discover(await rpc.block(10), max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[18:]], [(9, 10)] * 6)
+                for q in rpc.core_queries[18:]], [(9, 10)] * 6)
             self.assertEqual(restarted.discovery_month, '2026-12')
 
 
