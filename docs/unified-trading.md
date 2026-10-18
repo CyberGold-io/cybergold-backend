@@ -7,8 +7,26 @@ basket targets. App does not choose issuance, redemption or a market swap.
 Existing family APIs remain available to older clients and specialist flows.
 
 The coordinator runs complete eligible Core and market candidates at one
-pinned block. Initial PAXG ERC20 trades compare both; existing other-token and
-native ETH intents retain Core execution. Native requests use WETH as the
+pinned block. ERC20 counter-tokens compare both providers through the typed
+adapter. Every Market branch begins with the configured canonical CYGLD/PAXG
+pool for a CYGLD sale, or ends with that pool for a CYGLD purchase. PAXG itself
+uses only that canonical pool. Other ERC20s add PAXG connectors within the
+existing three-hop bound. Discovery retains selected V2/V3/V4 inventory and
+direct/via-WETH V3 connector identities; this is not a claim that every V4 pool
+has been discovered. Another CYGLD pool cannot replace the canonical edge.
+
+Mixed-protocol exact-input routes use the existing measured per-hop adapter.
+Exact-output routes remain homogeneous: the canonical V4 edge therefore needs
+an all-V4 connector path. Mixed-protocol exact-output paths remain excluded;
+if no eligible complete route is found the ordinary no-route/deadline result
+remains distinct from proven insufficient liquidity. Fees, execution bounds,
+selection objectives and the existing partial-input/refund behavior are unchanged.
+Retained Market plans revalidate the same anchor, rather than admitting an
+unanchored caller hint. Core sourcing routes retain their existing coverage.
+
+Native ETH intents retain Core execution. The deployed Market facet funds and
+settles ERC20s and has no payable wrap/unwrap entrypoint; exposing its WETH quote
+as native ETH execution would be incorrect. Native requests use WETH as the
 counter-token with `native: true`; the actual endpoint and Core helper token
 are the native zero address. The historical V3 adapter keeps Core's legacy
 compiler; it cannot decode the market provider's typed payload, so that market
@@ -77,7 +95,7 @@ provider-specific so an eligible Market candidate can still qualify and win.
 Input-budget issuance continues to permit the existing cap-limited fixed output
 and input refunds; a large budget alone does not require a cap rejection.
 
-Mixed exact-output, cross-family input splitting, gas-adjusted ranking, actual
-partial fills, arbitrary hooks and wider market token UI remain deferred.
+Mixed exact-output, native ETH Market execution, cross-family input splitting,
+gas-adjusted ranking, arbitrary hooks and basket Market composition remain deferred.
 This source introduces no contract deployment, server broadcast or new
 operational approval requirement.

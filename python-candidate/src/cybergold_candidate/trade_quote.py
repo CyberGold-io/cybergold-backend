@@ -247,8 +247,11 @@ class TradeQuotes:
     def supported_market(self, request):
         # The historical V3 deployment does not decode the market compiler's
         # typed payload. Core keeps its existing legacy encoder in that case.
-        return (not request['native'] and request['counterToken'].lower() == PAXG.lower()
-                and uses_typed_adapter(request.get('adapter')))
+        # The Market facet funds and settles ERC20s. Native ETH needs a new
+        # wrapping/unwrap execution endpoint, so it remains explicitly absent.
+        # Eligible ERC20 connectors use canonical Market anchoring in the shared
+        # route engine; mixed exact-output is still excluded by its ABI rule.
+        return not request['native'] and uses_typed_adapter(request.get('adapter'))
 
     def cached_basis(self):
         if self.history and self.basis_epoch != self.history.epoch:

@@ -25,6 +25,7 @@ from cybergold_candidate.protocol_facts import ProtocolFactsRpc
 from cybergold_candidate.helpers_router_facts import ABI as HELPERS_ABI
 from cybergold_candidate.quote_history import QuoteHistory
 from cybergold_candidate.runtime import create_configured_app
+from cybergold_candidate.uniswap_state import PoolRegistry
 
 CORE, HELPERS, SAFE = ('0x'+value*40 for value in ('1', '2', '3'))
 NEW = '0xc2c210979674db1349f812ea116f2f6d131ab839'
@@ -468,9 +469,10 @@ class ProtocolConfigurationTests(unittest.IsolatedAsyncioTestCase):
         class Head:
             async def block(self, _hash): return {'number': 20, 'hash': HASH}
             async def assert_canonical(self, _block): pass
+            async def close(self): pass
         rpc = Head()
-        registry = SimpleNamespace(chain=1, core=CORE, inventory={},
-            pending=SharedReads(), get_rpc=lambda: rpc, ensure_loaded=lambda: asyncio.sleep(0))
+        registry = PoolRegistry(settings(), rpc=rpc)
+        registry.ensure_loaded = lambda: asyncio.sleep(0)
         market = MarketQuotes(settings(), registry, request_resolver=configuration.resolve_request)
         request = {'side': 'buy', 'mode': 'exact-in', 'counterToken': CUSTOM}
         model = await market.get_model(request)
@@ -479,7 +481,7 @@ class ProtocolConfigurationTests(unittest.IsolatedAsyncioTestCase):
             return {'adapter': request['adapter']}
         market.sharing.service.get = selected
         self.assertEqual((await market.get({**request, 'amount': '1'}))['adapter'].lower(), NEW)
-        await market.close(); await registry.pending.close(); await configuration.close()
+        await market.close(); await registry.close(); await configuration.close()
 
     async def test_http_core_default_and_explicit_legacy_keep_their_distinct_identities(self):
         configuration = ProtocolConfiguration(settings())

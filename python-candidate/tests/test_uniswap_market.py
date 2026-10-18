@@ -375,6 +375,9 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A,
             NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS=C, NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=C)
         self.registry = PoolRegistry(settings, rpc=self.rpc)
+        # These fee/custody fixtures use their V2 pair as the canonical edge;
+        # production's configured canonical seed remains V4 CYGLD/PAXG.
+        self.registry.seed = deepcopy(POOL)
         self.registry.inventory = {C: deepcopy(POOL)}
         node = os.environ.get('CYBERGOLD_TEST_NODE', 'node')
         self.sdk = SdkWorker([node, str(Path('src/uniswap-sdk/worker.ts').resolve())])
@@ -678,7 +681,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['fullyFilled'])
         self.assertEqual(result['postState']['liquidity'], '1500000')
 
-    async def test_sdk_economics_rank_candidates_without_contract_repricing(self):
+    async def test_noncanonical_direct_pool_cannot_replace_anchor_or_use_contract_repricing(self):
         other = {**POOL, 'id': '0x'+'4'.rjust(40, '0'), 'address': '0x'+'4'.rjust(40, '0'),
             'protocol': 'v3', 'feePips': 100, 'tickSpacing': 1}
         self.registry.inventory[other['id']] = other
@@ -703,7 +706,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         request = {**self.request, 'mode': 'exact-out'}
         result = await self.quotes.get(request)
         reference.assert_not_awaited()
-        self.assertTrue(any(protocols == {'v3'} and value['fullyFilled'] for protocols, value in prices))
+        self.assertFalse(any(protocols == {'v3'} for protocols, value in prices))
         self.assertTrue(any(protocols == {'v2'} and value['fullyFilled'] for protocols, value in prices))
         self.assertEqual(result['qualification'], 'sdk')
         self.assertEqual(result['netOutput'], request['amount'])
@@ -766,7 +769,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         async def read(address, signature, inputs, args, outputs, block):
             reads.append(signature)
             if signature == 'getPair(address,address)':
-                return (C if set(args) == {A.lower(), B.lower()} else ZERO,)
+                return ('0x'+'4'.rjust(40, '0') if set(args) == {B.lower(), C.lower()} else ZERO,)
             if signature == 'getPool(address,address,uint24)':
                 return (ZERO,)
             if signature == 'decimals()':
@@ -781,12 +784,13 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.rpc.read_function, self.rpc.assert_canonical, self.rpc.logs = read, canonical, logs
         self.quotes.connector_inventory = MethodType(MarketQuotes.connector_inventory, self.quotes)
         self.registry.inventory.clear()
-        first = await self.quotes._get(self.request, block=BLOCK)
+        request = {**self.request, 'counterToken': C}
+        first = await self.quotes._get(request, block=BLOCK)
         static = {name: reads.count(name) for name in ('getPair(address,address)',
             'getPool(address,address,uint24)', 'decimals()')}
         self.assertGreater(static['getPair(address,address)'], 0)
         self.assertEqual(static['decimals()'], 2)
-        second = await self.quotes._get({**self.request, 'amount': '2002'}, block={
+        second = await self.quotes._get({**request, 'amount': '2002'}, block={
             'number': 124, 'hash': '0x'+'cd'*32})
         self.assertNotEqual(first['netOutput'], second['netOutput'])
         self.assertEqual(static['getPair(address,address)'], reads.count('getPair(address,address)'))
@@ -796,7 +800,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         # at the new block instead of inheriting an old absence as a veto.
         self.assertEqual(reads.count('getPool(address,address,uint24)'),
                          static['getPool(address,address,uint24)']+4+2*9)
-        self.assertEqual(reads.count('getReserves()'), 1)
+        self.assertEqual(reads.count('getReserves()'), 2)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
         self.rpc.v2_factory, self.rpc.factory, self.rpc.pool_manager = A, B, C

@@ -23,11 +23,12 @@ from cybergold_candidate.route_encoding import ADAPTER_TYPE, encode_route
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
 from cybergold_candidate.sdk_worker import SdkWorker
 from cybergold_candidate.uniswap_quote import UniswapQuote
-from cybergold_candidate.uniswap_routes import RoutePlan, v3_path
+from cybergold_candidate.uniswap_routes import RoutePlan, v3_path, initial_v3_branches
 from cybergold_candidate.uniswap_state import PoolRegistry, ZERO
 from test_quote_intent import (ADAPTER, ASSET_A, ASSET_B, CORE, HASH, SETTINGS,
                                request as core_request, service as core_service)
 from cybergold_candidate.route_search import WETH
+from cybergold_candidate.trade_quote import PAXG
 
 BLOCK = {'number': 101, 'hash': HASH}
 
@@ -59,7 +60,7 @@ class PipelineFixtureRpc:
         """Opaque SDK callback; never dispatched as a contract/RPC quote."""
         assert block == BLOCK
         self.sdk_prices.append((path, mode, amount))
-        if len(path) == 43 and int.from_bytes(path[20:23]) == 100:
+        if all(int.from_bytes(path[offset:offset+3]) == 100 for offset in range(20, len(path), 23)):
             self.fast.set()
             return amount*2 if mode == 'exactIn' else (amount+1)//2
         if self.held_tail:
@@ -130,6 +131,11 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
     def engine(self, *, held_tail=False):
         rpc = PipelineFixtureRpc(held_tail=held_tail)
         registry = PoolRegistry(SETTINGS, rpc=rpc)
+        # Programmable scheduling fixture uses a V3 canonical edge so both its
+        # anchor and connectors use the same opaque price callback. Actual V4
+        # anchor math/encoding is covered by test_market_canonical_anchor.
+        registry.seed = next(initial_v3_branches({'inputAsset': CORE, 'outputAsset': PAXG,
+            'amount': '0'}, 'exactIn', 1))[0]['hops'][0]['pool']
         registry.inventory = {}
         install_programmable_sdk_snapshot(registry)
         engine = MarketQuotes(SETTINGS, registry, ProgrammablePipelineSdk(rpc))
@@ -259,8 +265,8 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
         # A real cached typed route competes with the original V3 skeletons.
         registry.inventory = {'fixture-v2': {'id': 'fixture-v2', 'protocol': 'v2',
             'address': ASSET_A, 'feePips': 3000,
-            'token0': {'address': min(CORE, WETH), 'decimals': 18, 'chainId': 1},
-            'token1': {'address': max(CORE, WETH), 'decimals': 18, 'chainId': 1}}}
+            'token0': {'address': min(PAXG, WETH), 'decimals': 18, 'chainId': 1},
+            'token1': {'address': max(PAXG, WETH), 'decimals': 18, 'chainId': 1}}}
         connector_started, connector_drained = asyncio.Event(), asyncio.Event()
         async def connectors(*_args):
             connector_started.set()
