@@ -376,6 +376,9 @@ class TradeQuotes:
                                 'pending' if search_outcomes[name] == 'running' else 'unavailable')
                 result[name] = {'availability': availability, 'searchOutcome': search_outcomes[name],
                                 **deepcopy(provider_errors.get(name, {}))}
+                diagnostic = pool.get(name, {}).get('providerQuote', {}).get('quoteDiagnostics')
+                if availability == 'qualified' and isinstance(diagnostic, dict):
+                    result[name].setdefault('quoteDiagnostics', deepcopy(diagnostic))
             return result
 
         def decorate(value, pool=None):

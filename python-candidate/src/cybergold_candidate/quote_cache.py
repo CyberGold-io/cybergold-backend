@@ -15,7 +15,7 @@ import time
 from .route_search import RouteSearchRpc
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
-from .rpc_diagnostics import bind_quote_error, quote_failure_context
+from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_candidate_scope
 from .quote_budget import budget_entry, current_budget
 
 
@@ -212,7 +212,8 @@ class IntentSharing:
             async def produce():
                 try:
                     options = {'model_epoch': entry['modelEpoch']} if history else {}
-                    value = await budget.produce(self.service.get(request, update, block=block, **options))
+                    with quote_candidate_scope(entry['workId']):
+                        value = await budget.produce(self.service.get(request, update, block=block, **options))
                     if isinstance(value, dict) and isinstance(value.get('metrics'), dict):
                         value['metrics']['totalMs'] = round(budget.elapsed(), 3)
                         value['metrics'].update(budget.metrics())

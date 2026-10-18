@@ -26,7 +26,10 @@ from .uniswap_routes import resize_branches, v3_plan
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
 from .rpc_diagnostics import (error_diagnostics, quote_work_scope, quote_background, quote_phase,
-                              quote_qualified, route_subphase, finish_route_work, freeze_quote_work)
+                              quote_qualified, route_subphase, finish_route_work, freeze_quote_work,
+                              provider_qualification_begin, provider_qualification_current, provider_qualification_scope,
+                              provider_qualification_stage, provider_qualification_finish, provider_qualification_terms,
+                              provider_qualification_selected, current_quote_diagnostics)
 
 
 class RetainedQuotePlan(BaseModel):
@@ -177,6 +180,7 @@ class QuoteIntent:
 
         def result_value(value):
             return {**value, 'mode': request['mode'], 'slippageBps': slippage_bps, 'context': context,
+                    **({'quoteDiagnostics': diagnostics} if (diagnostics := current_quote_diagnostics()) else {}),
                     'metrics': {**metrics, 'totalMs': round((time.perf_counter() - started) * 1000, 3)}}
 
         def improves(value):
@@ -193,6 +197,18 @@ class QuoteIntent:
                 return int(value['preview']['minimumAmountOut']) > int(qualified['preview']['minimumAmountOut'])
             return int(value['executionAmount']) < int(qualified['executionAmount'])
 
+        def qualification_terms(value):
+            try:
+                issue = request['mode'].startswith('issue')
+                provider_qualification_terms(executionAmount=value['executionAmount'],
+                    quotedInput=value.get('expectedInputAmount', value['maximumInputAmount']) if issue else value['executionAmount'],
+                    quotedOutput=value['executionAmount'] if issue else value.get('expectedOutputAmount', value['preview']['minimumAmountOut']),
+                    inputMaximum=value['maximumInputAmount'] if issue else value['executionAmount'],
+                    outputMinimum=value['executionAmount'] if issue else value['preview']['minimumAmountOut'],
+                    branches=[branch for leg in value['quotes'] for branch in leg.get('routePlan', {}).get('branches', [])])
+            except Exception:
+                pass  # Optional evidence cannot change quote qualification.
+
         async def invalidate_context(error):
             nonlocal context_error, qualified, pending_qualification
             context_error = error
@@ -200,44 +216,63 @@ class QuoteIntent:
                 budget.invalidated()
             qualified = None
             quote_qualified(False)
+            if pending_qualification:
+                provider_qualification_finish(pending_qualification[1], 'cancelled')
             pending_qualification = None
             await on_update({'type': 'invalidated', 'context': context, 'reason': 'snapshot-changed'})
 
         async def qualify():
             nonlocal pending_qualification, qualified, context_error
             while pending_qualification is not None:
-                read, pending_qualification = pending_qualification, None
+                (read, probe), pending_qualification = pending_qualification, None
                 try:
-                    value = await read()
-                    if not request['mode'].startswith('issue'):
-                        value.setdefault('expectedCoreOutputs', core_bounds(value['preview']['projectedCoreOutputs'], slippage_bps))
-                    if not improves(value):
-                        continue
-                    metrics['rpcReads'] += 1
-                    metrics['rpcReadsRequested'] += 1
-                    async with asyncio.timeout(15):
-                        await rpc.assert_canonical(block)
-                    if budget is not None and not budget.qualified():
-                        continue
-                    qualified = value
-                    quote_qualified(True)
-                    await on_update({'type': 'qualified', 'value': result_value(value)})
+                    with provider_qualification_scope(probe):
+                        value = await read()
+                        if not request['mode'].startswith('issue'):
+                            value.setdefault('expectedCoreOutputs', core_bounds(value['preview']['projectedCoreOutputs'], slippage_bps))
+                        qualification_terms(value)
+                        if not improves(value):
+                            provider_qualification_finish(probe, 'not-improved')
+                            continue
+                        metrics['rpcReads'] += 1
+                        metrics['rpcReadsRequested'] += 1
+                        provider_qualification_stage('canonicality')
+                        async with asyncio.timeout(15):
+                            await rpc.assert_canonical(block)
+                        provider_qualification_stage('selection')
+                        if budget is not None and not budget.qualified():
+                            provider_qualification_finish(probe, 'cancelled')
+                            continue
+                        qualified = value
+                        provider_qualification_selected(probe)
+                        quote_qualified(True)
+                        provider_qualification_finish(probe, 'qualified')
+                        await on_update({'type': 'qualified', 'value': result_value(value)})
+                except asyncio.CancelledError:
+                    provider_qualification_finish(probe, 'cancelled')
+                    raise
                 except SnapshotChanged as error:
                     # A disproved common snapshot is different from an
                     # unavailable prospective route. It also retires an
                     # earlier tuple and survives a later ordinary tail error.
+                    provider_qualification_finish(probe, 'rejected', error)
                     await invalidate_context(error)
                     return
-                except Exception:
+                except Exception as error:
                     # An optional candidate failure does not replace ordinary
                     # complete coverage/validation or discard a checked tuple.
-                    pass
+                    provider_qualification_finish(probe, 'rejected', error)
 
         def schedule_qualification(read):
             nonlocal pending_qualification, qualifying
             if not self.qualification or context_error is not None:
                 return
-            pending_qualification = read
+            if pending_qualification:
+                provider_qualification_finish(pending_qualification[1], 'superseded')
+            probe = provider_qualification_current() or provider_qualification_begin()
+            if probe is not None:
+                probe.scheduled = True
+            pending_qualification = (read, probe)
             if qualifying is None or qualifying.done():
                 async def background():
                     with quote_background():
@@ -247,6 +282,7 @@ class QuoteIntent:
                 qualifying.add_done_callback(estimates.discard)
 
         async def preview(service, value):
+            provider_qualification_stage('basket-preview' if service is basket else 'final-preview')
             data = service.encode(value)
             key = (service.helpers, data)
             if key not in memo:
@@ -334,28 +370,37 @@ class QuoteIntent:
                 nonlocal pending_early
                 while pending_early is not None:
                     rows, pending_early = pending_early, None
+                    probe = provider_qualification_begin('composition') if self.qualification else None
                     try:
                         # Prospective replay shares candidate pricing slots
                         # and the producer's existing selection budget.
-                        async with engine_work(engine.semaphore):
-                            rows = await engine.compose_core_rows(rows,
-                                'exactIn' if mode == 'exact-in' else 'exactOut', block,
-                                ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
-                        early(rows)
-                        if wait_early and qualifying is not None:
-                            await asyncio.shield(qualifying)
-                            if context_error is not None:
-                                raise context_error
+                        with provider_qualification_scope(probe):
+                            async with engine_work(engine.semaphore):
+                                rows = await engine.compose_core_rows(rows,
+                                    'exactIn' if mode == 'exact-in' else 'exactOut', block,
+                                    ordered_assets=request['orderedAssets'], issue=request['mode'].startswith('issue'))
+                            early(rows)
+                            if probe is not None and not probe.scheduled:
+                                provider_qualification_finish(probe, 'not-improved')
+                            if wait_early and qualifying is not None:
+                                await asyncio.shield(qualifying)
+                                if context_error is not None:
+                                    raise context_error
+                    except asyncio.CancelledError:
+                        freeze_quote_work()
+                        provider_qualification_finish(probe, 'cancelled')
+                        raise
                     except SnapshotChanged as error:
+                        provider_qualification_finish(probe, 'rejected', error)
                         if context_error is not error:
                             await invalidate_context(error)
                         if wait_early:
                             raise
                         return
-                    except Exception:
+                    except Exception as error:
                         # Final selection retains its ordinary errors. A failed
                         # prospective replay may be superseded by another route.
-                        pass
+                        provider_qualification_finish(probe, 'rejected', error)
             async def update(event):
                 nonlocal previous, pending_early, preparing
                 rows = canonical_rows(event['results'], targets, mode)
@@ -434,20 +479,18 @@ class QuoteIntent:
             capacity_value = {}
             if request['mode'] == 'issue-exact-in':
                 targets = request['targets']
-                side_started = False
                 def early(rows):
-                    nonlocal side_started
                     # Advisory construction uses expected route output. It is
                     # not an execution minimum or a slippage-adjusted payout.
                     value = issue_request('exact-in', legs(targets, rows, 'exact-in', protect=False), amount)
                     schedule(lambda: preview(token, value), issue_estimate)
-                    if side_started or not self.early_issue_probe:
+                    if not self.early_issue_probe:
                         return
-                    side_started = True
                     async def checked():
                         provisional = await preview(token, value)
                         same_order(provisional['orderedCoreAssets'], request['orderedAssets'])
                         net = int(provisional['netCygldOut'])
+                        provider_qualification_terms(executionAmount=str(net))
                         selected = []
                         for index, (target, row) in enumerate(zip(targets, rows, strict=True)):
                             # Fresh revalidation resolves the same selected
@@ -626,6 +669,8 @@ class QuoteIntent:
             for iteration in range(remaining_corrections + 1):
                 gross = int(result['executionAmount'])
                 minimum = int(result['preview']['minimumAmountOut'])
+                provider_qualification_stage('tolerance', targetAmount=str(target), minimumAmountOut=str(target),
+                    maximumAmountOut=str(ceil(target, slippage_bps)), observedAmountOut=str(minimum))
                 observations.append((gross, minimum))
                 if target <= minimum <= ceil(target, slippage_bps):
                     return result
@@ -790,6 +835,8 @@ class QuoteIntent:
 
         async def drain():
             nonlocal pending_qualification, context_error
+            if pending_qualification:
+                provider_qualification_finish(pending_qualification[1], 'cancelled')
             pending_qualification = None
             tasks = list(estimates) + list(memo.values()) + ([recovery] if recovery else []) + ([capacity_state] if capacity_state else [])
             for task in tasks:
@@ -819,8 +866,20 @@ class QuoteIntent:
                 prior = incumbent[1]
             if prior:
                 quote_phase('retained-validation')
+                retained_validation = provider_qualification_begin('retained-validation')
                 try:
-                    result = await revalidate(request, prior, rpc, block, basket, token, preview, metrics)
+                    with provider_qualification_scope(retained_validation):
+                        try:
+                            result = await revalidate(request, prior, rpc, block, basket, token, preview, metrics)
+                            qualification_terms(result)
+                            provider_qualification_finish(retained_validation, 'qualified')
+                        except asyncio.CancelledError:
+                            freeze_quote_work()
+                            provider_qualification_finish(retained_validation, 'cancelled')
+                            raise
+                        except Exception as error:
+                            provider_qualification_finish(retained_validation, 'rejected', error)
+                            raise
                 except RetainedPlanChanged:
                     await on_update({'type': 'invalidated', 'context': context})
                 except KnownPreviewError:
@@ -874,8 +933,21 @@ class QuoteIntent:
             if budget is not None:
                 await drain()
             quote_phase('canonicality')
-            async with asyncio.timeout(15):
-                await rpc.assert_canonical(block)
+            final_validation = provider_qualification_begin('canonicality')
+            with provider_qualification_scope(final_validation):
+                try:
+                    qualification_terms(result)
+                    async with asyncio.timeout(15):
+                        await rpc.assert_canonical(block)
+                except asyncio.CancelledError:
+                    freeze_quote_work()
+                    provider_qualification_finish(final_validation, 'cancelled')
+                    raise
+                except Exception as error:
+                    provider_qualification_finish(final_validation, 'rejected', error)
+                    if isinstance(error, SnapshotChanged):
+                        quote_qualified(False)
+                    raise
             if budget is not None:
                 budget.canonical_done()
             if context_error is not None:
@@ -884,9 +956,17 @@ class QuoteIntent:
                 if qualified is None:
                     raise SearchStopped()
                 result = deepcopy(qualified)
+            with provider_qualification_scope(final_validation):
+                qualification_terms(result)
+                provider_qualification_selected(final_validation)
+                provider_qualification_finish(final_validation, 'qualified')
+            quote_qualified(True)
             # Final completion supersedes any still-running display-only read.
             result.update(mode=request['mode'], slippageBps=slippage_bps, context=context,
                           metrics={**metrics, 'totalMs': round((time.perf_counter() - started) * 1000, 3)})
+            diagnostics = current_quote_diagnostics()
+            if diagnostics:
+                result['quoteDiagnostics'] = diagnostics
             if not request['mode'].startswith('issue'):
                 result.setdefault('expectedCoreOutputs', core_bounds(result['preview']['projectedCoreOutputs'], slippage_bps))
             if self.retain_plans and rpc.chain_id == 1 and not request.get('retainedPlan'):

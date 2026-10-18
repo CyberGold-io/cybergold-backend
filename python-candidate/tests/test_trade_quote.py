@@ -720,6 +720,15 @@ class ProviderEvidenceTests(unittest.IsolatedAsyncioTestCase):
                     engines = self.engines()
                     other = 'market' if name == 'core' else 'core'
                     setattr(engines, other+'_error', QuoteFailure('quote-no-route'))
+                    selected_diagnostic = {'phase': 'canonicality', 'elapsedMs': 1, 'qualified': True,
+                        'providerQualifications': {'provider': name, 'attempts': 1, 'rows': [
+                            {'attempt': 1, 'stage': 'selection', 'outcome': 'qualified'}]}}
+                    terminal_diagnostic = {'phase': 'execution-search', 'elapsedMs': 12, 'qualified': True,
+                        'providerQualifications': {'provider': name, 'attempts': 2, 'rows': [
+                            {'attempt': 1, 'stage': 'selection', 'outcome': 'qualified'},
+                            {'attempt': 2, 'stage': 'qualification', 'outcome': 'rejected', 'code': code}]}}
+                    getattr(engines, name+'_value')['quoteDiagnostics'] = selected_diagnostic
+                    error.quote_diagnostics = terminal_diagnostic
                     async def tail(value, publish, **kwargs):
                         await publish({'type': 'qualified', 'value': deepcopy(getattr(engines, name+'_value'))})
                         raise error
@@ -732,7 +741,18 @@ class ProviderEvidenceTests(unittest.IsolatedAsyncioTestCase):
                     observed = result['providerAssessments'][name]
                     self.assertEqual((observed['availability'], observed['searchOutcome'], observed['code']),
                                      ('qualified', outcome, code))
-                    self.assertEqual(result['providerCandidates'][name]['providerQuote'], getattr(engines, name+'_value'))
+                    actual_quote = deepcopy(result['providerCandidates'][name]['providerQuote'])
+                    actual_selected = actual_quote.pop('quoteDiagnostics')
+                    expected_quote = deepcopy(getattr(engines, name+'_value'))
+                    expected_quote.pop('quoteDiagnostics')
+                    self.assertEqual(actual_quote, expected_quote)
+                    for actual, expected in ((observed['quoteDiagnostics'], terminal_diagnostic),
+                                             (actual_selected, selected_diagnostic)):
+                        for field, expected_value in expected.items():
+                            if field == 'providerQualifications':
+                                self.assertEqual({key: actual[field][key] for key in expected_value}, expected_value)
+                            else:
+                                self.assertEqual(actual[field], expected_value)
                     self.assertEqual(result['evaluation'][name], 'unavailable')
 
     async def test_invalidated_family_can_qualify_lower_without_retaining_old_plan(self):
