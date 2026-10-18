@@ -224,7 +224,9 @@ class TradeDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
             with self.assertLogs('cybergold.candidate', level='ERROR') as captured:
                 response = await client.post('/api/quotes/trade/stream',
-                    json=request(counterToken=intent_request('issue-exact-in')['quoteToken']))
+                    # Native execution remains Core-only; ordinary ERC20
+                    # counterparts can now retain a qualified Market fallback.
+                    json=request(native=True, counterToken=intent_request('issue-exact-in')['quoteToken']))
         frames = [json.loads(row) for row in response.text.splitlines()]
         provider = next(frame for frame in frames if frame['type'] == 'provider-error')
         terminal = frames[-1]

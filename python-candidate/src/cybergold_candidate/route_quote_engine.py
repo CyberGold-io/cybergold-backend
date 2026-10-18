@@ -18,7 +18,8 @@ from .rpc_diagnostics import route_count, route_legs, route_leg_started, route_l
 from .route_scheduler import schedule_routes, raise_snapshot_disproof
 from .sdk_worker import SdkWorker, MissingPoolState
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
-    pool_identity, route_identity, v3_branches, initial_v3_branches, LEGACY_V3_ADAPTERS)
+    pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
+    market_anchor, LEGACY_V3_ADAPTERS)
 from .uniswap_state import ZERO
 from .wallet_balances import TOKENS
 
@@ -88,7 +89,7 @@ class RouteQuoteEngine:
             for weight, baseline in branches)/effective_rate
         return PoolBaseline(exchange, retention, effective_impact/retention)
 
-    async def connector_inventory(self, token_in, token_out, block):
+    async def connector_inventory(self, token_in, token_out, block, include_core=True):
         """Preserve existing direct/via-WETH V3 fee coverage; add V2 connectors."""
         rpc = self.registry.get_rpc()
         weth = dict(TOKENS)['weth']
@@ -98,7 +99,7 @@ class RouteQuoteEngine:
             self.registry.lookup_month = month
         endpoints = {token_in.lower(), token_out.lower()}
         for pool in self.registry.inventory.values():
-            if any(token['address'].lower() == self.registry.core.lower() for token in (pool['token0'], pool['token1'])):
+            if include_core and any(token['address'].lower() == self.registry.core.lower() for token in (pool['token0'], pool['token1'])):
                 endpoints.update(token['address'].lower() for token in (pool['token0'], pool['token1']))
         # Existing direct/via-WETH paths plus CYGLD-counter connectors; do not
         # construct a complete token-universe cross product on every edit.
@@ -371,7 +372,16 @@ class RouteQuoteEngine:
                 for target in targets:
                     if target['inputAsset'].lower() == target['outputAsset'].lower():
                         continue
-                    await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
+                    if request.get('executionContext') == 'helpers-market':
+                        _, (source, output), _ = market_anchor(self.registry.seed, self.registry.core,
+                            target['inputAsset'], target['outputAsset'])
+                        # Only V4 connectors can execute exact-output around
+                        # the V4 anchor. V2/V3 factory acquisition cannot add
+                        # an executable candidate for that operation.
+                        if source.lower() != output.lower() and mode == 'exactIn':
+                            await self.connector_inventory(source, output, block, False)
+                    else:
+                        await self.connector_inventory(target['inputAsset'], target['outputAsset'], block)
             except SnapshotChanged:
                 raise
             except Exception:
@@ -385,9 +395,13 @@ class RouteQuoteEngine:
                     return
                 prior = dict(scheduled[index])
                 seen = {}
-                seed = iter(self.initial_v3_branches(target, mode))
+                market = request.get('executionContext') == 'helpers-market'
+                anchor = self.registry.seed if market else None
+                seed = iter(initial_market_branches(anchor, self.registry.core, target, mode, self.registry.chain,
+                    getattr(self.registry.get_rpc(), 'pool_manager', anchor.get('poolManager')))
+                    if market else self.initial_v3_branches(target, mode))
                 graph = candidate_branches(pools, target['inputAsset'], target['outputAsset'],
-                    mode, int(target['amount']))
+                    mode, int(target['amount']), **({'anchor': anchor, 'core': self.registry.core} if market else {}))
                 seed_done = graph_done = False
                 graph_next = asyncio.create_task(anext(graph))
                 turn = 0

@@ -216,7 +216,7 @@ class MarketBudgetProviders(unittest.IsolatedAsyncioTestCase):
             if self.reorg:
                 raise SnapshotChanged('Disproved after progressive Market qualification')
         self.rpc.assert_canonical = canonical
-        async def branches(_pools, _in, _out, _mode, amount):
+        async def branches(_pools, _in, _out, _mode, amount, **_anchor):
             try:
                 yield [{'amountIn': str(amount), 'hops': [{'pool': deepcopy(POOL), 'zeroForOne': True}]}]
                 await self.release.wait()

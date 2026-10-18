@@ -249,17 +249,22 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
         invalidated = next(i for i, frame in enumerate(frames) if frame['type'] == 'invalidated')
         self.assertFalse(any(frame['type'] == 'qualified' for frame in frames[invalidated+1:]))
 
-    async def test_capability_filter_prevents_market_fanout_for_other_token_and_native(self):
-        for value in (request(counterToken=ASSET_A), request(native=True, counterToken=ZERO)):
+    async def test_typed_market_supports_erc20_connectors_but_native_stays_unsupported(self):
+        for side in ('buy', 'sell'):
+            for mode in ('exact-in', 'exact-out'):
+                engines = self.engines()
+                result = await engines.quotes.get(request(side, mode, counterToken=ASSET_A), lambda _: asyncio.sleep(0))
+                self.assertEqual(result['evaluation']['market'], 'complete')
+                self.assertEqual(engines.market_calls[0][0]['counterToken'], ASSET_A)
+        for value in (request(native=True, counterToken=ZERO),):
             engines = self.engines()
             result = await engines.quotes.get(value, lambda _: asyncio.sleep(0))
             self.assertEqual(result['evaluation']['market'], 'unsupported')
             self.assertFalse(engines.market_calls)
             self.assertEqual(engines.models, 0)
-            if value['native']:
-                self.assertEqual(engines.core_calls[0][0]['token'], ZERO)
-                self.assertEqual(engines.core_calls[0][0]['quoteToken'].lower(), WETH.lower())
-                self.assertEqual(result['tokenIn'], ZERO)
+            self.assertEqual(engines.core_calls[0][0]['token'], ZERO)
+            self.assertEqual(engines.core_calls[0][0]['quoteToken'].lower(), WETH.lower())
+            self.assertEqual(result['tokenIn'], ZERO)
 
     async def test_historical_adapter_fallback_preserves_core_without_typed_market_fanout(self):
         engines = self.engines()
@@ -574,7 +579,7 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(result['providerRequest']['amount'], '10000')
                         self.assertEqual(result['providerRequest']['token'], ZERO if native else WETH)
                         self.assertEqual(result['context']['blockHash'], HASH)
-                        self.assertFalse(engines.market_calls)
+                        self.assertEqual(bool(engines.market_calls), not native)
                         results.append(result)
                 zero, protected = results
                 self.assertEqual(zero['quotedOutput'], protected['quotedOutput'])

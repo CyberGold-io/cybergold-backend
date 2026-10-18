@@ -34,6 +34,7 @@ MAINNET_DEPLOYMENT_BLOCKS = {
     ('v3', DEFAULT_FACTORY.lower()): 12_369_621,
     ('v4', POOL_MANAGER.lower()): 21_688_329,
 }
+CATALOG_PROTOCOLS = {'v2': 'v2', 'v3': 'v3', 'v4': 'v4', 'v4-paxg': 'v4'}
 
 
 def topic(signature):
@@ -212,7 +213,7 @@ class UniswapStore:
                     await connection.execute('''DELETE FROM cybergold_uniswap_state
                         WHERE chain_id=%s AND core_address=%s AND namespace=%s
                         AND payload->'pool'->>'protocol'=%s AND payload->'pool'->>'id'=ANY(%s)''',
-                        (self.chain, self.core, scope+'activity', protocol, list(removed)))
+                        (self.chain, self.core, scope+'activity', CATALOG_PROTOCOLS.get(protocol, protocol), list(removed)))
                 rows = [('inventory', pool['id'], pool) for pool in pools]+[('cursor', protocol, cursor)]
                 for namespace, identity, value in rows:
                     await connection.execute('''INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)
@@ -356,6 +357,14 @@ class PoolRegistry:
             self.observed[state['id']] = deepcopy(state)
         self.persist('observation', state['id'], state)
 
+    def acquire_pool(self, pool, block):
+        """Retain a server-acquired identity with its ordinary rewind anchor."""
+        if pool['id'] not in self.inventory:
+            pool = {**deepcopy(pool), 'acquisition': {'blockNumber': str(block['number']), 'blockHash': block['hash']}}
+            self.inventory[pool['id']] = pool
+            self.persist('inventory', pool['id'], pool)
+        return self.inventory[pool['id']]
+
     async def snapshot(self, pool, block, *, publish=True):
         rpc = self.get_rpc()
         generation = self.generation
@@ -413,11 +422,21 @@ class PoolRegistry:
             return state
         old = self.observed.get(pool['id'])
         if self.chain == 1 and old and old['context']['blockHash'] == block['hash']:
-            return deepcopy(old)
-        state = deepcopy(await self.pending.one(key, produce))
+            state = deepcopy(old)
+        else:
+            state = deepcopy(await self.pending.one(key, produce))
         # A shared acquisition stays pure. Each caller owns publication after
         # its accepted boundary, without duplicating event advancement/getters.
         if publish and generation == self.generation:
+            if state['protocol'] == 'v4' and int(state['sqrtRatioX96']) != 0:
+                # The pinned StateView getter establishes initialized identity,
+                # just as the existing explicit pool producer does. A seed is
+                # never persisted as an existing pool from its guessed key alone.
+                identity = {name: deepcopy(state[name]) for name in ('id', 'protocol', 'token0', 'token1',
+                    'feePips', 'tickSpacing', 'hooks', 'poolManager') if name in state}
+                acquired = self.acquire_pool(identity, block)
+                if acquired.get('acquisition'):
+                    state['acquisition'] = deepcopy(acquired['acquisition'])
             self.publish_observation(state)
         return state
 
@@ -520,7 +539,7 @@ class PoolRegistry:
             self.inventory.pop(identity, None)
             self.observed.pop(identity, None)
             for key, bundle in list(self.activity.items()):
-                if bundle['pool']['protocol'] == protocol and bundle['pool']['id'] == identity:
+                if bundle['pool']['protocol'] == CATALOG_PROTOCOLS.get(protocol, protocol) and bundle['pool']['id'] == identity:
                     self.activity.pop(key)
         for pool in pools:
             self.inventory[pool['id']] = pool
@@ -544,8 +563,8 @@ class PoolRegistry:
                     return False
                 canonical.add(key)
             return True
-        for protocol in ('v2', 'v3', 'v4'):
-            cursor = self.cursors.get(protocol, {})
+        for scope, protocol in CATALOG_PROTOCOLS.items():
+            cursor = self.cursors.get(scope, {})
             checkpoints = list(cursor.get('checkpoints', []))
             rewind = None
             while checkpoints:
@@ -554,14 +573,15 @@ class PoolRegistry:
                     break
                 rewind = int(checkpoints.pop()['rangeStart'])
             if rewind is not None:
-                removed = [identity for identity, pool in self.inventory.items() if pool.get('discovery', {}).get('protocol') == protocol
+                removed = [identity for identity, pool in self.inventory.items() if pool.get('discovery', {}).get(
+                    'scope', pool.get('discovery', {}).get('protocol')) == scope
                     and int(pool['discovery']['blockNumber']) >= rewind]
-                await self.commit_catalog(protocol, {'blockNumber': str(rewind), 'checkpoints': checkpoints, 'pending': True}, removed=removed)
+                await self.commit_catalog(scope, {'blockNumber': str(rewind), 'checkpoints': checkpoints, 'pending': True}, removed=removed)
                 changed = True
             elif cursor and not checkpoints and not cursor.get('checkpoints'):
                 # Older un-hashed inventory cursors are hints; replay their
                 # creation events to establish recoverable canonical checkpoints.
-                await self.commit_catalog(protocol, {'blockNumber': '0', 'checkpoints': [], 'pending': True})
+                await self.commit_catalog(scope, {'blockNumber': '0', 'checkpoints': [], 'pending': True})
                 changed = True
             # On-demand identities have the same recoverable canonical anchor
             # as discovery ranges, without requiring another quote-time probe.
@@ -575,7 +595,7 @@ class PoolRegistry:
                     pool = self.inventory[identity]
                     for token in (pool['token0'], pool['token1']):
                         self.metadata.pop(token['address'].lower(), None)
-                await self.commit_catalog(protocol, self.cursors.get(protocol, {}), removed=removed)
+                await self.commit_catalog(scope, self.cursors.get(scope, {}), removed=removed)
                 changed = True
         for key, anchor in list(self.lookup_anchors.items()):
             if key not in self.lookups:
@@ -597,16 +617,19 @@ class PoolRegistry:
         if force:
             self.lookups = {key: value for key, value in self.lookups.items() if value is not None}
         month = datetime.now(timezone.utc).strftime('%Y-%m')
-        if not force and self.discovery_month == month and not any(row.get('pending') for row in self.cursors.values()):
+        if not force and self.discovery_month == month and 'v4-paxg' in self.cursors and not any(
+                row.get('pending') for row in self.cursors.values()):
             return
         rpc = self.get_rpc()
-        padded = '0x'+self.core[2:].lower().rjust(64, '0')
         completed = True
-        for protocol, address in (('v2', rpc.v2_factory), ('v3', rpc.factory), ('v4', rpc.pool_manager)):
+        for scope, protocol, address, currency in (('v2', 'v2', rpc.v2_factory, self.core),
+                ('v3', 'v3', rpc.factory, self.core), ('v4', 'v4', rpc.pool_manager, self.core),
+                ('v4-paxg', 'v4', rpc.pool_manager, PAXG)):
             # Producer birth includes every possible pool creation, including
             # currency keys initialized before CYGLD deployment. Keep a saved
             # cursor literal; only a cold known deployment uses this floor.
-            cursor = self.cursors.get(protocol, {})
+            cursor = self.cursors.get(scope, {})
+            padded = '0x'+currency[2:].lower().rjust(64, '0')
             floor = MAINNET_DEPLOYMENT_BLOCKS.get((protocol, address.lower()), 0) if self.chain in (1, 31338) else 0
             start = int(cursor.get('blockNumber', floor))
             checkpoints = list(cursor.get('checkpoints', []))
@@ -623,13 +646,16 @@ class PoolRegistry:
                 logs = {row['transactionHash']+row['logIndex']: row for group in rows for row in group}
                 pools = []
                 for row in sorted(logs.values(), key=lambda row: (int(row['blockNumber'], 16), int(row['logIndex'], 16))):
+                    if scope == 'v4-paxg' and self.core.lower() in ['0x'+topic[-40:].lower() for topic in row['topics'][2:4]]:
+                        continue  # Core-containing identities belong to the existing Core catalog.
                     pool = await self.decode_discovery(protocol, row, block)
                     pool['discovery'] = {'protocol': protocol, 'blockNumber': str(int(row['blockNumber'], 16)),
+                        'scope': scope,
                         'scanBlockNumber': str(last), 'scanBlockHash': anchor['hash']}
                     pools.append(pool)
                 await rpc.assert_canonical(anchor)
                 checkpoints.append({'rangeStart': str(first), 'blockNumber': str(last), 'blockHash': anchor['hash']})
-                await self.commit_catalog(protocol, {'blockNumber': str(last+1), 'checkpoints': checkpoints,
+                await self.commit_catalog(scope, {'blockNumber': str(last+1), 'checkpoints': checkpoints,
                     'pending': last < block['number']}, pools)
             completed &= end == block['number']
         if completed:

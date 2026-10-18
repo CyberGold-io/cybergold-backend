@@ -25,7 +25,7 @@ from .quote_errors import public_quote_error, QuoteFailure
 from .quote_budget import budget_entry, current_budget, SearchStopped
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
-from .uniswap_routes import RoutePlan
+from .uniswap_routes import RoutePlan, market_routes, supported_route, pool_identity, route_identity
 from .uniswap_state import ZERO
 from .quote_models import PoolBaseline, LegModel
 from .route_quote_engine import RouteQuoteEngine
@@ -186,6 +186,16 @@ class MarketQuotes(RouteQuoteEngine):
             if self.recipient_cache:
                 self.recipient_cache.reset()
 
+    def resolve_market_branches(self, branches, token_in, token_out, mode, amount):
+        result = super().resolve_branches(branches, token_in, token_out, mode, amount)
+        sale = token_in.lower() == self.registry.core.lower()
+        anchor = pool_identity(self.registry.seed)
+        for branch in result:
+            hop = branch['hops'][0 if sale else -1]
+            if pool_identity(hop['pool']) != anchor:
+                raise InvalidPreview('Retained Market route does not use the canonical CYGLD pool.')
+        return result
+
     async def get_model(self, request, *, block=None):
         if self.request_resolver:
             request = await self.request_resolver(request)
@@ -200,22 +210,23 @@ class MarketQuotes(RouteQuoteEngine):
         token_in, token_out = (request['counterToken'], self.registry.core) if request['side'] == 'buy' else (
             self.registry.core, request['counterToken'])
         routes = []
-        for pool in list(self.registry.inventory.values()):
-            tokens = {token['address'].lower() for token in (pool['token0'], pool['token1'])}
-            if tokens != {token_in.lower(), token_out.lower()}:
+        mode = 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
+        async for hops in market_routes(list(self.registry.inventory.values()), token_in, token_out,
+                                        self.registry.core, self.registry.seed):
+            if not supported_route(hops, mode):
                 continue
             try:
-                state = await self.registry.snapshot(pool, block)
-                zero_for_one = token_in.lower() == pool['token0']['address'].lower()
-                baseline = self.baseline(state, zero_for_one)
                 def fraction(value):
                     return {'numerator': str(value.numerator), 'denominator': str(value.denominator)}
                 route = {'version': 1, 'executionContext': 'helpers-market',
-                    'mode': 'exactIn' if request['mode'] == 'exact-in' else 'exactOut',
+                    'mode': mode,
                     'tokenIn': token_in, 'tokenOut': token_out,
-                    'branches': [{'amountIn': '0', 'hops': [{'pool': deepcopy(pool), 'zeroForOne': zero_for_one}]}],
+                    'branches': [{'amountIn': '0', 'hops': deepcopy(hops)}],
                     'inputAmount': '0', 'outputAmount': '0', 'limit': '0', 'deadline': '0'}
-                old = next((row for row in packet['routes'] if row['route']['branches'][0]['hops'][0]['pool']['id'] == pool['id']), None)
+                baseline = await self.route_baseline(route, block)
+                key = route_identity(route['branches'])
+                old = next((row for row in packet['routes'] if route_identity([
+                    {**branch, 'amountIn': '0'} for branch in row['route']['branches']]) == key), None)
                 routes.append({'route': route, 'amountIn': '0', 'amountOut': '0', 'points': old['points'] if old else [],
                     'exchangeRate': fraction(baseline.exchange), 'feeRetention': fraction(baseline.fee_retention),
                     **({'localImpact': fraction(baseline.local_impact)} if baseline.local_impact is not None else {})})
@@ -411,7 +422,7 @@ class MarketQuotes(RouteQuoteEngine):
                                     raise InvalidPreview('Retained market '+name+' changed.')
                             target = int(retained['params']['routedInput']) if side == 'sell' and exact_in else (
                                 amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else amount)
-                            branches = self.resolve_branches(retained['route']['branches'], token_in, token_out, mode, target)
+                            branches = self.resolve_market_branches(retained['route']['branches'], token_in, token_out, mode, target)
                             provider_qualification_stage('route-pricing')
                             route_count('typedEnumerated')
                             route_leg_started(diagnostic_leg, amount=str(target))
@@ -596,7 +607,10 @@ class MarketQuotes(RouteQuoteEngine):
             result['metrics'] = {'candidateCalls': completed, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
             result['searchCoverage'] = {'scope': 'selected-inventory', 'maxHops': 3,
                 'splitPercentages': [25, 50, 75] if exact_in else [],
-                'inventoryPools': len(pools), 'catalogMonth': self.registry.discovery_month}
+                'inventoryPools': len(pools), 'catalogMonth': self.registry.discovery_month,
+                'canonicalPoolId': self.registry.seed['id'],
+                'canonicalPosition': 'first' if side == 'sell' else 'last',
+                'protocolCoverage': 'mixed-exact-input' if exact_in else 'homogeneous-exact-output'}
             if self.recipient_cache:
                 try:
                     cached = await budget.discovery(self.recipient_cache.load()) if budget is not None else await self.recipient_cache.load()

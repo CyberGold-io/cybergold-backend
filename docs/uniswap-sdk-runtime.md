@@ -89,6 +89,15 @@ Persisted cursors/checkpoints continue literally, including a cursor earlier
 than the default. This retains pool initialization before CYGLD deployment and
 adds no runtime identity probe or pool/quote eligibility rule.
 
+V4 PAXG connectors use a separate `v4-paxg` discovery cursor and canonical
+rewind checkpoints, starting at the same configured PoolManager birth. Core
+pool discovery cannot stand in for historical PAXG discovery. Cold Market
+requests can quote bounded common hookless V4 PoolKey candidates through
+StateView and the SDK while the background catalog catches up custom keys.
+An initialized key is retained with its acquisition block/hash; missing or
+uninitialized keys remain ordinary unavailable candidates, with no claim that
+all V4 pools or all of one pool's tick domain have been acquired.
+
 The floors were verified against the deployment receipts and pinned official
 [V2](https://raw.githubusercontent.com/Uniswap/v2-subgraph/3d7c06982866e0535a350ee15c792b4003231b2b/config/ethereum/config.json),
 [V3](https://raw.githubusercontent.com/Uniswap/v3-subgraph/b4a0e8d34b8238482cadd3929ae88d3426a7067b/config/ethereum/config.json)
