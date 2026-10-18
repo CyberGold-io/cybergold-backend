@@ -2263,7 +2263,20 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
                 /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                 diagnostics?: {
                     rpcMethod?: string;
@@ -2307,7 +2320,20 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
                 /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                 diagnostics?: {
                     rpcMethod?: string;
@@ -3171,7 +3197,20 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
                 /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                 diagnostics?: {
                     rpcMethod?: string;
@@ -3237,7 +3276,20 @@ export interface components {
             strategy: "core" | "market";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -3271,7 +3323,20 @@ export interface components {
             type: "error";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -3295,13 +3360,13 @@ export interface components {
         "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
             /** @enum {string} */
             mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
-            token: string;
             amount: string;
             targets: {
                 inputAsset: string;
                 outputAsset: string;
                 amount: string;
             }[];
+            token: string;
             native: boolean;
             adapter?: string;
             /**
@@ -3913,9 +3978,9 @@ export interface components {
             chainId: number;
             observedAt: string;
         } & {
-            transaction: components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | null;
+            transaction: components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | null;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3924,34 +3989,34 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId?: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x0";
+            /** @description Gas provided for transaction execution */
+            gas: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description Hash of this transaction */
             hash: string;
             /** @description Unix timestamp of when this block was included */
             blockTimestamp?: string;
-            /** @description Gas provided for transaction execution */
-            gas: string;
             /** @description Contract code or a hashed method call */
             input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
             /** @description Index of this transaction in the block or `null` if pending */
             transactionIndex: string | null;
-            /** @description Base fee per gas. */
-            gasPrice: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3960,41 +4025,41 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x1";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Base fee per gas. */
-            gasPrice: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4003,43 +4068,43 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x2";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4048,35 +4113,22 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x3";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
-            /** @description EIP-2930 Access List. */
-            accessList: {
-                address: string;
-                storageKeys: string[];
-            }[];
             /** @description List of versioned blob hashes associated with the transaction's blobs. */
             blobVersionedHashes: string[];
             /** @description Maximum total fee per gas sender is willing to pay for blob gas (in wei). */
@@ -4085,10 +4137,23 @@ export interface components {
             maxFeePerGas: string;
             /** @description Max priority fee per gas (in wei). */
             maxPriorityFeePerGas: string;
+            /** @description EIP-2930 Access List. */
+            accessList: {
+                address: string;
+                storageKeys: string[];
+            }[];
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4097,30 +4162,26 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x4";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
@@ -4140,10 +4201,14 @@ export interface components {
                 /** @description y parity. */
                 yParity: string;
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
@@ -4282,8 +4347,8 @@ export interface components {
                 withdrawalsRoot?: string;
             } | null;
         };
-        "RpcTransaction<false>": components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"];
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}": {
+        "RpcTransaction<false>": components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"];
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4292,34 +4357,34 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId?: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x0";
+            /** @description Gas provided for transaction execution */
+            gas: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description Hash of this transaction */
             hash: string;
             /** @description Unix timestamp of when this block was included */
             blockTimestamp?: string;
-            /** @description Gas provided for transaction execution */
-            gas: string;
             /** @description Contract code or a hashed method call */
             input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
             /** @description Index of this transaction in the block or `null` if pending */
             transactionIndex: string;
-            /** @description Base fee per gas. */
-            gasPrice: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4328,41 +4393,41 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x1";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Base fee per gas. */
-            gasPrice: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4371,43 +4436,43 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x2";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4416,35 +4481,22 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x3";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
-            /** @description EIP-2930 Access List. */
-            accessList: {
-                address: string;
-                storageKeys: string[];
-            }[];
             /** @description List of versioned blob hashes associated with the transaction's blobs. */
             blobVersionedHashes: string[];
             /** @description Maximum total fee per gas sender is willing to pay for blob gas (in wei). */
@@ -4453,10 +4505,23 @@ export interface components {
             maxFeePerGas: string;
             /** @description Max priority fee per gas (in wei). */
             maxPriorityFeePerGas: string;
+            /** @description EIP-2930 Access List. */
+            accessList: {
+                address: string;
+                storageKeys: string[];
+            }[];
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -4465,30 +4530,26 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x4";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
@@ -4508,10 +4569,14 @@ export interface components {
                 /** @description y parity. */
                 yParity: string;
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
@@ -5111,7 +5176,20 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                    constraint?: {
+                        /** @enum {string} */
+                        kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                        /** @enum {string} */
+                        quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                        /** @enum {string} */
+                        limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                        requestedRaw?: string;
+                        availableRaw?: string;
+                        currentSupplyRaw?: string;
+                        limitRaw?: string;
+                    };
                     /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                     diagnostics?: {
                         rpcMethod?: string;
@@ -5182,7 +5260,20 @@ export interface components {
                         path: string;
                         rpcCode: number;
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                        constraint?: {
+                            /** @enum {string} */
+                            kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                            /** @enum {string} */
+                            quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                            /** @enum {string} */
+                            limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                            requestedRaw?: string;
+                            availableRaw?: string;
+                            currentSupplyRaw?: string;
+                            limitRaw?: string;
+                        };
                         /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                         diagnostics?: {
                             rpcMethod?: string;
@@ -5218,7 +5309,20 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -5875,7 +5979,20 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -6277,7 +6394,20 @@ export interface components {
             searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
             error?: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -7503,7 +7633,20 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                    constraint?: {
+                        /** @enum {string} */
+                        kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                        /** @enum {string} */
+                        quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                        /** @enum {string} */
+                        limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                        requestedRaw?: string;
+                        availableRaw?: string;
+                        currentSupplyRaw?: string;
+                        limitRaw?: string;
+                    };
                     /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                     diagnostics?: {
                         rpcMethod?: string;
@@ -8002,8 +8145,21 @@ export interface components {
             strategy?: "core" | "market";
             /** @enum {string} */
             stage?: "authorization" | "balance" | "confirmation" | "network" | "preparation" | "quote" | "simulation" | "submission";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @enum {string} */
-            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             tokenIn?: string;
             tokenOut?: string;
             amount?: string;
@@ -8366,7 +8522,20 @@ export interface components {
         } & {
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;

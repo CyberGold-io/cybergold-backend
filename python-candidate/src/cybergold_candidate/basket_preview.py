@@ -103,7 +103,8 @@ class BasketPreviewRpc(RecoveryRpc):
         response = await self.w3.provider.make_request('eth_call', [
             {'to': self.helpers, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
         if 'error' in response:
-            known = preview_error(response['error'])
+            _, arguments = self.contract.decode_function_input(data)
+            known = preview_error(response['error'], mode=mode, arguments=arguments)
             if known:
                 raise known
             raise rpc_failure(response['error'])

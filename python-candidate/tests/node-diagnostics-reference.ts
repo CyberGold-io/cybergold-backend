@@ -25,6 +25,13 @@ cases.push({body:{...base,requestId:'secret',correlationId:'secret',workId:'secr
   blockNumber:'1\n',blockHash:'secret',errorClassification:'secret'}});
 for(const errorClassification of ['quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit'])
   cases.push({body:{...base,errorClassification}});
+for(const errorClassification of ['redemption-supply-exceeded','redemption-capacity-exceeded'])
+  cases.push({body:{...base,errorClassification}});
+for(const constraint of [null, true, {}, {kind:'issuance-cap',quantity:'gross-cygld-mint',limitKind:'effective-supply-cap',
+  requestedRaw:'20',availableRaw:'10',currentSupplyRaw:'90',limitRaw:'100',private:'fixture-private-constraint'},
+  {kind:'redemption-supply',quantity:'gross-cygld-input',requestedRaw:'100'},
+  {kind:'secret',quantity:'secret',limitKind:'secret',requestedRaw:(2n**256n).toString(),availableRaw:'-1',currentSupplyRaw:'1\n',limitRaw:100}])
+  cases.push({body:{...base,constraint}});
 cases.push({body:base,type:'text/plain'},{body:base,type:'application/json; charset=utf-8'});
 for(const entry of cases){
   const logs:any[]=[];
