@@ -4,6 +4,8 @@ from contextvars import ContextVar
 from functools import wraps
 from http import HTTPStatus
 import asyncio
+import json
+import logging
 import re
 from time import perf_counter
 import math
@@ -18,10 +20,21 @@ from web3.exceptions import Web3RPCError
 _scope = ContextVar('rpc_diagnostic_scope', default=None)
 _quote_scope = ContextVar('quote_work_scope', default=None)
 _quote_background = ContextVar('quote_background_work', default=False)
+_provider_qualification = ContextVar('provider_qualification_diagnostic', default=None)
+_candidate_work_id = ContextVar('quote_candidate_work_id', default=None)
 _QUOTE_PHASES = {'context', 'initial-search', 'initial-preview', 'capacity', 'basket-preview',
                  'expected-input-search', 'execution-search', 'final-preview', 'canonicality',
                  'retained-validation'}
 _ROUTE_PHASES = {'context', 'eligibility', 'v3-coverage', 'typed-reserve', 'structured-search', 'composition', 'canonicality'}
+_PROVIDER_STAGES = {'composition', 'basket-preview', 'initial-preview', 'execution-search',
+                'expected-input-search', 'final-preview', 'tolerance', 'canonicality', 'selection',
+                'route-pricing', 'fee-bounds', 'qualification', 'retained-validation'}
+_PROVIDER_OUTCOMES = {'running', 'qualified', 'rejected', 'not-improved', 'cancelled', 'superseded'}
+_QUOTE_CODES = {'rpc-rate-limit', 'rpc-timeout', 'rpc-unavailable', 'rpc-access-denied',
+                'quote-timeout', 'quote-no-route', 'quote-contract-reverted', 'quote-unavailable',
+                'insufficient-protocol-supply', 'issuance-cap-exceeded',
+                'redemption-supply-exceeded', 'redemption-capacity-exceeded'}
+_LEG_ROWS, _LEG_CODES, _LEG_POOLS, _PROVIDER_ROWS = 16, 16, 8, 8
 _stages = {'eth_chainId': 'chain-head', 'eth_blockNumber': 'chain-head', 'eth_getBlockByNumber': 'block-read',
            'eth_getBlockByHash': 'block-read', 'eth_call': 'contract-read',
            'eth_estimateGas': 'gas-estimation', 'eth_maxPriorityFeePerGas': 'priority-fee',
@@ -153,6 +166,13 @@ class _QuoteWork:
         self.started = perf_counter()
         self.phase, self.qualified, self.iteration = 'context', False, 0
         self.wave, self.frozen = None, None
+        from .quote_budget import current_budget
+        self.budget = current_budget()
+        self.work_id = _candidate_work_id.get()
+        self.qualifications = _ProviderQualifications(self)
+
+    def clock(self):
+        return self.budget.elapsed() if self.budget is not None else _milliseconds(self.started)
 
     def snapshot(self):
         if self.frozen is not None:
@@ -164,6 +184,8 @@ class _QuoteWork:
             pending = _pending_sdk(self.wave)
             if pending:
                 result['pendingSdk'] = pending
+        if self.qualifications.attempts:
+            result['providerQualifications'] = self.qualifications.snapshot()
         return result
 
 
@@ -178,6 +200,8 @@ class _RouteWork:
         # wave's wall time. They are never added to the aggregate elapsed time.
         self.sdk_wait, self.sdk_exchange, self.sdk_active = 0, 0, {}
         self.sdk_sessions, self.sdk_sequence = {}, 0
+        self.legs = []
+        self.leg_count = 0
 
     def snapshot(self):
         if self.frozen is not None:
@@ -188,10 +212,14 @@ class _RouteWork:
                                   for queued, acquired in self.sdk_active.values())
         exchange = self.sdk_exchange + sum((end - acquired) * 1000
                                           for _, acquired in self.sdk_active.values() if acquired is not None)
-        return {'mode': self.mode, 'elapsedMs': _milliseconds(self.started, end),
+        result = {'mode': self.mode, 'elapsedMs': _milliseconds(self.started, end),
                 'subphase': self.subphase, 'subphaseElapsedMs': _milliseconds(self.phase_started, end),
                 **self.counts, 'typedPending': self.counts['typedEnumerated'] - self.counts['typedCompleted'],
                 'sdkWaiting': waiting, 'sdkLockWaitMs': round(wait, 3), 'sdkExchangeMs': round(exchange, 3)}
+        if self.leg_count:
+            result['legs'] = {'count': self.leg_count, 'omittedRows': self.leg_count-len(self.legs),
+                              'rows': [leg.snapshot() for leg in self.legs]}
+        return result
 
 
 def quote_work_scope(method):
@@ -200,12 +228,23 @@ def quote_work_scope(method):
         token = _quote_scope.set(_QuoteWork())
         try:
             return await method(*args, **kwargs)
-        except Exception as error:
+        except BaseException as error:
             freeze_quote_work(error)
             raise
         finally:
             _quote_scope.reset(token)
     return observed
+
+
+@contextmanager
+def quote_candidate_scope(work_id):
+    """A shared producer owns observations; subscribers never emit copies."""
+    valid = isinstance(work_id, str) and re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', work_id)
+    token = _candidate_work_id.set(work_id if valid else None)
+    try:
+        yield
+    finally:
+        _candidate_work_id.reset(token)
 
 
 @contextmanager
@@ -234,6 +273,7 @@ def quote_owned_task():
 
 
 def quote_phase(phase, *, iteration=None):
+    provider_qualification_stage(phase)
     current = _quote_scope.get()
     if current and current.owner is asyncio.current_task() and phase in _QUOTE_PHASES:
         if current.phase != phase:
@@ -269,7 +309,15 @@ def route_work_scope(method):
     return observed
 
 
+def start_route_work(mode):
+    """Observe non-facade consumers after their normal request validation."""
+    current = _quote_scope.get()
+    if current and current.owner is asyncio.current_task() and mode in ('exact-in', 'exact-out'):
+        current.wave, current.frozen = _RouteWork(mode), None
+
+
 def route_subphase(phase):
+    provider_qualification_stage(phase)
     current = _quote_scope.get()
     if current and current.wave and current.owner is asyncio.current_task() and phase in _ROUTE_PHASES:
         current.wave.subphase, current.wave.phase_started = phase, perf_counter()
@@ -343,6 +391,294 @@ def _pool_identity(value):
     return None
 
 
+def _uint256(value):
+    return (isinstance(value, str) and re.fullmatch(r'0|[1-9][0-9]{0,77}', value) is not None
+            and int(value) < 2**256)
+
+
+def _address(value):
+    return value.lower() if isinstance(value, str) and re.fullmatch(r'0x[0-9a-fA-F]{40}', value) else None
+
+
+def _one_of(value, allowed):
+    return isinstance(value, str) and value in allowed
+
+
+def _safe_pools(branches):
+    """Pool identities only: never retain executable route/request contents."""
+    pools, seen, total = [], set(), 0
+    for branch in branches if isinstance(branches, list) else ():
+        for hop in branch.get('hops', []) if isinstance(branch, dict) and isinstance(branch.get('hops'), list) else ():
+            pool = hop.get('pool') if isinstance(hop, dict) else None
+            if not isinstance(pool, dict) or not _one_of(pool.get('protocol'), ('v2', 'v3', 'v4')):
+                continue
+            row = {'protocol': pool['protocol']}
+            identity, address = _pool_identity(pool.get('id')), _address(pool.get('address'))
+            if identity:
+                row['poolId'] = identity
+            if address:
+                row['poolAddress'] = address
+            if not identity and not address:
+                continue
+            key = tuple(row.items())
+            if key in seen:
+                continue
+            seen.add(key)
+            total += 1
+            if len(pools) < _LEG_POOLS:
+                pools.append(row)
+    return pools, max(0, total-len(pools))
+
+
+def _observation(default=None):
+    """Optional evidence cannot replace the producer's ordinary result/error."""
+    def decorate(function):
+        @wraps(function)
+        def observed(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except Exception:
+                return default
+        return observed
+    return decorate
+
+
+class _RouteLeg:
+    def __init__(self, wave, index, target):
+        self.wave, self.index = wave, index
+        self.target = {name: target[name] for name in ('inputAsset', 'outputAsset', 'amount') if name in target}
+        self.started = self.succeeded = self.failed = self.cancelled = 0
+        self.best = target.get('inputAsset', '').lower() == target.get('outputAsset', '').lower()
+        self.codes, self.pools, self.omitted_pools = {}, [], 0
+
+    def snapshot(self):
+        row = {'index': self.index, 'started': self.started, 'succeeded': self.succeeded,
+               'failed': self.failed, 'cancelled': self.cancelled,
+               'pending': self.started-self.succeeded-self.failed-self.cancelled,
+               'bestAvailable': self.best, 'failureCounts': [dict(code=code, count=count)
+                   for code, count in list(self.codes.items())[:_LEG_CODES]],
+               'omittedFailureCodes': max(0, len(self.codes)-_LEG_CODES),
+               'bestPools': [dict(pool) for pool in self.pools], 'omittedPools': self.omitted_pools}
+        for name in ('inputAsset', 'outputAsset'):
+            if value := _address(self.target.get(name)):
+                row[name] = value
+        if _uint256(self.target.get('amount')):
+            row['amount'] = self.target['amount']
+        return row
+
+
+@_observation(())
+def route_legs(targets):
+    current = _quote_scope.get()
+    wave = current.wave if current and not _quote_background.get() else None
+    if wave is None or wave.frozen is not None:
+        return []
+    wave.leg_count = len(targets)
+    wave.legs = [_RouteLeg(wave, index, target) for index, target in enumerate(targets[:_LEG_ROWS])]
+    return wave.legs
+
+
+@_observation()
+def route_leg_started(leg, *, amount=None):
+    if leg is not None and leg.wave.frozen is None:
+        if amount is not None and leg.target.get('amount') != amount:
+            # A retained replay and its ordinary fallback can price distinct
+            # routed amounts. Keep their counts without claiming one amount.
+            leg.target.pop('amount', None)
+        leg.started += 1
+
+
+@_observation()
+def route_leg_finished(leg, outcome, *, code=None, best=None):
+    if leg is None or leg.wave.frozen is not None:
+        return
+    if outcome == 'succeeded':
+        leg.succeeded += 1
+        if best:
+            leg.best = True
+            leg.pools, leg.omitted_pools = _safe_pools(best['routePlan']['branches'])
+    elif outcome == 'failed':
+        leg.failed += 1
+        code = code if code in _QUOTE_CODES else 'quote-unavailable'
+        leg.codes[code] = leg.codes.get(code, 0)+1
+    elif outcome == 'cancelled':
+        leg.cancelled += 1
+
+
+class _ProviderQualifications:
+    def __init__(self, work):
+        self.work = work
+        self.attempts, self.rows = 0, []
+        self.provider = None
+        self.selected = None
+        self.counts = dict.fromkeys(('qualified', 'rejected', 'not-improved', 'cancelled', 'superseded'), 0)
+
+    def keep(self, row):
+        if row not in self.rows:
+            self.rows.append(row)
+        if len(self.rows) > _PROVIDER_ROWS:
+            old = next((entry for entry in self.rows if entry['outcome'] != 'running'
+                        and entry['attempt'] != self.selected), None)
+            old = old or next((entry for entry in self.rows if entry['attempt'] != self.selected), self.rows[0])
+            self.rows.remove(old)
+
+    def snapshot(self):
+        rows = [{**row, **({'elapsedMs': max(0, round(self.work.clock()-row['startedMs'], 3))}
+                          if row['outcome'] == 'running' else {})} for row in self.rows]
+        return {'provider': self.provider, 'attempts': self.attempts, **{('notImproved' if key == 'not-improved' else key): count
+                    for key, count in self.counts.items()},
+                'pending': self.attempts-sum(self.counts.values()),
+                'omittedRows': self.attempts-len(self.rows), 'rows': rows,
+                **({'selectedAttempt': self.selected} if self.selected is not None else {}),
+                **_selection_fields(self.work.budget)}
+
+
+class _ProviderQualification:
+    def __init__(self, work, stage):
+        self.work = work
+        work.qualifications.attempts += 1
+        self.row = {'attempt': work.qualifications.attempts, 'stage': stage, 'outcome': 'running',
+                    'startedMs': round(work.clock(), 3)}
+        work.qualifications.keep(self.row)
+        self.scheduled = False
+        self.logged_terminal = False
+        self.observe('started', self.row)
+
+    @_observation()
+    def observe(self, phase, row):
+        if self.work.work_id is None:
+            return
+        candidate = _project_qualification_row(row)
+        if candidate is not None:
+            from .telemetry import observe
+            record = {'event': 'quote_candidate', 'workId': self.work.work_id,
+                      'provider': self.work.qualifications.provider, 'phase': phase,
+                      'candidate': candidate}
+            observe(lambda: logging.getLogger('cybergold.candidate').info(json.dumps(record)))
+
+    def finish(self, outcome, error=None):
+        if self.logged_terminal or self.row['outcome'] != 'running' or outcome not in _PROVIDER_OUTCOMES-{'running'}:
+            return
+        # Snapshot rows/counters are copied at the cutoff. Keep live cleanup
+        # state accurate too: a later successful finalization may unfreeze it.
+        row = self.row
+        row['outcome'] = outcome
+        row['completedMs'] = round(self.work.clock(), 3)
+        row['elapsedMs'] = max(0, round(row['completedMs']-row['startedMs'], 3))
+        self.work.qualifications.counts[outcome] += 1
+        if error is not None and outcome == 'rejected':
+            # Import lazily: quote_errors itself projects these diagnostics.
+            from .quote_errors import public_quote_error
+            code = public_quote_error(error)['code']
+            if code == 'quote-unavailable':
+                from .quote_errors import QuoteFailure
+                from .preview_errors import KnownPreviewError
+                if isinstance(error.__cause__, (QuoteFailure, KnownPreviewError)):
+                    code = public_quote_error(error.__cause__)['code']
+            row['code'] = code if code in _QUOTE_CODES else 'quote-unavailable'
+        self.logged_terminal = True
+        self.observe('completed', row)
+
+
+@_observation()
+def provider_qualification_begin(stage='selection', *, provider='core'):
+    current = _quote_scope.get()
+    if current is None or current.frozen is not None or stage not in _PROVIDER_STAGES or provider not in ('core', 'market'):
+        return None
+    if current.qualifications.provider is not None and current.qualifications.provider != provider:
+        return None
+    current.qualifications.provider = provider
+    return _ProviderQualification(current, stage)
+
+
+@contextmanager
+def provider_qualification_scope(probe):
+    token = _provider_qualification.set(probe)
+    try:
+        yield
+    finally:
+        _provider_qualification.reset(token)
+
+
+@_observation()
+def provider_qualification_stage(stage, **bounds):
+    probe = _provider_qualification.get()
+    if probe is None or probe.work is not _quote_scope.get() or probe.work.frozen is not None or probe.row['outcome'] != 'running':
+        return
+    if stage in _PROVIDER_STAGES:
+        probe.row['stage'] = stage
+    if stage == 'tolerance':
+        for name in ('targetAmount', 'minimumAmountOut', 'maximumAmountOut', 'observedAmountOut',
+                     'maximumAmountIn', 'observedAmountIn'):
+            if _uint256(bounds.get(name)):
+                probe.row[name] = bounds[name]
+
+
+def provider_qualification_current():
+    probe = _provider_qualification.get()
+    return probe if probe is not None and probe.work is _quote_scope.get() and probe.row['outcome'] == 'running' else None
+
+
+@_observation()
+def provider_qualification_terms(*, branches=None, **amounts):
+    probe = provider_qualification_current()
+    if probe is None or probe.work.frozen is not None:
+        return
+    for name in ('executionAmount', 'quotedInput', 'quotedOutput', 'inputMaximum', 'outputMinimum'):
+        if _uint256(amounts.get(name)):
+            probe.row[name] = amounts[name]
+    if branches is not None:
+        probe.row['pools'], probe.row['omittedPools'] = _safe_pools(branches)
+
+
+@_observation()
+def provider_qualification_selected(probe):
+    if probe is not None and probe.work is _quote_scope.get() and probe.work.frozen is None:
+        probe.work.qualifications.selected = probe.row['attempt']
+        probe.work.qualifications.keep(probe.row)
+
+
+def _selection_fields(budget):
+    if budget is None:
+        return {}
+    fields = budget.metrics()
+    result = {key: fields[key] for key in ('firstQualifiedMs', 'selectionMs', 'canonicalCompletedMs',
+              'cleanupCompletedMs') if key in fields}
+    reason = budget.timings().get('selectionReason')
+    if reason in ('complete', 'best-initial', 'first-extension', 'timeout'):
+        result['selectionReason'] = reason
+    return result
+
+
+@_observation()
+def current_quote_diagnostics():
+    current = _quote_scope.get()
+    return project_quote_diagnostics(current.snapshot()) if current is not None else None
+
+
+@_observation()
+def finalize_quote_diagnostics(value, budget):
+    """Complete the existing shared clock after producer finalization."""
+    if not isinstance(value, dict):
+        return
+    diagnostic = value.get('quoteDiagnostics')
+    if isinstance(diagnostic, dict) and isinstance(diagnostic.get('providerQualifications'), dict):
+        diagnostic['providerQualifications'].update(_selection_fields(budget))
+    for name in ('providerQuote',):
+        finalize_quote_diagnostics(value.get(name), budget)
+    for name in ('providerCandidates', 'providerAssessments'):
+        rows = value.get(name)
+        if isinstance(rows, dict):
+            for provider in ('core', 'market'):
+                finalize_quote_diagnostics(rows.get(provider), budget)
+
+
+@_observation()
+def provider_qualification_finish(probe, outcome, error=None):
+    if probe is not None:
+        probe.finish(outcome, error)
+
+
 def _sdk_members(value, low, high):
     if not isinstance(value, list):
         return [], 0
@@ -381,6 +717,86 @@ def _project_pending_sdk(value):
     if _bounded_integer(value.get('omittedRows')):
         result['omittedRows'] = value['omittedRows']
     return result
+
+
+def _project_pools(values):
+    pools = []
+    for pool in values[:_LEG_POOLS] if isinstance(values, list) else ():
+        if not isinstance(pool, dict) or not _one_of(pool.get('protocol'), ('v2', 'v3', 'v4')):
+            continue
+        safe = {'protocol': pool['protocol']}
+        if identity := _pool_identity(pool.get('poolId')):
+            safe['poolId'] = identity
+        if address := _address(pool.get('poolAddress')):
+            safe['poolAddress'] = address
+        if len(safe) > 1:
+            pools.append(safe)
+    return pools
+
+
+def _project_route_legs(value):
+    if not isinstance(value, dict) or not _bounded_integer(value.get('count')):
+        return None
+    result = {'count': value['count'], 'rows': []}
+    if _bounded_integer(value.get('omittedRows')):
+        result['omittedRows'] = value['omittedRows']
+    for source in value.get('rows', [])[:_LEG_ROWS] if isinstance(value.get('rows'), list) else ():
+        if not isinstance(source, dict) or not _bounded_integer(source.get('index')):
+            continue
+        row = {name: source[name] for name in ('index', 'started', 'succeeded', 'failed', 'cancelled',
+               'pending', 'omittedFailureCodes', 'omittedPools') if _bounded_integer(source.get(name))}
+        if type(source.get('bestAvailable')) is bool:
+            row['bestAvailable'] = source['bestAvailable']
+        for name in ('inputAsset', 'outputAsset'):
+            if address := _address(source.get(name)):
+                row[name] = address
+        if _uint256(source.get('amount')):
+            row['amount'] = source['amount']
+        row['failureCounts'] = [{'code': failure['code'], 'count': failure['count']}
+            for failure in source.get('failureCounts', [])[:_LEG_CODES]
+            if isinstance(failure, dict) and _one_of(failure.get('code'), _QUOTE_CODES)
+            and _bounded_integer(failure.get('count'))] if isinstance(source.get('failureCounts'), list) else []
+        row['bestPools'] = _project_pools(source.get('bestPools'))
+        result['rows'].append(row)
+    return result
+
+
+def _project_provider_qualifications(value):
+    if not isinstance(value, dict) or not _bounded_integer(value.get('attempts')) \
+            or not _one_of(value.get('provider'), ('core', 'market')):
+        return None
+    result = {name: value[name] for name in ('attempts', 'qualified', 'rejected', 'notImproved',
+              'cancelled', 'superseded', 'pending', 'omittedRows', 'selectedAttempt') if _bounded_integer(value.get(name))}
+    for name in ('firstQualifiedMs', 'selectionMs', 'canonicalCompletedMs', 'cleanupCompletedMs'):
+        if type(value.get(name)) in (int, float) and math.isfinite(value[name]) and 0 <= value[name] <= 1e12:
+            result[name] = value[name]
+    if _one_of(value.get('selectionReason'), ('complete', 'best-initial', 'first-extension', 'timeout')):
+        result['selectionReason'] = value['selectionReason']
+    rows = [_project_qualification_row(source) for source in value.get('rows', [])[:_PROVIDER_ROWS]] \
+        if isinstance(value.get('rows'), list) else []
+    return {**result, 'provider': value['provider'], 'rows': [row for row in rows if row is not None]}
+
+
+def _project_qualification_row(source):
+    if not isinstance(source, dict) or not _bounded_integer(source.get('attempt')) \
+            or not _one_of(source.get('stage'), _PROVIDER_STAGES) or not _one_of(source.get('outcome'), _PROVIDER_OUTCOMES):
+        return None
+    row = {name: source[name] for name in ('attempt', 'stage', 'outcome')}
+    for name in ('startedMs', 'completedMs', 'elapsedMs'):
+        if type(source.get(name)) in (int, float) and math.isfinite(source[name]) and 0 <= source[name] <= 1e12:
+            row[name] = source[name]
+    if _one_of(source.get('code'), _QUOTE_CODES):
+        row['code'] = source['code']
+    for name in ('targetAmount', 'minimumAmountOut', 'maximumAmountOut', 'observedAmountOut',
+                 'maximumAmountIn', 'observedAmountIn', 'executionAmount', 'quotedInput', 'quotedOutput',
+                 'inputMaximum', 'outputMinimum'):
+        if _uint256(source.get(name)):
+            row[name] = source[name]
+    if isinstance(source.get('pools'), list):
+        row['pools'] = _project_pools(source['pools'])
+    if _bounded_integer(source.get('omittedPools')):
+        row['omittedPools'] = source['omittedPools']
+    return row
 
 
 class _SdkSession:
@@ -548,15 +964,14 @@ def quote_failure_context(error):
     return result
 
 
-def quote_error_diagnostics(error):
+def project_quote_diagnostics(source):
     """Closed projection: diagnostic payloads cannot contain request data."""
     try:
-        source = _quote_error_source(error)
         if not isinstance(source, dict):
             return None
         result = {}
         for name, allowed in (('phase', _QUOTE_PHASES),):
-            if source.get(name) in allowed:
+            if _one_of(source.get(name), allowed):
                 result[name] = source[name]
         if type(source.get('qualified')) is bool:
             result['qualified'] = source['qualified']
@@ -566,19 +981,32 @@ def quote_error_diagnostics(error):
                 if type(number) in (int, float) and math.isfinite(number) and 0 <= number <= 1e12:
                     target[name] = number
         numbers(source, ('elapsedMs', 'inversionIteration'), result)
+        qualifications = _project_provider_qualifications(source.get('providerQualifications'))
+        if qualifications:
+            result['providerQualifications'] = qualifications
         wave = source.get('routeWave')
         if isinstance(wave, dict):
             projected = {}
             if wave.get('mode') in ('exact-in', 'exact-out'):
                 projected['mode'] = wave['mode']
-            if wave.get('subphase') in _ROUTE_PHASES:
+            if _one_of(wave.get('subphase'), _ROUTE_PHASES):
                 projected['subphase'] = wave['subphase']
             numbers(wave, ('elapsedMs', 'subphaseElapsedMs', 'legacyCandidates', 'legacyCompleted',
                           'typedEnumerated', 'typedCompleted', 'typedPending', 'sdkRequests',
                           'sdkWaiting', 'sdkLockWaitMs', 'sdkExchangeMs'), projected)
+            legs = _project_route_legs(wave.get('legs'))
+            if legs:
+                projected['legs'] = legs
             if projected:
                 result['routeWave'] = projected
         return result or None
+    except Exception:
+        return None
+
+
+def quote_error_diagnostics(error):
+    try:
+        return project_quote_diagnostics(_quote_error_source(error))
     except Exception:
         return None
 

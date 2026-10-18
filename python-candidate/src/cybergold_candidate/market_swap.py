@@ -31,6 +31,11 @@ from .quote_models import PoolBaseline, LegModel
 from .route_quote_engine import RouteQuoteEngine
 from .route_encoding import ADAPTER_TYPE, encode_adapter, encode_route
 from .quote_cache import IntentSharing
+from .rpc_diagnostics import (quote_work_scope, quote_phase, quote_qualified, start_route_work,
+    route_subphase, route_count, route_legs, route_leg_started, route_leg_finished,
+    provider_qualification_begin, provider_qualification_scope, provider_qualification_stage,
+    provider_qualification_finish, provider_qualification_terms, provider_qualification_selected,
+    current_quote_diagnostics)
 
 class MarketQuoteRequest(BaseModel):
     side: Literal['buy', 'sell']
@@ -286,8 +291,12 @@ class MarketQuotes(RouteQuoteEngine):
                 limit = net
                 input_maximum, output_minimum = bound, net
         if retained and exact_in and net < output_minimum:
+            provider_qualification_stage('tolerance', targetAmount=str(request_amount),
+                minimumAmountOut=str(output_minimum), observedAmountOut=str(net))
             raise InvalidPreview('Retained market minimum net output cannot be met.')
         if retained and not exact_in and total > input_maximum:
+            provider_qualification_stage('tolerance', targetAmount=str(request_amount),
+                maximumAmountIn=str(input_maximum), observedAmountIn=str(total))
             raise InvalidPreview('Retained market inclusive input maximum would be exceeded.')
         route = {'version': 1, 'executionContext': 'helpers-market', 'mode': 'exactIn' if exact_in else 'exactOut',
             'tokenIn': token_in, 'tokenOut': token_out, 'branches': deepcopy(branches),
@@ -341,6 +350,7 @@ class MarketQuotes(RouteQuoteEngine):
             pass
         return await self.sharing.get(request, on_update or ignore)
 
+    @quote_work_scope
     async def _get(self, request, on_update=None, *, block=None):
         budget = current_budget()
         request = MarketQuoteRequest.model_validate(request).model_dump()
@@ -351,8 +361,18 @@ class MarketQuotes(RouteQuoteEngine):
         except (ValueError, TypeError, OverflowError) as error:
             raise InvalidPreview('Invalid market quote input.') from error
         async def emit(value):
+            if value.get('type') == 'qualified' and isinstance(value.get('value'), dict):
+                diagnostics = current_quote_diagnostics()
+                if diagnostics:
+                    value = {**value, 'value': {**value['value'], 'quoteDiagnostics': diagnostics}}
             if on_update:
                 await on_update(value)
+        def terms(result, branches):
+            try:
+                provider_qualification_terms(quotedInput=result['totalInput'], quotedOutput=result['netOutput'],
+                    inputMaximum=result['inputMaximum'], outputMinimum=result['outputMinimum'], branches=branches)
+            except Exception:
+                pass  # Optional evidence cannot change quote qualification.
         await emit({'type': 'model', 'value': self.packet(request)})
         started = time.perf_counter()
         model_generation = self.generation
@@ -368,30 +388,72 @@ class MarketQuotes(RouteQuoteEngine):
             quote_amount = routed_sell_budget(amount, rate)[0] if side == 'sell' and exact_in else (
                 gross_buy_target(amount, rate)[0] if side == 'buy' and not exact_in else amount)
             mode = 'exactIn' if exact_in else 'exactOut'
+            quote_phase('execution-search')
+            start_route_work(request['mode'])
+            route_subphase('structured-search')
+            diagnostic_legs = route_legs([{'inputAsset': token_in, 'outputAsset': token_out,
+                                            'amount': str(quote_amount)}])
+            diagnostic_leg = diagnostic_legs[0] if diagnostic_legs else None
+            diagnostic_best = None
             retained = request.get('retainedPlan')
             if retained:
                 async def retained_quote():
-                    for name in ('side', 'mode', 'amount', 'slippageBps'):
-                        if retained.get(name) != request[name]:
-                            raise InvalidPreview('Retained market '+name+' changed.')
-                    for name in ('counterToken', 'adapter', 'recipient'):
-                        if retained['params'][name].lower() != request[name].lower():
-                            raise InvalidPreview('Retained market '+name+' changed.')
-                    target = int(retained['params']['routedInput']) if side == 'sell' and exact_in else (
-                        amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else amount)
-                    branches = self.resolve_branches(retained['route']['branches'], token_in, token_out, mode, target)
-                    async with engine_work(self.semaphore):
-                        raw = await self.quote_branches(branches, mode, target, block)
-                    result = await self.qualify_quote(request, branches, raw, retained['fee']['ratePpm'], block, target, emit, retained=retained)
-                    await rpc.assert_canonical(block)
-                    if budget is not None:
-                        budget.canonical_done()
-                        budget.cleanup_done()
-                    if budget is not None and not budget.qualified():
-                        raise SearchStopped()
-                    result['metrics'] = {'candidateCalls': 1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
-                    await emit({'type': 'qualified', 'value': result})
-                    return result
+                    nonlocal diagnostic_best
+                    probe = provider_qualification_begin('retained-validation', provider='market')
+                    priced, pricing_started = False, False
+                    with provider_qualification_scope(probe):
+                        try:
+                            for name in ('side', 'mode', 'amount', 'slippageBps'):
+                                if retained.get(name) != request[name]:
+                                    raise InvalidPreview('Retained market '+name+' changed.')
+                            for name in ('counterToken', 'adapter', 'recipient'):
+                                if retained['params'][name].lower() != request[name].lower():
+                                    raise InvalidPreview('Retained market '+name+' changed.')
+                            target = int(retained['params']['routedInput']) if side == 'sell' and exact_in else (
+                                amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else amount)
+                            branches = self.resolve_branches(retained['route']['branches'], token_in, token_out, mode, target)
+                            provider_qualification_stage('route-pricing')
+                            route_count('typedEnumerated')
+                            route_leg_started(diagnostic_leg, amount=str(target))
+                            pricing_started = True
+                            async with engine_work(self.semaphore):
+                                raw = await self.quote_branches(branches, mode, target, block)
+                            route_leg_finished(diagnostic_leg, 'succeeded', best={'routePlan': {'branches': branches}})
+                            priced = True
+                            diagnostic_best = int(raw['amountOut' if exact_in else 'amountIn'])
+                            provider_qualification_stage('qualification')
+                            result = await self.qualify_quote(request, branches, raw, retained['fee']['ratePpm'], block, target, emit, retained=retained)
+                            terms(result, branches)
+                            provider_qualification_stage('canonicality')
+                            await rpc.assert_canonical(block)
+                            if budget is not None:
+                                budget.canonical_done()
+                                budget.cleanup_done()
+                            provider_qualification_stage('selection')
+                            if budget is not None and not budget.qualified():
+                                provider_qualification_finish(probe, 'cancelled')
+                                raise SearchStopped()
+                            result['metrics'] = {'candidateCalls': 1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
+                            quote_qualified(True)
+                            provider_qualification_selected(probe)
+                            provider_qualification_finish(probe, 'qualified')
+                            await emit({'type': 'qualified', 'value': result})
+                            if diagnostics := current_quote_diagnostics():
+                                result['quoteDiagnostics'] = diagnostics
+                            return result
+                        except asyncio.CancelledError:
+                            if pricing_started and not priced:
+                                route_leg_finished(diagnostic_leg, 'cancelled')
+                            provider_qualification_finish(probe, 'cancelled')
+                            raise
+                        except Exception as error:
+                            if pricing_started and not priced:
+                                route_leg_finished(diagnostic_leg, 'failed', code=public_quote_error(error)['code'])
+                            provider_qualification_finish(probe, 'rejected', error)
+                            raise
+                        finally:
+                            if pricing_started:
+                                route_count('typedCompleted')
                 try:
                     return await budget.discovery(retained_quote()) if budget is not None else await retained_quote()
                 except InvalidPreview:
@@ -411,39 +473,76 @@ class MarketQuotes(RouteQuoteEngine):
             pools = []
             lock = asyncio.Lock()
             async def evaluate(branches):
-                nonlocal best, completed, rpc_error, context_error
-                try:
-                    async with engine_work(self.semaphore):
-                        raw = await self.quote_branches(branches, mode, quote_amount, block)
-                        result = self.make_quote(request, branches, raw, rate, block)
-                    async with lock:
-                        score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
-                        tie = json.dumps(branches, sort_keys=True)
-                        if best is None or (score, tie) > best[0]:
-                            # The SDK result supplies the economic terms;
-                            # canonical context validation still precedes readiness.
-                            result = await self.qualify_quote(request, branches, raw, rate, block, quote_amount, emit)
+                nonlocal best, completed, rpc_error, context_error, diagnostic_best
+                probe = provider_qualification_begin('route-pricing', provider='market')
+                route_leg_started(diagnostic_leg, amount=str(quote_amount))
+                priced = False
+                with provider_qualification_scope(probe):
+                    try:
+                        async with engine_work(self.semaphore):
+                            raw = await self.quote_branches(branches, mode, quote_amount, block)
+                            observed = int(raw['amountOut' if exact_in else 'amountIn'])
+                            improves_pricing = diagnostic_best is None or (
+                                observed > diagnostic_best if exact_in else observed < diagnostic_best)
+                            if improves_pricing:
+                                diagnostic_best = observed
+                            route_leg_finished(diagnostic_leg, 'succeeded',
+                                best={'routePlan': {'branches': branches}} if improves_pricing else None)
+                            priced = True
+                            provider_qualification_stage('fee-bounds')
+                            result = self.make_quote(request, branches, raw, rate, block)
+                            terms(result, branches)
+                        async with lock:
                             score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
+                            tie = json.dumps(branches, sort_keys=True)
                             if best is None or (score, tie) > best[0]:
-                                if budget is not None:
-                                    await rpc.assert_canonical(block)
-                                    if not budget.qualified():
-                                        return
-                                best = ((score, tie), result)
-                                await emit({'type': 'qualified', 'value': {**result,
-                                    'metrics': {'candidateCalls': completed+1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}}})
-                except SnapshotChanged as error:
-                    context_error, best = error, None
-                    if budget is not None:
-                        budget.invalidated()
-                    raise
-                except Exception as error:
-                    if public_quote_error(error)['code'].startswith('rpc-'):
-                        rpc_error = error
-                finally:
-                    async with lock:
-                        completed += 1
-                        await emit({'type': 'progress', 'completedCandidates': completed})
+                                # The SDK result supplies the economic terms;
+                                # canonical context validation still precedes readiness.
+                                provider_qualification_stage('qualification')
+                                result = await self.qualify_quote(request, branches, raw, rate, block, quote_amount, emit)
+                                terms(result, branches)
+                                score = int(result['netOutput']) if exact_in else -int(result['totalInput'])
+                                if best is None or (score, tie) > best[0]:
+                                    if budget is not None:
+                                        provider_qualification_stage('canonicality')
+                                        await rpc.assert_canonical(block)
+                                        provider_qualification_stage('selection')
+                                        if not budget.qualified():
+                                            provider_qualification_finish(probe, 'cancelled')
+                                            return
+                                    best = ((score, tie), result)
+                                    quote_qualified(True)
+                                    provider_qualification_selected(probe)
+                                    provider_qualification_finish(probe, 'qualified')
+                                    await emit({'type': 'qualified', 'value': {**result,
+                                        'metrics': {'candidateCalls': completed+1, 'totalMs': round((time.perf_counter()-started)*1000, 3)}}})
+                            provider_qualification_finish(probe, 'not-improved')
+                    except asyncio.CancelledError:
+                        if not priced:
+                            route_leg_finished(diagnostic_leg, 'cancelled')
+                        provider_qualification_finish(probe, 'cancelled')
+                        raise
+                    except SnapshotChanged as error:
+                        if not priced:
+                            route_leg_finished(diagnostic_leg, 'failed', code=public_quote_error(error)['code'])
+                        provider_qualification_finish(probe, 'rejected', error)
+                        quote_qualified(False)
+                        context_error, best = error, None
+                        if budget is not None:
+                            budget.invalidated()
+                        raise
+                    except Exception as error:
+                        code = public_quote_error(error)['code']
+                        if not priced:
+                            route_leg_finished(diagnostic_leg, 'failed', code=code)
+                        provider_qualification_finish(probe, 'rejected', error)
+                        if code.startswith('rpc-'):
+                            rpc_error = error
+                    finally:
+                        route_count('typedCompleted')
+                        async with lock:
+                            completed += 1
+                            await emit({'type': 'progress', 'completedCandidates': completed})
             async def search():
                 nonlocal pools
                 async def price(_index, branches):
@@ -478,7 +577,19 @@ class MarketQuotes(RouteQuoteEngine):
                 if rpc_error:
                     raise rpc_error
                 raise QuoteFailure('quote-no-route')
-            await rpc.assert_canonical(block)
+            final_validation = provider_qualification_begin('canonicality', provider='market')
+            with provider_qualification_scope(final_validation):
+                try:
+                    await rpc.assert_canonical(block)
+                    provider_qualification_finish(final_validation, 'qualified')
+                except asyncio.CancelledError:
+                    provider_qualification_finish(final_validation, 'cancelled')
+                    raise
+                except Exception as error:
+                    provider_qualification_finish(final_validation, 'rejected', error)
+                    if isinstance(error, SnapshotChanged):
+                        quote_qualified(False)
+                    raise
             if budget is not None:
                 budget.canonical_done()
             result = best[1]
@@ -513,7 +624,11 @@ class MarketQuotes(RouteQuoteEngine):
             while len(self.models) > 128:
                 self.models.popitem(last=False)
             await emit({'type': 'model', 'value': self.packet(request)})
+            quote_qualified(True)
+            if diagnostics := current_quote_diagnostics():
+                result['quoteDiagnostics'] = diagnostics
             return result
+
 
 async def handle_market_quote(request, service, stream=False):
     if not stream:

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { QuoteConstraint } from "../contracts/dto";
+import { projectQuoteDiagnostics, type ProjectedQuoteDiagnostics } from "./quoteDiagnostics.ts";
 
 export type ClientDiagnostic = {
   operation?: "quote" | "swap" | "wallet";
@@ -30,6 +31,7 @@ export type ClientDiagnostic = {
   strategy?: "core" | "market";
   stage?: "quote" | "balance" | "network" | "authorization" | "preparation" | "simulation" | "submission" | "confirmation";
   constraint?: QuoteConstraint;
+  quoteDiagnostics?: ProjectedQuoteDiagnostics;
   errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "redemption-supply-exceeded" | "redemption-capacity-exceeded" | "rpc-rate-limit" | "rpc-timeout"
     | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout" | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable"
     | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-invalid-input" | "quote-request-limit";
@@ -50,6 +52,8 @@ export type ClientDiagnostic = {
 export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
   const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const result: Record<string, unknown> = {};
+  const quoteDiagnostics = projectQuoteDiagnostics(source.quoteDiagnostics);
+  if (quoteDiagnostics) result.quoteDiagnostics = quoteDiagnostics;
   const enums = {
     operation: ["quote", "swap", "wallet"],
     outcome: ["started", "succeeded", "failed", "submitted", "reverted", "unconfirmed", "requested"],

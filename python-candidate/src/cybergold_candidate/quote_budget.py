@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from functools import wraps
 from inspect import iscoroutine
 
-from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_owned_task
+from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_owned_task, finalize_quote_diagnostics
 
 
 _budget = ContextVar('quote_selection_budget', default=None)
@@ -136,6 +136,7 @@ class QuoteBudget:
             result = await operation
             if self.selected is None:
                 self.finish_selection('complete')
+            finalize_quote_diagnostics(result, self)
             return result
         except SearchStopped as stopped:
             error = TimeoutError('Quote selection budget exhausted')

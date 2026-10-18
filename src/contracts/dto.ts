@@ -121,6 +121,7 @@ export type MarketQuote = {
   searchCoverage?: { scope: "selected-inventory"; maxHops: number; splitPercentages: number[];
     inventoryPools: number; catalogMonth: string | null };
   metrics: { candidateCalls: number; totalMs: number } & QuoteSelectionMetrics;
+  quoteDiagnostics?: QuoteWorkDiagnostics;
 };
 export type MarketQuoteModelPacket = {
   namespace: "market"; family: string; context?: MarketQuote["context"];
@@ -141,7 +142,7 @@ export type MarketQuoteEvent = DiagnosticReferences & (
   | { type: "qualified" | "complete"; value: MarketQuote }
   | { type: "progress"; completedCandidates: number; totalCandidates?: number }
   | { type: "invalidated" }
-  | { type: "error"; error: string; code?: string; diagnostics?: RpcErrorDiagnostics });
+  | { type: "error"; error: string; code?: string; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 
 type ReceiptWaitContext = { chainId: number; observedAt: string };
 export type GovernanceTargetCode = { context: ProtocolFacts["context"]; address: string; hasCode: boolean };
@@ -356,7 +357,7 @@ export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; co
 export type RouteSearchEvent =
   | { type: "progress"; results: (RouteSearch["results"][number] & { total: number })[] }
   | { type: "complete"; value: RouteSearch }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics };
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics };
 
 /** Optional observed RPC failure context; provider text is sanitized before publication. */
 export type RpcErrorDiagnostics = {
@@ -384,15 +385,111 @@ export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exce
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
   | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable";
 
+/**
+ * Bounded observation count; never an execution eligibility predicate.
+ * @TJS-type integer
+ * @minimum 0
+ * @maximum 1000000000000
+ */
+export type QuoteDiagnosticCount = number;
+/**
+ * Observed duration or offset in milliseconds, never a selection predicate.
+ * @minimum 0
+ * @maximum 1000000000000
+ */
+export type QuoteDiagnosticMilliseconds = number;
+/**
+ * Raw uint256 quantity; the producer additionally enforces the uint256 maximum.
+ * @pattern ^[0-9]{1,78}$
+ */
+export type QuoteDiagnosticAmount = string;
+/** @pattern ^0x[0-9a-fA-F]{40}$ */
+export type QuoteDiagnosticAddress = string;
+/**
+ * Concrete pool identity or the existing unresolved V3 execution identity.
+ * @pattern ^(?:0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})|v3:0x[0-9a-fA-F]{40}:0x[0-9a-fA-F]{40}:(?:[0-9]{1,6}|0[0-9]{6}|1000000))$
+ */
+export type QuoteDiagnosticPoolId = string;
+/** @additionalProperties false */
+export type QuoteDiagnosticPool = {
+  protocol: "v2" | "v3" | "v4";
+  poolId?: QuoteDiagnosticPoolId;
+  poolAddress?: QuoteDiagnosticAddress;
+};
+/** @additionalProperties false */
+export type QuoteDiagnosticFailureCount = { code: QuoteErrorCode; count: QuoteDiagnosticCount };
+/** One required conversion leg, without paths, calldata or upstream messages.
+ * @additionalProperties false
+ */
+export type QuoteDiagnosticLeg = {
+  index: QuoteDiagnosticCount;
+  inputAsset?: QuoteDiagnosticAddress; outputAsset?: QuoteDiagnosticAddress; amount?: QuoteDiagnosticAmount;
+  started: QuoteDiagnosticCount; succeeded: QuoteDiagnosticCount; failed: QuoteDiagnosticCount;
+  cancelled: QuoteDiagnosticCount; pending: QuoteDiagnosticCount; bestAvailable: boolean;
+  /** @maxItems 16 */
+  failureCounts: QuoteDiagnosticFailureCount[];
+  omittedFailureCodes: QuoteDiagnosticCount;
+  /** @maxItems 8 */
+  bestPools: QuoteDiagnosticPool[];
+  omittedPools: QuoteDiagnosticCount;
+};
+/** @additionalProperties false */
+export type QuoteDiagnosticLegs = {
+  count: QuoteDiagnosticCount; omittedRows: QuoteDiagnosticCount;
+  /** @maxItems 16 */
+  rows: QuoteDiagnosticLeg[];
+};
+/** One complete provider qualification attempt; rejection is distinct from a missing route.
+ * @additionalProperties false
+ */
+export type ProviderQualificationDiagnostic = {
+  attempt: QuoteDiagnosticCount;
+  stage: "composition" | "basket-preview" | "initial-preview" | "execution-search" | "expected-input-search"
+    | "final-preview" | "tolerance" | "canonicality" | "selection"
+    | "route-pricing" | "fee-bounds" | "qualification" | "retained-validation";
+  outcome: "running" | "qualified" | "rejected" | "not-improved" | "cancelled" | "superseded";
+  code?: QuoteErrorCode;
+  targetAmount?: QuoteDiagnosticAmount; minimumAmountOut?: QuoteDiagnosticAmount;
+  maximumAmountOut?: QuoteDiagnosticAmount; observedAmountOut?: QuoteDiagnosticAmount;
+  maximumAmountIn?: QuoteDiagnosticAmount; observedAmountIn?: QuoteDiagnosticAmount;
+  /** Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+  startedMs?: QuoteDiagnosticMilliseconds; completedMs?: QuoteDiagnosticMilliseconds;
+  elapsedMs?: QuoteDiagnosticMilliseconds;
+  executionAmount?: QuoteDiagnosticAmount; quotedInput?: QuoteDiagnosticAmount; quotedOutput?: QuoteDiagnosticAmount;
+  inputMaximum?: QuoteDiagnosticAmount; outputMinimum?: QuoteDiagnosticAmount;
+  /** @maxItems 8 */
+  pools?: QuoteDiagnosticPool[];
+  omittedPools?: QuoteDiagnosticCount;
+};
+/** @additionalProperties false */
+export type ProviderQualificationDiagnostics = {
+  provider: "core" | "market";
+  attempts: QuoteDiagnosticCount; qualified: QuoteDiagnosticCount; rejected: QuoteDiagnosticCount;
+  notImproved: QuoteDiagnosticCount; cancelled: QuoteDiagnosticCount; superseded: QuoteDiagnosticCount;
+  pending: QuoteDiagnosticCount; omittedRows: QuoteDiagnosticCount;
+  selectedAttempt?: QuoteDiagnosticCount;
+  selectionReason?: "best-initial" | "first-extension" | "complete" | "timeout";
+  firstQualifiedMs?: QuoteDiagnosticMilliseconds; selectionMs?: QuoteDiagnosticMilliseconds;
+  canonicalCompletedMs?: QuoteDiagnosticMilliseconds; cleanupCompletedMs?: QuoteDiagnosticMilliseconds;
+  /** @maxItems 8 */
+  rows: ProviderQualificationDiagnostic[];
+};
+
 /** Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
 export type QuoteWorkDiagnostics = {
-  phase?: string; elapsedMs?: number; qualified?: boolean; inversionIteration?: number;
+  phase?: "context" | "initial-search" | "initial-preview" | "capacity" | "basket-preview"
+    | "expected-input-search" | "execution-search" | "final-preview" | "canonicality" | "retained-validation";
+  elapsedMs?: number; qualified?: boolean; inversionIteration?: number;
   routeWave?: {
-    elapsedMs?: number; subphaseElapsedMs?: number; subphase?: string; mode?: string;
+    elapsedMs?: number; subphaseElapsedMs?: number;
+    subphase?: "context" | "eligibility" | "v3-coverage" | "typed-reserve" | "structured-search" | "composition" | "canonicality";
+    mode?: "exact-in" | "exact-out";
     legacyCandidates?: number; legacyCompleted?: number;
     typedEnumerated?: number; typedCompleted?: number; typedPending?: number;
     sdkRequests?: number; sdkWaiting?: number; sdkLockWaitMs?: number; sdkExchangeMs?: number;
+    legs?: QuoteDiagnosticLegs;
   };
+  providerQualifications?: ProviderQualificationDiagnostics;
 };
 
 export type QuoteIntentRequest = {
@@ -428,6 +525,7 @@ export type QuoteIntent = {
   expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
   metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number; rpcReadsScope?: "coordinator";
     candidateCalls: number; iterations: number; totalMs: number } & QuoteSelectionMetrics;
+  quoteDiagnostics?: QuoteWorkDiagnostics;
 };
 /** Display-only source data. No transaction tuples or execution readiness. */
 export type QuoteModelPacket = {
@@ -461,7 +559,7 @@ export type QuoteIntentEvent = DiagnosticReferences & (
   | { type: "qualified"; value: QuoteIntent }
   | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
   | { type: "complete"; value: QuoteIntent }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics });
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 
 /** One user trade; Backend chooses a complete Core or market execution. */
 export type TradeModelRequest = {
@@ -516,14 +614,15 @@ export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "provider-qualified"; strategy: "core" | "market"; value: TradeProviderCandidate }
   | { type: "provider-assessment"; strategy: "core" | "market"; value: TradeProviderAssessment }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
-  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics }
+  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics }
   | { type: "invalidated"; strategy: "core" | "market" }
-  | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics;
+  | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
       providerAssessments?: TradeProviderAssessments; providerCandidates?: TradeProviderCandidates });
 
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
 export interface ContractSchemas {
   DiagnosticReferences: DiagnosticReferences;
+  QuoteWorkDiagnostics: QuoteWorkDiagnostics;
   TradeModelRequest: TradeModelRequest;
   TradeQuoteRequest: TradeQuoteRequest;
   TradeQuote: TradeQuote;
@@ -611,7 +710,7 @@ export interface ContractSchemas {
   Dashboard: (OnchainDashboardSnapshot | { enabled: false; protocolLogicUpdate: null; protocolParameterUpdate: null; lastScannedBlock: null }) & {
     sandboxForkGeneration?: string | null;
   };
-  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics };
+  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics };
   AliasesRequest: OwnerAliasesRequest;
   AliasesResult: { entries: GovernanceOwnerAliasEntry[] } | { entry: GovernanceOwnerAliasEntry } | { ok: true; deleted: boolean };
   PoolRequest: PoolCacheRequest;

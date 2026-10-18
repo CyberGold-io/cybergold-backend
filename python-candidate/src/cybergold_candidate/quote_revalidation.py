@@ -7,6 +7,7 @@ from .route_work_slots import engine_work
 from .uniswap_routes import resize_branches, v3_plan
 from .route_encoding import encode_route
 from .recovery_rpc import SnapshotChanged
+from .rpc_diagnostics import provider_qualification_stage
 
 
 class RetainedPlanChanged(InvalidPreview):
@@ -94,6 +95,7 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         # Selected normalization remains owned by the ordinary sequential path
         # if this optional work dispatch cannot prepare its input.
         planned = None
+    provider_qualification_stage('composition')
     values = await quote_shared(planned, mode, block, ordered_assets=request['orderedAssets'],
         issue=issue, resolve=resolve_selected) if planned is not None else None
     if values is not None:
@@ -110,6 +112,7 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
                 raise RetainedPlanChanged(str(error)) from error
             try:
                 metrics['candidateCalls'] += 1
+                provider_qualification_stage('route-pricing')
                 async with engine_work(provider.semaphore):
                     result = await provider.quote_branches(branches, mode, raw, block)
             except Exception as error:
@@ -123,6 +126,7 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
             values.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
                 'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
                 'best': {'quote': observed, 'routePlan': plan}})
+        provider_qualification_stage('composition')
         async with engine_work(provider.semaphore):
             values = await provider.compose_core_rows(values, mode, block,
                 ordered_assets=request['orderedAssets'], issue=issue)
@@ -133,6 +137,8 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         observed = int(value['best']['quote'])
         if issue:
             if observed > int(leg['amountIn']):
+                provider_qualification_stage('tolerance', maximumAmountIn=leg['amountIn'],
+                    observedAmountIn=str(observed))
                 raise RetainedPlanChanged('Retained swap input bound cannot be met.')
             bound = min(int(leg['amountIn']), ceil(observed, slippage_bps))
             expected_input += observed
@@ -140,6 +146,8 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
             quote = {**leg, 'amountIn': str(bound), 'minimumAmountOut': str(raw)}
         else:
             if observed < limit:
+                provider_qualification_stage('tolerance', minimumAmountOut=str(limit),
+                    observedAmountOut=str(observed))
                 raise RetainedPlanChanged('Retained swap output bound cannot be met.')
             quote = {**leg, 'inputAmount': str(raw)}
             expected_surplus += observed - limit
@@ -154,6 +162,8 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         needed += sum(int(row['amountIn']) for row in quotes)
         maximum = int(previous['maximumInputAmount']) if request['mode'] == 'issue-exact-in' else needed
         if needed > int(previous['maximumInputAmount']):
+            provider_qualification_stage('tolerance', maximumAmountIn=previous['maximumInputAmount'],
+                observedAmountIn=str(needed))
             raise RetainedPlanChanged('Retained aggregate input bound cannot be met.')
         value = {'mode': prefix+'-exact-out', 'quotes': quotes, 'netCygldOut': str(amount),
                  'maximumNativeIn' if request['native'] else 'maximumInputAmount': str(maximum)}
@@ -170,6 +180,8 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         check_core(final['projectedCoreOutputs'], bounds)
         minimum = int(final['minimumAmountOut'])
         if minimum < int(previous['preview']['minimumAmountOut']):
+            provider_qualification_stage('tolerance', minimumAmountOut=previous['preview']['minimumAmountOut'],
+                observedAmountOut=str(minimum))
             raise RetainedPlanChanged('Retained aggregate output bound cannot be met.')
         if request['mode'] == 'redeem-exact-out' and not int(request['amount']) <= minimum <= ceil(int(request['amount']), slippage_bps):
             raise RetainedPlanChanged('Retained minimum-output interval changed.')

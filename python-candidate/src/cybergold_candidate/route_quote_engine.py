@@ -14,7 +14,7 @@ from .basket_preview import InvalidPreview
 from .quote_errors import public_quote_error
 from .quote_models import PoolBaseline
 from .recovery_rpc import SnapshotChanged
-from .rpc_diagnostics import route_count
+from .rpc_diagnostics import route_count, route_legs, route_leg_started, route_leg_finished
 from .route_scheduler import schedule_routes, raise_snapshot_disproof
 from .sdk_worker import SdkWorker, MissingPoolState
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
@@ -442,6 +442,7 @@ class RouteQuoteEngine:
         mode = 'exactIn' if request['mode'] == 'exact-in' else 'exactOut'
         results = [{'target': target, 'best': None, 'attempted': 0, 'succeeded': 0,
                     'failures': [], 'total': 0} for target in request['targets']]
+        diagnostic_legs = route_legs(request['targets'])
         for result in results:
             target = result['target']
             if target['inputAsset'].lower() == target['outputAsset'].lower():
@@ -454,6 +455,8 @@ class RouteQuoteEngine:
         async def evaluate(index, branches):
             result = results[index]
             target = result['target']
+            diagnostic_leg = diagnostic_legs[index] if index < len(diagnostic_legs) else None
+            route_leg_started(diagnostic_leg)
             result['total'] += 1
             try:
                 async with engine_work(self.semaphore):
@@ -472,11 +475,18 @@ class RouteQuoteEngine:
                 if observed > 0 and (best is None or (observed > int(best['quote'])
                         if mode == 'exactIn' else observed < int(best['quote']))):
                     result['best'] = row
-            except SnapshotChanged:
+                route_leg_finished(diagnostic_leg, 'succeeded', best=result['best'])
+            except asyncio.CancelledError:
+                route_leg_finished(diagnostic_leg, 'cancelled')
+                raise
+            except SnapshotChanged as error:
+                route_leg_finished(diagnostic_leg, 'failed', code=public_quote_error(error)['code'])
                 raise
             except Exception as error:
+                failure = public_quote_error(error)
+                route_leg_finished(diagnostic_leg, 'failed', code=failure['code'])
                 if len(result['failures']) < 128:
-                    result['failures'].append({'path': '0x', 'rpcCode': 0, **public_quote_error(error)})
+                    result['failures'].append({'path': '0x', 'rpcCode': 0, **failure})
             finally:
                 result['attempted'] += 1
                 route_count('typedCompleted')

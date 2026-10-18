@@ -27,6 +27,71 @@ test("diagnostics retain signed safe codes and only the four-byte selector", () 
   }
 });
 
+test("browser quote diagnostics survive the real collector without leaking raw provider fields", async () => {
+  let output = "";
+  const stream = new Writable({ write(chunk, _encoding, done) { output += chunk.toString(); done(); } });
+  const api = await createBackendServer("api", { logger: { stream } });
+  try {
+    for (const provider of ["core", "market"]) {
+      const quoteDiagnostics = { phase: "initial-search", routeWave: { subphase: "structured-search",
+        legs: { count: 1, rows: [{ index: 0, inputAsset: `0x${"A".repeat(40)}`, amount: "1", pending: 1,
+          bestAvailable: false, failureCounts: [{ code: "quote-no-route", count: 1 }],
+          bestPools: [{ protocol: "v3", poolId: `v3:0x${"A".repeat(40)}:0x${"B".repeat(40)}:0000500` }] }] } },
+        providerQualifications: { provider, attempts: 1, rejected: 1,
+          rows: [{ attempt: 1, stage: "qualification", outcome: "rejected", code: "quote-contract-reverted", observedAmountIn: "1" }] } };
+      const projected = projectClientDiagnostic({ operation: "quote", outcome: "failed", quoteDiagnostics });
+      assert.equal(projected.quoteDiagnostics?.providerQualifications?.provider, provider);
+      assert.equal(projected.quoteDiagnostics?.routeWave?.legs?.rows[0].inputAsset, `0x${"a".repeat(40)}`);
+      const response = await api.inject({ method: "POST", url: "/api/diagnostics", payload: {
+        operation: "quote", outcome: "failed", quoteDiagnostics: { ...quoteDiagnostics,
+          message: "never-log-me", routeWave: { ...quoteDiagnostics.routeWave, calldata: "never-log-me" } } } });
+      assert.equal(response.statusCode, 202);
+      const event = output.trim().split("\n").map(line => JSON.parse(line)).filter(line => line.event === "client_diagnostic").at(-1);
+      assert.deepEqual(event.quoteDiagnostics, projected.quoteDiagnostics);
+    }
+    assert.doesNotMatch(output, /never-log-me/);
+    assert.deepEqual(projectClientDiagnostic({ operation: "quote", outcome: "failed", quoteDiagnostics: {
+      phase: "context", providerQualifications: { provider: [], attempts: 1 }, routeWave: { legs: { count: false } } } }),
+    { operation: "quote", outcome: "failed", quoteDiagnostics: { phase: "context" } });
+    assert.deepEqual(projectClientDiagnostic({ quoteDiagnostics: { routeWave: { legs: { count: 1, rows: [{
+      index: 0, amount: "1\n", inputAsset: `0x${"a".repeat(40)}\n`,
+      bestPools: [{ protocol: "v3", poolId: `0x${"a".repeat(40)}\n` }],
+    }] } } } }), { quoteDiagnostics: { routeWave: { legs: { count: 1,
+      rows: [{ index: 0, failureCounts: [], bestPools: [] }] } } } });
+  } finally { await api.close(); }
+});
+
+test("candidate timing and selected attempt survive telemetry without inventing missing evidence", () => {
+  const poolId = `0x${"A".repeat(64)}`;
+  const quoteDiagnostics = { providerQualifications: { provider: "core", attempts: 2, selectedAttempt: 2,
+    selectionReason: "best-initial", firstQualifiedMs: 50.25, selectionMs: 5000.5,
+    canonicalCompletedMs: 5010, cleanupCompletedMs: 5001,
+    rows: [{ attempt: 1, stage: "qualification", outcome: "rejected", startedMs: 20.25, completedMs: 40.5,
+      elapsedMs: 20.25, quotedInput: "100", quotedOutput: "200", inputMaximum: "100", outputMinimum: "198" },
+    { attempt: 2, stage: "selection", outcome: "qualified", startedMs: 40.75, completedMs: 50.25,
+      elapsedMs: 9.5, executionAmount: "400", quotedInput: "100", quotedOutput: "400", inputMaximum: "100", outputMinimum: "396",
+      pools: Array.from({ length: 12 }, () => ({ protocol: "v4", poolId, calldata: "private-payload" })), omittedPools: 4 }],
+    arbitraryReason: "private-payload" } };
+  const result = projectClientDiagnostic({ quoteDiagnostics });
+  const qualifications = result.quoteDiagnostics?.providerQualifications;
+  assert.equal(qualifications?.selectedAttempt, 2);
+  assert.equal(qualifications?.selectionReason, "best-initial");
+  assert.equal(qualifications?.rows[0].elapsedMs, 20.25);
+  assert.equal(qualifications?.rows[1].quotedOutput, "400");
+  assert.equal(qualifications?.rows[1].pools?.length, 8);
+  assert.equal(qualifications?.rows[1].pools?.[0].poolId, poolId.toLowerCase());
+  assert.doesNotMatch(JSON.stringify(result), /private-payload/);
+  quoteDiagnostics.providerQualifications.rows[1].pools![0].poolId = "changed";
+  assert.equal(qualifications?.rows[1].pools?.[0].poolId, poolId.toLowerCase());
+  assert.deepEqual(projectClientDiagnostic({ quoteDiagnostics: { providerQualifications: { provider: "market", attempts: 1,
+    selectedAttempt: true, selectionReason: "private-reason", selectionMs: -1, canonicalCompletedMs: Infinity,
+    rows: [{ attempt: 1, stage: "fee-bounds", outcome: "rejected", startedMs: true, completedMs: 1e12 + 1,
+      elapsedMs: "100", quotedInput: "00", quotedOutput: (2n ** 256n).toString(), inputMaximum: "1\n",
+      pools: [{ protocol: "v4", poolId: `${poolId}\n` }] }] } } }), {
+    quoteDiagnostics: { providerQualifications: { provider: "market", attempts: 1,
+      rows: [{ attempt: 1, stage: "fee-bounds", outcome: "rejected", pools: [] }] } } });
+});
+
 test("real API emits only projected diagnostic fields and retains ordinary JSON errors", async () => {
   let output = "";
   const stream = new Writable({ write(chunk, _encoding, done) { output += chunk.toString(); done(); } });

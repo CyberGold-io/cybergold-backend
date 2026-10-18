@@ -7,6 +7,7 @@ import uuid
 from fastapi.responses import JSONResponse
 
 from .rpc_http import parse_json
+from .rpc_diagnostics import project_quote_diagnostics
 
 ENUMS={'operation':['quote','swap','wallet'],
     'outcome':['started','succeeded','failed','submitted','reverted','unconfirmed','requested'],
@@ -59,6 +60,9 @@ def project(input):
                 safe[key] = value
         if safe:
             result['constraint'] = safe
+    quote_diagnostics = project_quote_diagnostics(source.get('quoteDiagnostics'))
+    if quote_diagnostics:
+        result['quoteDiagnostics'] = quote_diagnostics
     return result
 
 
