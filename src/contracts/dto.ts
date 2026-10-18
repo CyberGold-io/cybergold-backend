@@ -348,7 +348,7 @@ export type RouteSearchTarget = { inputAsset: string; outputAsset: string; amoun
 export type RouteSearchRequest = { mode: UniswapQuoteRequest["mode"]; targets: RouteSearchTarget[]; adapter?: string };
 export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; context: BasketPreview["context"];
   results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed" | "identity";
-    feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }[] }[];
+    feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics }[] }[];
   metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number; rpcReadsScope?: "coordinator";
     rpcReadsCoalesced: number; rpcReadsReused: number; contextMs: number; quotesMs: number;
     canonicalityMs: number; totalMs: number } };
@@ -356,7 +356,7 @@ export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; co
 export type RouteSearchEvent =
   | { type: "progress"; results: (RouteSearch["results"][number] & { total: number })[] }
   | { type: "complete"; value: RouteSearch }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics };
 
 /** Optional observed RPC failure context; provider text is sanitized before publication. */
 export type RpcErrorDiagnostics = {
@@ -371,7 +371,16 @@ export type RpcErrorDiagnostics = {
   errorName?: string;
 };
 
+/** Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+export type QuoteConstraint = {
+  kind?: "issuance-cap" | "redemption-supply" | "redemption-capacity";
+  quantity?: "gross-cygld-mint" | "gross-cygld-input" | "core-output-minima";
+  limitKind?: "maximum-total-supply" | "effective-supply-cap";
+  requestedRaw?: string; availableRaw?: string; currentSupplyRaw?: string; limitRaw?: string;
+};
+
 export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exceeded"
+  | "redemption-supply-exceeded" | "redemption-capacity-exceeded"
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
   | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable";
 
@@ -452,7 +461,7 @@ export type QuoteIntentEvent = DiagnosticReferences & (
   | { type: "qualified"; value: QuoteIntent }
   | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
   | { type: "complete"; value: QuoteIntent }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics });
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics });
 
 /** One user trade; Backend chooses a complete Core or market execution. */
 export type TradeModelRequest = {
@@ -483,7 +492,7 @@ export type TradeProviderCandidate = CoreTradeProviderCandidate | MarketTradePro
 export type TradeProviderAssessment = {
   availability: "pending" | "qualified" | "unavailable" | "unsupported" | "not-run";
   searchOutcome: "running" | "complete" | "timeout" | "error" | "cancelled" | "not-run";
-  error?: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
+  error?: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
 };
 export type TradeProviderAssessments = Record<"core" | "market", TradeProviderAssessment>;
 export type TradeProviderCandidates = {
@@ -507,9 +516,9 @@ export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "provider-qualified"; strategy: "core" | "market"; value: TradeProviderCandidate }
   | { type: "provider-assessment"; strategy: "core" | "market"; value: TradeProviderAssessment }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
-  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }
+  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics }
   | { type: "invalidated"; strategy: "core" | "market" }
-  | { type: "error"; error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics;
+  | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics;
       providerAssessments?: TradeProviderAssessments; providerCandidates?: TradeProviderCandidates });
 
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
@@ -602,7 +611,7 @@ export interface ContractSchemas {
   Dashboard: (OnchainDashboardSnapshot | { enabled: false; protocolLogicUpdate: null; protocolParameterUpdate: null; lastScannedBlock: null }) & {
     sandboxForkGeneration?: string | null;
   };
-  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics };
   AliasesRequest: OwnerAliasesRequest;
   AliasesResult: { entries: GovernanceOwnerAliasEntry[] } | { entry: GovernanceOwnerAliasEntry } | { ok: true; deleted: boolean };
   PoolRequest: PoolCacheRequest;

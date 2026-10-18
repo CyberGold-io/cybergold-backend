@@ -52,6 +52,31 @@ provider deadlines, bounded concurrency, last-subscriber cancellation and
 existing fork/generation invalidation are retained. First qualified latency and
 full-search latency are distinct; one HTTP request does not imply one RPC read.
 
+Capacity failures keep the existing canonical Helpers preview as authority.
+An explicit CYGLD issuance output is previewed before collateral route search;
+an explicit CYGLD redemption input is previewed before output route search.
+`issuance-cap-exceeded` retains the contract's gross requested increase, current
+supply, limiting cap and remaining gross capacity in `constraint`. The
+`limitKind` distinguishes maximum total supply from the effective recovery cap.
+`redemption-supply-exceeded` identifies a focused exact-input redemption rejected
+because its post-Helpers-fee Core input exceeds total supply; its requested raw
+amount is the outer CYGLD input, not a collateral amount or wallet balance.
+
+Core uses the same `InsufficientSupply()` ABI error for exact-output collateral
+minima above reserves and for their computed gross redemption above supply.
+That focused failure is therefore `redemption-capacity-exceeded`; it does not
+claim to distinguish those two causes or invent missing available quantities.
+The generic compatibility decoder retains `insufficient-protocol-supply` when
+no focused preview method is known. Diagnostics add no RPC reads or retries.
+
+A token-output redemption may need inverse route observations before its Core
+minimum vector exists. A search deadline before that preview is a quote timeout,
+not evidence of a supply or reserve failure. Weighted seed allocation and nominal
+USD size cannot prove that every route is infeasible. Core failures remain
+provider-specific so an eligible Market candidate can still qualify and win.
+Input-budget issuance continues to permit the existing cap-limited fixed output
+and input refunds; a large budget alone does not require a cap rejection.
+
 Mixed exact-output, cross-family input splitting, gas-adjusted ranking, actual
 partial fills, arbitrary hooks and wider market token UI remain deferred.
 This source introduces no contract deployment, server broadcast or new

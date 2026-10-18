@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { QuoteConstraint } from "../contracts/dto";
 
 export type ClientDiagnostic = {
   operation?: "quote" | "swap" | "wallet";
@@ -28,7 +29,8 @@ export type ClientDiagnostic = {
   side?: "buy" | "sell";
   strategy?: "core" | "market";
   stage?: "quote" | "balance" | "network" | "authorization" | "preparation" | "simulation" | "submission" | "confirmation";
-  errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "rpc-rate-limit" | "rpc-timeout"
+  constraint?: QuoteConstraint;
+  errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "redemption-supply-exceeded" | "redemption-capacity-exceeded" | "rpc-rate-limit" | "rpc-timeout"
     | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout" | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable"
     | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-invalid-input" | "quote-request-limit";
   tokenIn?: string;
@@ -47,7 +49,7 @@ export type ClientDiagnostic = {
 /** Project untrusted diagnostics onto explicit fields. Never log the input object. */
 export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
   const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const result: Record<string, string | number> = {};
+  const result: Record<string, unknown> = {};
   const enums = {
     operation: ["quote", "swap", "wallet"],
     outcome: ["started", "succeeded", "failed", "submitted", "reverted", "unconfirmed", "requested"],
@@ -56,7 +58,7 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
     walletStep: ["approval", "signature", "transaction"],
     side: ["buy", "sell"], strategy: ["core", "market"],
     stage: ["quote", "balance", "network", "authorization", "preparation", "simulation", "submission", "confirmation"],
-    errorClassification: ["insufficient-protocol-supply", "issuance-cap-exceeded", "rpc-rate-limit", "rpc-timeout",
+    errorClassification: ["insufficient-protocol-supply", "issuance-cap-exceeded", "redemption-supply-exceeded", "redemption-capacity-exceeded", "rpc-rate-limit", "rpc-timeout",
       "rpc-unavailable", "rpc-access-denied", "quote-timeout", "quote-no-route", "quote-contract-reverted", "quote-unavailable",
       "quote-service-unavailable", "quote-stream-interrupted", "quote-invalid-input", "quote-request-limit"],
   };
@@ -85,6 +87,23 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
     if (typeof source[key] === "string" && /^[0-9]{1,78}$/.test(source[key]) && BigInt(source[key]) < 2n ** 256n) result[key] = source[key];
   }
   if (typeof source.blockHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(source.blockHash)) result.blockHash = source.blockHash;
+  const constraint = source.constraint;
+  if (constraint && typeof constraint === "object") {
+    const values = constraint as Record<string, unknown>;
+    const projected: Record<string, string> = {};
+    const kinds = {
+      kind: ["issuance-cap", "redemption-supply", "redemption-capacity"],
+      quantity: ["gross-cygld-mint", "gross-cygld-input", "core-output-minima"],
+      limitKind: ["maximum-total-supply", "effective-supply-cap"],
+    };
+    for (const [key, allowed] of Object.entries(kinds)) {
+      if (typeof values[key] === "string" && allowed.includes(values[key])) projected[key] = values[key];
+    }
+    for (const key of ["requestedRaw", "availableRaw", "currentSupplyRaw", "limitRaw"]) {
+      if (typeof values[key] === "string" && /^[0-9]{1,78}$/.test(values[key]) && BigInt(values[key]) < 2n ** 256n) projected[key] = values[key];
+    }
+    if (Object.keys(projected).length) result.constraint = projected;
+  }
   return result as ClientDiagnostic;
 }
 

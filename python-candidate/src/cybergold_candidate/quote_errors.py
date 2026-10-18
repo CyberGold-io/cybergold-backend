@@ -45,7 +45,8 @@ def rpc_failure(error):
 
 def _public_quote_error(error):
     if isinstance(error, (KnownPreviewError, QuoteFailure)):
-        return {'code': error.code, 'error': str(error)}
+        return {'code': error.code, 'error': str(error),
+                **({'constraint': dict(error.constraint)} if isinstance(error, KnownPreviewError) and error.constraint else {})}
     if isinstance(error, Web3RPCError):
         return _public_quote_error(rpc_failure((error.rpc_response or {}).get('error', {})))
     if isinstance(error, (RpcTimeout, httpx.TimeoutException)):

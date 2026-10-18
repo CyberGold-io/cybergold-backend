@@ -519,7 +519,7 @@ class QuoteIntent:
             try:
                 required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})
             except KnownPreviewError as error:
-                if fallback_gross is None or error.code != 'insufficient-protocol-supply':
+                if fallback_gross is None or error.code not in ('insufficient-protocol-supply', 'redemption-supply-exceeded'):
                     raise
                 gross = fallback_gross
                 required = await preview(basket, {'mode': 'redeem-exact-in', 'grossCygldIn': str(gross)})

@@ -15,7 +15,8 @@ ENUMS={'operation':['quote','swap','wallet'],
     'walletStep':['approval','signature','transaction'],
     'side':['buy','sell'],'strategy':['core','market'],
     'stage':['quote','balance','network','authorization','preparation','simulation','submission','confirmation'],
-    'errorClassification':['insufficient-protocol-supply','issuance-cap-exceeded','rpc-rate-limit','rpc-timeout',
+    'errorClassification':['insufficient-protocol-supply','issuance-cap-exceeded','redemption-supply-exceeded',
+        'redemption-capacity-exceeded','rpc-rate-limit','rpc-timeout',
         'rpc-unavailable','rpc-access-denied','quote-timeout','quote-no-route','quote-contract-reverted','quote-unavailable',
         'quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit']}
 
@@ -43,6 +44,21 @@ def project(input):
         if isinstance(value,str) and re.fullmatch(r'[0-9]{1,78}',value) and int(value)<2**256:result[key]=value
     value=source.get('blockHash')
     if isinstance(value,str) and re.fullmatch(r'0x[0-9a-fA-F]{64}',value):result['blockHash']=value
+    constraint = source.get('constraint')
+    if isinstance(constraint, dict):
+        safe = {}
+        enums = {'kind': ('issuance-cap', 'redemption-supply', 'redemption-capacity'),
+                 'quantity': ('gross-cygld-mint', 'gross-cygld-input', 'core-output-minima'),
+                 'limitKind': ('maximum-total-supply', 'effective-supply-cap')}
+        for key, allowed in enums.items():
+            if isinstance(constraint.get(key), str) and constraint[key] in allowed:
+                safe[key] = constraint[key]
+        for key in ('requestedRaw', 'availableRaw', 'currentSupplyRaw', 'limitRaw'):
+            value = constraint.get(key)
+            if isinstance(value, str) and re.fullmatch(r'[0-9]{1,78}', value) and int(value) < 2**256:
+                safe[key] = value
+        if safe:
+            result['constraint'] = safe
     return result
 
 
