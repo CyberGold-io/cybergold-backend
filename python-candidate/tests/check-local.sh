@@ -135,6 +135,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_pool_producer.py
 
 node --import tsx python-candidate/tests/node-basket-preview-reference.ts > "$candidate_reference_dir/basket-preview.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_basket_preview.py "$candidate_reference_dir/basket-preview.json"
+python-candidate/.venv/bin/python python-candidate/tests/test_basket_max.py
 python-candidate/.venv/bin/python python-candidate/tests/test_preview_errors.py
 
 node --import tsx python-candidate/tests/node-token-preview-reference.ts > "$candidate_reference_dir/token-preview.json"

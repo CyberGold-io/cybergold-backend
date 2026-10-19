@@ -711,6 +711,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/basket-max": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Largest wallet-bounded proportional basket driver whose unclipped direct-basket mint fits current gross capacity. Uses configured Core assets, weights, decimals, conversion and fee rounding at one canonical block, with an ordinary positive exact-in Helpers preview. Zero capacity returns zero amounts. No wallet read, signing, submission, Market basket provider or client fee calculation. */
+        post: operations["post__api_quotes_basket_max"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/token-preview": {
         parameters: {
             query?: never;
@@ -10458,6 +10475,24 @@ export interface components {
             token: string;
             amount: string;
         };
+        BasketMaxRequest: {
+            driverToken: string;
+            maximumAmountsIn: string[];
+        };
+        BasketMax: {
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            helpers: string;
+            orderedCoreAssets: string[];
+            driverToken: string;
+            driverAmount: string;
+            maximumAmountsIn: string[];
+            netCygldOut: string;
+        };
         UniswapQuoteRequest: {
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
@@ -14253,6 +14288,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BasketPreview"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_quotes_basket_max: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BasketMaxRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasketMax"];
                 };
             };
             /** @description Remote API entry requires its environment's backend bearer */
