@@ -17,6 +17,7 @@ PATHS={
     '/api/governance/target-code',
     '/api/pools/snapshot',
     '/api/quotes/basket-preview',
+    '/api/quotes/basket-max',
     '/api/quotes/token-preview',
     '/api/quotes/uniswap',
     '/api/quotes/routes', '/api/quotes/routes/stream',

@@ -181,6 +181,9 @@ operation("/api/governance/target-code", "get", "GovernanceTargetCode", undefine
 operation("/api/quotes/basket-preview", "post", "BasketPreview", "BasketPreviewRequest", {
   description: "The four Helpers issue/redeem basket previews used by Swap, at one canonical configured-chain block. Raw amounts remain decimal strings and basket order is preserved. No caller-selected target, ABI, method or provider. No database, server transaction submission or retry. Wallet signing remains frontend-owned.",
 });
+operation("/api/quotes/basket-max", "post", "BasketMax", "BasketMaxRequest", {
+  description: "Largest wallet-bounded proportional basket driver whose unclipped direct-basket mint fits current gross capacity. Uses configured Core assets, weights, decimals, conversion and fee rounding at one canonical block, with an ordinary positive exact-in Helpers preview. Zero capacity returns zero amounts. No wallet read, signing, submission, Market basket provider or client fee calculation.",
+});
 operation("/api/quotes/token-preview", "post", "TokenPreview", "TokenPreviewRequest", {
   description: "The Apps' six token/native Helpers issue/redeem previews at one canonical configured-chain block. Preserves ordered opaque adapter calldata and lossless amounts; no routing, slippage modification, caller-selected target/ABI/provider, signing or submission. Ordinary contract errors remain recoverable preview failures.",
 });

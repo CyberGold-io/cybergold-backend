@@ -4511,6 +4511,114 @@
         ]
       }
     },
+    "/api/quotes/basket-max": {
+      "post": {
+        "operationId": "post__api_quotes_basket_max",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BasketMaxRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing response envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasketMax"
+                }
+              }
+            },
+            "headers": {
+              "X-CyberGold-Request-Id": {
+                "description": "Backend request reference, separate for each subscriber to shared quote work.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Remote API entry requires its environment's backend bearer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicError"
+                }
+              }
+            },
+            "headers": {
+              "X-CyberGold-Request-Id": {
+                "description": "Backend request reference, separate for each subscriber to shared quote work.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Existing route-specific errors; see compatibility fixtures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicError"
+                }
+              }
+            },
+            "headers": {
+              "X-CyberGold-Request-Id": {
+                "description": "Backend request reference, separate for each subscriber to shared quote work.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-CyberGold-Backend-Revision": {
+                "description": "Optional observed Backend build commit from this responding process; absent for unversioned local builds.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
+              }
+            }
+          }
+        },
+        "description": "Largest wallet-bounded proportional basket driver whose unclipped direct-basket mint fits current gross capacity. Uses configured Core assets, weights, decimals, conversion and fee rounding at one canonical block, with an ordinary positive exact-in Helpers preview. Zero capacity returns zero amounts. No wallet read, signing, submission, Market basket provider or client fee calculation.",
+        "parameters": [
+          {
+            "name": "X-CyberGold-Attempt-Id",
+            "in": "header",
+            "required": false,
+            "description": "Optional UUID for one browser trade attempt. Invalid values are ignored.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
     "/api/quotes/token-preview": {
       "post": {
         "operationId": "post__api_quotes_token_preview",
@@ -44654,6 +44762,85 @@
           "amount",
           "owner",
           "token"
+        ]
+      },
+      "BasketMaxRequest": {
+        "type": "object",
+        "properties": {
+          "driverToken": {
+            "type": "string"
+          },
+          "maximumAmountsIn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "driverToken",
+          "maximumAmountsIn"
+        ]
+      },
+      "BasketMax": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "object",
+            "properties": {
+              "chainId": {
+                "type": "number"
+              },
+              "blockNumber": {
+                "type": "string"
+              },
+              "blockHash": {
+                "type": "string"
+              },
+              "observedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "blockHash",
+              "blockNumber",
+              "chainId",
+              "observedAt"
+            ]
+          },
+          "helpers": {
+            "type": "string"
+          },
+          "orderedCoreAssets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "driverToken": {
+            "type": "string"
+          },
+          "driverAmount": {
+            "type": "string"
+          },
+          "maximumAmountsIn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "netCygldOut": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "context",
+          "driverAmount",
+          "driverToken",
+          "helpers",
+          "maximumAmountsIn",
+          "netCygldOut",
+          "orderedCoreAssets"
         ]
       },
       "UniswapQuoteRequest": {

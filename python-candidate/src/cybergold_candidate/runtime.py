@@ -44,6 +44,7 @@ from .governance_safe_principal import GovernanceSafePrincipal
 from .governance_target_code import GovernanceTargetCode
 from .shared_market import SharedMarketCache
 from .basket_preview import BasketPreview
+from .basket_max import BasketMax
 from .token_preview import TokenPreview
 from .uniswap_quote import UniswapQuote
 from .route_search import RouteSearch, RouteSearchRpc
@@ -182,6 +183,7 @@ def create_configured_app(settings=None, database=None, client=None):
                       recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history, pool_reads=pool_reads),
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
+                      basket_max=BasketMax(settings),
                       token_preview=TokenPreview(settings),
                       uniswap_quote=UniswapQuote(settings, engine=market_quotes),
                       route_search=routes,

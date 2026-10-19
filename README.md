@@ -403,6 +403,18 @@ validation. The route uses the existing private backend bearer ingress and
 15-second read deadline, with caller cancellation, redacted correlated errors
 and no-store responses. It accepts no caller-selected contract/provider/ABI.
 
+`POST /api/quotes/basket-max` accepts `driverToken` and a wallet-limited
+`maximumAmountsIn` vector in configured Core asset order. It returns the largest
+raw proportional driver and canonical budget vector whose unclipped canonical
+Core gross issuance fits remaining supply capacity, bounded by every supplied
+wallet amount. Weights, decimals, conversions, fees and capacity use the existing
+canonical block read contract; one Helpers exact-in preview validates any
+positive result and supplies the recipient net. Zero capacity or insufficient
+wallet budget returns zero amounts. Integer fee plateaus and token rounding are
+preserved. The endpoint does not read a wallet or add a Market basket provider;
+the ordinary exact-in preview remains authoritative when the App quotes the
+returned amounts.
+
 [Source and native qualification](python-candidate/basket-preview-qualification.json)
 compares actual Viem calldata/results for all four modes and the assembled Linux
 API against a synthetic authenticated provider. This read-only slice has no

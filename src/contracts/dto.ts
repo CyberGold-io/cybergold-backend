@@ -312,6 +312,16 @@ export type GovernanceSafePrincipal = {
   threshold: FactRead<string>;
 };
 type PreviewOutput = { kind: number; token: string; id: string; amount: string };
+export type BasketMaxRequest = { driverToken: string; maximumAmountsIn: string[] };
+export type BasketMax = {
+  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  helpers: string;
+  orderedCoreAssets: string[];
+  driverToken: string;
+  driverAmount: string;
+  maximumAmountsIn: string[];
+  netCygldOut: string;
+};
 export type BasketPreviewRequest =
   | { mode: "issue-exact-in"; maximumAmountsIn: string[] }
   | { mode: "issue-exact-out"; netCygldOut: string }
@@ -686,6 +696,8 @@ export interface ContractSchemas {
   Permit2Context: Permit2Context;
   BasketPreviewRequest: BasketPreviewRequest;
   BasketPreview: BasketPreview;
+  BasketMaxRequest: BasketMaxRequest;
+  BasketMax: BasketMax;
   TokenPreviewRequest: TokenPreviewRequest;
   TokenPreview: TokenPreview;
   UniswapQuoteRequest: UniswapQuoteRequest;
