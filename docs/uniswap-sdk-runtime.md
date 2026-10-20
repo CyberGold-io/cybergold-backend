@@ -6,6 +6,29 @@ simulates ordered branches, and reports missing bitmap/tick coverage to Python.
 Candidate post-state is isolated from observed state; branches advance shared
 pools in execution order. Wire post-state omits unchanged tick coverage.
 
+Route simulations suspend the SDK swap when required tick or bitmap coverage
+is missing. Python acquires that coverage outside the serialized bridge
+exchange, then resumes the same request-local calculation. Resumption adds
+observed coverage without replacing advanced price, tick or liquidity state.
+Cancellation retires owned continuations; losing their worker remains an SDK
+error. SDK diagnostics count each start/resume exchange, rather than counting
+only fresh swap simulations, and exclude the intervening Python state reads.
+
+Core, Market and direct Uniswap quotes use the same structured route engine
+and completion-driven scheduler. Every swap candidate uses the pinned SDK
+simulation: V2, V3, V4, mixed and split routes, plus retained-route revalidation
+and caller-selected V3 paths. Contract Quoter and Router price calls are removed.
+Python acquires pool state at the pinned block and extends concentrated-liquidity
+tick coverage when the SDK requests it, within the existing producer deadline.
+SDK simulation accounts for shared state and intermediate remainders; Core
+replays shared pools in execution order before Helpers validates execution terms.
+Cold exact-output redemption can
+freshly price and qualify a complete initial seed before unrelated candidates
+refill the released pricing slots. Its seed estimate alone never establishes
+execution terms. Native Core wrapping, adapter encoding, Helpers validation and
+the existing five-second search/fifteen-second maximum selection window retain
+their established behavior.
+
 The existing registry worker also retains pool activity in the existing
 `cybergold_uniswap_state` JSONB store. Normal monitoring reuses the canonical
 logs and header checks already acquired for state maintenance; quote/model
@@ -65,6 +88,15 @@ profiles use the defaults; another chain or producer address starts at genesis.
 Persisted cursors/checkpoints continue literally, including a cursor earlier
 than the default. This retains pool initialization before CYGLD deployment and
 adds no runtime identity probe or pool/quote eligibility rule.
+
+V4 PAXG connectors use a separate `v4-paxg` discovery cursor and canonical
+rewind checkpoints, starting at the same configured PoolManager birth. Core
+pool discovery cannot stand in for historical PAXG discovery. Cold Market
+requests can quote bounded common hookless V4 PoolKey candidates through
+StateView and the SDK while the background catalog catches up custom keys.
+An initialized key is retained with its acquisition block/hash; missing or
+uninitialized keys remain ordinary unavailable candidates, with no claim that
+all V4 pools or all of one pool's tick domain have been acquired.
 
 The floors were verified against the deployment receipts and pinned official
 [V2](https://raw.githubusercontent.com/Uniswap/v2-subgraph/3d7c06982866e0535a350ee15c792b4003231b2b/config/ethereum/config.json),

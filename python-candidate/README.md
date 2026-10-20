@@ -15,6 +15,31 @@ Activity/dashboard reads never initialize the schema. Pool-cache requests
 retain their existing schema bootstrap; worker initialization remains separate.
 Database connections are lazy.
 
+Core, Market, route search and caller-selected Uniswap quotes use one forward
+structured route model, `RouteQuoteEngine`, candidate scheduler and execution
+compiler. Original direct/via-WETH V3 skeletons can quote before optional pool
+discovery finishes. Each completed candidate can enter the owning producer's
+qualification while exploration continues; no full V3 wave precedes other
+routes. Pool-state simulation uses the installed Uniswap SDKs, with native
+Quoter pricing inside the same engine when required state is unavailable.
+Retained-plan checks and advisory history use that same route identity.
+
+Packed V3 input is normalized at API/retained-input boundaries. HTTP V3 path
+projections and the deployed adapter ABI are produced at their output
+boundaries. The compiler preserves Core's whole-path V3 execution and historical
+V3-only deployments, alongside the existing typed multi-protocol adapter;
+this source refactor changes no Solidity deployment. Core basket fees, asset
+order, shared-pool state replay, bounds and Helpers validation stay with Core.
+Market keeps its own fee and settlement economics over the shared engine.
+
+The existing producer owns selection time: search through five seconds, extend
+to fifteen only when none qualifies, then finish canonical validation and drain.
+Route/intent `rpcReadsScope: "coordinator"` marks their coordinator counters;
+they do not include every engine observation or supplier request. Candidate
+calls now count common-engine jobs rather than only the old V3 batch members.
+These counters alone cannot establish RPC savings. Smart Order Router/AlphaRouter
+is deferred until this pipeline provides a measured comparison baseline.
+
 Implemented and compared with the **actual retained Node implementation**:
 
 - Gold/FX strict provider/payload validation, timestamps, fallback and acquisition
@@ -324,6 +349,28 @@ bytes/results; `tests/native_helpers_router_facts.py` exercises the Linux image,
 real HTTP/private transport, outage recovery, deadlines and disconnects.
 
 ## Token/native previews and Uniswap quotes — 2026-10-01
+
+The configured Sandbox runtime (chain `31338`) enables the existing single
+early probe for issue exact-in. Forced Core and automatic trade quotes share
+the same Core engine. A supported selected typed route can become a usable
+incumbent before exhaustive initial discovery finishes, after fresh exact-output
+repricing, ordered shared-pool composition, the full protected Helpers preview,
+capacity checks and canonicality. Estimates alone remain indicative. Full search
+continues and may refine that incumbent; its existing deadline, route coverage,
+input budget and execution tolerance are unchanged. An ordinary search-tail
+failure can retain that checked tuple; reorgs and caller cancellation retire it.
+
+The early probe adds RPC and SDK work and can consume its one attempt on an
+unsupported or unfillable first route. It does not guarantee the exhaustive best
+route or fix every quote timeout. Mainnet keeps the issue probe disabled. Redemption exact-out can refine one
+fresh protected Helpers point outside the existing output interval using the
+ordinary integer gross correction. It freshly reprices the resized selected
+routes, composes shared pools in Core order and checks the full Helpers output
+and canonicality before retaining a quote. Full route coverage continues and can
+improve that quote; existing output bounds, deadlines and cancellation remain
+unchanged. The first usable quote can require more Core than the complete-search
+optimum, and the refinement can add RPC and SDK work. Sandbox transaction and
+frontend amount acceptance are recorded separately in the Ops regression workplan.
 
 The subsequent [unified trade coordinator](../docs/unified-trading.md) owns
 Core basket seed construction and compares complete qualified Core/market
@@ -785,3 +832,73 @@ retired model frames. Exact quote results, RPC reads, deadlines and errors remai
 unchanged. Mainnet and repeated observations of the same generation retain their
 models. The comparison suite covers delayed acquisitions, in-flight facts and
 quotes, shared model replay, and unavailable snapshots during fork catch-up.
+
+## Universal exact input (local release candidate)
+
+`POST /api/quotes/universal-exact-input` accepts `intent` (`0` buy CYGLD,
+`1` sell CYGLD, `2` issue from the ordered Core basket, `3` redeem to the Core
+output vector), exact `inputs: [{currency, amount}]`, `outputCurrency`,
+`recipient`, `deadline`, and optional `slippageBps`. Amounts and deadlines are
+decimal strings. Address zero is native ETH; WETH keeps its ERC20 address.
+The response contains the typed `executeExactInput` plan with encoded `body`,
+its reviewable description, gross input vector, final output bound, fees,
+estimated retained input charges, and estimated recipient/recovery outputs.
+The retained assets remain in Helpers under its owner at settlement; they are
+not user refunds. Signed funding and transaction submission remain in the App.
+With a configured universal release, fresh exact-input Market/trade quote
+producers delegate to this same service. The old recipient-less Core quote
+stream returns explicitly `readOnly` numbers without swap-leg calldata for
+its prior exact-input executors. True exact-output keeps its existing APIs.
+A fresh output-target Core-sale winner receives a new Core-only quote at its
+solved gross CYGLD input, preserving the accepted scalar and ordered Core
+minima and disclosing retention before wallet authorization. Captured legacy
+requests keep their original binding and are not silently migrated.
+
+The producer tries Core allocations `0/25/50/75/100` percent, with the integer
+remainder assigned to Market. Mixed allocations try Core first and Market
+first. Each candidate makes at most one joint Core preview, uses its own pool
+state bank, and prices subsequent branches from the selected preceding state.
+Positive purchase basket remainders continue through the canonical PAXG/CYGLD
+market route, including when Core issuance rounds to zero. Runtime AMM route
+weights allocate their final branch the integer remainder. Search covers the
+selected hookless inventory, up to three AMM hops, and optional two-path splits
+at `25/50/75` percent; gas does not change the final net output ranking.
+Initial direct/via-WETH V3 identities and native V4 PoolKeys price concurrently
+with optional connector discovery under the existing selection budget. Their
+identity does not assert liquidity. Candidates share quote-local immutable
+observations while keeping independent execution state banks. Initial known V3
+coverage can qualify before cold V4 connector observations; refinement explores
+all selected protocols and allocations.
+
+The optional `CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS` is deliberately absent
+from the local defaults. After the successor has a real deployment address,
+configure it for that environment. The existing cached Helpers approval
+observation makes it the preferred adapter only after it is observed approved.
+Fresh true exact-out quotes then use its encoder; captured legacy plans keep
+their original address and bytes. No endpoint deploys contracts or changes
+approvals. The optional `universalExactInput=true` Helpers facts observation
+reports whether the canonical execute selector is installed.
+
+`tests/fixtures/universal-exact-input.json` contains synthetic address fixtures
+for all four plan bodies, complete funding/calldata, and both successor adapter
+modes. Python and independent Viem tests compare those bytes. The local Python
+compatibility suite also runs the integrated quote HTTP/state replay tests.
+
+`python-candidate/tests/qualification/universal_fork.py` is the explicit disposable
+fork integration exercise. It starts its own Anvil through Ops' authenticated
+read-only RPC wrapper, deploys the current 45-selector Helpers candidate and
+successor locally, and uses a fresh impersonated fork payer without signatures.
+It compares public native buy/sale and basket quotes, plus explicit 50/50 mixed
+buy/sale candidates, with actual Core/Universal Router execution: exact outputs,
+fees, minima, retained vectors, treasury deltas and gross wallet balances.
+The recorded cases have empty retained vectors; nonzero underconsumption custody
+is covered separately by Helpers' adapter/engine qualification. Run from Ops:
+
+```sh
+./scripts/with-authenticated-rpc.sh --cwd ../cybergold-backend-universal-exact-in -- python-candidate/.venv/bin/python python-candidate/tests/qualification/universal_fork.py
+```
+
+For the staged Ops rehearsal, the same entrypoint consumes `OWNED_FORK_RPC_URL`
+and `HELPERS_EXACT_INPUT_DEPLOYMENT`; it exercises the supplied activation using
+only its fresh fork payer and leaves the owner/executor nonce alone. No real
+deployment address or approval default is configured by this qualification.

@@ -2,9 +2,12 @@
 from copy import deepcopy
 
 from .basket_preview import InvalidPreview
-from .quote_errors import QuoteFailure
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
-from .uniswap_routes import resize_branches, uses_typed_adapter
+from .route_work_slots import engine_work
+from .uniswap_routes import resize_branches, v3_plan
+from .route_encoding import encode_route
+from .recovery_rpc import SnapshotChanged
+from .rpc_diagnostics import provider_qualification_stage
 
 
 class RetainedPlanChanged(InvalidPreview):
@@ -22,6 +25,24 @@ def check_core(outputs, bounds):
     expected = {(row['kind'], row['token'].lower(), row['id']): int(row['minimumAmount']) for row in bounds}
     if actual.keys() != expected.keys() or any(actual[key] < bound for key, bound in expected.items()):
         raise RetainedPlanChanged('Retained Core output bounds changed.')
+
+
+def selected_route(leg, mode, amount, rpc):
+    """Normalize an older retained ABI payload once at the request boundary."""
+    if leg.get('routePlan'):
+        plan = deepcopy(leg['routePlan'])
+        limit = int(leg['minimumAmountOut'])
+    else:
+        path, limit, deadline, exact_in = rpc.w3.codec.decode(
+            ['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(leg['data'][2:]))
+        plan = v3_plan(path, 'exactIn' if exact_in else 'exactOut', amount,
+            chain_id=rpc.chain_id, limit=limit, deadline=deadline)
+    if plan['mode'] != mode:
+        raise RetainedPlanChanged('Retained swap mode changed.')
+    plan['executionContext'] = 'helpers-core'
+    if mode == 'exactIn':
+        plan['branches'] = resize_branches(plan['branches'], amount)
+    return plan, limit
 
 
 async def revalidate(request, previous, rpc, block, basket, token, preview, metrics):
@@ -48,82 +69,76 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
     targets = [(asset, raw) for asset, raw in quantities if raw > 0 and asset.lower() != request['quoteToken'].lower()]
     if {asset.lower() for asset, _ in targets} != selected.keys():
         raise RetainedPlanChanged('Retained swap asset set changed.')
-    plans, calls = [], []
-    typed = []
-    mode = 'exact-out' if issue else 'exact-in'
-    for asset, raw in targets:
-        leg = selected[asset.lower()]
-        if leg.get('routePlan'):
-            plan = deepcopy(leg['routePlan'])
-            if plan['mode'] != ('exactOut' if issue else 'exactIn'):
-                raise RetainedPlanChanged('Retained swap mode changed.')
-            branches = resize_branches(plan['branches'], raw) if not issue else plan['branches']
-            plans.append((leg, asset, raw, None, int(leg['minimumAmountOut'])))
-            typed.append((len(plans)-1, plan, branches, raw))
-            continue
-        path, limit, _, exact_in = rpc.w3.codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(leg['data'][2:]))
-        if exact_in == issue:
-            raise RetainedPlanChanged('Retained swap mode changed.')
-        plans.append((leg, asset, raw, path, limit))
-        calls.append(rpc.encode({'mode': mode, 'path': '0x'+path.hex(), 'amount': str(raw)}))
-    counts = {'requested': 0, 'issued': 0, 'coalesced': 0, 'reused': 0}
-    legacy_values = iter(await rpc.quote_batch_counted(mode, calls, block, counts) if calls else [])
-    values = [None if path is None else next(legacy_values) for _leg, _asset, _raw, path, _limit in plans]
-    typed_plans = {}
-    for index, plan, branches, raw in typed:
-        provider = getattr(rpc, 'multi_protocol', None)
-        if request.get('adapter') and not uses_typed_adapter(request['adapter']):
-            provider = None
-        if provider is None:
-            raise RetainedPlanChanged('Retained typed route is unavailable for this adapter compiler.')
-        asset = plans[index][1]
+    plans, values = [], []
+    mode = 'exactOut' if issue else 'exactIn'
+    provider = rpc.route_engine
+    def resolve_selected(*args):
         try:
-            branches = provider.resolve_branches(branches, request['quoteToken'] if issue else asset,
-                asset if issue else request['quoteToken'], plan['mode'], raw)
+            return provider.resolve_branches(*args)
         except InvalidPreview as error:
             raise RetainedPlanChanged(str(error)) from error
-        result = await provider.quote_branches(branches, plan['mode'], raw, block)
-        observed = result['amountIn' if issue else 'amountOut']
-        values[index] = {'status': 'success', 'amount': observed}
-        plan.update(branches=branches, inputAmount=result['amountIn'], outputAmount=result['amountOut'])
-        typed_plans[index] = plan
-    provider = getattr(rpc, 'multi_protocol', None)
-    if request.get('adapter') and not uses_typed_adapter(request['adapter']):
-        provider = None
-    if provider:
-        rows = []
-        for index, ((leg, asset, raw, path, _limit), value) in enumerate(zip(plans, values, strict=True)):
-            best = None
-            if value['status'] == 'success':
-                best = {'path': '0x'+path.hex() if path is not None else '0x', 'quote': value['amount'],
-                    **({'routePlan': typed_plans[index]} if index in typed_plans else {})}
-            rows.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
-                'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)}, 'best': best})
-        composed = await provider.compose_core_rows(rows, 'exactOut' if issue else 'exactIn', block,
-            ordered_assets=request['orderedAssets'], issue=issue)
-        for index, row in enumerate(composed):
-            if row['best']:
-                values[index]['amount'] = row['best']['quote']
-                if index in typed_plans:
-                    typed_plans[index] = row['best']['routePlan']
-    for name, counter in (('rpcReads', 'issued'), ('rpcReadsRequested', 'requested'),
-                          ('rpcReadsCoalesced', 'coalesced'), ('rpcReadsReused', 'reused')):
-        metrics[name] += counts[counter]
-    metrics['candidateCalls'] += len(calls)
+
+    planned = None
+    try:
+        planned = []
+        for asset, raw in targets:
+            leg = selected[asset.lower()]
+            plan, limit = selected_route(leg, mode, raw, rpc)
+            plans.append((leg, asset, raw, limit))
+            planned.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
+                'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
+                'best': {'quote': '0', 'routePlan': plan}})
+        quote_shared = provider.quote_shared_core_rows
+    except SnapshotChanged:
+        raise
+    except Exception:
+        # Selected normalization remains owned by the ordinary sequential path
+        # if this optional work dispatch cannot prepare its input.
+        planned = None
+    provider_qualification_stage('composition')
+    values = await quote_shared(planned, mode, block, ordered_assets=request['orderedAssets'],
+        issue=issue, resolve=resolve_selected) if planned is not None else None
+    if values is not None:
+        metrics['candidateCalls'] += len(targets)
+    else:
+        plans, values = [], []
+        for asset, raw in targets:
+            leg = selected[asset.lower()]
+            plan, limit = selected_route(leg, mode, raw, rpc)
+            try:
+                branches = provider.resolve_branches(plan['branches'], request['quoteToken'] if issue else asset,
+                    asset if issue else request['quoteToken'], plan['mode'], raw)
+            except InvalidPreview as error:
+                raise RetainedPlanChanged(str(error)) from error
+            try:
+                metrics['candidateCalls'] += 1
+                provider_qualification_stage('route-pricing')
+                async with engine_work(provider.semaphore):
+                    result = await provider.quote_branches(branches, mode, raw, block)
+            except Exception as error:
+                from .quote_errors import public_quote_error
+                if public_quote_error(error)['code'] == 'quote-contract-reverted':
+                    raise RetainedPlanChanged('Retained route no longer quotes.') from error
+                raise
+            observed = result['amountIn' if issue else 'amountOut']
+            plan.update(branches=branches, inputAmount=result['amountIn'], outputAmount=result['amountOut'])
+            plans.append((leg, asset, raw, limit))
+            values.append({'target': {'inputAsset': request['quoteToken'] if issue else asset,
+                'outputAsset': asset if issue else request['quoteToken'], 'amount': str(raw)},
+                'best': {'quote': observed, 'routePlan': plan}})
+        provider_qualification_stage('composition')
+        async with engine_work(provider.semaphore):
+            values = await provider.compose_core_rows(values, mode, block,
+                ordered_assets=request['orderedAssets'], issue=issue)
     quotes = []
     expected_surplus = 0
     expected_input = 0
-    for index, ((leg, asset, raw, path, limit), value) in enumerate(zip(plans, values, strict=True)):
-        if value['status'] != 'success':
-            code = value.get('code', 'rpc-unavailable')
-            if code == 'quote-contract-reverted':
-                raise RetainedPlanChanged('Retained route no longer quotes.')
-            # A transport failure supplies no contradiction of the original
-            # bounds and must not trigger candidate enumeration.
-            raise QuoteFailure(code, diagnostics=value.get('diagnostics'))
-        observed = int(value['amount'])
+    for (leg, asset, raw, limit), value in zip(plans, values, strict=True):
+        observed = int(value['best']['quote'])
         if issue:
             if observed > int(leg['amountIn']):
+                provider_qualification_stage('tolerance', maximumAmountIn=leg['amountIn'],
+                    observedAmountIn=str(observed))
                 raise RetainedPlanChanged('Retained swap input bound cannot be met.')
             bound = min(int(leg['amountIn']), ceil(observed, slippage_bps))
             expected_input += observed
@@ -131,25 +146,24 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
             quote = {**leg, 'amountIn': str(bound), 'minimumAmountOut': str(raw)}
         else:
             if observed < limit:
+                provider_qualification_stage('tolerance', minimumAmountOut=str(limit),
+                    observedAmountOut=str(observed))
                 raise RetainedPlanChanged('Retained swap output bound cannot be met.')
             quote = {**leg, 'inputAmount': str(raw)}
             expected_surplus += observed - limit
-        if index in typed_plans:
-            from .market_swap import encode_adapter
-            plan = typed_plans[index]
-            plan.update(limit=str(limit), deadline=request['deadline'])
-            quote.update(routePlan=plan, data=encode_adapter(plan))
-        else:
-            quote['data'] = '0x'+rpc.w3.codec.encode(['bytes', 'uint256', 'uint256', 'bool'],
-                [path, limit, int(request['deadline']), not issue]).hex()
+        plan = value['best']['routePlan']
+        plan.update(limit=str(limit), deadline=request['deadline'])
+        quote.update(routePlan=plan, data=encode_route(plan, request['adapter']))
         quotes.append(quote)
     prefix = ('issue-' if issue else 'redeem-') + ('native' if request['native'] else 'token')
     if issue:
         needed = sum(raw for asset, raw in quantities if asset.lower() == request['quoteToken'].lower())
         expected_input += needed
         needed += sum(int(row['amountIn']) for row in quotes)
-        maximum = int(previous['maximumInputAmount']) if request['mode'] == 'issue-exact-in' else needed
+        maximum = needed
         if needed > int(previous['maximumInputAmount']):
+            provider_qualification_stage('tolerance', maximumAmountIn=previous['maximumInputAmount'],
+                observedAmountIn=str(needed))
             raise RetainedPlanChanged('Retained aggregate input bound cannot be met.')
         value = {'mode': prefix+'-exact-out', 'quotes': quotes, 'netCygldOut': str(amount),
                  'maximumNativeIn' if request['native'] else 'maximumInputAmount': str(maximum)}
@@ -166,6 +180,8 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         check_core(final['projectedCoreOutputs'], bounds)
         minimum = int(final['minimumAmountOut'])
         if minimum < int(previous['preview']['minimumAmountOut']):
+            provider_qualification_stage('tolerance', minimumAmountOut=previous['preview']['minimumAmountOut'],
+                observedAmountOut=str(minimum))
             raise RetainedPlanChanged('Retained aggregate output bound cannot be met.')
         if request['mode'] == 'redeem-exact-out' and not int(request['amount']) <= minimum <= ceil(int(request['amount']), slippage_bps):
             raise RetainedPlanChanged('Retained minimum-output interval changed.')

@@ -6,7 +6,7 @@ import httpx
 from web3.exceptions import Web3RPCError
 
 from .preview_errors import KnownPreviewError
-from .rpc_diagnostics import error_diagnostics
+from .rpc_diagnostics import error_diagnostics, quote_error_diagnostics
 
 
 MESSAGES = {
@@ -16,6 +16,7 @@ MESSAGES = {
     'rpc-access-denied': 'RPC provider refused access. Please retry later.',
     'quote-timeout': 'Quote calculation timed out. Please retry.',
     'quote-no-route': 'No exchange route is available for this amount.',
+    'quote-insufficient-liquidity': 'The Market does not have enough liquidity to fill this amount. Reduce the amount.',
     'quote-contract-reverted': 'The contract rejected the quote for this amount.',
     'quote-unavailable': 'The quote service could not complete this request. Please retry.',
 }
@@ -45,7 +46,8 @@ def rpc_failure(error):
 
 def _public_quote_error(error):
     if isinstance(error, (KnownPreviewError, QuoteFailure)):
-        return {'code': error.code, 'error': str(error)}
+        return {'code': error.code, 'error': str(error),
+                **({'constraint': dict(error.constraint)} if isinstance(error, KnownPreviewError) and error.constraint else {})}
     if isinstance(error, Web3RPCError):
         return _public_quote_error(rpc_failure((error.rpc_response or {}).get('error', {})))
     if isinstance(error, (RpcTimeout, httpx.TimeoutException)):
@@ -66,4 +68,6 @@ def _public_quote_error(error):
 def public_quote_error(error):
     payload = _public_quote_error(error)
     diagnostics = error_diagnostics(error)
-    return {**payload, **({'diagnostics': diagnostics} if diagnostics else {})}
+    quote_diagnostics = quote_error_diagnostics(error)
+    return {**payload, **({'diagnostics': diagnostics} if diagnostics else {}),
+            **({'quoteDiagnostics': quote_diagnostics} if quote_diagnostics else {})}

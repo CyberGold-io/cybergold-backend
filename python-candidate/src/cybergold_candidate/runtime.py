@@ -44,16 +44,18 @@ from .governance_safe_principal import GovernanceSafePrincipal
 from .governance_target_code import GovernanceTargetCode
 from .shared_market import SharedMarketCache
 from .basket_preview import BasketPreview
+from .basket_max import BasketMax
 from .token_preview import TokenPreview
 from .uniswap_quote import UniswapQuote
-from .route_search import RouteSearch
+from .route_search import RouteSearch, RouteSearchRpc
 from .quote_intent import QuoteIntent
-from .quote_cache import BasketMath, IntentSharing, SharingQuoterRpc, VerifiedGrossSeed
+from .quote_cache import BasketMath, IntentSharing, VerifiedGrossSeed
 from .quote_history import QuoteHistory
 from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import MarketQuotes, DailyRecipientCache
 from .trade_quote import TradeQuotes
+from .universal_quote import UniversalQuotes
 from .shared_reads import SharedReads
 
 
@@ -94,7 +96,7 @@ def create_configured_app(settings=None, database=None, client=None):
     pools = PoolProducer(settings)
     pool_reads = SharedReads()
     def route_rpc(value):
-        return SharingQuoterRpc(value, completed=True, pool_reads=pool_reads)
+        return RouteSearchRpc(value, pool_reads=pool_reads)
     routes = RouteSearch(settings, rpc_factory=route_rpc)
     history = QuoteHistory(settings)
     uniswap_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None
@@ -115,10 +117,16 @@ def create_configured_app(settings=None, database=None, client=None):
     market_recipient = DailyRecipientCache(uniswap_store, settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
     market_quotes = MarketQuotes(settings, uniswap_registry, recipient_cache=market_recipient,
                                 request_resolver=configuration.resolve_request)
-    routes.multi_protocol = market_quotes
+    routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
-        correction=delayed_local_step, retain_plans=True)
+        correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
+    universal_quotes = UniversalQuotes(settings, market_quotes)
+    market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
+    trade_quotes.universal_quotes = universal_quotes
+    shared_core_quotes = IntentSharing(core_quotes, rpc_factory=route_rpc,
+                                      request_resolver=configuration.resolve_request)
+    shared_core_quotes.universal_quotes = universal_quotes
 
     async def close_runtime():
         await pool_reads.close()
@@ -182,12 +190,13 @@ def create_configured_app(settings=None, database=None, client=None):
                       recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history, pool_reads=pool_reads),
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
+                      basket_max=BasketMax(settings),
                       token_preview=TokenPreview(settings),
-                      uniswap_quote=UniswapQuote(settings),
+                      uniswap_quote=UniswapQuote(settings, engine=market_quotes),
                       route_search=routes,
-                      quote_intent=IntentSharing(core_quotes,
-                          rpc_factory=route_rpc, request_resolver=configuration.resolve_request),
+                      quote_intent=shared_core_quotes,
                       trade_quotes=trade_quotes,
+                      universal_quotes=universal_quotes,
                       governance_core_facts=GovernanceCoreFacts(settings),
                       wallet_balances=WalletBalances(settings),
                       token_balance=TokenBalance(settings),

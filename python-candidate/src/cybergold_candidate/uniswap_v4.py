@@ -4,9 +4,38 @@ The caller retains its RPC transport, caching, errors and cancellation. These
 helpers provide ABI/identity data and observations, never swap or LP arithmetic.
 """
 import asyncio
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 
 from eth_utils.abi import collapse_if_tuple
 from web3 import Web3
+from .recovery_rpc import SnapshotChanged
+
+_tick_prefetch_attempts = ContextVar('tick_prefetch_attempts', default=None)
+
+
+@asynccontextmanager
+async def tick_prefetch_scope():
+    """Share advisory acquisition attempts only within the owning request."""
+    if _tick_prefetch_attempts.get() is not None:
+        yield
+        return
+    token = _tick_prefetch_attempts.set(set())
+    try:
+        yield
+    finally:
+        _tick_prefetch_attempts.reset(token)
+
+
+def begin_tick_prefetch(pool, block):
+    attempts = _tick_prefetch_attempts.get()
+    if attempts is None:
+        return True
+    identity = (pool.get('poolManager', '').lower(), pool['id'].lower(), block['hash'].lower())
+    if identity in attempts:
+        return False
+    attempts.add(identity)
+    return True
 
 POOL_ID = '0x33fd4629a4e190b9a98a8a3758afb7a2639eb740088a04bd4d3016e3ac9d55a4'
 POOL_MANAGER = '0x000000000004444c5dc75cB358380D2e3dE08A90'
@@ -72,3 +101,33 @@ async def read_pool_state(read_function, state_view, pool_id, block):
         call('getLiquidity', block, [bytes.fromhex(pool_id[2:])]))
     return {'sqrtRatioX96': str(slot[0]), 'tick': slot[1], 'protocolFee': slot[2],
             'lpFee': slot[3], 'liquidity': str(liquidity[0])}
+
+
+async def read_tick_bitmap_words(read_function, manager, pool_id, positions, block):
+    """Read the same StateLibrary bitmap slots in bounded transport batches.
+
+    V4 StateLibrary uses pools slot 6 and tickBitmap offset 5. This is storage
+    acquisition only: the SDK still traverses and prices every initialized tick.
+    https://github.com/Uniswap/v4-core/blob/main/src/libraries/StateLibrary.sol
+    """
+    codec = Web3().codec
+    state_slot = int.from_bytes(Web3.keccak(codec.encode(
+        ['bytes32', 'uint256'], [bytes.fromhex(pool_id[2:]), 6])), 'big')
+    async def read_batch(batch):
+        slots = [Web3.keccak(codec.encode(['int256', 'uint256'], [position, state_slot+5]))
+                 for position in batch]
+        values, = await read_function(manager, 'extsload(bytes32[])', ['bytes32[]'], [slots], ['bytes32[]'], block)
+        return [(position, int.from_bytes(value, 'big')) for position, value in zip(batch, values, strict=True)]
+    # Batches only bound calldata, not coverage: every requested word is read.
+    tasks = [asyncio.create_task(read_batch(positions[index:index+128]))
+             for index in range(0, len(positions), 128)]
+    try:
+        return [row for batch in await asyncio.gather(*tasks) for row in batch]
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+        if disproof is not None:
+            raise disproof

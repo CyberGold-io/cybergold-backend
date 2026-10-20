@@ -1,3 +1,4 @@
+from legacy_quote_wire_fixture import ReferenceRouteSearchRpc as RouteSearchRpc
 """Sharing preserves exact read identity, cancellation, errors and fork behavior."""
 import asyncio
 from types import SimpleNamespace
@@ -5,7 +6,8 @@ import unittest
 from unittest.mock import patch
 
 from cybergold_candidate.shared_reads import SharedReads
-from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH
+from route_engine_fixture import install_fixture_engine
+from cybergold_candidate.route_search import RouteSearch, WETH
 from test_route_search import Provider, Wire, service, target, ASSET_A, ASSET_B, ASSET_C, SETTINGS, HASH, candidates
 from cybergold_candidate.uniswap_state import UniswapRpc, PoolRegistry
 from cybergold_candidate.quote_errors import QuoteFailure
@@ -268,6 +270,64 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(cancelled.is_set())
         self.assertEqual(reads.pending, {})
 
+    async def test_replacement_reads_do_not_join_cancelled_producer_during_its_drain(self):
+        for keys in (['same'], ['a', 'b']):
+            with self.subTest(keys=keys):
+                reads = SharedReads()
+                started, cancelling, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                fresh_started, release = asyncio.Event(), asyncio.Event()
+                calls, tasks = [], []
+                async def original(_keys):
+                    started.set()
+                    try:
+                        await asyncio.Event().wait()
+                    except asyncio.CancelledError:
+                        cancelling.set()
+                        await drained.wait()
+                        raise
+                async def fresh(selected):
+                    calls.append(list(selected))
+                    fresh_started.set()
+                    await release.wait()
+                    return [{'result': key} for key in selected]
+                try:
+                    first = asyncio.create_task(reads.many(keys, original))
+                    tasks.append(first)
+                    await asyncio.wait_for(started.wait(), 1)
+                    first.cancel()
+                    await asyncio.wait_for(cancelling.wait(), 1)
+                    replacement = asyncio.create_task(reads.many(keys, fresh, retain=True))
+                    tasks.append(replacement)
+                    await asyncio.wait_for(fresh_started.wait(), 1)
+                    entries = dict(reads.pending)
+                    drained.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await first
+                    # Finishing the retired producer cannot remove fresh work.
+                    self.assertEqual(reads.pending, entries)
+                    sibling = asyncio.create_task(reads.many(keys, fresh, retain=True))
+                    tasks.append(sibling)
+                    async def joined():
+                        while not all(reads.pending[key].users == 2 for key in keys):
+                            await asyncio.sleep(0)
+                    await asyncio.wait_for(joined(), 1)
+                    release.set()
+                    (values, counts), (shared, shared_counts) = await asyncio.gather(replacement, sibling)
+                    self.assertEqual(values, [{'result': key} for key in keys])
+                    self.assertEqual(shared, values)
+                    self.assertEqual(calls, [keys])
+                    self.assertEqual(counts['issued'], len(keys))
+                    self.assertEqual(shared_counts['coalesced'], len(keys))
+                    self.assertEqual(reads.pending, {})
+                    self.assertEqual(reads.completed, dict(zip(keys, values, strict=True)))
+                finally:
+                    drained.set(); release.set()
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    await reads.close()
+
     async def test_partially_overlapping_batches_share_members_and_errors_are_not_retained(self):
         reads = SharedReads()
         self.addAsyncCleanup(reads.close)
@@ -303,8 +363,9 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             requests = [{'mode': 'exact-in', 'targets': [target(asset, amount=100 + i),
                 target(asset, ASSET_C, amount=200 + i)]} for i in range(5)]
             values = await asyncio.gather(*(search.get(request) for request in requests))
-            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), current)
-            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), shared)
+            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 15)
+            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 15)
+            self.assertTrue(all(value['metrics']['rpcReadsScope'] == 'coordinator' for value in values))
             self.assertTrue(all(value['metrics']['candidateCalls'] == (8 if asset == WETH else 26) for value in values))
             self.assertEqual(sum(len(batch) for batch in wire.batches) + 15, shared)
 
@@ -313,14 +374,20 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(search.close)
         async def quote(_path, amount): return amount + 777
         wire.on_quote = quote
+        def members():
+            return sum(len(batch) for batch in wire.batches)
         first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]})
+        first_members = members()
         second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]})
-        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (27, 11))
-        self.assertEqual(second['metrics']['rpcReadsReused'], 16)
+        second_members = members()-first_members
+        self.assertEqual((first_members, second_members), (24, 8))
+        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (3, 3))
+        self.assertEqual(second['metrics']['rpcReadsScope'], 'coordinator')
         self.assertEqual(int(second['results'][0]['best']['quote']), int(first['results'][0]['best']['quote']) + 1)
         provider.block_hash = '0x' + 'b' * 64
         third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]})
-        self.assertEqual(third['metrics']['rpcReads'], 27)
+        self.assertEqual(members()-first_members-second_members, 24)
+        self.assertEqual(third['metrics']['rpcReads'], 3)
         self.assertEqual(third['context']['blockHash'], provider.block_hash)
         provider.reorg = True
         with self.assertRaisesRegex(Exception, 'snapshot changed'):
@@ -331,15 +398,134 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         provider, wire = Provider(chain='0x7a6a'), Wire()
         search = RouteSearch(settings, RouteSearchRpc(settings, AsyncWeb3(provider),
             httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+        install_fixture_engine(search)
         self.addAsyncCleanup(search.close)
         wire.pool_liquidity = lambda _fee: 0
         first = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
-        self.assertEqual(first['metrics']['candidateCalls'], 0)
+        self.assertEqual(first['metrics']['candidateCalls'], 4)
+        self.assertFalse(any(row['params'][0]['data'][:10] in ('0xcdca1753', '0x2f80bb1d')
+            for batch in wire.batches for row in batch))
+        before = len(wire.batches)
         wire.pool_liquidity = lambda _fee: 123
         second = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
         self.assertEqual(second['context']['blockHash'], HASH)
         self.assertEqual(second['metrics']['candidateCalls'], 4)
+        native = [row for batch in wire.batches[before:] for row in batch
+            if row['params'][0]['data'][:10] not in ('0x1698ee82', '0x1a686502')]
+        self.assertEqual(len(native), 4)
         self.assertEqual(second['metrics']['rpcReadsReused'], 0)
+
+
+    async def _singleton_until(self, predicate):
+        async with asyncio.timeout(3):
+            while not predicate():
+                await asyncio.sleep(0)
+
+    async def test_singleton_await_cancel_before_first_turn_before_delivery_and_after_completion(self):
+        bank, called = SharedReads(), []
+        async def produce():
+            called.append(True)
+            return {'result': 'value'}
+        early = asyncio.create_task(bank.one('early', produce))
+        early.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await early
+        self.assertEqual(called, [])
+        started, release = asyncio.Event(), asyncio.Event()
+        async def pending():
+            started.set()
+            await release.wait()
+            return {'result': 'value'}
+        task = asyncio.create_task(bank.one('delivery', pending))
+        await started.wait()
+        bank.pending['delivery'].future.add_done_callback(lambda future: task.cancel())
+        release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(bank.pending, {})
+        late = asyncio.create_task(bank.one('late', produce))
+        self.assertEqual(await late, {'result': 'value'})
+        self.assertFalse(late.cancel())
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_partial_batch_foreign_singleton_preserves_producer(self):
+        bank = SharedReads()
+        started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def batch(keys):
+            self.assertEqual(keys, ['a', 'b'])
+            started.set()
+            try:
+                await release.wait()
+                return [{'result': key} for key in keys]
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+        async def unexpected(keys):
+            self.fail('A joining subscriber must not produce another read')
+        first = asyncio.create_task(bank.many(['a', 'b'], batch))
+        await started.wait()
+        second = asyncio.create_task(bank.many(['a'], unexpected))
+        await self._singleton_until(lambda: bank.pending['a'].users == 2)
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertFalse(cancelled.is_set())
+        self.assertEqual((bank.pending['a'].users, bank.pending['b'].users), (1, 0))
+        release.set()
+        self.assertEqual(await second,
+            ([{'result': 'a'}], {'requested': 1, 'issued': 0, 'coalesced': 1, 'reused': 0}))
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_last_cancel_drains_before_return_and_replacement_is_independent(self):
+        bank = SharedReads()
+        started, cleaning, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def produce():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleaning.set()
+                await finish.wait()
+        first = asyncio.create_task(bank.one('same', produce))
+        await started.wait()
+        first.cancel()
+        await cleaning.wait()
+        self.assertFalse(first.done())
+        self.assertNotIn('same', bank.pending)
+        self.assertEqual(await bank.one('same', lambda: asyncio.sleep(0, result={'result': 'new'})),
+                         {'result': 'new'})
+        finish.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(bank.pending, {})
+        await bank.close()
+
+    async def test_singleton_await_exception_identity_snapshot_disproof_and_cardinality_errors(self):
+        from cybergold_candidate.recovery_rpc import SnapshotChanged
+        for error in (ValueError('ordinary'), SnapshotChanged('canonical disproof')):
+            with self.subTest(error=type(error).__name__):
+                bank, started, release = SharedReads(), asyncio.Event(), asyncio.Event()
+                async def produce():
+                    started.set()
+                    await release.wait()
+                    raise error
+                first = asyncio.create_task(bank.one('same', produce))
+                await started.wait()
+                second = asyncio.create_task(bank.one('same', produce))
+                await self._singleton_until(lambda: bank.pending['same'].users == 2)
+                release.set()
+                outcomes = await asyncio.gather(first, second, return_exceptions=True)
+                self.assertTrue(all(value is error for value in outcomes))
+                self.assertEqual(bank.pending, {})
+                self.assertEqual(bank.completed, {})
+                await bank.close()
+        bank = SharedReads()
+        with self.assertRaises(ValueError):
+            await bank.many(['missing'], lambda keys: asyncio.sleep(0, result=[]))
+        self.assertEqual(bank.pending, {})
+        await bank.close()
 
 
 if __name__ == '__main__':

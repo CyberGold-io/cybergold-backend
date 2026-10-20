@@ -1,7 +1,7 @@
 """Held evaluation variants; production uses only quote_cache's qualified parts."""
 from collections import OrderedDict
 
-from .quote_cache import BasketMath, GrossSeeds, IntentSharing, SharingQuoterRpc
+from .quote_cache import BasketMath, GrossSeeds, IntentSharing
 
 def bracket_step(points, target, proportional):
     """H2: interpolate actual verified outputs inside a current inversion bracket."""

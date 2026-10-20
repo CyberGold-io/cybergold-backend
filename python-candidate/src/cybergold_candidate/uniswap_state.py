@@ -13,13 +13,14 @@ import time
 from web3 import Web3
 from web3.exceptions import BlockNotFound
 
-from .uniswap_v4 import POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view
+from .uniswap_v4 import (POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view,
+    read_tick_bitmap_words, begin_tick_prefetch)
 from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
 from .uniswap_routes import pool_key, v4_pool_id
 from .wallet_balances import TOKENS
-from .quote_errors import rpc_failure
-from .recovery_rpc import RecoveryApiError
+from .quote_errors import QuoteFailure, rpc_failure
+from .recovery_rpc import RecoveryApiError, SnapshotChanged
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
 
 ZERO = '0x'+'00'*20
@@ -34,6 +35,7 @@ MAINNET_DEPLOYMENT_BLOCKS = {
     ('v3', DEFAULT_FACTORY.lower()): 12_369_621,
     ('v4', POOL_MANAGER.lower()): 21_688_329,
 }
+CATALOG_PROTOCOLS = {'v2': 'v2', 'v3': 'v3', 'v4': 'v4', 'v4-paxg': 'v4'}
 
 
 def topic(signature):
@@ -52,6 +54,35 @@ EVENTS = {signature.split('(')[0]: topic(signature) for signature in (
     'ProtocolFeeUpdated(bytes32,uint24)', 'SetFeeProtocol(uint8,uint8,uint8,uint8)')}
 V3_SWAP = topic('Swap(address,address,int256,int256,uint160,uint128,int24)')
 V4_SWAP = topic('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)')
+
+
+def copy_pool_snapshot(snapshot):
+    """Own canonical scalar coverage rows and deep-copy all pool metadata.
+
+    Bitmap/tick producers below and their persisted observations contain only
+    scalar row values. Lists and row dictionaries still belong to each caller.
+    """
+    coverage = ('bitmapWords', 'ticks')
+    result = deepcopy({key: value for key, value in snapshot.items() if key not in coverage})
+    for key in coverage:
+        if key in snapshot:
+            result[key] = [dict(row) for row in snapshot[key]]
+    return {key: result[key] for key in snapshot}
+
+
+async def owned_reads(*operations):
+    """Drain this acquisition's subscriptions; preserve canonical disproof."""
+    tasks = [asyncio.create_task(operation) for operation in operations]
+    try:
+        return await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+        if disproof is not None:
+            raise disproof
 
 
 class UniswapRpc(PoolRpc):
@@ -183,7 +214,7 @@ class UniswapStore:
                     await connection.execute('''DELETE FROM cybergold_uniswap_state
                         WHERE chain_id=%s AND core_address=%s AND namespace=%s
                         AND payload->'pool'->>'protocol'=%s AND payload->'pool'->>'id'=ANY(%s)''',
-                        (self.chain, self.core, scope+'activity', protocol, list(removed)))
+                        (self.chain, self.core, scope+'activity', CATALOG_PROTOCOLS.get(protocol, protocol), list(removed)))
                 rows = [('inventory', pool['id'], pool) for pool in pools]+[('cursor', protocol, cursor)]
                 for namespace, identity, value in rows:
                     await connection.execute('''INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)
@@ -297,11 +328,14 @@ class PoolRegistry:
     async def token_metadata(self, address, block, *, publish=True):
         if address.lower() not in self.metadata:
             generation = self.generation
-            if address.lower() == ZERO:
-                value = 18  # The native currency has no ERC20 contract.
-            else:
-                value, = await self.get_rpc().read_function(address, 'decimals()', [], [], ['uint8'], block)
-            token = self.token(address, value)
+            async def produce():
+                if address.lower() == ZERO:
+                    value = 18  # The native currency has no ERC20 contract.
+                else:
+                    value, = await self.get_rpc().read_function(address, 'decimals()', [], [], ['uint8'], block)
+                return self.token(address, value)
+            token = deepcopy(await self.pending.one(
+                ('token-metadata', generation, address.lower(), block['hash']), produce))
             if publish and generation == self.generation:
                 self.metadata[address.lower()] = token
             return token
@@ -324,6 +358,14 @@ class PoolRegistry:
             self.observed[state['id']] = deepcopy(state)
         self.persist('observation', state['id'], state)
 
+    def acquire_pool(self, pool, block):
+        """Retain a server-acquired identity with its ordinary rewind anchor."""
+        if pool['id'] not in self.inventory:
+            pool = {**deepcopy(pool), 'acquisition': {'blockNumber': str(block['number']), 'blockHash': block['hash']}}
+            self.inventory[pool['id']] = pool
+            self.persist('inventory', pool['id'], pool)
+        return self.inventory[pool['id']]
+
     async def snapshot(self, pool, block, *, publish=True):
         rpc = self.get_rpc()
         generation = self.generation
@@ -335,18 +377,44 @@ class PoolRegistry:
                 try:
                     state = await self.advance(pool, old, block)
                     return state
+                except SnapshotChanged:
+                    raise
                 except Exception:
                     pass  # Ordinary gap/reorg/read failure uses fresh getters.
             state = deepcopy(pool)
+            if pool['protocol'] == 'v3':
+                if not state.get('address'):
+                    address, = await rpc.read_function(rpc.factory, 'getPool(address,address,uint24)',
+                        ['address', 'address', 'uint24'], [pool['token0']['address'],
+                            pool['token1']['address'], int(pool['feePips'])], ['address'], block)
+                    if address.lower() == ZERO:
+                        raise QuoteFailure('quote-no-route')
+                    state['address'] = address
+                if state.get('tickSpacing') is None:
+                    state['tickSpacing'], = await rpc.read_function(state['address'],
+                        'tickSpacing()', [], [], ['int24'], block)
+            async def metadata(token):
+                if token.get('decimals') is not None:
+                    return {**token, 'chainId': self.chain}
+                try:
+                    return await self.token_metadata(token['address'], block)
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    # Integer swap arithmetic does not depend on display scale.
+                    # Preserve discovery's existing unknown-decimals contract.
+                    return {**self.token(token['address'], 18), 'decimalsKnown': False}
+            state['token0'], state['token1'] = await owned_reads(
+                metadata(state['token0']), metadata(state['token1']))
             if pool['protocol'] == 'v2':
                 r0, r1, _ = await rpc.read_function(pool['address'], 'getReserves()', [], [],
                     ['uint112', 'uint112', 'uint32'], block)
                 state.update(reserve0=str(r0), reserve1=str(r1))
             elif pool['protocol'] == 'v3':
-                slot, liquidity = await asyncio.gather(
-                    rpc.read_function(pool['address'], 'slot0()', [], [],
+                slot, liquidity = await owned_reads(
+                    rpc.read_function(state['address'], 'slot0()', [], [],
                         ['uint160', 'int24', 'uint16', 'uint16', 'uint16', 'uint8', 'bool'], block),
-                    rpc.read_function(pool['address'], 'liquidity()', [], [], ['uint128'], block))
+                    rpc.read_function(state['address'], 'liquidity()', [], [], ['uint128'], block))
                 state.update(sqrtRatioX96=str(slot[0]), tick=slot[1], liquidity=str(liquidity[0]),
                              protocolFee=slot[5], lpFee=int(pool['feePips']))
             else:
@@ -355,17 +423,39 @@ class PoolRegistry:
             return state
         old = self.observed.get(pool['id'])
         if self.chain == 1 and old and old['context']['blockHash'] == block['hash']:
-            return deepcopy(old)
-        state = deepcopy(await self.pending.one(key, produce))
+            state = deepcopy(old)
+        else:
+            state = deepcopy(await self.pending.one(key, produce))
         # A shared acquisition stays pure. Each caller owns publication after
         # its accepted boundary, without duplicating event advancement/getters.
         if publish and generation == self.generation:
+            if state['protocol'] == 'v4' and int(state['sqrtRatioX96']) != 0:
+                # The pinned StateView getter establishes initialized identity,
+                # just as the existing explicit pool producer does. A seed is
+                # never persisted as an existing pool from its guessed key alone.
+                identity = {name: deepcopy(state[name]) for name in ('id', 'protocol', 'token0', 'token1',
+                    'feePips', 'tickSpacing', 'hooks', 'poolManager') if name in state}
+                acquired = self.acquire_pool(identity, block)
+                if acquired.get('acquisition'):
+                    state['acquisition'] = deepcopy(acquired['acquisition'])
             self.publish_observation(state)
         return state
 
     async def extend_ticks(self, snapshot, requests, block):
-        rpc = self.get_rpc()
+        snapshot, requests = copy_pool_snapshot(snapshot), deepcopy(requests)
         generation = self.generation
+        # Share only an identical fill that is still acquiring its coverage.
+        # Completed Sandbox observations remain fresh on the next call, even
+        # at the same header; each caller owns the returned mutable snapshot.
+        key = ('tick-fill', generation, block['hash'],
+               json.dumps(snapshot, sort_keys=True), json.dumps(requests, sort_keys=True))
+        async def produce():
+            return await self._extend_ticks(snapshot, requests, block, generation)
+        result = copy_pool_snapshot(await self.pending.one(key, produce))
+        return result
+
+    async def _extend_ticks(self, snapshot, requests, block, generation):
+        rpc = self.get_rpc()
         pool = snapshot
         current = self.observed.get(pool['id'])
         covered = current if current and current['context']['blockHash'] == block['hash'] else snapshot
@@ -381,12 +471,40 @@ class PoolRegistry:
             else:
                 value, = await rpc.read_function(pool['address'], 'tickBitmap(int16)', ['int16'], [word], ['uint256'], block)
             return word, value
-        for word, bitmap in await asyncio.gather(*(read_word(word) for word in missing_words)):
+        for word, bitmap in await owned_reads(*(read_word(word) for word in missing_words)):
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
+        if pool['protocol'] == 'v4':
+            # A large swap can exhaust its funded range and then traverse
+            # thousands of empty words. Acquire the remaining direction at
+            # once, instead of one RPC and SDK continuation per empty word.
+            # Empty gaps are never treated as global liquidity exhaustion.
+            current_word = (int(snapshot['tick'])//spacing) >> 8
+            positions = set()
+            for request in requests:
+                direction = request.get('zeroForOne')
+                if type(direction) is not bool or request.get('activeLiquidity') != '0':
+                    continue
+                for word in request.get('wordPositions', []):
+                    if word == current_word or int(words[word]['bitmap']):
+                        continue
+                    lower, upper = ((-887272//spacing) >> 8, word) if direction else (
+                        word, (887272//spacing) >> 8)
+                    positions.update(range(lower, upper+1))
+            missing = sorted(positions-words.keys())
+            if missing and begin_tick_prefetch(pool, block):
+                try:
+                    coverage = await read_tick_bitmap_words(rpc.read_function,
+                        pool.get('poolManager', rpc.pool_manager), pool['id'], missing, block)
+                    words.update({word: {'wordPosition': word, 'bitmap': str(bitmap)} for word, bitmap in coverage})
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    pass  # Optional prefetch failure retains ordinary demanded reads.
         needed = {int(tick) for request in requests for tick in request.get('ticks', [])}
         for word in requested_words:
             bits = int(words[word]['bitmap'])
-            needed.update(((word << 8)+bit)*spacing for bit in range(256) if bits & (1 << bit))
+            if bits:
+                needed.update(((word << 8)+bit)*spacing for bit in range(256) if bits & (1 << bit))
         async def read_tick(index):
             if pool['protocol'] == 'v4':
                 value = await read_state_view(rpc.read_function, rpc.state_view, 'getTickLiquidity', block,
@@ -395,7 +513,7 @@ class PoolRegistry:
                 value = await rpc.read_function(pool['address'], 'ticks(int24)', ['int24'], [index],
                     ['uint128', 'int128', 'uint256', 'uint256', 'int56', 'uint160', 'uint32', 'bool'], block)
             return {'index': index, 'liquidityGross': str(value[0]), 'liquidityNet': str(value[1])}
-        for row in await asyncio.gather(*(read_tick(index) for index in sorted(needed-ticks.keys()))):
+        for row in await owned_reads(*(read_tick(index) for index in sorted(needed-ticks.keys()))):
             ticks[row['index']] = row
         # Concurrent candidates can have requested different coverage from the
         # same observation. Merge their immutable tick observations at this hash.
@@ -403,7 +521,9 @@ class PoolRegistry:
         if current and current['context']['blockHash'] == block['hash']:
             words.update({int(row['wordPosition']): row for row in current.get('bitmapWords', [])})
             ticks.update({int(row['index']): row for row in current.get('ticks', [])})
-        result = {**deepcopy(snapshot), 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
+        # extend_ticks owns the snapshot; coverage below replaces its old rows.
+        # Subscriber, observed-state and persistence copies remain independent.
+        result = {**snapshot, 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
         if generation == self.generation:
             if self.chain == 1:
                 self.observed[pool['id']] = deepcopy(result)
@@ -447,7 +567,7 @@ class PoolRegistry:
             self.inventory.pop(identity, None)
             self.observed.pop(identity, None)
             for key, bundle in list(self.activity.items()):
-                if bundle['pool']['protocol'] == protocol and bundle['pool']['id'] == identity:
+                if bundle['pool']['protocol'] == CATALOG_PROTOCOLS.get(protocol, protocol) and bundle['pool']['id'] == identity:
                     self.activity.pop(key)
         for pool in pools:
             self.inventory[pool['id']] = pool
@@ -471,8 +591,8 @@ class PoolRegistry:
                     return False
                 canonical.add(key)
             return True
-        for protocol in ('v2', 'v3', 'v4'):
-            cursor = self.cursors.get(protocol, {})
+        for scope, protocol in CATALOG_PROTOCOLS.items():
+            cursor = self.cursors.get(scope, {})
             checkpoints = list(cursor.get('checkpoints', []))
             rewind = None
             while checkpoints:
@@ -481,14 +601,15 @@ class PoolRegistry:
                     break
                 rewind = int(checkpoints.pop()['rangeStart'])
             if rewind is not None:
-                removed = [identity for identity, pool in self.inventory.items() if pool.get('discovery', {}).get('protocol') == protocol
+                removed = [identity for identity, pool in self.inventory.items() if pool.get('discovery', {}).get(
+                    'scope', pool.get('discovery', {}).get('protocol')) == scope
                     and int(pool['discovery']['blockNumber']) >= rewind]
-                await self.commit_catalog(protocol, {'blockNumber': str(rewind), 'checkpoints': checkpoints, 'pending': True}, removed=removed)
+                await self.commit_catalog(scope, {'blockNumber': str(rewind), 'checkpoints': checkpoints, 'pending': True}, removed=removed)
                 changed = True
             elif cursor and not checkpoints and not cursor.get('checkpoints'):
                 # Older un-hashed inventory cursors are hints; replay their
                 # creation events to establish recoverable canonical checkpoints.
-                await self.commit_catalog(protocol, {'blockNumber': '0', 'checkpoints': [], 'pending': True})
+                await self.commit_catalog(scope, {'blockNumber': '0', 'checkpoints': [], 'pending': True})
                 changed = True
             # On-demand identities have the same recoverable canonical anchor
             # as discovery ranges, without requiring another quote-time probe.
@@ -502,7 +623,7 @@ class PoolRegistry:
                     pool = self.inventory[identity]
                     for token in (pool['token0'], pool['token1']):
                         self.metadata.pop(token['address'].lower(), None)
-                await self.commit_catalog(protocol, self.cursors.get(protocol, {}), removed=removed)
+                await self.commit_catalog(scope, self.cursors.get(scope, {}), removed=removed)
                 changed = True
         for key, anchor in list(self.lookup_anchors.items()):
             if key not in self.lookups:
@@ -524,16 +645,19 @@ class PoolRegistry:
         if force:
             self.lookups = {key: value for key, value in self.lookups.items() if value is not None}
         month = datetime.now(timezone.utc).strftime('%Y-%m')
-        if not force and self.discovery_month == month and not any(row.get('pending') for row in self.cursors.values()):
+        if not force and self.discovery_month == month and 'v4-paxg' in self.cursors and not any(
+                row.get('pending') for row in self.cursors.values()):
             return
         rpc = self.get_rpc()
-        padded = '0x'+self.core[2:].lower().rjust(64, '0')
         completed = True
-        for protocol, address in (('v2', rpc.v2_factory), ('v3', rpc.factory), ('v4', rpc.pool_manager)):
+        for scope, protocol, address, currency in (('v2', 'v2', rpc.v2_factory, self.core),
+                ('v3', 'v3', rpc.factory, self.core), ('v4', 'v4', rpc.pool_manager, self.core),
+                ('v4-paxg', 'v4', rpc.pool_manager, PAXG)):
             # Producer birth includes every possible pool creation, including
             # currency keys initialized before CYGLD deployment. Keep a saved
             # cursor literal; only a cold known deployment uses this floor.
-            cursor = self.cursors.get(protocol, {})
+            cursor = self.cursors.get(scope, {})
+            padded = '0x'+currency[2:].lower().rjust(64, '0')
             floor = MAINNET_DEPLOYMENT_BLOCKS.get((protocol, address.lower()), 0) if self.chain in (1, 31338) else 0
             start = int(cursor.get('blockNumber', floor))
             checkpoints = list(cursor.get('checkpoints', []))
@@ -550,13 +674,16 @@ class PoolRegistry:
                 logs = {row['transactionHash']+row['logIndex']: row for group in rows for row in group}
                 pools = []
                 for row in sorted(logs.values(), key=lambda row: (int(row['blockNumber'], 16), int(row['logIndex'], 16))):
+                    if scope == 'v4-paxg' and self.core.lower() in ['0x'+topic[-40:].lower() for topic in row['topics'][2:4]]:
+                        continue  # Core-containing identities belong to the existing Core catalog.
                     pool = await self.decode_discovery(protocol, row, block)
                     pool['discovery'] = {'protocol': protocol, 'blockNumber': str(int(row['blockNumber'], 16)),
+                        'scope': scope,
                         'scanBlockNumber': str(last), 'scanBlockHash': anchor['hash']}
                     pools.append(pool)
                 await rpc.assert_canonical(anchor)
                 checkpoints.append({'rangeStart': str(first), 'blockNumber': str(last), 'blockHash': anchor['hash']})
-                await self.commit_catalog(protocol, {'blockNumber': str(last+1), 'checkpoints': checkpoints,
+                await self.commit_catalog(scope, {'blockNumber': str(last+1), 'checkpoints': checkpoints,
                     'pending': last < block['number']}, pools)
             completed &= end == block['number']
         if completed:

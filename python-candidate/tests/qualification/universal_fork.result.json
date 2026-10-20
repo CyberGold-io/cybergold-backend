@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "observedAt": "2026-10-20T11:42:37.654045+00:00",
+  "scope": "local disposable Anvil fork; no production write, signature, deployment or configured release default",
+  "sourceBlock": {
+    "number": 26164733,
+    "hash": "0x841450fad8ae713daeeadf60e0e360554053c81d0341729d394c602154aff453"
+  },
+  "localChainId": 31338,
+  "localSelectorCount": 45,
+  "helpersLocal": "0x9978912A3b9D4C2415b51127d6aF6ca164079473",
+  "adapterLocal": "0x0A8b8F32CC2672a649C553AE36F5A41014546252",
+  "artifactCreationTemplateSha256": {
+    "TradeExactInFacet": "5a7fa73a51848726f5a965598c2299004830fd7a2274eab63900be7a5532a4af",
+    "CoreIssueExecution": "1a57784c3bb61e797edddbf00151bb322ad176bd803b9b267e0f6bc4aca81731",
+    "TradeRouteEncoding": "6ff4edd1f6a1f7f6de4ea67f3f023ed845b5c01b925f9e6ecbc491b19ab7e0d7",
+    "UniswapRoutingAdapter": "b2f22ac80523781ab4e8ce63e408f7374d31ebd05b4a9d16ff52c99a5ce783db",
+    "MarketSwapFacet": "cec102593b50fc5072d6adcd5b9e651d3983d474c348eca67016d5ee19550d59"
+  },
+  "backendBase": "793bc959dd3e559932c1abbfca2f300a0bf7e34b",
+  "backendLocalWorkingTree": true,
+  "sdk": "actual checked-in Node Uniswap SDK worker; candidate-private sequential post-state replay",
+  "caseCount": 6,
+  "publicGetQuoteExecutions": 4,
+  "explicitGridCandidateExecutions": 2,
+  "assertions": [
+    "exact quoted scalar output equals aggregate actual output",
+    "full ordered basket recipient vector equals quote",
+    "Core protocol, Helpers and Market fees equal quote",
+    "minimum output respected",
+    "retained charge vector equals estimate",
+    "Helpers balance deltas equal retained charges",
+    "payer balance deltas equal gross declared input and actual output, with transaction gas accounted",
+    "fee beneficiary is Helpers current owner; retained custodian is Helpers"
+  ],
+  "limitations": [
+    "All six actual-fork retained vectors are empty; nonzero underconsumption is qualified separately in Helpers tests.",
+    "This selected-inventory snapshot exercise does not claim global route optimality or production release readiness."
+  ],
+  "checks": {
+    "node": {
+      "command": "npm run ci-check",
+      "exitCode": 0,
+      "tests": 247,
+      "includes": [
+        "typecheck",
+        "generated contract freshness"
+      ],
+      "nodeVersion": "v26.10.0"
+    },
+    "python": {
+      "command": "bash python-candidate/tests/check-local.sh",
+      "exitCode": 0,
+      "unittestGroups": 78,
+      "unittestTests": 898,
+      "parityPassGroups": 49,
+      "nodeReferenceAndSdkVersion": "v26.10.0"
+    }
+  },
+  "cases": [
+    {
+      "case": "native-buy-public-quote",
+      "intent": 0,
+      "routeFamily": "market",
+      "quotedOutput": "185819125586128723",
+      "actualOutput": "185819125586128723",
+      "minimumOutput": "183960934330267435",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x601da021cAF3DB5AA63e700D239b5935C370601d",
+          "id": "0",
+          "amount": "185819125586128723"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "0",
+        "coreHelpersFeeCygld": "0",
+        "marketFeeCygld": "186005130716846"
+      },
+      "stages": 2,
+      "gasUsed": 587135
+    },
+    {
+      "case": "native-buy-mixed-core-first",
+      "intent": 0,
+      "routeFamily": "mixed",
+      "quotedOutput": "161279880808772292",
+      "actualOutput": "161279880808772292",
+      "minimumOutput": "159667082000684569",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x601da021cAF3DB5AA63e700D239b5935C370601d",
+          "id": "0",
+          "amount": "161279880808772292"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "32192098487999",
+        "coreHelpersFeeCygld": "160799531947560",
+        "marketFeeCygld": "129410184135344"
+      },
+      "stages": 9,
+      "gasUsed": 1408533
+    },
+    {
+      "case": "native-sale-public-quote",
+      "intent": 1,
+      "routeFamily": "mixed",
+      "quotedOutput": "4159557883783644",
+      "actualOutput": "4159557883783644",
+      "minimumOutput": "4117962304945807",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x0000000000000000000000000000000000000000",
+          "id": "0",
+          "amount": "4159557883783644"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "26745580234121",
+        "coreHelpersFeeCygld": "134399900673976",
+        "marketFeeCygld": "26853127007788"
+      },
+      "stages": 3,
+      "gasUsed": 1222684
+    },
+    {
+      "case": "native-sale-mixed-market-first",
+      "intent": 1,
+      "routeFamily": "mixed",
+      "quotedOutput": "2725924286921040",
+      "actualOutput": "2725924286921040",
+      "minimumOutput": "2698665044051829",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x0000000000000000000000000000000000000000",
+          "id": "0",
+          "amount": "2725924286921040"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "26745580234121",
+        "coreHelpersFeeCygld": "134399900673976",
+        "marketFeeCygld": "26853127007788"
+      },
+      "stages": 3,
+      "gasUsed": 1157265
+    },
+    {
+      "case": "basket-redeem-public-quote",
+      "intent": 3,
+      "routeFamily": "core",
+      "quotedOutput": "0",
+      "actualOutput": "0",
+      "minimumOutput": "0",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+          "id": "0",
+          "amount": "1030828472004216"
+        },
+        {
+          "kind": 0,
+          "token": "0x68749665FF8D2d112Fa859AA293F07A622782F38",
+          "id": "0",
+          "amount": "687"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "53491160468242",
+        "coreHelpersFeeCygld": "268799801347953",
+        "marketFeeCygld": "0"
+      },
+      "stages": 0,
+      "gasUsed": 409337
+    },
+    {
+      "case": "basket-issue-public-quote",
+      "intent": 2,
+      "routeFamily": "mixed",
+      "quotedOutput": "53110175308954109",
+      "actualOutput": "53110175308954109",
+      "minimumOutput": "52579073555864567",
+      "retainedInputs": [],
+      "recipientOutputs": [
+        {
+          "kind": 0,
+          "token": "0x601da021cAF3DB5AA63e700D239b5935C370601d",
+          "id": "0",
+          "amount": "53110175308954109"
+        }
+      ],
+      "fees": {
+        "coreProtocolFeeCygld": "53420221403999",
+        "coreHelpersFeeCygld": "266834005912980",
+        "marketFeeCygld": "10218350622"
+      },
+      "stages": 3,
+      "gasUsed": 667485
+    }
+  ],
+  "nodeVersion": "v26.10.0",
+  "sdkRequestCount": 126,
+  "backendSourceSha256": {
+    "python-candidate/src/cybergold_candidate/universal_quote.py": "74a93d22e8d0e82b651c3f185ed32755a8e79ffd11f3a8ffc88b6d569cc49a89",
+    "python-candidate/src/cybergold_candidate/exact_input_plan.py": "86e2d172fcce37530baf20af8b83d25bd43f171279981a15af650ed274163dd1",
+    "python-candidate/src/cybergold_candidate/routing_encoding.py": "6a4a0cd80854ada738c3df25c5abca2b266709a51fcfe5e66473116fec957d46",
+    "python-candidate/src/cybergold_candidate/route_quote_engine.py": "edef3d45303e0ae8a42d05328344c23c020ccad86f708f39966b7470d289c327",
+    "src/uniswap-sdk/engine.ts": "daba68cc27cf0bca3357b4c25feaa0ed1750b171f05a22189f0f5b5a81fafcf5"
+  },
+  "evidenceLogSha256": {
+    "fork": "76d252836c366f6f626b78b0e9bd4bd21e1e4a17d6b247537e5ee45118eb69dc",
+    "node": "07aa205cfb220e16f7820348a1f82298d074700c16738499354355b4e9f4332d",
+    "python": "1224be2b68b1fe04df164d00a17c981b501724b7bb11d86ecfa1e71597ff4283"
+  }
+}

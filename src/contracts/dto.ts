@@ -25,11 +25,37 @@ export type ProtocolConfiguration = {
   tokens: ProtocolConfiguredToken[];
   sandboxForkGeneration: string | null;
   adapter: { status: "success" | "unavailable";
-    encoding: "uniswap-multi-protocol-v1" | "uniswap-v3" | null;
+    encoding: "uniswap-multi-protocol-v1" | "uniswap-v3" | "uniswap-routing-v1" | null;
     observation: { blockNumber: string; blockHash: string; observedAt: string } | null };
+  universalExactInput: { adapter: string | null; encoding: "uniswap-routing-v1" | null;
+    settlementPolicy: "protocol-retained-input" };
 };
 
 /** Market swaps transfer existing CYGLD; never use Core basket economics. */
+export type UniversalExactInputRequest = {
+  intent: 0 | 1 | 2 | 3;
+  inputs: { currency: string; amount: string }[];
+  outputCurrency: string; recipient: string; deadline: string; slippageBps?: number;
+};
+export type UniversalExactInputPlan = Omit<UniversalExactInputRequest, "slippageBps"> & {
+  minimumOutput: string; body: string;
+};
+export type UniversalExactInputQuote = {
+  strategy: "universal"; routeFamily: "core" | "market" | "mixed";
+  operation: "executeExactInput"; settlementPolicy: "protocol-retained-input";
+  plan: UniversalExactInputPlan; planDescription: Record<string, unknown>;
+  inputs: { currency: string; amount: string }[];
+  quotedInput?: string; inputMaximum?: string; quotedOutput: string; outputMinimum: string;
+  estimatedRetainedInputCharges: { branch: number; stage: number; currency: string; amount: string }[];
+  estimatedRecipientOutputs: { kind: number; token: string; id: string; amount: string }[];
+  fees: { coreProtocolFeeCygld: string; coreHelpersFeeCygld: string; marketFeeCygld: string };
+  recoveryShares: { kind: number; token: string; id: string; amount: string }[];
+  deployment: { helpers: string; adapter: string; encoding: "uniswap-routing-v1" };
+  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
+  searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
+    maxAmmHops: number; scope: "selected-inventory" };
+};
 export type MarketQuoteRequest = {
   side: "buy" | "sell"; mode: "exact-in" | "exact-out";
   counterToken: string; amount: string; adapter?: string; recipient: string;
@@ -41,6 +67,13 @@ export type MarketPoolRef = {
   token0: { address: string; decimals: number; chainId: number; decimalsKnown?: boolean };
   token1: { address: string; decimals: number; chainId: number; decimalsKnown?: boolean };
   address?: string; feePips: number; tickSpacing?: number; poolManager?: string; hooks?: string;
+};
+/** Executable identity can precede optional SDK/display metadata acquisition. */
+export type RouteTokenRef = {
+  address: string; decimals?: number; chainId?: number; decimalsKnown?: boolean;
+};
+export type RoutePoolRef = Omit<MarketPoolRef, "token0" | "token1"> & {
+  token0: RouteTokenRef; token1: RouteTokenRef;
 };
 export type PoolIdentifier = { tokenA: string; tokenB: string; id?: string } & (
   | { protocol?: "v3"; fee: number }
@@ -81,7 +114,7 @@ export type PoolActivity = { enabled: false; events: []; pools: [] } | {
 export type MarketRoutePlan = {
   version: 1; executionContext: "helpers-market" | "helpers-core";
   mode: "exactIn" | "exactOut"; tokenIn: string; tokenOut: string;
-  branches: { amountIn: string; hops: { pool: MarketPoolRef; zeroForOne: boolean }[] }[];
+  branches: { amountIn: string; hops: { pool: RoutePoolRef; zeroForOne: boolean }[] }[];
   inputAmount: string; outputAmount: string; limit: string; deadline: string;
 };
 export type MarketSwapParams = {
@@ -92,6 +125,11 @@ export type MarketRetainedPlan = {
   side: "buy" | "sell"; mode: "exact-in" | "exact-out"; amount: string;
   slippageBps: number; route: MarketRoutePlan; params: MarketSwapParams;
   fee: { asset: string; ratePpm: number; amount: string; basis: "quoted"; notional: string };
+};
+/** Producer selection includes context and first qualification; terminal work is measured separately. */
+type QuoteSelectionMetrics = {
+  firstQualifiedMs?: number; selectionMs?: number; canonicalCompletedMs?: number;
+  cleanupCompletedMs?: number; finalizationMs?: number;
 };
 export type MarketQuote = {
   operation: "market"; side: "buy" | "sell"; mode: "exact-in" | "exact-out";
@@ -108,7 +146,8 @@ export type MarketQuote = {
   executionSimulationRequired?: boolean; quoteVerificationUnavailable?: string;
   searchCoverage?: { scope: "selected-inventory"; maxHops: number; splitPercentages: number[];
     inventoryPools: number; catalogMonth: string | null };
-  metrics: { candidateCalls: number; totalMs: number };
+  metrics: { candidateCalls: number; totalMs: number } & QuoteSelectionMetrics;
+  quoteDiagnostics?: QuoteWorkDiagnostics;
 };
 export type MarketQuoteModelPacket = {
   namespace: "market"; family: string; context?: MarketQuote["context"];
@@ -120,13 +159,17 @@ export type MarketQuoteModelPacket = {
     feeRetention?: { numerator: string; denominator: string };
     localImpact?: { numerator: string; denominator: string } }[];
 };
-export type MarketQuoteEvent =
+/** Optional subscriber references; workId belongs to shared producer work. */
+export type DiagnosticReferences = { requestId?: string; attemptId?: string; correlationId?: string; workId?: string };
+
+export type MarketQuoteResponse = MarketQuote | UniversalExactInputQuote;
+export type MarketQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: MarketQuoteModelPacket }
   | { type: "estimate"; amount: string }
-  | { type: "qualified" | "complete"; value: MarketQuote }
+  | { type: "qualified" | "complete"; value: MarketQuote | UniversalExactInputQuote }
   | { type: "progress"; completedCandidates: number; totalCandidates?: number }
   | { type: "invalidated" }
-  | { type: "error"; error: string; code?: string };
+  | { type: "error"; error: string; code?: string; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 
 type ReceiptWaitContext = { chainId: number; observedAt: string };
 export type GovernanceTargetCode = { context: ProtocolFacts["context"]; address: string; hasCode: boolean };
@@ -231,12 +274,7 @@ export type SafeTransactionHashRequest = { address: string; to: string; value: s
 export type SafeExecutionRequest = Omit<SafeTransactionHashRequest, "nonce"> & { executor: string; executorNonce: string; signatures: string };
 export type SafeExecution = { context: ProtocolFacts["context"]; address: string; executor: string; executorNonce: string;
   success: boolean; blockTag: "latest" };
-export type HelpersExecutionRequest = { owner: string; operation: "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithPermit2"
-  | "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactOutWithMixedPermits"
-  | "issueFromTokenExactOutWithPermit2" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOut" | "issueFromNativeExactOut"
-  | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit"
-  | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit"
-  | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "swapExactInput" | "swapExactOutput"; args: unknown[]; value?: string };
+export type HelpersExecutionRequest = { owner: string; operation: "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput" | "executeExactInput"; args: unknown[]; value?: string };
 export type HelpersExecution = { context: ProtocolFacts["context"]; helpers: string; owner: string;
   operation: HelpersExecutionRequest["operation"]; gas: string; blockTag: "latest" };
 export type TransactionFees = { context: ProtocolFacts["context"]; maxFeePerGas: string; maxPriorityFeePerGas: string };
@@ -286,7 +324,7 @@ export type HelpersRouterFacts = {
     wrappedNative: FactRead<string>; owner: FactRead<string>;
     approvedAdapters: FactRead<string[]>; paused: FactRead<boolean>; tokenPermitIssuance?: FactRead<boolean>;
     basketPermitIssuanceExactIn?: FactRead<boolean>; basketPermitIssuanceExactOut?: FactRead<boolean>;
-    marketSwapExactInput?: FactRead<boolean>; marketSwapExactOutput?: FactRead<boolean> };
+    universalExactInput?: FactRead<boolean>; marketSwapExactInput?: FactRead<boolean>; marketSwapExactOutput?: FactRead<boolean> };
 };
 export type GovernanceSafePrincipal = {
   context: ProtocolFacts["context"];
@@ -296,6 +334,16 @@ export type GovernanceSafePrincipal = {
   threshold: FactRead<string>;
 };
 type PreviewOutput = { kind: number; token: string; id: string; amount: string };
+export type BasketMaxRequest = { driverToken: string; maximumAmountsIn: string[] };
+export type BasketMax = {
+  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  helpers: string;
+  orderedCoreAssets: string[];
+  driverToken: string;
+  driverAmount: string;
+  maximumAmountsIn: string[];
+  netCygldOut: string;
+};
 export type BasketPreviewRequest =
   | { mode: "issue-exact-in"; maximumAmountsIn: string[] }
   | { mode: "issue-exact-out"; netCygldOut: string }
@@ -332,16 +380,16 @@ export type UniswapQuote = { context: BasketPreview["context"]; quoter: string;
 export type RouteSearchTarget = { inputAsset: string; outputAsset: string; amount: string };
 export type RouteSearchRequest = { mode: UniswapQuoteRequest["mode"]; targets: RouteSearchTarget[]; adapter?: string };
 export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; context: BasketPreview["context"];
-  results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed";
-    feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics }[] }[];
-  metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number;
+  results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed" | "identity";
+    feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics }[] }[];
+  metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number; rpcReadsScope?: "coordinator";
     rpcReadsCoalesced: number; rpcReadsReused: number; contextMs: number; quotesMs: number;
     canonicalityMs: number; totalMs: number } };
 
 export type RouteSearchEvent =
   | { type: "progress"; results: (RouteSearch["results"][number] & { total: number })[] }
   | { type: "complete"; value: RouteSearch }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics };
 
 /** Optional observed RPC failure context; provider text is sanitized before publication. */
 export type RpcErrorDiagnostics = {
@@ -352,11 +400,129 @@ export type RpcErrorDiagnostics = {
   providerMessage?: string;
   httpStatus?: number;
   failureType?: "rpc-error" | "http-error" | "provider-timeout" | "backend-deadline" | "transport-error";
+  errorSelector?: string;
+  errorName?: string;
+};
+
+/** Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+export type QuoteConstraint = {
+  kind?: "issuance-cap" | "redemption-supply" | "redemption-capacity";
+  quantity?: "gross-cygld-mint" | "gross-cygld-input" | "core-output-minima";
+  limitKind?: "maximum-total-supply" | "effective-supply-cap";
+  requestedRaw?: string; availableRaw?: string; currentSupplyRaw?: string; limitRaw?: string;
 };
 
 export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exceeded"
+  | "redemption-supply-exceeded" | "redemption-capacity-exceeded"
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
-  | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable";
+  | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable";
+
+/**
+ * Bounded observation count; never an execution eligibility predicate.
+ * @TJS-type integer
+ * @minimum 0
+ * @maximum 1000000000000
+ */
+export type QuoteDiagnosticCount = number;
+/**
+ * Observed duration or offset in milliseconds, never a selection predicate.
+ * @minimum 0
+ * @maximum 1000000000000
+ */
+export type QuoteDiagnosticMilliseconds = number;
+/**
+ * Raw uint256 quantity; the producer additionally enforces the uint256 maximum.
+ * @pattern ^[0-9]{1,78}$
+ */
+export type QuoteDiagnosticAmount = string;
+/** @pattern ^0x[0-9a-fA-F]{40}$ */
+export type QuoteDiagnosticAddress = string;
+/**
+ * Concrete pool identity or the existing unresolved V3 execution identity.
+ * @pattern ^(?:0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})|v3:0x[0-9a-fA-F]{40}:0x[0-9a-fA-F]{40}:(?:[0-9]{1,6}|0[0-9]{6}|1000000))$
+ */
+export type QuoteDiagnosticPoolId = string;
+/** @additionalProperties false */
+export type QuoteDiagnosticPool = {
+  protocol: "v2" | "v3" | "v4";
+  poolId?: QuoteDiagnosticPoolId;
+  poolAddress?: QuoteDiagnosticAddress;
+};
+/** @additionalProperties false */
+export type QuoteDiagnosticFailureCount = { code: QuoteErrorCode; count: QuoteDiagnosticCount };
+/** One required conversion leg, without paths, calldata or upstream messages.
+ * @additionalProperties false
+ */
+export type QuoteDiagnosticLeg = {
+  index: QuoteDiagnosticCount;
+  inputAsset?: QuoteDiagnosticAddress; outputAsset?: QuoteDiagnosticAddress; amount?: QuoteDiagnosticAmount;
+  started: QuoteDiagnosticCount; succeeded: QuoteDiagnosticCount; failed: QuoteDiagnosticCount;
+  cancelled: QuoteDiagnosticCount; pending: QuoteDiagnosticCount; bestAvailable: boolean;
+  /** @maxItems 16 */
+  failureCounts: QuoteDiagnosticFailureCount[];
+  omittedFailureCodes: QuoteDiagnosticCount;
+  /** @maxItems 8 */
+  bestPools: QuoteDiagnosticPool[];
+  omittedPools: QuoteDiagnosticCount;
+};
+/** @additionalProperties false */
+export type QuoteDiagnosticLegs = {
+  count: QuoteDiagnosticCount; omittedRows: QuoteDiagnosticCount;
+  /** @maxItems 16 */
+  rows: QuoteDiagnosticLeg[];
+};
+/** One complete provider qualification attempt; rejection is distinct from a missing route.
+ * @additionalProperties false
+ */
+export type ProviderQualificationDiagnostic = {
+  attempt: QuoteDiagnosticCount;
+  stage: "composition" | "basket-preview" | "initial-preview" | "execution-search" | "expected-input-search"
+    | "final-preview" | "tolerance" | "canonicality" | "selection"
+    | "route-pricing" | "fee-bounds" | "qualification" | "retained-validation";
+  outcome: "running" | "qualified" | "rejected" | "not-improved" | "cancelled" | "superseded";
+  code?: QuoteErrorCode;
+  targetAmount?: QuoteDiagnosticAmount; minimumAmountOut?: QuoteDiagnosticAmount;
+  maximumAmountOut?: QuoteDiagnosticAmount; observedAmountOut?: QuoteDiagnosticAmount;
+  maximumAmountIn?: QuoteDiagnosticAmount; observedAmountIn?: QuoteDiagnosticAmount;
+  /** Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+  startedMs?: QuoteDiagnosticMilliseconds; completedMs?: QuoteDiagnosticMilliseconds;
+  elapsedMs?: QuoteDiagnosticMilliseconds;
+  executionAmount?: QuoteDiagnosticAmount; quotedInput?: QuoteDiagnosticAmount; quotedOutput?: QuoteDiagnosticAmount;
+  inputMaximum?: QuoteDiagnosticAmount; outputMinimum?: QuoteDiagnosticAmount;
+  /** @maxItems 8 */
+  pools?: QuoteDiagnosticPool[];
+  omittedPools?: QuoteDiagnosticCount;
+};
+/** @additionalProperties false */
+export type ProviderQualificationDiagnostics = {
+  provider: "core" | "market";
+  attempts: QuoteDiagnosticCount; qualified: QuoteDiagnosticCount; rejected: QuoteDiagnosticCount;
+  notImproved: QuoteDiagnosticCount; cancelled: QuoteDiagnosticCount; superseded: QuoteDiagnosticCount;
+  pending: QuoteDiagnosticCount; omittedRows: QuoteDiagnosticCount;
+  selectedAttempt?: QuoteDiagnosticCount;
+  selectionReason?: "best-initial" | "first-extension" | "complete" | "timeout";
+  firstQualifiedMs?: QuoteDiagnosticMilliseconds; selectionMs?: QuoteDiagnosticMilliseconds;
+  canonicalCompletedMs?: QuoteDiagnosticMilliseconds; cleanupCompletedMs?: QuoteDiagnosticMilliseconds;
+  /** @maxItems 8 */
+  rows: ProviderQualificationDiagnostic[];
+};
+
+/** Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+export type QuoteWorkDiagnostics = {
+  phase?: "context" | "initial-search" | "initial-preview" | "capacity" | "basket-preview"
+    | "expected-input-search" | "execution-search" | "final-preview" | "canonicality" | "retained-validation";
+  elapsedMs?: number; qualified?: boolean; inversionIteration?: number;
+  routeWave?: {
+    elapsedMs?: number; subphaseElapsedMs?: number;
+    subphase?: "context" | "eligibility" | "v3-coverage" | "typed-reserve" | "structured-search" | "composition" | "canonicality";
+    mode?: "exact-in" | "exact-out";
+    legacyCandidates?: number; legacyCompleted?: number;
+    typedEnumerated?: number; typedCompleted?: number; typedPending?: number;
+    sdkRequests?: number; sdkWaiting?: number; sdkLockWaitMs?: number; sdkExchangeMs?: number;
+    legs?: QuoteDiagnosticLegs;
+  };
+  providerQualifications?: ProviderQualificationDiagnostics;
+};
 
 export type QuoteIntentRequest = {
   mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
@@ -389,8 +555,9 @@ export type QuoteIntent = {
   remainingGrossCapacity?: string; remainingNetCapacity?: string;
   expectedOutputAmount?: string;
   expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
-  metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number;
-    candidateCalls: number; iterations: number; totalMs: number };
+  metrics: { rpcReads: number; rpcReadsRequested: number; rpcReadsCoalesced: number; rpcReadsReused: number; rpcReadsScope?: "coordinator";
+    candidateCalls: number; iterations: number; totalMs: number } & QuoteSelectionMetrics;
+  quoteDiagnostics?: QuoteWorkDiagnostics;
 };
 /** Display-only source data. No transaction tuples or execution readiness. */
 export type QuoteModelPacket = {
@@ -417,14 +584,20 @@ export type QuoteModelPacket = {
     };
   };
 };
-export type QuoteIntentEvent =
+export type NumericCoreQuote = {
+  readOnly: true; mode: QuoteIntentRequest["mode"]; context: QuoteIntent["context"];
+  slippageBps?: number; metrics?: QuoteIntent["metrics"]; displayAmount?: string;
+  executionAmount?: string; maximumInputAmount?: string; expectedInputAmount?: string;
+  expectedOutputAmount?: string; minimumAmountOut: string;
+};
+export type QuoteIntentEvent = DiagnosticReferences & (
   | { type: "model"; value: QuoteModelPacket }
   | { type: "progress"; stage: string; completed: number; total: number }
   | { type: "estimate"; amount: string; context: BasketPreview["context"] }
-  | { type: "qualified"; value: QuoteIntent }
+  | { type: "qualified"; value: QuoteIntent | NumericCoreQuote }
   | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
-  | { type: "complete"; value: QuoteIntent }
-  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  | { type: "complete"; value: QuoteIntent | NumericCoreQuote }
+  | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 
 /** One user trade; Backend chooses a complete Core or market execution. */
 export type TradeModelRequest = {
@@ -442,36 +615,69 @@ type TradeEconomics = {
   side: TradeModelRequest["side"]; mode: TradeModelRequest["mode"];
   tokenIn: string; tokenOut: string; quotedInput: string; quotedOutput: string;
   inputMaximum: string; outputMinimum: string; context: QuoteIntent["context"];
-  evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number };
+  evaluation: TradeEvaluation; metrics: { totalMs: number; targetReads: number } & QuoteSelectionMetrics;
 };
-export type TradeQuote = TradeEconomics & (
-  | { strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent }
-  | { strategy: "market"; providerRequest: MarketQuoteRequest; providerQuote: MarketQuote }
-);
+/** One complete provider plan, without recursive provider evidence maps. */
+export type CoreTradeProviderCandidate = TradeEconomics & {
+  strategy: "core"; providerRequest: QuoteIntentRequest; providerQuote: QuoteIntent;
+};
+export type MarketTradeProviderCandidate = TradeEconomics & {
+  strategy: "market"; providerRequest: MarketQuoteRequest; providerQuote: MarketQuote;
+};
+export type TradeProviderCandidate = CoreTradeProviderCandidate | MarketTradeProviderCandidate;
+export type TradeProviderAssessment = {
+  availability: "pending" | "qualified" | "unavailable" | "unsupported" | "not-run";
+  searchOutcome: "running" | "complete" | "timeout" | "error" | "cancelled" | "not-run";
+  error?: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
+};
+export type TradeProviderAssessments = Record<"core" | "market", TradeProviderAssessment>;
+export type TradeProviderCandidates = {
+  core?: CoreTradeProviderCandidate;
+  market?: MarketTradeProviderCandidate;
+};
+/** Additive maps are optional for compatibility with prior served responses. */
+export type TradeQuote = TradeProviderCandidate & {
+  providerAssessments?: TradeProviderAssessments;
+  providerCandidates?: TradeProviderCandidates;
+};
 export type TradeQuoteModelPacket = {
   namespace: "trade"; intent: TradeModelRequest;
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
   estimate?: { strategy: "core" | "market"; amount: string };
+  /** Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+  budgetRange?: { minimumBudget: string; maximumBudget?: string; quotedInput: string; quotedOutput: string };
 };
-export type TradeQuoteEvent =
+export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: TradeQuoteModelPacket }
   | { type: "estimate"; strategy: "core" | "market"; amount: string }
-  | { type: "qualified" | "complete"; value: TradeQuote }
+  | { type: "qualified" | "complete"; value: TradeQuote | UniversalExactInputQuote }
+  | { type: "provider-qualified"; strategy: "core" | "market"; value: TradeProviderCandidate }
+  | { type: "provider-assessment"; strategy: "core" | "market"; value: TradeProviderAssessment }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
-  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode }
+  | { type: "provider-error"; strategy: "core" | "market"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics }
   | { type: "invalidated"; strategy: "core" | "market" }
-  | { type: "error"; error: string; code?: QuoteErrorCode };
+  | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics;
+      providerAssessments?: TradeProviderAssessments; providerCandidates?: TradeProviderCandidates });
 
 /** Documentation/client schemas only: runtime handlers retain their own parsers. */
 export interface ContractSchemas {
+  DiagnosticReferences: DiagnosticReferences;
+  QuoteWorkDiagnostics: QuoteWorkDiagnostics;
   TradeModelRequest: TradeModelRequest;
+  UniversalExactInputRequest: UniversalExactInputRequest;
+  UniversalExactInputQuote: UniversalExactInputQuote;
   TradeQuoteRequest: TradeQuoteRequest;
   TradeQuote: TradeQuote;
+  TradeProviderCandidate: TradeProviderCandidate;
+  TradeProviderAssessment: TradeProviderAssessment;
+  TradeProviderAssessments: TradeProviderAssessments;
+  TradeProviderCandidates: TradeProviderCandidates;
   TradeQuoteEvent: TradeQuoteEvent;
   TradeQuoteModelPacket: TradeQuoteModelPacket;
   ProtocolConfiguration: ProtocolConfiguration;
   MarketQuoteRequest: MarketQuoteRequest;
   MarketQuote: MarketQuote;
+  MarketQuoteResponse: MarketQuoteResponse;
   MarketQuoteEvent: MarketQuoteEvent;
   MarketQuoteModelPacket: MarketQuoteModelPacket;
   MarketModelRequest: MarketModelRequest;
@@ -523,6 +729,8 @@ export interface ContractSchemas {
   Permit2Context: Permit2Context;
   BasketPreviewRequest: BasketPreviewRequest;
   BasketPreview: BasketPreview;
+  BasketMaxRequest: BasketMaxRequest;
+  BasketMax: BasketMax;
   TokenPreviewRequest: TokenPreviewRequest;
   TokenPreview: TokenPreview;
   UniswapQuoteRequest: UniswapQuoteRequest;
@@ -533,6 +741,7 @@ export interface ContractSchemas {
   QuoteIntentRequest: QuoteIntentRequest;
   QuoteIntent: QuoteIntent;
   QuoteModelPacket: QuoteModelPacket;
+  NumericCoreQuote: NumericCoreQuote;
   QuoteIntentEvent: QuoteIntentEvent;
   RpcErrorDiagnostics: RpcErrorDiagnostics;
   ClientDiagnostic: ClientDiagnostic;
@@ -547,7 +756,7 @@ export interface ContractSchemas {
   Dashboard: (OnchainDashboardSnapshot | { enabled: false; protocolLogicUpdate: null; protocolParameterUpdate: null; lastScannedBlock: null }) & {
     sandboxForkGeneration?: string | null;
   };
-  PublicError: { error: string; correlationId?: string; code?: QuoteErrorCode; diagnostics?: RpcErrorDiagnostics };
+  PublicError: DiagnosticReferences & { error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics };
   AliasesRequest: OwnerAliasesRequest;
   AliasesResult: { entries: GovernanceOwnerAliasEntry[] } | { entry: GovernanceOwnerAliasEntry } | { ok: true; deleted: boolean };
   PoolRequest: PoolCacheRequest;

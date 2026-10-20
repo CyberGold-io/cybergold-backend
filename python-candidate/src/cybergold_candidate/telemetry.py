@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import re
 import time
 import uuid
 
@@ -16,10 +17,13 @@ PATHS={
     '/api/governance/target-code',
     '/api/pools/snapshot',
     '/api/quotes/basket-preview',
+    '/api/quotes/basket-max',
     '/api/quotes/token-preview',
     '/api/quotes/uniswap',
     '/api/quotes/routes', '/api/quotes/routes/stream',
     '/api/quotes/trade/stream', '/api/quotes/trade/model',
+    '/api/quotes/intent/stream', '/api/quotes/market',
+    '/api/quotes/market/stream', '/api/quotes/market/model',
     '/api/transaction/fees',
     '/api/account/transaction-nonce',
     '/api/transaction/receipt',
@@ -35,6 +39,7 @@ PATHS={
     '/api/transaction/recovery-redemption',
     '/api/transaction/permit2-approval-gas',
     '/api/transaction/helpers-execution',
+    '/api/transaction/token-approval-gas',
     '/api/protocol/recovery-assets',
     '/api/protocol/recovery-share-precision',
     '/api/protocol/facts','/api/governance/core-facts','/api/governance/helpers-facts','/api/governance/safe-principal','/api/account/wallet-balances','/api/account/core-permit','/api/account/permit2','/api/activity/core','/api/activity/safe','/api/activity/helpers','/api/dashboard/onchain-summary',
@@ -77,6 +82,15 @@ class Metrics:
         self.http_requests=counter('http_requests_total','Completed backend HTTP requests, excluding metrics scrapes.',('operation','method','status'))
         self.http_duration=histogram('http_duration_seconds','Backend response duration, excluding metrics scrapes.',
             ('operation','method'),[.01,.05,.1,.25,.5,1,2.5,5,10,30,120])
+        self.quote_outcomes=counter('quote_outcomes_total',
+            'Logical quote subscriptions by semantic outcome, independent of HTTP status.',('operation','mode','outcome'))
+        self.quote_first_executable=histogram('quote_first_executable_seconds',
+            'Time until first qualified executable quote per HTTP subscription; indicative frames excluded.',
+            ('operation','mode'),[.01,.05,.1,.25,.5,1,2.5,5,10,30,120])
+        self.quote_stages=counter('quote_stage_events_total',
+            'Subscriber qualified/invalidation/provider/terminal quote observations.',('operation','strategy','stage'))
+        self.quote_provider_outcomes=counter('quote_provider_outcomes_total',
+            'Provider outcomes per HTTP subscription, including losing-provider failures.',('operation','strategy','outcome'))
         self.cache_requests=counter('market_cache_requests_total','Market cache requests: hit, miss (including expiry), or coalesced in-flight refresh.',('feed','result'))
         self.shared_market_requests=counter('market_shared_cache_requests_total',
             'Optional Valkey market reads/writes; hits preserve acquisition expiry.',('feed','operation','result'))
@@ -119,16 +133,31 @@ class Metrics:
 class TelemetryMiddleware:
     def __init__(self,app,metrics,component,release=None):
         self.app,self.metrics,self.component,self.release=app,metrics,component,release
+        # Optional observed build context. Unset/local release values do not
+        # affect requests, and arbitrary environment text never becomes a header.
+        self.backend_revision=(release.lower() if isinstance(release,str)
+            and re.fullmatch(r'[0-9a-f]{40}',release,re.I) else None)
 
     async def __call__(self,scope,receive,send):
         if scope['type']!='http' or scope['path']=='/metrics':return await self.app(scope,receive,send)
         operation=scope['path'] if scope['path'] in PATHS else 'unmatched'
         method=scope['method'] if scope['method'] in ('GET','HEAD','POST','OPTIONS') else 'other'
         request_id=str(uuid.uuid4());scope.setdefault('state',{})['request_id']=request_id
+        attempt_id=next((value.decode('latin1') for key,value in scope.get('headers',[])
+                         if key.lower()==b'x-cybergold-attempt-id'),None)
+        if attempt_id and re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}',attempt_id,re.I):
+            scope['state']['attempt_id']=attempt_id
+        else:attempt_id=None
         started=time.monotonic();status=None
         async def forward(message):
             nonlocal status
-            if message['type']=='http.response.start':status=message['status']
+            if message['type']=='http.response.start':
+                status=message['status']
+                message={**message,'headers':[(key,value) for key,value in message.get('headers',[])
+                    if key.lower() not in (b'x-cybergold-request-id',b'x-cybergold-backend-revision')]
+                    +[(b'x-cybergold-request-id',request_id.encode())]}
+                if self.backend_revision:
+                    message['headers'].append((b'x-cybergold-backend-revision',self.backend_revision.encode()))
             await send(message)
         try:await self.app(scope,receive,forward)
         except Exception:
@@ -146,4 +175,5 @@ class TelemetryMiddleware:
                 record={'msg':'request completed','operation':operation,'method':method,'statusCode':status,
                     'durationMs':elapsed*1000,'requestId':request_id,'component':self.component}
                 if self.release is not None:record['release']=self.release
+                if attempt_id:record['attemptId']=attempt_id
                 observe(lambda:logging.getLogger('cybergold.candidate').info(json.dumps(record)))

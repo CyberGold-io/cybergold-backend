@@ -8,62 +8,15 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from fractions import Fraction
+import uuid
 import json
 import time
 
 from .route_search import RouteSearchRpc
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
-
-
-class SharingQuoterRpc(RouteSearchRpc):
-    """Coalesce identical Quoter calldata; optionally retain successful Mainnet math."""
-    def __init__(self, *args, completed=False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.quotes = SharedReads()
-        self.retain_completed = completed
-        self.completed_quotes = OrderedDict()
-        self.counts = dict(requested=0, issued=0, coalesced=0, reused=0)
-
-    async def quote_batch(self, mode, data, block):
-        return await self.quote_batch_counted(mode, data, block, {})
-
-    async def quote_batch_counted(self, mode, data, block, caller_counts):
-        keys = [(self.chain_id, block['hash'].lower(), self.quoter.lower(), mode, value.lower()) for value in data]
-        by_key = dict(zip(keys, data, strict=True))
-        hits = {}
-        if self.retain_completed and self.chain_id == 1:
-            for key in keys:
-                row = self.completed_quotes.get(key)
-                if row and time.monotonic()-row[0] < 10:
-                    hits[key] = deepcopy(row[1])
-                    self.completed_quotes.move_to_end(key)
-                else:
-                    self.completed_quotes.pop(key,None)
-        async def produce(missing):
-            result = await super(SharingQuoterRpc, self).quote_batch(mode, [by_key[key] for key in missing], block)
-            if self.retain_completed and self.chain_id == 1:
-                for key,value in zip(missing,result,strict=True):
-                    if value['status'] == 'success':
-                        self.completed_quotes[key] = (time.monotonic(),deepcopy(value))
-                        self.completed_quotes.move_to_end(key)
-                        while len(self.completed_quotes)>4096:
-                            self.completed_quotes.popitem(last=False)
-            return result
-        missing = [key for key in keys if key not in hits]
-        values, counts = await self.quotes.many(missing, produce)
-        counts['requested'] += len(keys)-len(missing)
-        counts['reused'] += len(keys)-len(missing)
-        resolved = dict(zip(missing,values,strict=True))
-        for key, value in counts.items():
-            self.counts[key] += value
-            caller_counts[key] = caller_counts.get(key, 0) + value
-        return [hits[key] if key in hits else resolved[key] for key in keys]
-
-    async def close(self):
-        await self.quotes.close()
-        self.completed_quotes.clear()
-        await super().close()
+from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_candidate_scope
+from .quote_budget import budget_entry, current_budget
 
 
 class BasketMath:
@@ -210,9 +163,11 @@ class IntentSharing:
         self.request_resolver = request_resolver
         self.started, self.joined = 0, 0
 
+    @budget_entry
     async def get(self, request, on_update):
+        budget = current_budget()
         if self.request_resolver:
-            request = await self.request_resolver(request)
+            request = await budget.prepare(self.request_resolver(request))
         history = self.history
         epoch = history.epoch if history else None
         last_model = None
@@ -228,12 +183,12 @@ class IntentSharing:
         if history:
             # Historical display data does not depend on acquiring a new head.
             # Final validation still follows the ordinary producer below.
-            await emit({'type': 'model', 'value': history.packet(request)}, epoch)
+            await budget.prepare(emit({'type': 'model', 'value': history.packet(request)}, epoch))
         if self.service.routes.rpc is None:
             self.service.routes.rpc = self.rpc_factory(self.service.settings)
         rpc = self.service.routes.rpc
         try:
-            async with asyncio.timeout(15):
+            async with asyncio.timeout_at(budget.deadline):
                 block = await self.head() if self.head else await rpc.block(None)
         except RpcTimeout:
             raise
@@ -245,18 +200,26 @@ class IntentSharing:
         entry = self.pending.get(key)
         subscriber = Subscriber()
         if entry is None:
-            entry = {'clients': {subscriber}, 'latest': {}, 'task': None, 'modelEpoch': epoch}
+            entry = {'clients': {subscriber}, 'latest': {}, 'task': None, 'modelEpoch': epoch,
+                     'workId': str(uuid.uuid4()), 'budget': budget}
             self.pending[key] = entry
             self.started += 1
             async def update(frame):
+                frame = {**frame, 'workId': entry['workId']}
                 entry['latest'][(frame['type'], frame.get('stage'), frame.get('strategy'))] = frame
                 for client in entry['clients']:
                     client.update(frame)
             async def produce():
                 try:
                     options = {'model_epoch': entry['modelEpoch']} if history else {}
-                    terminal = ('result', await self.service.get(request, update, block=block, **options))
+                    with quote_candidate_scope(entry['workId']):
+                        value = await budget.produce(self.service.get(request, update, block=block, **options))
+                    if isinstance(value, dict) and isinstance(value.get('metrics'), dict):
+                        value['metrics']['totalMs'] = round(budget.elapsed(), 3)
+                        value['metrics'].update(budget.metrics())
+                    terminal = ('result', value)
                 except BaseException as error:
+                    entry['errorQuoteDiagnostics'] = quote_failure_context(error)
                     terminal = ('error', error)
                 finally:
                     if self.pending.get(key) is entry:
@@ -280,11 +243,14 @@ class IntentSharing:
                 if subscriber.terminal:
                     kind, value = subscriber.terminal
                     if kind == 'error':
+                        bind_quote_error(value, entry.get('errorQuoteDiagnostics'))
                         raise value
                     return deepcopy(value)
         finally:
             entry['clients'].discard(subscriber)
             if not entry['clients'] and not entry['task'].done():
+                if self.pending.get(key) is entry:
+                    del self.pending[key]
                 entry['task'].cancel()
                 await asyncio.gather(entry['task'], return_exceptions=True)
 

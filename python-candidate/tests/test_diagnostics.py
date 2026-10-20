@@ -18,7 +18,7 @@ async def run(path):
         logs=[]
         class Logger:
             def info(self,message):
-                record=json.loads(message);record.pop('requestId')
+                record=json.loads(message);record.pop('requestId');record.pop('diagnosticRequestId')
                 logs.append(record)
         assert project(case.get('body'))==case['projection'],case
         app=create_app(diagnostic_logger=Logger())

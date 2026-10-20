@@ -15,9 +15,10 @@ import time
 import urllib.request
 
 from benchmark_quote_experiments import public_settings
-from cybergold_candidate.quote_cache import BasketMath, IntentSharing, SharingQuoterRpc, VerifiedGrossSeed
+from cybergold_candidate.quote_cache import BasketMath, IntentSharing, VerifiedGrossSeed
 from cybergold_candidate.quote_history import QuoteHistory
 from cybergold_candidate.quote_intent import QuoteIntent
+from cybergold_candidate.market_swap import MarketQuotes
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc
 
 
@@ -57,8 +58,8 @@ async def main(args):
             for name in ('inputAsset', 'outputAsset'):
                 target[name] = contracts.get(target[name], target[name])
         templates.setdefault(key, value)
-    baseline_routes = RouteSearch(settings, RouteSearchRpc(settings))
-    routes = RouteSearch(settings, SharingQuoterRpc(settings, completed=True))
+    baseline_routes = RouteSearch(settings, RouteSearchRpc(settings), engine=MarketQuotes(settings))
+    routes = RouteSearch(settings, RouteSearchRpc(settings), engine=MarketQuotes(settings))
     history = QuoteHistory(settings)
     history.facts_observed(facts)
     baseline = QuoteIntent(settings, baseline_routes)
@@ -108,6 +109,8 @@ async def main(args):
         await upgraded.close()
         await routes.close()
         await baseline_routes.close()
+        await routes.engine.close()
+        await baseline_routes.engine.close()
 
 
 if __name__ == '__main__':

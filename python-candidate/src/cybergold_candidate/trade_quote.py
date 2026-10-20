@@ -5,7 +5,6 @@ terms; wallet authorization and signed full-call simulation remain separate.
 """
 import asyncio
 from copy import deepcopy
-from fractions import Fraction
 import json
 import time
 from types import SimpleNamespace
@@ -16,19 +15,21 @@ from eth_abi.exceptions import EncodingError
 from pydantic import BaseModel, Field
 from web3 import Web3
 
-from .basket_arithmetic import BasketArithmetic
 from .basket_preview import InvalidPreview
-from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
+from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
 from .quote_errors import QuoteFailure, public_quote_error
-from .quote_models import LegModel, PoolBaseline
+from .rpc_diagnostics import bind_quote_error, quote_failure_context
+from .fast_trade_estimates import FastTradeEstimates, model_estimate
 from .recovery_rpc import SnapshotChanged
 from .route_search import WETH
 from .wallet_balances import TOKENS
 from .uniswap_routes import uses_typed_adapter
 from .shared_reads import discard_pool_observation
+from .trade_observation import QuoteObservation
+from .quote_budget import budget_entry, current_budget, SearchStopped
 
 PAXG = next(address for name, address in TOKENS if name == 'paxg')
 
@@ -151,83 +152,13 @@ def score(request, value):
     return int(value['quotedOutput']) if request['mode'] == 'exact-in' else -int(value['quotedInput'])
 
 
-def model_estimate(packet, request):
-    """Existing factorized Core/Helpers display arithmetic, without chain reads."""
-    if not packet.get('protocol'):
-        return None
-    try:
-        source = packet['protocol']['state']
-        state = {name: [int(v) for v in value] if name in ('weights', 'conversions', 'available', 'recoveryShares', 'recoveryValues')
-                 else int(value) if name in ('issueFee', 'helperFee', 'redeemFee', 'supply', 'maxSupply', 'effectiveCap') else value
-                 for name, value in source.items()}
-        basket = BasketArithmetic(state)
-        counter = request['counterToken'].lower()
-        def predict(asset, amount, *, inverse=False, buy=False):
-            if asset.lower() == counter:
-                return amount
-            values = []
-            for row in packet['routes']:
-                pair = (counter, asset.lower()) if buy else (asset.lower(), counter)
-                if (row['tokens'][0].lower(), row['tokens'][-1].lower()) != pair:
-                    continue
-                def f(value):
-                    return Fraction(int(value['numerator']), int(value['denominator']))
-                baseline = PoolBaseline(f(row['exchangeRate']), f(row['feeRetention']),
-                    f(row['localImpact']) if row.get('localImpact') else None) if row.get('exchangeRate') else None
-                model = LegModel([(int(p['input']), int(p['output'])) for p in row['points']], baseline)
-                value = model.predict(amount, 'anchored' if model.points and baseline else 'local' if baseline else 'larger', inverse)
-                if value is not None:
-                    values.append(value)
-            if not values:
-                raise ValueError('Indicative route unavailable')
-            return min(values) if inverse else max(values)
-        amount = int(request['amount'])
-        if request['side'] == 'buy':
-            if request['mode'] == 'exact-out':
-                result = basket.issue(amount, includes_helper=True)
-                return str(sum(predict(asset, int(value), inverse=True, buy=True)
-                    for asset, value in zip(state['assets'], result['amountsInExact'], strict=True) if value))
-            budgets = {row['outputAsset'].lower(): int(row['amount']) for row in packet['intent']['targets']}
-            # Direct input was omitted from swap targets by the seed builder.
-            used = sum(budgets.values())
-            reserve = [amount-used if asset.lower() == counter else predict(asset, budgets.get(asset.lower(), 0), buy=True)
-                       if budgets.get(asset.lower(), 0) else 0 for asset in state['assets']]
-            return str(basket.issue_in(reserve)['netCygldOut'])
-        def output(gross, *, protected=False):
-            projected = basket.redeem_in(gross)['projectedCoreOutputs']
-            values = []
-            for row in projected:
-                if row['kind'] != 0 or not int(row['amount']):
-                    continue
-                value = predict(row['token'], int(row['amount']))
-                if protected and row['token'].lower() != counter:
-                    value = floor(value, request['slippageBps'])
-                values.append(value)
-            return sum(values)
-        if request['mode'] == 'exact-in':
-            return str(output(amount))
-        seed = basket.redeem_out([int(next((t['amount'] for t in packet['intent']['targets']
-                         if t['inputAsset'].lower() == asset.lower()), '0')) for asset in state['assets']]
-            + [0]*len(state['recoveryShares']))['grossCygldIn']
-        for _ in range(11):
-            received = output(seed, protected=True)
-            if amount <= received <= ceil(amount, request['slippageBps']):
-                return str(seed)
-            if received <= 0:
-                return None
-            next_seed = seed*amount//received
-            seed = next_seed if next_seed != seed else seed+(1 if received < amount else -1)
-    except (ValueError, KeyError, ZeroDivisionError):
-        pass
-    return None
-
-
 class TradeQuotes:
     def __init__(self, settings, core, market, *, request_resolver=None, basis_reader=None):
         self.settings, self.core, self.market = settings, core, market
         self.request_resolver, self.basis_reader = request_resolver, basis_reader
         self.history = getattr(core, 'history', None)
         self.basis, self.basis_epoch = None, None
+        self.fast_estimates = FastTradeEstimates()
         self.sharing = IntentSharing(SimpleNamespace(settings=settings, routes=core.routes, get=self._get),
             rpc_factory=core.routes.rpc_factory, head=market.head)
 
@@ -244,8 +175,11 @@ class TradeQuotes:
     def supported_market(self, request):
         # The historical V3 deployment does not decode the market compiler's
         # typed payload. Core keeps its existing legacy encoder in that case.
-        return (not request['native'] and request['counterToken'].lower() == PAXG.lower()
-                and uses_typed_adapter(request.get('adapter')))
+        # The Market facet funds and settles ERC20s. Native ETH needs a new
+        # wrapping/unwrap execution endpoint, so it remains explicitly absent.
+        # Eligible ERC20 connectors use canonical Market anchoring in the shared
+        # route engine; mixed exact-output is still excluded by its ABI rule.
+        return not request['native'] and uses_typed_adapter(request.get('adapter'))
 
     def cached_basis(self):
         if self.history and self.basis_epoch != self.history.epoch:
@@ -284,6 +218,13 @@ class TradeQuotes:
                 raise
         return list(values[0]), list(map(int, values[1])), counts['issued']
 
+    def estimate_scope(self):
+        return (self.settings.NEXT_PUBLIC_CHAIN_ID,
+                self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS.lower(),
+                self.settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS.lower(),
+                self.history.epoch if self.history else None,
+                getattr(self.market, 'generation', None))
+
     def packet(self, request, provider_models=None):
         intent = {name: deepcopy(request[name]) for name in TradeModelRequest.model_fields}
         packet = {'namespace': 'trade', 'intent': intent, 'models': []}
@@ -303,9 +244,7 @@ class TradeQuotes:
             amount = self.market.estimate(value, adapted)
             if amount is not None:
                 estimates.append(('market', amount))
-        if estimates:
-            strategy, amount = max(estimates, key=lambda row: (int(row[1]) if request['mode'] == 'exact-in' else -int(row[1]), row[0] == 'core'))
-            packet['estimate'] = {'strategy': strategy, 'amount': amount}
+        packet.update(self.fast_estimates.packet(request, estimates, scope=self.estimate_scope()))
         return packet
 
     async def acquire_models(self, request, block):
@@ -329,6 +268,8 @@ class TradeQuotes:
     async def get_model(self, request):
         request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
         packet = self.packet(request)
+        if packet.get('budgetRange') and packet.get('estimate'):
+            return packet
         if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol')) for row in packet['models']) and packet['models']:
             return packet
         # Cold model acquisition reuses the providers' lightweight baselines;
@@ -338,30 +279,89 @@ class TradeQuotes:
         block = await self.market.head()
         return await self.acquire_models(request, block)
 
+    @budget_entry
     async def get(self, request, on_update):
-        request = await self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump()))
-        await on_update({'type': 'model', 'value': self.packet(request)})
-        return await self.sharing.get(request, on_update)
+        universal = getattr(self, 'universal_quotes', None)
+        if universal and universal.adapter and request.get('mode') == 'exact-in' and not request.get('retainedPlan'):
+            return await universal.scalar_request(request, on_update)
+        budget = current_budget()
+        request = await budget.prepare(self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump())))
+        await budget.prepare(on_update({'type': 'model', 'value': self.packet(request)}))
+        bridge = universal and universal.adapter and request['side'] == 'sell' and request['mode'] == 'exact-out' and not request.get('retainedPlan')
+        async def publish(frame):
+            if bridge:
+                candidate = frame.get('value', {})
+                if frame['type'] in ('qualified', 'provider-qualified') and candidate.get('strategy') == 'core':
+                    return
+                frame = deepcopy(frame)
+                frame.get('value', {}).get('providerCandidates', {}).pop('core', None)
+                frame.get('providerCandidates', {}).pop('core', None)
+            await on_update(frame)
+        result = await self.sharing.get(request, publish)
+        if bridge:
+            if result['strategy'] == 'core':
+                return await universal.core_sale_from_legacy(request, result, on_update)
+            result = deepcopy(result)
+            result.get('providerCandidates', {}).pop('core', None)
+        return result
 
     async def _get(self, request, on_update, *, block):
         started, target_reads = time.perf_counter(), 0
+        budget = current_budget()
         retained = request.get('retainedPlan')
         strategies = [retained['strategy']] if retained else ['core', 'market']
         evaluation = {name: 'running' if name in strategies and (name == 'core' or self.supported_market(request)) else 'unsupported'
                       for name in ('core', 'market')}
-        candidates, winner, errors, context_error = {}, None, {}, None
+        candidates, terminal_candidates, winner, errors, context_error = {}, {}, None, {}, None
+        error_quote_diagnostics = {}
+        search_outcomes = {name: 'running' if evaluation[name] == 'running' else 'not-run'
+                           for name in ('core', 'market')}
+        provider_errors = {}
         lock = asyncio.Lock()
 
-        def decorate(value):
+        def candidate_value(value):
             return {**deepcopy(value), 'evaluation': deepcopy(evaluation),
                     'metrics': {'totalMs': round((time.perf_counter()-started)*1000, 3), 'targetReads': target_reads}}
+
+        def assessments(pool):
+            result = {}
+            for name in ('core', 'market'):
+                availability = ('not-run' if name not in strategies else
+                                'unsupported' if evaluation[name] == 'unsupported' else
+                                'unavailable' if context_error is not None else
+                                'qualified' if name in pool else
+                                'pending' if search_outcomes[name] == 'running' else 'unavailable')
+                result[name] = {'availability': availability, 'searchOutcome': search_outcomes[name],
+                                **deepcopy(provider_errors.get(name, {}))}
+                diagnostic = pool.get(name, {}).get('providerQuote', {}).get('quoteDiagnostics')
+                if availability == 'qualified' and isinstance(diagnostic, dict):
+                    result[name].setdefault('quoteDiagnostics', deepcopy(diagnostic))
+            return result
+
+        def decorate(value, pool=None):
+            pool = candidates if pool is None else pool
+            return {**candidate_value(value), 'providerAssessments': assessments(pool),
+                    'providerCandidates': {name: candidate_value(row) for name, row in pool.items()}}
+
+        async def evidence(frame):
+            try:
+                await on_update(frame)
+            except Exception:
+                # Additive observations never change ordinary selection/errors.
+                pass
+
+        async def assessment(name, pool=None):
+            await evidence({'type': 'provider-assessment', 'strategy': name,
+                            'value': assessments(candidates if pool is None else pool)[name]})
 
         async def select():
             nonlocal winner
             selected = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core')) if candidates else None
             if selected is not None and selected != winner:
                 winner = deepcopy(selected)
+                self.fast_estimates.remember_selected(request, winner, scope=self.estimate_scope())
                 await on_update({'type': 'qualified', 'value': decorate(winner)})
+                await evidence({'type': 'model', 'value': self.packet(request)})
             elif selected is None:
                 winner = None
 
@@ -372,25 +372,28 @@ class TradeQuotes:
             try:
                 if strategy == 'core':
                     epoch = self.history.epoch if self.history else None
-                    assets, weights, reads = await self.read_basis(block)
+                    operation = self.read_basis(block)
+                    assets, weights, reads = await budget.discovery(operation) if budget else await operation
                     target_reads += reads
                     if not self.history or self.history.epoch == epoch:
                         self.basis, self.basis_epoch = (assets, weights), epoch
                     adapted = core_request(request, assets, weights)
                 else:
                     adapted = market_request(request)
+                def execution_value(quote):
+                    counter = ZERO if request['native'] else request['counterToken']
+                    return {'strategy': strategy, 'side': request['side'], 'mode': request['mode'],
+                        'tokenIn': counter if request['side'] == 'buy' else self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
+                        'tokenOut': self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS if request['side'] == 'buy' else counter,
+                        **economics(strategy, request, quote), 'context': quote['context'],
+                        'providerRequest': deepcopy(adapted), 'providerQuote': deepcopy(quote)}
                 async def publish(frame):
                     nonlocal context_error
                     if frame['type'] == 'qualified':
                         if context_error is not None:
                             return
                         quote = frame['value']
-                        counter = ZERO if request['native'] else request['counterToken']
-                        value = {'strategy': strategy, 'side': request['side'], 'mode': request['mode'],
-                            'tokenIn': counter if request['side'] == 'buy' else self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
-                            'tokenOut': self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS if request['side'] == 'buy' else counter,
-                            **economics(strategy, request, quote), 'context': quote['context'],
-                            'providerRequest': deepcopy(adapted), 'providerQuote': deepcopy(quote)}
+                        value = execution_value(quote)
                         async with lock:
                             if context_error is not None:
                                 return
@@ -398,19 +401,31 @@ class TradeQuotes:
                             if old is None or score(request, value) >= score(request, old):
                                 candidates[strategy] = value
                                 await select()
+                                if old != value:
+                                    await evidence({'type': 'provider-qualified', 'strategy': strategy,
+                                                    'value': candidate_value(value)})
+                                    await assessment(strategy)
                     elif frame['type'] == 'invalidated':
                         async with lock:
                             if frame.get('reason') == 'snapshot-changed':
                                 context_error = SnapshotChanged('Recovery snapshot changed; restart discovery', retry=1)
                                 candidates.clear()
+                                self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                                 if winner:
                                     await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
                                 await select()
+                                await evidence({'type': 'model', 'value': self.packet(request)})
                             else:
                                 candidates.pop(strategy, None)
                                 if winner and winner['strategy'] == strategy:
+                                    self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                                     await on_update({'type': 'invalidated', 'strategy': strategy})
                                     await select()
+                                    await evidence({'type': 'model', 'value': self.packet(request)})
+                            if budget:
+                                budget.ready = bool(candidates)
+                            for name in (('core', 'market') if context_error is not None else (strategy,)):
+                                await assessment(name)
                     elif frame['type'] == 'model':
                         await on_update({'type': 'model', 'value': self.packet(request, {strategy: frame['value']})})
                     elif frame['type'] == 'progress':
@@ -421,34 +436,84 @@ class TradeQuotes:
                 quote = (await self.core.get(adapted, publish, block=block, quoted_ranking=True) if strategy == 'core'
                          else await self.market._get(adapted, publish, block=block))
                 await publish({'type': 'qualified', 'value': quote})
+                terminal_candidates[strategy] = execution_value(quote)
                 evaluation[strategy] = 'complete'
+                search_outcomes[strategy] = 'complete'
+                await assessment(strategy)
+            except SearchStopped as error:
+                evaluation[strategy] = 'unavailable'
+                search_outcomes[strategy] = 'timeout'
+                errors[strategy] = TimeoutError('Quote selection budget exhausted')
+                error_quote_diagnostics[strategy] = quote_failure_context(error)
+                provider_errors[strategy] = public_quote_error(errors[strategy])
+                await assessment(strategy)
+            except asyncio.CancelledError:
+                evaluation[strategy] = 'unavailable'
+                search_outcomes[strategy] = 'cancelled'
+                try:
+                    await assessment(strategy)
+                finally:
+                    raise
             except Exception as error:
                 evaluation[strategy] = 'unavailable'
                 errors[strategy] = error
+                error_quote_diagnostics[strategy] = quote_failure_context(error)
+                provider_errors[strategy] = public_quote_error(error)
+                code = provider_errors[strategy]['code']
+                search_outcomes[strategy] = ('timeout' if code in ('quote-timeout', 'rpc-timeout') else
+                                             'complete' if code in ('quote-no-route', 'quote-insufficient-liquidity',
+                                                                    'issuance-cap-exceeded') else 'error')
                 if isinstance(error, SnapshotChanged):
                     async with lock:
                         context_error = error
+                        self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                         if winner:
                             await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
                         candidates.clear()
                         await select()
+                        await evidence({'type': 'model', 'value': self.packet(request)})
                 await on_update({'type': 'provider-error', 'strategy': strategy, **public_quote_error(error)})
+                for name in (('core', 'market') if context_error is not None else (strategy,)):
+                    await assessment(name)
 
         async def models():
             value = await self.acquire_models(request, block)
             await on_update({'type': 'model', 'value': value})
             if value.get('estimate'):
                 await on_update({'type': 'estimate', **value['estimate']})
+        for strategy in ('core', 'market'):
+            await assessment(strategy)
         model_task = asyncio.create_task(models())
         tasks = [asyncio.create_task(run(strategy)) for strategy in strategies]
         try:
             await asyncio.gather(*tasks)
             if context_error is not None:
+                bind_quote_error(context_error, next((error_quote_diagnostics[strategy]
+                    for strategy, error in errors.items() if error is context_error), None))
                 raise context_error
-            if candidates:
-                winner = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
-                return decorate(winner)
-            raise next(iter(errors.values()), QuoteFailure('quote-no-route'))
+            # Ordinary search errors retain the existing checked-incumbent
+            # fallback. A policy cutoff must obtain a provider terminal value,
+            # including its final canonical validation and owned-task drain.
+            final = terminal_candidates if budget and budget.stop.is_set() else candidates
+            for strategy in ('core', 'market'):
+                await assessment(strategy, final)
+            if final:
+                winner = max(final.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
+                self.fast_estimates.remember_selected(request, winner, scope=self.estimate_scope())
+                await evidence({'type': 'model', 'value': self.packet(request)})
+                return decorate(winner, final)
+            error = next(iter(errors.values()), QuoteFailure('quote-no-route'))
+            # A full Core cap does not prevent Market purchases. When that
+            # independent provider also fails, expose why it could not fill
+            # the request; retain the cap reason in Core's assessment.
+            core_error = errors.get('core')
+            if (getattr(core_error, 'code', None) == 'issuance-cap-exceeded'
+                    and (getattr(core_error, 'constraint', None) or {}).get('availableRaw') == '0'
+                    and 'market' in errors):
+                error = errors['market']
+            bind_quote_error(error, next((error_quote_diagnostics[strategy]
+                for strategy, value in errors.items() if value is error), None))
+            raise error
         finally:
             for task in [model_task, *tasks]:
                 task.cancel()
@@ -461,18 +526,36 @@ async def handle_trade_quote(request, service, *, model=False):
         validate(value, model=model)
     except (ValueError, TypeError):
         return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
+    observation = QuoteObservation(request, value)
     if model:
         try:
-            return JSONResponse(await service.get_model(value), headers={'Cache-Control': 'no-store'})
+            result = await service.get_model(value)
+            observation.finish('succeeded')
+            return JSONResponse(result, headers={'Cache-Control': 'no-store'})
         except Exception as error:
-            return JSONResponse(public_quote_error(error), status_code=503, headers={'Cache-Control': 'no-store'})
+            payload = observation.event(observation.error(error))
+            return JSONResponse({key: value for key, value in payload.items() if key != 'type'},
+                                status_code=503, headers={'Cache-Control': 'no-store'})
     async def events():
         queue = asyncio.Queue()
+        provider_assessments, provider_candidates = {}, {}
+        async def publish(frame):
+            if frame['type'] == 'provider-assessment':
+                provider_assessments[frame['strategy']] = deepcopy(frame['value'])
+                if frame['value']['availability'] != 'qualified':
+                    provider_candidates.pop(frame['strategy'], None)
+            elif frame['type'] == 'provider-qualified':
+                provider_candidates[frame['strategy']] = deepcopy(frame['value'])
+            await queue.put(observation.event(frame))
         async def produce():
             try:
-                await queue.put({'type': 'complete', 'value': await service.get(value, queue.put)})
+                await publish({'type': 'complete', 'value': await service.get(value, publish)})
             except Exception as error:
-                await queue.put({'type': 'error', **public_quote_error(error)})
+                payload = observation.error(error)
+                if provider_assessments:
+                    payload.update(providerAssessments=deepcopy(provider_assessments),
+                                   providerCandidates=deepcopy(provider_candidates))
+                await publish(payload)
             finally:
                 await queue.put(None)
         task = asyncio.create_task(produce())
@@ -482,4 +565,5 @@ async def handle_trade_quote(request, service, *, model=False):
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            observation.finish('cancelled')
     return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})

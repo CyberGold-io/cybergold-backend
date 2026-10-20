@@ -9,7 +9,8 @@ import httpx
 from web3 import AsyncWeb3
 
 from cybergold_candidate.app import create_app
-from cybergold_candidate.route_search import RouteSearchRpc, reduce_results
+from cybergold_candidate.route_search import reduce_results
+from legacy_quote_wire_fixture import ReferenceRouteSearchRpc as RouteSearchRpc
 from cybergold_candidate.rpc_transport import rpc_provider
 
 
@@ -255,6 +256,7 @@ class RpcErrorDiagnosticsHttp(unittest.IsolatedAsyncioTestCase):
         success_event = json.loads(success.text.splitlines()[-1])
         unrelated_event = json.loads(unrelated.text.splitlines()[-1])
         failed_event = json.loads(failed.text.splitlines()[-1])
+        self.assertEqual(success_event.pop('requestId'), success.headers['X-CyberGold-Request-Id'])
         self.assertEqual(success_event, {'type': 'complete', 'value': {'chainId': 31338}})
         self.assertNotIn('diagnostics', unrelated_event)
         self.assertEqual(failed_event['diagnostics']['rpcMethod'], 'eth_getBlockByNumber')

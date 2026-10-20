@@ -76,6 +76,17 @@ class SelectorProvider(Provider):
 
 
 class HelpersRouterFactsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_universal_selector_is_observed_only_on_explicit_request(self):
+        observer = service(SelectorProvider(installed=False))
+        self.assertNotIn('universalExactInput', (await observer.get())['configuration'])
+        value = await observer.get(universal_exact_input=True)
+        self.assertEqual(value['configuration']['universalExactInput'], {'status': 'success', 'value': False})
+        app = create_app(helpers_router_facts=observer)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            result = await client.get('/api/governance/helpers-facts?universalExactInput=true')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['configuration']['universalExactInput'], {'status': 'success', 'value': False})
+
     async def test_native_permit_selector_observation_opt_in_installed_absent_and_unavailable(self):
         for provider, expected in ((SelectorProvider(), {'status': 'success', 'value': True}),
                                   (SelectorProvider(installed=False), {'status': 'success', 'value': False}),

@@ -1,7 +1,9 @@
 """Real SDK bridge, fee boundary, custody payload and cache/event regressions."""
 import asyncio
+from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
+from itertools import combinations
 import json
 import os
 from pathlib import Path
@@ -19,12 +21,14 @@ from cybergold_candidate.market_fee import quoted_fee, gross_buy_target, routed_
 from cybergold_candidate.market_swap import MarketQuotes, DailyRecipientCache, encode_adapter, ADAPTER_TYPE
 from cybergold_candidate.sdk_worker import SdkWorker, SdkWorkerError
 from cybergold_candidate.uniswap_routes import candidate_branches, discover_routes, discover_routes_async, supported_route, v3_path, v4_pool_id
-from cybergold_candidate.uniswap_state import PoolRegistry, EVENTS, DISCOVERY, ZERO, V3_SWAP
+from cybergold_candidate.uniswap_state import PoolRegistry, EVENTS, DISCOVERY, ZERO, V3_SWAP, PAXG
 from cybergold_candidate.uniswap_v4 import STATE_VIEW
 from cybergold_candidate.helpers_execution import ABI, argument
 from cybergold_candidate.quote_revalidation import revalidate, core_bounds
 from cybergold_candidate.recovery_rpc import RecoveryApiError
 from cybergold_candidate.quote_history import QuoteHistory
+from cybergold_candidate.quote_errors import public_quote_error
+from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope, quote_phase, freeze_quote_work
 
 A, B, C = ('0x'+str(index).rjust(40, '0') for index in (1, 2, 3))
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -91,6 +95,129 @@ class Store:
         await self.save('cursor', protocol, cursor)
 
 
+class RouteIdentityReplay(unittest.IsolatedAsyncioTestCase):
+    def pools(self):
+        d = '0x'+'4'*40
+        return [{**POOL, 'id': '0x'+format(index+100, '040x'), 'protocol': protocol,
+                 'token0': token(left), 'token1': token(right)}
+            for index, (left, right, protocol) in enumerate([
+                (A, B, 'v2'), (A, C, 'v2'), (C, B, 'v3'),
+                (A, B, 'v3'), (A, d, 'v4'), (d, B, 'v4'), (A, B, 'v4')])]
+
+    def expected(self, pools, mode, amount):
+        paths = [path for path in discover_routes(pools, A, B) if supported_route(path, mode)]
+        rows = [[{'amountIn': str(amount) if mode == 'exactIn' else '0', 'hops': path}]
+                for path in paths]
+        if mode == 'exactIn':
+            for left, right in combinations(paths, 2):
+                for percent in (25, 50, 75):
+                    first = amount*percent//100
+                    if first and amount-first:
+                        rows.append([{'amountIn': str(first), 'hops': left},
+                                     {'amountIn': str(amount-first), 'hops': right}])
+        return rows
+
+    async def test_matches_complete_mixed_graph_order_and_raw_allocations(self):
+        pools = self.pools()
+        for mode in ('exactIn', 'exactOut'):
+            for amount in (0, 1, 2, 3, 4, 101, 2**255):
+                with self.subTest(mode=mode, amount=amount):
+                    rows = [row async for row in candidate_branches(pools, A, B, mode, amount)]
+                    self.assertEqual(rows, self.expected(pools, mode, amount))
+                    if mode == 'exactIn':
+                        self.assertTrue(all(sum(int(branch['amountIn']) for branch in row) == amount for row in rows))
+
+    async def test_keeps_ordered_pair_directions_and_duplicate_raw_rounding(self):
+        pools = self.pools()
+        paths = [path async for path in discover_routes_async(pools, A, B)]
+        rows = [row async for row in candidate_branches(pools, A, B, 'exactIn', 2)]
+        splits = rows[len(paths):]
+        self.assertEqual(splits[:2], [[{'amountIn': '1', 'hops': paths[0]},
+                                      {'amountIn': '1', 'hops': paths[1]}]]*2)
+        self.assertEqual(len(splits), len(paths)*(len(paths)-1))
+
+    async def test_enumerates_selected_graph_once_for_all_split_pairs(self):
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', wraps=discover_routes_async) as discover:
+            rows = [row async for row in candidate_branches(self.pools(), A, B, 'exactIn', 101)]
+        self.assertTrue(any(len(row) == 2 for row in rows))
+        self.assertEqual(discover.call_count, 1)
+
+    async def test_first_candidate_remains_lazy_and_closing_prefix_stops_iterator(self):
+        seen = []
+        async def observed(*args, **kwargs):
+            async for path in discover_routes_async(*args, **kwargs):
+                seen.append(path)
+                yield path
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', observed):
+            iterator = candidate_branches(self.pools(), A, B, 'exactIn', 101)
+            first = await anext(iterator)
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(len(first), 1)
+            await iterator.aclose()
+            with self.assertRaises(StopAsyncIteration):
+                await anext(iterator)
+
+    async def test_standalone_consumer_cannot_mutate_replayed_hops(self):
+        pools = self.pools()
+        expected = self.expected(pools, 'exactIn', 101)
+        iterator = candidate_branches(pools, A, B, 'exactIn', 101)
+        first = await anext(iterator)
+        self.assertIs(first[0]['hops'][0]['pool'], pools[0])
+        first[0]['hops'][0]['zeroForOne'] = False
+        first[0]['hops'].append({'pool': {}, 'zeroForOne': False})
+        self.assertEqual([row async for row in iterator], expected[1:])
+
+    async def test_split_consumer_cannot_mutate_later_allocations(self):
+        pools = self.pools()
+        expected = self.expected(pools, 'exactIn', 101)
+        standalone = len(discover_routes(pools, A, B))
+        iterator = candidate_branches(pools, A, B, 'exactIn', 101)
+        for _ in range(standalone):
+            await anext(iterator)
+        first = await anext(iterator)
+        first[0]['hops'][0]['zeroForOne'] = False
+        first[0]['hops'].append({'pool': {}, 'zeroForOne': False})
+        self.assertEqual([row async for row in iterator], expected[standalone+1:])
+
+    async def test_zero_allocation_split_scan_remains_cancellable(self):
+        pools = [{**POOL, 'id': '0x'+format(index+100, '040x')} for index in range(100)]
+        graph_complete = asyncio.Event()
+        consumed = 0
+        async def observed(*args, **kwargs):
+            async for path in discover_routes_async(*args, **kwargs):
+                yield path
+            graph_complete.set()
+        async def consume():
+            nonlocal consumed
+            async for _row in candidate_branches(pools, A, B, 'exactIn', 1):
+                consumed += 1
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', observed):
+            task = asyncio.create_task(consume())
+            try:
+                await graph_complete.wait()
+                self.assertEqual(consumed, len(pools))
+                self.assertFalse(task.done())
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_graph_error_is_not_hidden_after_standalone_prefix(self):
+        error = ValueError('fixture graph failure')
+        path = [{'pool': self.pools()[0], 'zeroForOne': True}]
+        async def failing(*_args, **_kwargs):
+            yield path
+            raise error
+        with patch('cybergold_candidate.uniswap_routes.discover_routes_async', failing):
+            iterator = candidate_branches(self.pools(), A, B, 'exactIn', 101)
+            await anext(iterator)
+            with self.assertRaises(ValueError) as raised:
+                await anext(iterator)
+            self.assertIs(raised.exception, error)
+
+
 class Fees(unittest.TestCase):
     def test_minimal_gross_and_maximal_routed_integer_boundaries(self):
         for amount in range(1, 10_001):
@@ -131,6 +258,11 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 self.v2_factory, self.factory, self.pool_manager = (addresses[p] for p in ('v2', 'v3', 'v4'))
                 self.queries = []
 
+            @property
+            def core_queries(self):
+                padded = '0x'+PAXG[2:].lower().rjust(64, '0')
+                return [query for query in self.queries if padded not in query['topics']]
+
             async def block(self, number):
                 return {'number': number, 'hash': '0x'+hex(number)[2:].rjust(64, '0')}
 
@@ -162,15 +294,73 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 registry, rpc = self.fixture(chain)
                 try:
                     await registry.discover(await rpc.block(21_688_331), max_blocks=2)
-                    self.assertEqual(len(rpc.queries), 6)
+                    self.assertEqual(len(rpc.core_queries), 6)
                     for _protocol, (address, birth) in self.deployments.items():
-                        queries = [row for row in rpc.queries if row['address'] == address]
+                        queries = [row for row in rpc.core_queries if row['address'] == address]
                         self.assertEqual([int(row['fromBlock'], 16) for row in queries], [birth, birth])
                     pool = registry.inventory[v4_pool_id((A, B, 100, 1, ZERO))]
                     self.assertEqual(pool['discovery']['blockNumber'], '21688329')
                     self.assertEqual(pool['token0']['chainId'], chain)
                 finally:
                     await registry.close()
+
+    async def test_paxg_v4_catalog_has_own_birth_cursor_persists_custom_keys_and_rewinds(self):
+        store = Store()
+        registry, rpc = self.fixture(store=store)
+        birth = self.deployments['v4'][1]
+        checkpoint = await rpc.block(birth+1)
+        # A completed Core-only cursor cannot attest to historical PAXG coverage.
+        await store.save('cursor', 'v4', {'blockNumber': str(birth+2), 'checkpoints': [
+            {'rangeStart': str(birth), 'blockNumber': str(birth+1), 'blockHash': checkpoint['hash']}]})
+        padded = '0x'+PAXG[2:].lower().rjust(64, '0')
+        a, b = sorted((PAXG.lower(), B.lower()))
+        identity = v4_pool_id((a, b, 777, 7, ZERO))
+        original = rpc.logs
+        async def logs(query):
+            if padded not in query['topics']:
+                return await original(query)
+            rpc.queries.append(deepcopy(query))
+            if not int(query['fromBlock'], 16) <= birth <= int(query['toBlock'], 16):
+                return []
+            return [{'topics': [DISCOVERY['v4'], identity, '0x'+a[2:].rjust(64, '0'), '0x'+b[2:].rjust(64, '0')],
+                'data': Web3.to_hex(rpc.w3.codec.encode(['uint24', 'int24', 'address', 'uint160', 'int24'],
+                    [777, 7, ZERO, 1 << 96, 0])), 'transactionHash': '0x'+'12'*32,
+                'blockNumber': hex(birth), 'logIndex': '0x0'}]
+        rpc.logs = logs
+        try:
+            await registry.discover(checkpoint, max_blocks=2)
+            selected = [query for query in rpc.queries if padded in query['topics']]
+            self.assertEqual(len(selected), 2)
+            self.assertEqual({int(query['fromBlock'], 16) for query in selected}, {birth})
+            self.assertEqual(registry.inventory[identity]['feePips'], 777)
+            self.assertEqual(registry.inventory[identity]['tickSpacing'], 7)
+            self.assertEqual(registry.inventory[identity]['discovery']['scope'], 'v4-paxg')
+            self.assertEqual(registry.cursors['v4-paxg']['blockNumber'], str(birth+2))
+            self.assertEqual(store.data['cursor']['v4']['blockNumber'], str(birth+2))
+            restarted, _ = self.fixture(store=store)
+            try:
+                await restarted.ensure_loaded(wait=True)
+                self.assertIn(identity, restarted.inventory)
+                self.assertEqual(restarted.cursors['v4-paxg'], registry.cursors['v4-paxg'])
+            finally:
+                await restarted.close()
+            # Only this scope's orphaned creation suffix is removed; its rewind
+            # is persisted and ordinary bounded discovery can reacquire it.
+            registry.cursors['v4-paxg']['checkpoints'][0]['blockHash'] = '0x'+'f'*64
+            canonical = rpc.assert_canonical
+            async def reorg(block):
+                if block['hash'] == '0x'+'f'*64:
+                    from cybergold_candidate.recovery_rpc import SnapshotChanged
+                    raise SnapshotChanged('fixture orphan')
+                await canonical(block)
+            rpc.assert_canonical = reorg
+            self.assertTrue(await registry.recover_catalog())
+            self.assertNotIn(identity, registry.inventory)
+            self.assertNotIn(identity, store.data['inventory'])
+            self.assertEqual(registry.cursors['v4-paxg']['blockNumber'], str(birth))
+            self.assertTrue(registry.cursors['v4-paxg']['pending'])
+        finally:
+            await registry.close()
 
     async def test_saved_cursors_resume_literally_across_restart_below_and_above_floor(self):
         starts = {'v2': 10_000_830, 'v3': 12_369_630, 'v4': 21_688_330}
@@ -184,7 +374,7 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
             await registry.discover(await rpc.block(21_688_335), max_blocks=2)
             for protocol, start in starts.items():
                 address = self.deployments[protocol][0]
-                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.queries if row['address'] == address], [start, start])
+                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.core_queries if row['address'] == address], [start, start])
                 self.assertEqual(registry.cursors[protocol]['blockNumber'], str(start+2))
                 self.assertEqual(len(registry.cursors[protocol]['checkpoints']), 2)
         finally:
@@ -194,7 +384,7 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
             await restarted.discover(await rpc.block(21_688_335), max_blocks=2)
             for protocol, start in starts.items():
                 address = self.deployments[protocol][0]
-                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.queries if row['address'] == address], [start+2, start+2])
+                self.assertEqual([int(row['fromBlock'], 16) for row in rpc.core_queries if row['address'] == address], [start+2, start+2])
                 self.assertEqual(len(restarted.cursors[protocol]['checkpoints']), 3)
         finally:
             await restarted.close()
@@ -206,8 +396,8 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
                 registry, rpc = self.fixture(chain, addresses)
                 try:
                     await registry.discover(await rpc.block(21_688_330), max_blocks=2)
-                    self.assertEqual(len(rpc.queries), 6)
-                    self.assertTrue(all(row['fromBlock'] == '0x0' for row in rpc.queries))
+                    self.assertEqual(len(rpc.core_queries), 6)
+                    self.assertTrue(all(row['fromBlock'] == '0x0' for row in rpc.core_queries))
                 finally:
                     await registry.close()
 
@@ -218,27 +408,27 @@ class CatalogAcquisition(unittest.IsolatedAsyncioTestCase):
         with patch('cybergold_candidate.uniswap_state.datetime') as clock:
             clock.now.return_value = datetime(2026, 10, 1, tzinfo=timezone.utc)
             await registry.discover(await rpc.block(2), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 6)
+            self.assertEqual(len(rpc.core_queries), 6)
             self.assertEqual(registry.discovery_month, '2026-10')
             await registry.discover(await rpc.block(5), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 6)
+            self.assertEqual(len(rpc.core_queries), 6)
             await registry.discover(await rpc.block(5), force=True, max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[6:]], [(3, 5)] * 6)
+                for q in rpc.core_queries[6:]], [(3, 5)] * 6)
             clock.now.return_value = datetime(2026, 11, 1, tzinfo=timezone.utc)
             await registry.discover(await rpc.block(8), max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[12:]], [(6, 8)] * 6)
+                for q in rpc.core_queries[12:]], [(6, 8)] * 6)
             await asyncio.gather(*tuple(registry.background))
             restarted, _ = self.fixture(addresses={'v2': A, 'v3': B, 'v4': C}, store=store)
             restarted.rpc = rpc
             self.addAsyncCleanup(restarted.close)
             await restarted.discover(await rpc.block(9), max_blocks=5)
-            self.assertEqual(len(rpc.queries), 18)
+            self.assertEqual(len(rpc.core_queries), 18)
             clock.now.return_value = datetime(2026, 12, 1, tzinfo=timezone.utc)
             await restarted.discover(await rpc.block(10), max_blocks=5)
             self.assertEqual([(int(q['fromBlock'], 16), int(q['toBlock'], 16))
-                for q in rpc.queries[18:]], [(9, 10)] * 6)
+                for q in rpc.core_queries[18:]], [(9, 10)] * 6)
             self.assertEqual(restarted.discovery_month, '2026-12')
 
 
@@ -248,6 +438,9 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A,
             NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS=C, NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=C)
         self.registry = PoolRegistry(settings, rpc=self.rpc)
+        # These fee/custody fixtures use their V2 pair as the canonical edge;
+        # production's configured canonical seed remains V4 CYGLD/PAXG.
+        self.registry.seed = deepcopy(POOL)
         self.registry.inventory = {C: deepcopy(POOL)}
         node = os.environ.get('CYBERGOLD_TEST_NODE', 'node')
         self.sdk = SdkWorker([node, str(Path('src/uniswap-sdk/worker.ts').resolve())])
@@ -389,19 +582,23 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated['params']['bound'], quote['params']['bound'])
         self.assertEqual(repeated['params']['deadline'], '10000000000')
 
-    async def test_retained_quote_rechecks_native_reference_and_keeps_frozen_fee_and_limits(self):
+    async def test_retained_quote_reprices_with_sdk_and_keeps_frozen_fee_and_limits(self):
         quote = await self.quotes.get(self.request)
-        verified = []
-        async def reference(branches, mode, amount, block):
-            verified.append(amount)
-            return {'amountIn': '1000', 'amountOut': str(int(quote['netOutput'])-1), 'qualification': 'quoter'}
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
         self.quotes.quote_fallback_branches = reference
+        sdk = self.sdk.request
+        calls = []
+        async def priced(payload, **kwargs):
+            calls.append(deepcopy(payload))
+            return await sdk(payload, **kwargs)
+        self.sdk.request = priced
         repeated = await self.quotes.get({**self.request, 'retainedPlan': quote['plan'], 'deadline': '10000000000'})
-        self.assertEqual(verified, [1000])
-        self.assertEqual(repeated['qualification'], 'sdk-and-quoter')
+        reference.assert_not_awaited()
+        self.assertEqual([row['operation'] for row in calls], ['simulateRoute'])
+        self.assertEqual(repeated['qualification'], 'sdk')
         self.assertEqual(repeated['fee'], quote['fee'])
         self.assertEqual(repeated['params']['bound'], quote['params']['bound'])
-        self.assertEqual(repeated['netOutput'], str(int(quote['netOutput'])-1))
+        self.assertEqual(repeated['netOutput'], quote['netOutput'])
 
     async def test_retained_pool_metadata_uses_canonical_inventory_and_wrong_direction_researches(self):
         quote = await self.quotes.get(self.request)
@@ -547,74 +744,86 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['fullyFilled'])
         self.assertEqual(result['postState']['liquidity'], '1500000')
 
-    async def test_selected_quoter_disagreement_reprices_and_reranks_candidates(self):
-        other = {**POOL, 'id': '0x'+'4'.rjust(40, '0'), 'protocol': 'v4', 'feePips': 100,
-            'tickSpacing': 1, 'hooks': ZERO}
+    async def test_noncanonical_direct_pool_cannot_replace_anchor_or_use_contract_repricing(self):
+        other = {**POOL, 'id': '0x'+'4'.rjust(40, '0'), 'address': '0x'+'4'.rjust(40, '0'),
+            'protocol': 'v3', 'feePips': 100, 'tickSpacing': 1}
         self.registry.inventory[other['id']] = other
-        checks = []
-        async def sdk(branches, _mode, amount, _block):
-            if len(branches) != 1:
-                raise SdkWorkerError('Fixture exercises standalone candidate ranking')
-            is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
-            return {'amountIn': str(amount), 'amountOut': '2000' if is_v4 else '1500', 'qualification': 'sdk'}
-        async def quoter(branches, _mode, amount, _block):
-            is_v4 = branches[0]['hops'][0]['pool']['protocol'] == 'v4'
-            checks.append(is_v4)
-            return {'amountIn': str(amount), 'amountOut': '1000' if is_v4 else '1490', 'qualification': 'quoter'}
-        self.quotes.quote_branches, self.quotes.quote_fallback_branches = sdk, quoter
-        result = await self.quotes.get(self.request)
-        self.assertEqual(result['qualification'], 'sdk-and-quoter')
-        self.assertEqual(result['netOutput'], '1490')
-        self.assertEqual(result['plan']['route']['branches'][0]['hops'][0]['pool']['protocol'], 'v2')
-        self.assertCountEqual(checks, [True, False])
-
-    async def test_pinned_v4_quoter_success_proves_specified_output_at_quote_block(self):
-        pool = {**POOL, 'protocol': 'v4', 'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO}
-        async def sdk(*_args, **_kwargs):
-            raise SdkWorkerError('Uncovered range')
-        async def read(*_args):
-            return (500, 21000)
-        self.quotes.quote_sdk_branches, self.rpc.read_function = sdk, read
-        branches = [{'amountIn': '0', 'hops': [{'pool': pool, 'zeroForOne': False}]}]
-        raw = await self.quotes.quote_hop(branches[0]['hops'][0], 'exactOut', 1004, BLOCK)
-        self.assertTrue(raw['fullyFilled'])
-        request = {**self.request, 'side': 'buy', 'mode': 'exact-out'}
-        quote = self.quotes.make_quote(request, branches, raw, 1000, BLOCK)
-        self.assertNotIn('outputFillUnverified', quote)
-        self.assertEqual(quote['qualification'], 'quoter')
-
-    async def test_native_exact_output_reference_keeps_sdk_proven_forward_overdelivery(self):
-        request = {**self.request, 'amount': '1000', 'side': 'buy', 'mode': 'exact-out'}
-        branches = [{'amountIn': '0', 'hops': [{'pool': POOL, 'zeroForOne': False}]}]
-        raw = {'amountIn': '505', 'amountOut': '1003', 'qualification': 'sdk', 'fullyFilled': True}
-        async def reference(*_args):
-            return {'amountIn': '505', 'amountOut': '1002', 'qualification': 'quoter'}
+        read = self.rpc.read_function
+        async def state(address, signature, inputs, args, outputs, block):
+            if signature == 'slot0()':
+                return 1 << 96, 0, 0, 0, 0, 0, True
+            if signature == 'liquidity()':
+                return (10**12,)
+            if signature == 'tickBitmap(int16)':
+                return (0,)
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = state
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
         self.quotes.quote_fallback_branches = reference
-        events = []
-        quote = await self.quotes.qualify_quote(request, branches, raw, 1000, BLOCK, 1002,
-            lambda event: collect(events, event))
+        sdk, prices = self.sdk.request, []
+        async def priced(payload, **kwargs):
+            value = await sdk(payload, **kwargs)
+            prices.append(({pool['protocol'] for pool in payload.get('pools', [])}, deepcopy(value)))
+            return value
+        self.sdk.request = priced
+        request = {**self.request, 'mode': 'exact-out'}
+        result = await self.quotes.get(request)
+        reference.assert_not_awaited()
+        self.assertFalse(any(protocols == {'v3'} for protocols, value in prices))
+        self.assertTrue(any(protocols == {'v2'} and value['fullyFilled'] for protocols, value in prices))
+        self.assertEqual(result['qualification'], 'sdk')
+        self.assertEqual(result['netOutput'], request['amount'])
+        self.assertEqual(result['plan']['route']['branches'][0]['hops'][0]['pool']['id'], POOL['id'])
+        self.assertEqual(result['amountIn'], '506')
+        self.assertEqual(result['totalInput'], '507')
+
+    async def test_unavailable_v4_sdk_state_never_uses_contract_quote(self):
+        pool = {**POOL, 'protocol': 'v4', 'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO}
+        self.rpc.state_view = C
+        quoted = []
+        async def read(_address, signature, _inputs, _args, _outputs, _block):
+            if signature.startswith('quoteExact'):
+                quoted.append(signature)
+                return (500, 21000)
+            raise ValueError('Pinned SDK state unavailable')
+        self.rpc.read_function = read
+        branches = [{'amountIn': '0', 'hops': [{'pool': pool, 'zeroForOne': False}]}]
+        with self.assertRaises(ValueError):
+            await self.quotes.quote_branches(branches, 'exactOut', 1004, BLOCK)
+        self.assertEqual(quoted, [])
+
+    async def test_sdk_exact_output_keeps_proven_forward_overdelivery(self):
+        read = self.rpc.read_function
+        async def state(address, signature, inputs, args, outputs, block):
+            if signature == 'getReserves()':
+                return 200_000, 100_000, 0
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = state
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
+        request = {**self.request, 'amount': '1000', 'side': 'buy', 'mode': 'exact-out'}
+        quote = await self.quotes.get(request)
+        reference.assert_not_awaited()
+        self.assertEqual(quote['qualification'], 'sdk')
         self.assertEqual(quote['amountOut'], '1003')
         self.assertEqual(quote['grossOutput'], '1002')
         self.assertEqual(quote['outputRefundEstimate'], '1')
         self.assertEqual(quote['fee']['amount'], '2')
-        self.assertFalse(events)
 
-    async def test_stream_invalidates_before_native_repricing_and_never_publishes_optimistic_amount(self):
-        async def sdk(branches, _mode, amount, _block):
-            return {'amountIn': str(amount), 'amountOut': '2000', 'qualification': 'sdk'}
-        async def quoter(branches, _mode, amount, _block):
-            return {'amountIn': str(amount), 'amountOut': '1500', 'qualification': 'quoter'}
-        self.quotes.quote_branches, self.quotes.quote_fallback_branches = sdk, quoter
+    async def test_stream_publishes_sdk_terms_without_contract_repricing(self):
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
         app = create_app(market_quotes=self.quotes)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://local') as client:
             response = await client.post('/api/quotes/market/stream', json=self.request)
         events = [json.loads(line) for line in response.text.splitlines()]
-        invalidated = next(index for index, event in enumerate(events) if event['type'] == 'invalidated')
-        qualified = next(index for index, event in enumerate(events) if event['type'] == 'qualified')
-        self.assertLess(invalidated, qualified)
-        self.assertEqual(events[qualified]['value']['netOutput'], '1500')
+        reference.assert_not_awaited()
+        self.assertFalse(any(event['type'] == 'invalidated' for event in events))
+        qualified = next(event for event in events if event['type'] == 'qualified')
+        self.assertEqual(qualified['value']['qualification'], 'sdk')
+        self.assertEqual(qualified['value']['netOutput'], '1974')
         self.assertEqual(events[-1]['type'], 'complete')
-        self.assertEqual(events[-1]['value']['netOutput'], '1500')
+        self.assertEqual(events[-1]['value']['netOutput'], '1974')
 
     async def test_amount_edits_across_blocks_reuse_factory_identity_and_decimals(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
@@ -623,7 +832,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         async def read(address, signature, inputs, args, outputs, block):
             reads.append(signature)
             if signature == 'getPair(address,address)':
-                return (C if set(args) == {A.lower(), B.lower()} else ZERO,)
+                return ('0x'+'4'.rjust(40, '0') if set(args) == {B.lower(), C.lower()} else ZERO,)
             if signature == 'getPool(address,address,uint24)':
                 return (ZERO,)
             if signature == 'decimals()':
@@ -638,16 +847,23 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.rpc.read_function, self.rpc.assert_canonical, self.rpc.logs = read, canonical, logs
         self.quotes.connector_inventory = MethodType(MarketQuotes.connector_inventory, self.quotes)
         self.registry.inventory.clear()
-        first = await self.quotes._get(self.request, block=BLOCK)
+        request = {**self.request, 'counterToken': C}
+        first = await self.quotes._get(request, block=BLOCK)
         static = {name: reads.count(name) for name in ('getPair(address,address)',
             'getPool(address,address,uint24)', 'decimals()')}
         self.assertGreater(static['getPair(address,address)'], 0)
         self.assertEqual(static['decimals()'], 2)
-        second = await self.quotes._get({**self.request, 'amount': '2002'}, block={
+        second = await self.quotes._get({**request, 'amount': '2002'}, block={
             'number': 124, 'hash': '0x'+'cd'*32})
         self.assertNotEqual(first['netOutput'], second['netOutput'])
-        self.assertEqual(static, {name: reads.count(name) for name in static})
-        self.assertEqual(reads.count('getReserves()'), 1)
+        self.assertEqual(static['getPair(address,address)'], reads.count('getPair(address,address)'))
+        self.assertEqual(static['decimals()'], reads.count('decimals()'))
+        # Negative catalog observations are advisory. SDK state acquisition
+        # checks all four direct hops and both hops of nine via-WETH candidates
+        # at the new block instead of inheriting an old absence as a veto.
+        self.assertEqual(reads.count('getPool(address,address,uint24)'),
+                         static['getPool(address,address,uint24)']+4+2*9)
+        self.assertEqual(reads.count('getReserves()'), 2)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
         self.rpc.v2_factory, self.rpc.factory, self.rpc.pool_manager = A, B, C
@@ -745,7 +961,7 @@ for line in sys.stdin:
         finally:
             await worker.close()
 
-    async def test_connector_failure_cancels_parallel_baseline(self):
+    async def test_optional_connector_failure_keeps_cached_quote_and_drains_parallel_baseline(self):
         started, stopped = asyncio.Event(), asyncio.Event()
         async def model(*_args, **_kwargs):
             started.set()
@@ -757,8 +973,8 @@ for line in sys.stdin:
             await started.wait()
             raise ValueError('Fixture connector error')
         self.quotes.get_model, self.quotes.connector_inventory = model, connectors
-        with self.assertRaises(ValueError):
-            await self.quotes._get(self.request, block=BLOCK)
+        result = await self.quotes._get(self.request, block=BLOCK)
+        self.assertGreater(int(result['netOutput']), 0)
         self.assertTrue(stopped.is_set())
 
     async def test_dense_graph_is_cooperatively_cancellable(self):
@@ -839,41 +1055,43 @@ for line in sys.stdin:
         self.assertTrue(self.registry.cursors['v4']['pending'])
         self.assertNotIn(C, self.registry.inventory)
 
-    async def test_market_execution_abi_accepts_native_permit_full_lot(self):
+    async def test_historical_market_execution_abi_accepts_native_permit_full_lot(self):
+        from cybergold_candidate.helpers_router_facts import PROBE_ABI as historical_abi
         quote = await self.quotes.get(self.request)
-        function = next(row for row in ABI if row['name'] == 'swapExactInput')
+        function = next(row for row in historical_abi if row['name'] == 'swapExactInput')
         funding = {'mode': 1, 'nativePermit': {'value': '1002', 'deadline': '9999999999', 'v': 27,
             'r': '0x'+'00'*32, 's': '0x'+'00'*32}, 'permit2': {'permit': {'permitted': {'token': A,
             'amount': '0'}, 'nonce': '0', 'deadline': '0'}, 'signature': '0x'}}
         params = [argument(quote['params'], function['inputs'][0]), argument(funding, function['inputs'][1])]
-        encoded = Web3().eth.contract(abi=ABI).encode_abi('swapExactInput', args=params)
+        encoded = Web3().eth.contract(abi=historical_abi).encode_abi('swapExactInput', args=params)
         self.assertTrue(encoded.startswith('0x'))
         self.assertEqual(params[0][4], 1000)
         self.assertEqual(params[1][1][0], 1002)
 
-    async def test_historical_adapter_and_unversioned_route_search_keep_legacy_v3_encoding(self):
+    async def test_historical_adapter_uses_shared_engine_and_preserves_legacy_v3_encoding(self):
         from test_quote_intent import service, request
         legacy = '0x4edb8190232a47e45d861003672938eb7ee84a15'
         intent, _provider, routes, _wire = service()
-        routes.multi_protocol = self.quotes
-        reserve = AsyncMock(side_effect=AssertionError('Historical adapter cannot decode typed market routes'))
-        self.quotes.reserve_quotes = reserve
+        search = AsyncMock(wraps=routes.engine.search_routes)
+        routes.engine.search_routes = search
         try:
             value = request('issue-exact-out')
             value['adapter'] = legacy
             result = await intent.get(value, lambda _event: asyncio.sleep(0))
             self.assertTrue(result['quotes'])
             for leg in result['quotes']:
-                self.assertNotIn('routePlan', leg)
+                plan = leg['routePlan']
+                self.assertEqual(len(plan['branches']), 1)
+                self.assertTrue(all(hop['pool']['protocol'] == 'v3' for hop in plan['branches'][0]['hops']))
                 Web3().codec.decode(['bytes', 'uint256', 'uint256', 'bool'], bytes.fromhex(leg['data'][2:]))
             await routes.get({'mode': 'exact-in', 'targets': value['targets']})
-            reserve.assert_not_awaited()
+            self.assertGreaterEqual(search.await_count, 2)
         finally:
             await routes.close()
 
     async def test_core_reserve_provider_is_fee_neutral_and_typed_revalidation_retains_limits(self):
         target = {'inputAsset': A, 'outputAsset': B, 'amount': '1000'}
-        rows = await self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': [target]}, BLOCK)
+        rows = await self.quotes.reserve_quotes({'mode': 'exact-in', 'adapter': C, 'targets': [target]}, BLOCK)
         self.assertEqual(rows[0]['best']['quote'], '1974')
         plan = rows[0]['best']['routePlan']
         self.assertEqual(plan['executionContext'], 'helpers-core')
@@ -882,12 +1100,12 @@ for line in sys.stdin:
             'routePlan': plan, 'data': encode_adapter(plan)}
         outputs = [{'kind': 0, 'token': A, 'id': '0', 'amount': '1000'}]
         request = {'mode': 'redeem-exact-in', 'native': False, 'amount': '100',
-            'quoteToken': B, 'token': B, 'orderedAssets': [A], 'deadline': '10000000000', 'slippageBps': 50}
+            'quoteToken': B, 'token': B, 'adapter': C, 'orderedAssets': [A], 'deadline': '10000000000', 'slippageBps': 50}
         previous = {'executionAmount': '100', 'maximumInputAmount': '0', 'quotes': [leg],
             'expectedCoreOutputs': core_bounds(outputs, 50), 'preview': {'minimumAmountOut': '1900'}, 'slippageBps': 50}
         async def preview(service, _value):
             return {'projectedCoreOutputs': outputs, **({'minimumAmountOut': '1900'} if service == 'token' else {})}
-        self.rpc.multi_protocol = self.quotes
+        self.rpc.route_engine = self.quotes
         metrics = dict.fromkeys(('rpcReads', 'rpcReadsRequested', 'rpcReadsCoalesced', 'rpcReadsReused', 'candidateCalls'), 0)
         result = await revalidate(request, previous, self.rpc, BLOCK, 'basket', 'token', preview, metrics)
         changed = result['quotes'][0]
@@ -925,6 +1143,8 @@ for line in sys.stdin:
                 async for branches in candidate_branches(pools, target['inputAsset'], B, 'exactIn', 1000)])
         async def quote(branches, mode, amount, block):
             nonlocal active, maximum
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2 only')
             source = branches[0]['hops'][0]['pool']['token0']['address']
             observed.append((source, json.dumps(branches, sort_keys=True)))
             active += 1
@@ -940,7 +1160,7 @@ for line in sys.stdin:
             if all(row['best'] for row in rows):
                 ready.set()
         self.quotes.quote_branches = quote
-        operation = asyncio.create_task(self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': targets}, BLOCK, on_update=update))
+        operation = asyncio.create_task(self.quotes.reserve_quotes({'mode': 'exact-in', 'adapter': C, 'targets': targets}, BLOCK, on_update=update))
         try:
             await asyncio.wait_for(ready.wait(), 1)
             self.assertFalse(operation.done())
@@ -950,7 +1170,7 @@ for line in sys.stdin:
             final = await operation
             self.assertCountEqual(observed, expected)
             self.assertLessEqual(maximum, 8)
-            self.assertEqual(sum(row['attempted'] for row in final), len(expected))
+            self.assertEqual(sum(row['attempted'] for row in final), len(expected)+26)
             self.assertEqual(sum(row['succeeded'] for row in final), len(expected))
             self.assertTrue(all(int(row['best']['quote']) > 2001 for row in final))
         finally:
@@ -962,6 +1182,8 @@ for line in sys.stdin:
         started = {1000: asyncio.Event(), 2000: asyncio.Event()}
         stopped, release = set(), asyncio.Event()
         async def quote(branches, mode, amount, block):
+            if any(hop['pool']['protocol'] == 'v3' for branch in branches for hop in branch['hops']):
+                raise SdkWorkerError('Fixture liquidity is V2 only')
             started[amount].set()
             try:
                 await release.wait()
@@ -969,20 +1191,40 @@ for line in sys.stdin:
             finally:
                 stopped.add(amount)
         self.quotes.quote_branches = quote
+        quotes, diagnostics = self.quotes, {}
+        class ObservedReserve:
+            @route_work_scope
+            async def get(self, value):
+                return await quotes.reserve_quotes(value, BLOCK, on_update=lambda _rows: asyncio.sleep(0))
+        @quote_work_scope
         async def search(amount):
-            return await self.quotes.reserve_quotes({'mode': 'exact-in', 'targets': [
-                {'inputAsset': A, 'outputAsset': B, 'amount': str(amount)}]}, BLOCK,
-                on_update=lambda _rows: asyncio.sleep(0))
+            quote_phase('initial-search')
+            try:
+                result = await ObservedReserve().get({'mode': 'exact-in', 'adapter': C, 'targets': [
+                    {'inputAsset': A, 'outputAsset': B, 'amount': str(amount)}]})
+            except asyncio.CancelledError as error:
+                diagnostics[amount] = public_quote_error(error)['quoteDiagnostics']
+                raise
+            probe = ValueError('offline snapshot')
+            freeze_quote_work(probe)
+            diagnostics[amount] = public_quote_error(probe)['quoteDiagnostics']
+            return result
         first, other = asyncio.create_task(search(1000)), asyncio.create_task(search(2000))
         try:
             await asyncio.wait_for(asyncio.gather(*(event.wait() for event in started.values())), 1)
             first.cancel()
             await asyncio.gather(first, return_exceptions=True)
             self.assertTrue(first.cancelled())
+            cancelled = diagnostics[1000]['routeWave']
+            self.assertEqual(cancelled['typedPending'], 1)
+            self.assertEqual(cancelled['typedEnumerated']-cancelled['typedCompleted'], 1)
             self.assertEqual(stopped, {1000})
             self.assertFalse(other.done())
             release.set()
             self.assertEqual((await other)[0]['best']['quote'], '4000')
+            completed = diagnostics[2000]['routeWave']
+            self.assertEqual((completed['typedEnumerated'], completed['typedCompleted'], completed['typedPending']), (14, 14, 0))
+            self.assertEqual(diagnostics[1000]['routeWave'], cancelled)
         finally:
             first.cancel(); other.cancel()
             await asyncio.gather(first, other, return_exceptions=True)
@@ -1130,7 +1372,7 @@ for line in sys.stdin:
             history.observe(request, result, [('exact-in', [{'target': target,
                 'best': {'path': legacy, 'quote': '1960'}}], context)])
             self.assertEqual(len(history.routes), 2)
-            self.assertEqual({len(key) for key in history.routes}, {2, 3})
+            self.assertEqual({len(key) for key in history.routes}, {3})
         finally:
             await history.close()
 
@@ -1154,6 +1396,485 @@ for line in sys.stdin:
         self.assertEqual(states[C]['reserve0'], '100000')
         self.assertEqual(states[C]['reserve1'], '200000')
         self.assertGreaterEqual(int(composed[1]['best']['routePlan']['outputAmount']), 1000)
+
+
+def acquisition_address(value):
+    return '0x' + f'{value:040x}'
+
+
+ACQUISITION_BLOCK = {'number': 123, 'hash': '0x' + 'ab' * 32}
+ACQUISITION_POOLS = [{'id': acquisition_address(i + 100), 'address': acquisition_address(i + 100), 'protocol': 'v2', 'feePips': 3000,
+          'token0': {'address': acquisition_address(i), 'chainId': 31338, 'decimals': 18},
+          'token1': {'address': acquisition_address(i + 1), 'chainId': 31338, 'decimals': 18}}
+         for i in (1, 2)]
+ACQUISITION_BRANCHES = [{'amountIn': '1000', 'hops': [{'pool': pool, 'zeroForOne': True} for pool in ACQUISITION_POOLS]}]
+
+
+class AcquisitionRpc:
+    chain_id = 31338
+    w3 = Web3()
+
+    def __init__(self):
+        self.started = {pool['id']: asyncio.Event() for pool in ACQUISITION_POOLS}
+        self.release = {pool['id']: asyncio.Event() for pool in ACQUISITION_POOLS}
+        self.errors = {}
+        self.calls = Counter()
+        self.cancelled = set()
+        self.reserves = (100_000, 200_000, 0)
+
+    async def read_function(self, identity, signature, inputs, args, outputs, block):
+        assert signature == 'getReserves()' and block == ACQUISITION_BLOCK
+        self.calls[identity] += 1
+        self.started[identity].set()
+        try:
+            await self.release[identity].wait()
+            if identity in self.errors:
+                raise self.errors[identity]
+            return self.reserves
+        except asyncio.CancelledError:
+            self.cancelled.add(identity)
+            raise
+
+    async def close(self):
+        pass
+
+
+class AcquisitionSdk:
+    def __init__(self):
+        self.payloads = []
+
+    async def request(self, payload, on_state=None):
+        self.payloads.append(deepcopy(payload))
+        return {'amountIn': '1000', 'amountOut': '1900', 'settled': True, 'fullyFilled': True,
+                'postState': [{'id': row['id'], 'reserve0': '101000'} for row in payload['pools']]}
+
+    async def close(self):
+        pass
+
+
+class CandidateAcquisition(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=acquisition_address(1))
+        self.rpc, self.sdk = AcquisitionRpc(), AcquisitionSdk()
+        self.registry = PoolRegistry(settings, rpc=self.rpc)
+        self.quotes = MarketQuotes(settings, self.registry, sdk=self.sdk)
+
+    async def asyncTearDown(self):
+        for event in self.rpc.release.values():
+            event.set()
+        await self.quotes.close()
+        await self.registry.close()
+
+    async def started(self):
+        try:
+            await asyncio.wait_for(asyncio.gather(*(event.wait() for event in self.rpc.started.values())), 1)
+        except TimeoutError:
+            self.fail('All required candidate snapshots must start before either is released')
+
+    async def test_starts_distinct_snapshots_and_keeps_first_occurrence_payload_order(self):
+        # The repeated pool belongs to the same candidate, not another getter.
+        branches = deepcopy(ACQUISITION_BRANCHES)
+        branches.append({'amountIn': '0', 'hops': [deepcopy(branches[0]['hops'][0])]})
+        canonical = {}
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(branches, 'exactIn', 1000, ACQUISITION_BLOCK, canonical=canonical))
+        try:
+            await self.started()
+            self.assertFalse(task.done())
+            for event in self.rpc.release.values():
+                event.set()
+            await task
+            self.assertEqual(list(canonical), [pool['id'] for pool in ACQUISITION_POOLS])
+            self.assertEqual([row['id'] for row in self.sdk.payloads[0]['pools']], list(canonical))
+            self.assertEqual(self.rpc.calls, Counter({pool['id']: 1 for pool in ACQUISITION_POOLS}))
+            self.assertEqual(self.sdk.payloads[0]['route']['branches'][0]['hops'],
+                             [{'poolId': pool['id'], 'zeroForOne': True} for pool in ACQUISITION_POOLS])
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_first_read_failure_drains_blocked_sibling_and_preserves_exception(self):
+        error = ValueError('first fixture read')
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = error
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        with self.assertRaises(ValueError) as caught:
+            await task
+        self.assertIs(caught.exception, error)
+        self.assertEqual(self.rpc.cancelled, {ACQUISITION_POOLS[1]['id']})
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_error_priority_is_route_order_even_when_later_read_fails_first(self):
+        first = ValueError('first fixture read')
+        self.rpc.errors = {ACQUISITION_POOLS[0]['id']: first, ACQUISITION_POOLS[1]['id']: RuntimeError('second fixture read')}
+        self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.assertFalse(task.done())
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        with self.assertRaises(ValueError) as caught:
+            await task
+        self.assertIs(caught.exception, first)
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_failure_does_not_cancel_other_snapshot_subscriber(self):
+        shared = asyncio.create_task(self.registry.snapshot(ACQUISITION_POOLS[1], ACQUISITION_BLOCK))
+        await self.rpc.started[ACQUISITION_POOLS[1]['id']].wait()
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = ValueError('first fixture read')
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        try:
+            await self.started()
+            key = ('v2', ACQUISITION_POOLS[1]['id'], ACQUISITION_BLOCK['hash'])
+            # Awaiting the first start also gives the sibling task its normal
+            # subscription turn; inspect the actual shared primitive's users.
+            self.assertEqual(self.registry.pending.pending[key].users, 2)
+            self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+            with self.assertRaises(ValueError):
+                await task
+            self.assertFalse(shared.done())
+            self.assertNotIn(ACQUISITION_POOLS[1]['id'], self.rpc.cancelled)
+            self.assertEqual(self.registry.pending.pending[key].users, 1)
+            self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+            self.assertEqual((await shared)['reserve0'], '100000')
+            self.assertEqual(self.rpc.calls[ACQUISITION_POOLS[1]['id']], 1)
+        finally:
+            shared.cancel()
+            task.cancel()
+            await asyncio.gather(shared, task, return_exceptions=True)
+
+    async def test_caller_cancellation_drains_last_subscriptions_without_sdk(self):
+        task = asyncio.create_task(self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(self.rpc.cancelled, {pool['id'] for pool in ACQUISITION_POOLS})
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.sdk.payloads, [])
+
+    async def test_existing_canonical_entry_and_candidate_post_state_stay_private(self):
+        existing = {**deepcopy(ACQUISITION_POOLS[0]), 'reserve0': '50000', 'reserve1': '200000'}
+        canonical = {ACQUISITION_POOLS[0]['id']: existing}
+        candidate = {ACQUISITION_POOLS[0]['id']: {**deepcopy(existing), 'reserve0': '51000'}}
+        self.rpc.release[ACQUISITION_POOLS[1]['id']].set()
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK,
+                                             candidate=candidate, canonical=canonical)
+        self.assertEqual(self.rpc.calls, Counter({ACQUISITION_POOLS[1]['id']: 1}))
+        self.assertIs(canonical[ACQUISITION_POOLS[0]['id']], existing)
+        self.assertEqual(self.sdk.payloads[0]['pools'][0]['reserve0'], '51000')
+        self.assertEqual(existing['reserve0'], '50000')
+        self.assertEqual(candidate[ACQUISITION_POOLS[0]['id']]['reserve0'], '101000')
+        self.sdk.payloads[0]['pools'][0]['reserve0'] = '0'
+        self.assertEqual(existing['reserve0'], '50000')
+
+    async def test_next_sandbox_operation_rereads_mutation_at_same_header(self):
+        for event in self.rpc.release.values():
+            event.set()
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.rpc.reserves = (200_000, 300_000, 0)
+        await self.quotes.quote_sdk_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.assertEqual([row['reserve0'] for row in self.sdk.payloads[1]['pools']], ['200000', '200000'])
+        self.assertEqual(self.rpc.calls, Counter({pool['id']: 2 for pool in ACQUISITION_POOLS}))
+        self.assertEqual(self.registry.observed, {})
+        self.assertEqual(self.registry.pending.completed, {})
+
+    async def test_single_snapshot_keeps_original_caller_await(self):
+        # A single read gains no concurrency. Keeping it on the caller retains
+        # the existing observation scheduling used by Mainnet model acquisition.
+        owner, readers = asyncio.current_task(), []
+        original = self.registry.snapshot
+        async def snapshot(*arguments):
+            readers.append(asyncio.current_task())
+            return await original(*arguments)
+        self.registry.snapshot = snapshot
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        branches = [{'amountIn': '1000', 'hops': [deepcopy(ACQUISITION_BRANCHES[0]['hops'][0])]}]
+        await self.quotes.quote_sdk_branches(branches, 'exactIn', 1000, ACQUISITION_BLOCK)
+        self.assertEqual(readers, [owner])
+        self.assertEqual(self.rpc.calls, Counter({ACQUISITION_POOLS[0]['id']: 1}))
+
+    async def test_snapshot_failure_propagates_without_contract_quote_fallback(self):
+        error = ValueError('first fixture read')
+        self.rpc.errors[ACQUISITION_POOLS[0]['id']] = error
+        reference = AsyncMock(side_effect=AssertionError('Contract pricing is retired'))
+        self.quotes.quote_fallback_branches = reference
+        task = asyncio.create_task(self.quotes.quote_branches(ACQUISITION_BRANCHES, 'exactIn', 1000, ACQUISITION_BLOCK))
+        await self.started()
+        self.rpc.release[ACQUISITION_POOLS[0]['id']].set()
+        with self.assertRaises(ValueError) as raised:
+            await task
+        self.assertIs(raised.exception, error)
+        reference.assert_not_awaited()
+        self.assertEqual(self.rpc.cancelled, {ACQUISITION_POOLS[1]['id']})
+        self.assertEqual(self.sdk.payloads, [])
+
+
+class TickFillRpc:
+    """Controlled getter completion; no transport or chain."""
+    def __init__(self):
+        self.calls = Counter()
+        self.started, self.release = asyncio.Event(), asyncio.Event()
+        self.active = self.cancelled = 0
+        self.bitmap = 1
+        self.gross = 100
+        self.error = None
+
+    async def read_function(self, _address, signature, _inputs, args, _outputs, _block):
+        self.calls[signature] += 1
+        if signature == 'tickBitmap(int16)':
+            return (self.bitmap,)
+        assert signature == 'ticks(int24)'
+        self.active += 1
+        self.started.set()
+        try:
+            await self.release.wait()
+            if self.error:
+                raise self.error
+            return self.gross, args[0], 0, 0, 0, 0, 0, True
+        except asyncio.CancelledError:
+            self.cancelled += 1
+            raise
+        finally:
+            self.active -= 1
+
+    async def close(self):
+        pass
+
+
+class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.rpc = TickFillRpc()
+        settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A)
+        self.registry = PoolRegistry(settings, rpc=self.rpc)
+        self.addAsyncCleanup(self.registry.close)
+        self.snapshot = {**deepcopy(POOL), 'protocol': 'v3', 'tickSpacing': 10,
+            'sqrtRatioX96': str(1 << 96), 'tick': 1, 'liquidity': '1000',
+            'context': {'chainId': 31338, 'blockNumber': str(BLOCK['number']), 'blockHash': BLOCK['hash']},
+            'bitmapWords': [], 'ticks': []}
+        self.requests = [{'poolId': C, 'wordPositions': [0], 'ticks': []}]
+
+    async def start(self, snapshot=None, requests=None):
+        task = asyncio.create_task(self.registry.extend_ticks(
+            self.snapshot if snapshot is None else snapshot,
+            self.requests if requests is None else requests, BLOCK))
+        self.addAsyncCleanup(self.stop, task)
+        await asyncio.wait_for(self.rpc.started.wait(), 1)
+        return task
+
+    async def stop(self, task):
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    async def joined(self, users=2):
+        async def wait():
+            while not any(key[0] == 'tick-fill' and entry.users == users
+                          for key, entry in self.registry.pending.pending.items()):
+                await asyncio.sleep(0)
+        await asyncio.wait_for(wait(), 1)
+
+    async def test_staggered_identical_fill_shares_finished_bitmap_until_ticks_complete(self):
+        first = await self.start()
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+        await self.joined()
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(self.rpc.calls, Counter({'tickBitmap(int16)': 1, 'ticks(int24)': 1}))
+        self.assertEqual(a, b)
+        a['ticks'][0]['liquidityGross'] = '999'
+        self.assertEqual(b['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.registry.pending.pending, {})
+        self.assertEqual(self.registry.pending.completed, {})
+        self.assertEqual(self.registry.observed, {})
+
+    async def test_completed_fill_rereads_changed_sandbox_state_at_the_same_header(self):
+        self.rpc.release.set()
+        first = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.rpc.bitmap, self.rpc.gross = 2, 200
+        second = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(self.rpc.calls, Counter({'tickBitmap(int16)': 2, 'ticks(int24)': 2}))
+        self.assertEqual(first['ticks'], [{'index': 0, 'liquidityGross': '100', 'liquidityNet': '0'}])
+        self.assertEqual(second['ticks'], [{'index': 10, 'liquidityGross': '200', 'liquidityNet': '10'}])
+        self.assertEqual(self.registry.pending.completed, {})
+        self.assertEqual(self.registry.observed, {})
+
+    async def test_old_coverage_rows_stay_private_across_shared_fill_consumers(self):
+        self.snapshot['bitmapWords'] = [{'wordPosition': 9, 'bitmap': '1'}]
+        self.snapshot['ticks'] = [{'index': 23040, 'liquidityGross': '7', 'liquidityNet': '3'}]
+        original = deepcopy(self.snapshot)
+        one = self.registry.pending.one
+        first_mutated = asyncio.Event()
+        sequence = 0
+
+        async def delayed_one(key, produce):
+            nonlocal sequence
+            sequence += 1
+            position = sequence
+            value = await one(key, produce)
+            if position == 2:
+                await first_mutated.wait()
+            return value
+        self.registry.pending.one = delayed_one
+
+        async def first_consumer():
+            value = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+            word = next(row for row in value['bitmapWords'] if row['wordPosition'] == 9)
+            tick = next(row for row in value['ticks'] if row['index'] == 23040)
+            self.assertEqual((word['bitmap'], tick['liquidityGross']), ('1', '7'))
+            word['bitmap'] = tick['liquidityGross'] = '999'
+            first_mutated.set()
+            return value
+
+        first = asyncio.create_task(first_consumer())
+        self.addAsyncCleanup(self.stop, first)
+        await asyncio.wait_for(self.rpc.started.wait(), 1)
+        second = asyncio.create_task(self.registry.extend_ticks(original, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.snapshot['bitmapWords'][0]['bitmap'] = '888'
+        self.snapshot['ticks'][0]['liquidityGross'] = '888'
+        self.rpc.release.set()
+        _, result = await asyncio.gather(first, second)
+        self.assertEqual(next(row for row in result['bitmapWords'] if row['wordPosition'] == 9)['bitmap'], '1')
+        self.assertEqual(next(row for row in result['ticks'] if row['index'] == 23040)['liquidityGross'], '7')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+
+    async def test_unequal_prior_coverage_stays_distinct_at_the_same_header(self):
+        with_extra = deepcopy(self.snapshot)
+        with_extra['bitmapWords'] = [{'wordPosition': 9, 'bitmap': '0'}]
+        first = await self.start(with_extra)
+        self.rpc.bitmap = 2
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        async def both_started():
+            while self.rpc.active != 2:
+                await asyncio.sleep(0)
+        await asyncio.wait_for(both_started(), 1)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(next(row for row in a['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '1')
+        self.assertEqual(next(row for row in b['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '2')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+    async def test_unequal_baseline_snapshots_do_not_share_a_fill(self):
+        first = await self.start()
+        changed = {**self.snapshot, 'liquidity': '2000'}
+        second = asyncio.create_task(self.registry.extend_ticks(changed, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await asyncio.sleep(0)
+        self.assertEqual(sum(key[0] == 'tick-fill' for key in self.registry.pending.pending), 2)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual((a['liquidity'], b['liquidity']), ('1000', '2000'))
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+    async def test_unequal_coverage_requests_keep_their_own_words_and_ticks(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(
+            self.snapshot, [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await asyncio.sleep(0)
+        self.assertEqual(sum(key[0] == 'tick-fill' for key in self.registry.pending.pending), 2)
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual([row['wordPosition'] for row in a['bitmapWords']], [0])
+        self.assertEqual([row['wordPosition'] for row in b['bitmapWords']], [1])
+        self.assertEqual([row['index'] for row in a['ticks']], [0])
+        self.assertEqual([row['index'] for row in b['ticks']], [2560])
+
+    async def test_caller_mutation_cannot_replace_an_inflight_keyed_baseline_or_coverage(self):
+        original = deepcopy(self.snapshot)
+        first = await self.start()
+        self.snapshot['liquidity'] = '9000'
+        self.requests[0]['wordPositions'].append(1)
+        second = asyncio.create_task(self.registry.extend_ticks(original,
+            [{'poolId': C, 'wordPositions': [0], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.rpc.release.set()
+        a, b = await asyncio.gather(first, second)
+        self.assertEqual(a, b)
+        self.assertEqual(a['liquidity'], '1000')
+        self.assertEqual([row['wordPosition'] for row in a['bitmapWords']], [0])
+
+    async def test_concurrent_mainnet_fills_publish_the_full_coverage_union_atomically(self):
+        self.registry.chain = 1
+        self.snapshot['context']['chainId'] = 1
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot,
+            [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        async def both_started():
+            while self.rpc.active != 2:
+                await asyncio.sleep(0)
+        await asyncio.wait_for(both_started(), 1)
+        self.rpc.release.set()
+        results = await asyncio.gather(first, second)
+        observed = self.registry.observed[C]
+        self.assertEqual({row['wordPosition'] for row in observed['bitmapWords']}, {0, 1})
+        self.assertEqual({row['index'] for row in observed['ticks']}, {0, 2560})
+        self.assertTrue(any({row['index'] for row in result['ticks']} == {0, 2560} for result in results))
+
+    async def test_one_cancelled_subscriber_does_not_stop_the_other_fill(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(self.rpc.cancelled, 0)
+        self.assertFalse(second.done())
+        self.rpc.release.set()
+        result = await second
+        self.assertEqual(result['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 1)
+
+    async def test_last_cancelled_subscriber_cancels_and_drains_the_owned_fill(self):
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        first.cancel()
+        await asyncio.gather(first, return_exceptions=True)
+        second.cancel()
+        await asyncio.gather(second, return_exceptions=True)
+        self.assertEqual(self.rpc.cancelled, 1)
+        self.assertEqual(self.rpc.active, 0)
+        self.assertEqual(self.registry.pending.pending, {})
+
+    async def test_shared_ordinary_error_keeps_identity_and_next_call_is_fresh(self):
+        error = RuntimeError('public synthetic getter failure')
+        self.rpc.error = error
+        first = await self.start()
+        second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
+        self.addAsyncCleanup(self.stop, second)
+        await self.joined()
+        self.rpc.release.set()
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        self.assertTrue(all(result is error for result in results))
+        self.assertEqual(self.registry.pending.pending, {})
+        self.rpc.error = None
+        result = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(result['ticks'][0]['liquidityGross'], '100')
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
+
+    async def test_existing_generation_reset_cancels_old_fill_before_a_fresh_read(self):
+        first = await self.start()
+        await self.registry.observe_generation('next')
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(self.rpc.cancelled, 1)
+        self.assertEqual(self.registry.pending.pending, {})
+        self.rpc.release.set()
+        await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
+        self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
 
 
 if __name__ == '__main__':

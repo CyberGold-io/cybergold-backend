@@ -7,18 +7,25 @@ import uuid
 from fastapi.responses import JSONResponse
 
 from .rpc_http import parse_json
+from .rpc_diagnostics import project_quote_diagnostics
 
 ENUMS={'operation':['quote','swap','wallet'],
     'outcome':['started','succeeded','failed','submitted','reverted','unconfirmed','requested'],
     'reason':['wallet_rejected','rpc_error','contract_reverted','wrong_chain','unknown'],
     'direction':['issue','redeem'],'route':['basket','token'],'inputMode':['exact-in','exact-out'],
-    'walletStep':['approval','signature','transaction']}
+    'walletStep':['approval','signature','transaction'],
+    'side':['buy','sell'],'strategy':['core','market','universal'],
+    'stage':['quote','balance','network','authorization','preparation','simulation','submission','confirmation'],
+    'errorClassification':['insufficient-protocol-supply','issuance-cap-exceeded','redemption-supply-exceeded',
+        'redemption-capacity-exceeded','rpc-rate-limit','rpc-timeout',
+        'rpc-unavailable','rpc-access-denied','quote-timeout','quote-no-route','quote-insufficient-liquidity','quote-contract-reverted','quote-unavailable',
+        'quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit']}
 
 
 def project(input):
     source=input if isinstance(input,dict) else {}
     result={key:source[key] for key,values in ENUMS.items() if isinstance(source.get(key),str) and source[key] in values}
-    for key in ['attemptId','quoteId']:
+    for key in ['attemptId','quoteId','requestId','correlationId','workId']:
         value=source.get(key)
         if isinstance(value,str) and re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}',value,re.I):result[key]=value
     value=source.get('transactionHash')
@@ -30,6 +37,32 @@ def project(input):
     if type(value) in (int,float) and -(2**53-1)<=value<=2**53-1 and value==int(value):result['errorCode']=value
     value=source.get('errorSelector')
     if isinstance(value,str) and re.fullmatch(r'0x[0-9a-fA-F]{8}',value):result['errorSelector']=value.lower()
+    for key in ['tokenIn','tokenOut']:
+        value=source.get(key)
+        if isinstance(value,str) and re.fullmatch(r'0x[0-9a-fA-F]{40}',value):result[key]=value
+    for key in ['amount','inputMaximum','outputMinimum','blockNumber']:
+        value=source.get(key)
+        if isinstance(value,str) and re.fullmatch(r'[0-9]{1,78}',value) and int(value)<2**256:result[key]=value
+    value=source.get('blockHash')
+    if isinstance(value,str) and re.fullmatch(r'0x[0-9a-fA-F]{64}',value):result['blockHash']=value
+    constraint = source.get('constraint')
+    if isinstance(constraint, dict):
+        safe = {}
+        enums = {'kind': ('issuance-cap', 'redemption-supply', 'redemption-capacity'),
+                 'quantity': ('gross-cygld-mint', 'gross-cygld-input', 'core-output-minima'),
+                 'limitKind': ('maximum-total-supply', 'effective-supply-cap')}
+        for key, allowed in enums.items():
+            if isinstance(constraint.get(key), str) and constraint[key] in allowed:
+                safe[key] = constraint[key]
+        for key in ('requestedRaw', 'availableRaw', 'currentSupplyRaw', 'limitRaw'):
+            value = constraint.get(key)
+            if isinstance(value, str) and re.fullmatch(r'[0-9]{1,78}', value) and int(value) < 2**256:
+                safe[key] = value
+        if safe:
+            result['constraint'] = safe
+    quote_diagnostics = project_quote_diagnostics(source.get('quoteDiagnostics'))
+    if quote_diagnostics:
+        result['quoteDiagnostics'] = quote_diagnostics
     return result
 
 
@@ -61,7 +94,10 @@ async def handle_diagnostics(request,logger=None,release=None):
     if diagnostic.get('operation') and diagnostic.get('outcome'):
         try:
             record={**diagnostic,'event':'client_diagnostic','source':'browser','component':'api',
-                'requestId':request.scope.get('state',{}).get('request_id') or str(uuid.uuid4())}
+                'diagnosticRequestId':request.scope.get('state',{}).get('request_id') or str(uuid.uuid4())}
+            # The browser's requestId refers to the failed operation, not this
+            # separate best-effort diagnostic POST.
+            record.setdefault('requestId',record['diagnosticRequestId'])
             if release is not None:record['release']=release
             (logger or logging.getLogger('cybergold.candidate')).info(json.dumps(record))
         except Exception:pass  # Telemetry cannot change product behavior.

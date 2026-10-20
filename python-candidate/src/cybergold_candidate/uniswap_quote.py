@@ -1,4 +1,4 @@
-"""Configured QuoterV2 exact-input/output reads; App route choice is retained."""
+"""Caller-selected V3 routes use the shared structured quote engine."""
 import asyncio
 from datetime import datetime, timezone
 import json
@@ -11,6 +11,8 @@ from web3 import AsyncWeb3, Web3
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .recovery_rpc import RecoveryRpc
 from .rpc_transport import rpc_provider
+from .route_work_slots import engine_work
+from .uniswap_routes import v3_plan
 
 ABI = json.loads(Path(__file__).with_name('uniswap-quote-abi.json').read_text())
 METHODS = {'exact-in': 'quoteExactInput', 'exact-out': 'quoteExactOutput'}
@@ -30,39 +32,34 @@ class UniswapQuoteRpc(RecoveryRpc):
         self.chain_id = int(settings.NEXT_PUBLIC_CHAIN_ID)
         self.quoter = Web3.to_checksum_address(settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS)
         self.w3 = w3 or AsyncWeb3(rpc_provider(settings.RPC_URL, settings.RPC_AUTHORIZATION))
-        self.contract = self.w3.eth.contract(abi=ABI)
 
-    def encode(self, request):
-        try:
-            return self.contract.encode_abi(METHODS[request['mode']],
-                args=[bytes.fromhex(request['path'].removeprefix('0x')), int(request['amount'])])
-        except Exception as error:
-            raise InvalidPreview('Invalid Uniswap quote input.') from error
-
-    async def quote(self, mode, data, block):
-        response = await self.w3.provider.make_request('eth_call', [
-            {'to': self.quoter, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
-        if 'error' in response:
-            raise ValueError('Uniswap quote contract read failed')
-        outputs = next(row for row in ABI if row['name'] == METHODS[mode])['outputs']
-        decoded = self.w3.codec.decode([row['type'] for row in outputs], bytes.fromhex(response['result'][2:]))
-        # Existing App consumers use tuple[0]; gas/tick arrays do not select routes.
-        return {'amount': str(decoded[0])}
 
 
 class UniswapQuote:
-    def __init__(self, settings, rpc=None, now=None):
+    def __init__(self, settings, rpc=None, now=None, *, engine=None):
         self.settings, self.rpc = settings, rpc
+        self.engine = engine
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
 
     async def get(self, request):
+        try:
+            amount = int(request['amount'])
+            # Preserve the shipped ABI's uint256 input domain before RPC.
+            Web3().codec.encode(['uint256'], [amount])
+            plan = v3_plan(request['path'], request['mode'], amount,
+                chain_id=int(self.settings.NEXT_PUBLIC_CHAIN_ID))
+        except Exception as error:
+            raise InvalidPreview('Invalid Uniswap quote input.') from error
+        if self.engine is None:
+            raise RuntimeError('Shared route quote engine is not configured.')
         if self.rpc is None:
             self.rpc = UniswapQuoteRpc(self.settings)
-        data = self.rpc.encode(request)
         async with asyncio.timeout(15):
             block = await self.rpc.block(None)
-            result = await self.rpc.quote(request['mode'], data, block)
+            async with engine_work(self.engine.semaphore):
+                value = await self.engine.quote_branches(plan['branches'], plan['mode'], amount, block)
             await self.rpc.assert_canonical(block)
+            result = {'amount': str(value['amountOut' if plan['mode'] == 'exactIn' else 'amountIn'])}
             return {'mode': request['mode'], 'quoter': self.rpc.quoter, 'result': result,
                     'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
                                 'blockHash': block['hash'], 'observedAt': self.now()}}

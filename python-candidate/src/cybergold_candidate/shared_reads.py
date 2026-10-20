@@ -76,8 +76,11 @@ class SharedReads:
             for _, entry in new:
                 entry.task = task
         try:
-            values = await asyncio.gather(*(asyncio.shield(entry.future)
-                if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))
+            if len(selected) == 1 and selected[0][1] is not None:
+                values = [await asyncio.shield(selected[0][1].future)]
+            else:
+                values = await asyncio.gather(*(asyncio.shield(entry.future)
+                    if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))
             return values, counts
         finally:
             tasks = set()
@@ -91,6 +94,11 @@ class SharedReads:
             for task in tasks:
                 if not task.done() and not any(entry.users for entry in self.pending.values()
                                               if entry.task is task):
+                    # New callers must not join work already being cancelled.
+                    # The old producer's identity check preserves replacements.
+                    for key, entry in list(self.pending.items()):
+                        if entry.task is task:
+                            del self.pending[key]
                     task.cancel()
                     await asyncio.gather(task, return_exceptions=True)
 

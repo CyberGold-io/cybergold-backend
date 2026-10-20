@@ -25,8 +25,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                dashboard=None, on_shutdown=None, pool_cache=None, safe_service_url=None,
                safe_timeout_seconds=15, safe_status=None, faucet_settings=None, faucet_timeout_seconds=20,
                recovery=None,diagnostic_logger=None,release=None,aliases=None,protocol_facts=None,protocol_configuration=None,
-               shared_market=None,pool_producer=None,helpers_activity=None,pool_activity=None,basket_preview=None,governance_core_facts=None,
-               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None):
+               shared_market=None,pool_producer=None,helpers_activity=None,pool_activity=None,basket_preview=None,basket_max=None,governance_core_facts=None,
+               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None,universal_quotes=None):
     from .telemetry import Metrics, TelemetryMiddleware
     metrics=Metrics()
     owned_client = client is None
@@ -89,6 +89,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 await uniswap_registry.close()
             if basket_preview:
                 await basket_preview.close()
+            if basket_max:
+                await basket_max.close()
             if token_preview:
                 await token_preview.close()
             if trade_quotes:
@@ -372,6 +374,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
         from .basket_preview import handle_basket_preview
         return await handle_basket_preview(request, basket_preview)
 
+    @app.post('/api/quotes/basket-max')
+    async def basket_max_route(request: Request):
+        from .basket_max import handle_basket_max
+        return await handle_basket_max(request, basket_max)
+
     @app.post('/api/quotes/token-preview')
     async def token_preview_route(request: Request):
         from .token_preview import handle_token_preview
@@ -391,6 +398,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     async def market_quote_route(request: Request):
         from .market_swap import handle_market_quote
         return await handle_market_quote(request, market_quotes)
+
+    @app.post('/api/quotes/universal-exact-input')
+    async def universal_quote_route(request: Request):
+        from .universal_quote import handle_universal_quote
+        return await handle_universal_quote(request, universal_quotes)
 
     @app.post('/api/quotes/trade/stream')
     async def trade_quote_stream(request: Request):

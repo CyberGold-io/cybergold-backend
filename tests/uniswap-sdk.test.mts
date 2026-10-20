@@ -3,9 +3,10 @@ import { test } from 'node:test';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { quotePool, runRequest, sqrtRatioAtTick } from '../src/uniswap-sdk/engine.ts';
 import { MissingPoolState } from '../src/uniswap-sdk/types.ts';
-import type { PoolSnapshot } from '../src/uniswap-sdk/types.ts';
+import type { PoolSnapshot, SdkRequest, StateLoader } from '../src/uniswap-sdk/types.ts';
 const require = createRequire(import.meta.url);
 const { Token, CurrencyAmount } = require('@uniswap/sdk-core');
 const { Pool } = require('@uniswap/v3-sdk');
@@ -113,6 +114,22 @@ test('JSONL worker continues after malformed input and reports missing coverage'
   assert.equal(rows[2].result.amountOut,'1992');
 });
 
+test('JSONL worker identifies SDK minimum-input rounding without classifying unrelated errors',async()=>{
+  const child=spawn(process.execPath,['src/uniswap-sdk/worker.ts'],{stdio:['pipe','pipe','pipe']});
+  let out='',err='';child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
+  const tiny={...pair,reserve0:'100000000',reserve1:'1000000'};
+  child.stdin.end([
+    {id:'small',operation:'quote',mode:'exactIn',amount:'100',zeroForOne:true,pools:[tiny]},
+    {id:'ordinary',operation:'unknown',pools:[]},
+    {id:'ok',operation:'quote',mode:'exactIn',amount:'101',zeroForOne:true,pools:[tiny]},
+  ].map(row=>JSON.stringify(row)).join('\n')+'\n');
+  const [exit]=await once(child,'exit');assert.equal(exit,0,err);
+  const rows=out.trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(rows[0].error.code,'SDK_INPUT_TOO_SMALL');
+  assert.equal(rows[1].error.code,'SDK_ERROR');
+  assert.equal(rows[2].result.amountOut,'1');
+});
+
 test('Universal Router SDK 2.2 command reference has the extra hop price tuple field',async()=>{
   const { RoutePlanner, CommandType, UniversalRouterVersion }=require('@uniswap/universal-router-sdk');
   const { AbiCoder }=require('@ethersproject/abi');
@@ -134,4 +151,157 @@ test('JSONL cancellation terminates a queued request without poisoning the next 
   assert.equal(rows[0].result.amountOut,'1992');
   assert.equal(rows[1].error.code,'CANCELLED');
   assert.equal(rows[2].result.amountOut,'1992');
+});
+
+const sparseRange: PoolSnapshot = { ...concentrated, id:'sparse-range', feePips:100, tickSpacing:1,
+  liquidity:'0', ticks:[{index:-6144,liquidityGross:'1000000000000',liquidityNet:'-1000000000000'}],
+  bitmapWords:Array.from({length:26},(_,index)=>({wordPosition:index===0?0:-index,bitmap:index===24?'1':'0'})) };
+
+test('continued SDK state preserves the whole result and mutable state across repeated opposite pool use',async()=>{
+  for(const mode of ['exactIn','exactOut'] as const){
+    const original=structuredClone(sparseRange);
+    const request: SdkRequest = {id:mode,operation:'simulateRoute',mode,amount:'1000',pools:[sparseRange],
+      route:{branches:[{amountIn:'1000',hops:mode==='exactIn'
+        ?[{poolId:sparseRange.id,zeroForOne:true},{poolId:sparseRange.id,zeroForOne:false}]
+        :[{poolId:sparseRange.id,zeroForOne:true}]}]}};
+    const expected=await runRequest(request);
+    const requestedWords:number[]=[],requestedTicks:number[]=[];
+    const load: StateLoader = async missing=>{
+      assert.equal(missing.poolId,sparseRange.id);
+      requestedWords.push(...missing.wordPositions);requestedTicks.push(...missing.ticks);
+      return [{id:missing.poolId,
+        bitmapWords:missing.wordPositions.map(position=>{
+          const row=sparseRange.bitmapWords!.find(word=>word.wordPosition===position);assert.ok(row);return row;
+        }),ticks:missing.ticks.map(index=>{
+          const row=sparseRange.ticks!.find(tick=>tick.index===index);assert.ok(row);return row;
+        })}];
+    };
+    const continued=await runRequest({...request,pools:[{...sparseRange,ticks:[],bitmapWords:[]}]},undefined,load);
+    assert.deepEqual(continued,expected);
+    assert.deepEqual(requestedWords,Array.from({length:26},(_,index)=>index===0?0:-index));
+    assert.deepEqual(requestedTicks,[-6144]);
+    assert.deepEqual(sparseRange,original);
+    assert.ok(Array.isArray(expected.postState));
+    assert.notEqual(expected.postState[0].sqrtRatioX96,sparseRange.sqrtRatioX96);
+    assert.ok('residuals' in continued);
+    assert.equal(continued.remainingAmount,'0');assert.deepEqual(continued.residuals,[]);
+  }
+});
+
+function jsonlWorker(t:{after:(cleanup:()=>void)=>void}){
+  const child=spawn(process.execPath,['src/uniswap-sdk/worker.ts'],{stdio:['pipe','pipe','pipe']});
+  let stderr='';child.stderr.on('data',data=>stderr+=data);
+  const exited=once(child,'exit');
+  const lines=createInterface({input:child.stdout,crlfDelay:Infinity})[Symbol.asyncIterator]();
+  t.after(()=>{if(child.exitCode===null)child.kill();});
+  return {
+    send:(...requests:unknown[])=>child.stdin.write(requests.map(row=>JSON.stringify(row)).join('\n')+'\n'),
+    next:async()=>{const row=await lines.next();assert.equal(row.done,false,stderr);return JSON.parse(row.value!);},
+    outputAvailable:()=>once(child.stdout,'data'),
+    finish:async()=>{
+      child.stdin.end();const extra=[];
+      for(let row=await lines.next();!row.done;row=await lines.next())extra.push(JSON.parse(row.value));
+      const [code]=await exited;assert.equal(code,0,stderr);return extra;
+    },
+  };
+}
+const pairRequest=(id:string):SdkRequest=>({id,operation:'quote',mode:'exactIn',amount:'1000',zeroForOne:true,pools:[pair]});
+const compactPool=({ticks:_ticks,bitmapWords:_words,...pool}:PoolSnapshot)=>pool;
+
+test('cancel ACK follows an already queued required-state frame without a late terminal frame', {timeout:10000},async t=>{
+  const worker=jsonlWorker(t);
+  worker.send({id:'paused',operation:'quote',mode:'exactIn',amount:'1000',zeroForOne:true,
+    pools:[{...concentrated,bitmapWords:[]}],continueState:true},
+    {id:'paused',operation:'cancel',acknowledge:true});
+  const state=await worker.next();assert.equal(state.id,'paused');assert.equal(state.stateRequest[0].wordPositions[0],0);
+  assert.deepEqual(await worker.next(),{id:'paused',cancelled:true});
+  worker.send(pairRequest('after-state-cancel'));
+  const next=await worker.next();assert.equal(next.id,'after-state-cancel');assert.equal(next.result.amountOut,'1992');
+  assert.deepEqual(await worker.finish(),[]);
+});
+
+test('cancel ACK also follows a completed result that was queued before cancellation', {timeout:10000},async t=>{
+  const worker=jsonlWorker(t),available=worker.outputAvailable();
+  worker.send({...pairRequest('completed'),continueState:true});await available;
+  worker.send({id:'completed',operation:'cancel',acknowledge:true});
+  const completed=await worker.next();assert.equal(completed.id,'completed');assert.equal(completed.result.amountOut,'1992');
+  assert.deepEqual(await worker.next(),{id:'completed',cancelled:true});
+  worker.send(pairRequest('after-result-cancel'));
+  assert.equal((await worker.next()).id,'after-result-cancel');
+  assert.deepEqual(await worker.finish(),[]);
+});
+
+test('active continued cancellation preserves a foreign paused calculation and suppresses late owned replies', {timeout:10000},async t=>{
+  const worker=jsonlWorker(t);
+  worker.send({id:'foreign-paused',operation:'quote',mode:'exactIn',amount:'1000',zeroForOne:true,
+    pools:[{...concentrated,bitmapWords:[]}],continueState:true});
+  const state=await worker.next();assert.equal(state.id,'foreign-paused');assert.ok(state.stateRequest);
+  // Fully observed zero-liquidity words keep the actual SDK calculation active;
+  // cancellation needs no provider, additional observation or native action.
+  const empty={...sparseRange,id:'empty-range',ticks:[],bitmapWords:Array.from({length:3467},(_,index)=>({wordPosition:-index,bitmap:'0'}))};
+  worker.send({id:'active',operation:'quote',mode:'exactOut',amount:'1000',zeroForOne:true,pools:[empty],continueState:true},
+    {id:'active',operation:'cancel',acknowledge:true});
+  assert.deepEqual(await worker.next(),{id:'active',cancelled:true});
+  worker.send({id:'foreign-paused',operation:'resume',coverage:[{id:concentrated.id,
+    ticks:concentrated.ticks,bitmapWords:concentrated.bitmapWords}]});
+  const actual=await worker.next(),expected=await quotePool(concentrated,'exactIn','1000',true);
+  assert.equal(actual.id,'foreign-paused');
+  assert.deepEqual(actual.result,{...expected,postState:compactPool(expected.postState)});
+  worker.send(pairRequest('after-active-cancel'));assert.equal((await worker.next()).id,'after-active-cancel');
+  assert.deepEqual(await worker.finish(),[]);
+});
+
+test('native V4 currencies retain numeric swap and mixed route replay semantics',async()=>{
+  const native={...t0,address:'0x0000000000000000000000000000000000000000'};
+  const v4={...concentrated,id:'native-v4',protocol:'v4' as const,token0:native,lpFee:3000,protocolFee:0,
+    hooks:'0x0000000000000000000000000000000000000000'};
+  for(const direction of [true,false]) {
+    const expected=await quotePool(concentrated,'exactIn','1000000000000',direction);
+    const actual=await quotePool(v4,'exactIn','1000000000000',direction);
+    assert.equal(actual.amountOut,expected.amountOut);
+    const mixed=await runRequest({id:3,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',pools:[v4],
+      route:{branches:[{amountIn:'1000000000000',hops:[{poolId:v4.id,zeroForOne:direction}]}]}});
+    assert.equal(mixed.amountOut,actual.amountOut);
+    assert.ok(Array.isArray(mixed.postState));
+    assert.equal(mixed.postState[0].token0.address,native.address);
+  }
+});
+
+test('native V4 / V3 / V2 mixed hops replay in native input/output on Mainnet and Mainnet-backed Sandbox',async()=>{
+  for(const chainId of [1,31338]) {
+  const native={...t0,chainId,address:'0x0000000000000000000000000000000000000000'};
+  const t2={...t1,chainId,address:'0x0000000000000000000000000000000000000003'};
+  const t3={...t1,chainId,address:'0x0000000000000000000000000000000000000004'};
+  const v4={...concentrated,id:'native-first',protocol:'v4' as const,token0:native,token1:{...t1,chainId},lpFee:3000,protocolFee:0,
+    hooks:'0x0000000000000000000000000000000000000000'};
+  const v3={...concentrated,id:'middle-v3',token0:{...t1,chainId},token1:t2};
+  const v2={...pair,id:'last-v2',token0:t2,token1:t3};
+  for(const direction of [true,false]) {
+    const ordered=direction?[v4,v3,v2]:[v2,v3,v4];
+    let expected='1000000000000';
+    for(const pool of ordered) expected=(await quotePool(pool,'exactIn',expected,direction)).amountOut;
+    const result=await runRequest({id:4,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',
+      pools:[v4,v3,v2],route:{branches:[{amountIn:'1000000000000',hops:ordered.map(pool=>({poolId:pool.id,zeroForOne:direction}))}]}});
+    assert.equal(result.amountOut,expected);
+    assert.ok("settled" in result);
+    assert.equal(result.settled,true);
+  }
+  }
+});
+
+test('Sandbox native/WETH boundary retains the Mainnet-backed wrapped identity',async()=>{
+  const chainId=31338;
+  const native={...t0,chainId,address:'0x0000000000000000000000000000000000000000'};
+  const asset={...t1,chainId};
+  const output={...t1,chainId,address:'0x0000000000000000000000000000000000000003'};
+  const wrapped={...t1,chainId,address:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'};
+  const v4={...concentrated,id:'sandbox-native',protocol:'v4' as const,token0:native,token1:asset,
+    lpFee:3000,protocolFee:0,hooks:'0x0000000000000000000000000000000000000000'};
+  const v3={...concentrated,id:'sandbox-weth',token0:output,token1:wrapped};
+  const expectedFirst=await quotePool(v4,'exactIn','1000000000000',false);
+  const expected=await quotePool(v3,'exactIn',expectedFirst.amountOut,false);
+  const result=await runRequest({id:5,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',
+    pools:[v4,v3],route:{branches:[{amountIn:'1000000000000',hops:[
+      {poolId:v4.id,zeroForOne:false},{poolId:v3.id,zeroForOne:false}]}]}});
+  assert.equal(result.amountOut,expected.amountOut);
 });

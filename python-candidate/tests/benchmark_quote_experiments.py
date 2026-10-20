@@ -1,7 +1,8 @@
 """Read-only local comparison; no production feature flags or reset commands.
 
 PYTHONPATH=src .venv/bin/python tests/benchmark_quote_experiments.py --help
-Live mode must run through Ops' existing authenticated_rpc.py wrapper. It uses
+All current variants share SDK pricing; retired native-Quoter batch variants
+remain only in historical evidence. Live mode must run through Ops' existing authenticated_rpc.py wrapper. It uses
 the captured public request cohort and App's public configuration, never keys.
 """
 import argparse
@@ -23,15 +24,15 @@ from web3 import AsyncWeb3
 
 from cybergold_candidate.quote_intent import QuoteIntent
 from cybergold_candidate.quote_cache import VerifiedGrossSeed
-from cybergold_candidate.quote_experiments import BasketMath, GrossSeeds, IntentSharing, RecentGroups, SharingQuoterRpc, bracket_step, midpoint_step, ceil_scale_step, upper_secant_step, local_secant_step
+from cybergold_candidate.quote_experiments import BasketMath, GrossSeeds, IntentSharing, bracket_step, midpoint_step, ceil_scale_step, upper_secant_step, local_secant_step
 from cybergold_candidate.route_search import RouteSearch, RouteSearchRpc, WETH
 from cybergold_candidate.shared_reads import SharedReads
 
 
 from cybergold_candidate.quote_correction import delayed_local_step
 
-VARIANTS = ('baseline', 'quoter-sharing', 'intent-sharing', 'neighbor', 'repeat-seed', 'interpolation',
-            'bracket', 'midpoint', 'basket-math', 'route-math', 'completed-math', 'recent-groups', 'sharing+neighbor', 'sharing+math', 'production-sharing',
+VARIANTS = ('baseline', 'intent-sharing', 'neighbor', 'repeat-seed', 'interpolation',
+            'bracket', 'midpoint', 'basket-math', 'sharing+neighbor', 'sharing+math', 'production-sharing',
             'ceil-scale', 'upper-secant', 'local-secant', 'delayed-local')
 
 CORRECTIONS = {'bracket': bracket_step, 'midpoint': midpoint_step,
@@ -103,8 +104,6 @@ async def main(args):
             continue
         services = {}
         for variant in variants:
-            quoter_shared = variant in ('quoter-sharing','route-math','completed-math','sharing+neighbor','sharing+math','production-sharing')
-            rpc_type = SharingQuoterRpc if quoter_shared else RouteSearchRpc
             counters = {'batchCalls':0,'batchReads':0,'providerReadsRequested':0,'providerReadsIssued':0,'providerCoalesced':0,'providerHttpCalls':0}
             if args.fixture:
                 provider, wire = Provider(), QuoteWire()
@@ -123,17 +122,15 @@ async def main(args):
                         return await provider.reads.one(json.dumps([method,params],sort_keys=True),transport)
                     return await transport()
                 provider.make_request = delayed_provider
-                rpc = rpc_type(settings, AsyncWeb3(provider), httpx.AsyncClient(transport=httpx.MockTransport(delayed)))
+                rpc = RouteSearchRpc(settings, AsyncWeb3(provider), httpx.AsyncClient(transport=httpx.MockTransport(delayed)))
             else:
-                rpc = rpc_type(settings)
+                rpc = RouteSearchRpc(settings)
                 manager = rpc.w3.provider._request_session_manager
                 post = manager.async_make_post_request
                 async def counted_post(*parts, post=post, counters=counters, **kwargs):
                     counters['providerHttpCalls'] += 1
                     return await post(*parts, **kwargs)
                 manager.async_make_post_request = counted_post
-            if variant in ('route-math','completed-math','production-sharing'):
-                rpc.retain_completed = True
             batch = rpc.call_batch
             async def counted_batch(calls, block, batch=batch, counters=counters):
                 counters['batchCalls'] += 1
@@ -152,8 +149,14 @@ async def main(args):
             seeds = GrossSeeds(interpolate=variant == 'interpolation',exact=variant=='repeat-seed') if variant in ('neighbor','repeat-seed','interpolation','sharing+neighbor') else None
             if variant == 'production-sharing':
                 seeds = VerifiedGrossSeed()
-            math = BasketMath() if variant in ('basket-math','completed-math','sharing+math','production-sharing') else None
-            routes = RouteSearch(settings, rpc, group_planner=RecentGroups() if variant == 'recent-groups' else None)
+            math = BasketMath() if variant in ('basket-math','sharing+math','production-sharing') else None
+            routes = RouteSearch(settings, rpc)
+            if args.fixture:
+                from route_engine_fixture import install_fixture_engine
+                install_fixture_engine(routes)
+            else:
+                from cybergold_candidate.market_swap import MarketQuotes
+                routes.engine = MarketQuotes(settings)
             intent = QuoteIntent(settings, routes, seeds=seeds, basket_math=math,
                                  correction=CORRECTIONS.get(variant))
             shared = IntentSharing(intent) if variant in ('intent-sharing','sharing+neighbor','sharing+math','production-sharing') else None
@@ -178,7 +181,6 @@ async def main(args):
                 for variant in order:
                     service, routes, counters, math, shared = services[variant]
                     before = dict(counters)
-                    sharing_before = dict(getattr(routes.rpc, 'counts', {}))
                     math_before = math.hits if math else 0
                     joined_before = shared.joined if shared else 0
                     async def call(client):
@@ -202,7 +204,6 @@ async def main(args):
                     delta = {key:counters[key]-before[key] for key in counters}
                     delta['issuedReads'] = delta['batchReads']+delta['providerHttpCalls']
                     delta['httpEnvelopes'] = delta['batchCalls']+delta['providerHttpCalls']
-                    delta['quoterSharing'] = {k:v-sharing_before.get(k,0) for k,v in getattr(routes.rpc,'counts',{}).items()}
                     delta['basketMathHits'] = (math.hits if math else 0)-math_before
                     delta['intentJoins'] = (shared.joined if shared else 0)-joined_before
                     rows[0]['cohortTransport'] = delta
@@ -215,6 +216,7 @@ async def main(args):
                 if shared: await shared.close()
                 if math: await math.close()
                 await routes.close()
+                if not args.fixture: await routes.engine.close()
     save()
 
 

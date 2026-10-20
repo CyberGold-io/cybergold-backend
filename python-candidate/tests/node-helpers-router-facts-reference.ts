@@ -12,10 +12,11 @@ const rows=abi.map((fn:any)=>{
   return {name:fn.name,data:encodeFunctionData({abi,functionName:fn.name}),
     result:encodeFunctionResult({abi,functionName:fn.name,result:values[fn.name]})};
 });
-const selectorMethods = ['issueFromTokenExactOutWithPermit',
+const historical=JSON.parse(readFileSync('python-candidate/src/cybergold_candidate/helpers-historical-probe-abi.json','utf8'));
+const selectorMethods = ['executeExactInput', 'issueFromTokenExactOutWithPermit',
   'issueFromBasketExactInWithMixedPermits', 'issueFromBasketExactOutWithMixedPermits'];
 const selectors = Object.fromEntries(selectorMethods.map(name => {
-  const entry = HELPERS_DIAMOND_ABI.find(entry => entry.type === 'function' && entry.name === name);
+  const entry = [...HELPERS_DIAMOND_ABI,...historical].find(entry => entry.type === 'function' && entry.name === name);
   assert.ok(entry && entry.type === 'function');
   return [name, toFunctionSelector(entry)];
 }));

@@ -49,6 +49,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/universal-exact-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Gross-funded universal exact-input plans for scalar Core/Market mixtures and direct basket issue/redemption. One joint Core invocation per candidate; 0/25/50/75/100 Core allocation and both mixed orders replay shared AMM pools in execution order. Measured unused AMM input is a disclosed protocol charge held by Helpers under its current owner. Native ETH and WETH are distinct currencies. The configured successor address is required; no signing, submission, deployment, or silent legacy-plan rebinding. */
+        post: operations["post__api_quotes_universal_exact_input"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/market": {
         parameters: {
             query?: never;
@@ -58,7 +75,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Market-only CYGLD swaps through Helpers and the approved multi-protocol adapter. Quoter-qualified raw AMM amounts, quoted ceiling-rounded CYGLD fee, inclusive funding and net user bounds; never Core basket previews. Native permit signing and actual full-call simulation remain in the wallet flow. The cached beneficiary is advisory; Helpers resolves its live owner internally. No signing, submission or quote-time fee-recipient RPC. */
+        /** @description Fresh exact-input requests delegate to the universal coordinator quote service when its release is configured, returning a disclosed Core/Market/mixed plan. True exact-output and captured legacy plans keep their original address, encoding, and refund semantics. Wallet funding, signing, full-call simulation and submission remain in the App. */
         post: operations["post__api_quotes_market"];
         delete?: never;
         options?: never;
@@ -108,7 +125,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description One CYGLD trading intent compares complete Core and supported market candidates after their existing fees. Backend owns basket targets and default adapter selection; one pinned context, progressive qualified winners, tagged retained execution and ordinary independent provider errors. Wallet signing, actual signed-call simulation and submission remain browser-owned. */
+        /** @description Fresh exact-input trades use the universal Core/Market allocation grid when the universal release is configured. True exact-output preserves existing provider selection. A fresh output-target Core-sale winner becomes a newly disclosed Core-only universal quote at its solved gross input, preserving accepted scalar and Core vector minima. Captured legacy plans never silently change address or encoding. Signing and submission remain in the App. */
         post: operations["post__api_quotes_trade_stream"];
         delete?: never;
         options?: never;
@@ -650,7 +667,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Optional tokenPermitIssuance=true observes the native single-token selector; basketPermitIssuance=true separately observes mixed basket exact-in and exact-out selectors through existing Diamond facetAddress reads. Absence remains false and read failure remains unavailable; callers can retain the installed legacy Permit2 basket operation. Signing/submission stay browser-owned. */
+        /** @description Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Historical tokenPermitIssuance/basketPermitIssuance probes report selector installation for retained deployments; universalExactInput=true separately observes the canonical executeExactInput selector through the same Diamond facetAddress read. Absence remains false and read failure remains unavailable. Signing/submission stay browser-owned. */
         get: operations["get__api_governance_helpers_facts"];
         put?: never;
         post?: never;
@@ -711,6 +728,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/basket-max": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Largest wallet-bounded proportional basket driver whose unclipped direct-basket mint fits current gross capacity. Uses configured Core assets, weights, decimals, conversion and fee rounding at one canonical block, with an ordinary positive exact-in Helpers preview. Zero capacity returns zero amounts. No wallet read, signing, submission, Market basket provider or client fee calculation. */
+        post: operations["post__api_quotes_basket_max"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/token-preview": {
         parameters: {
             query?: never;
@@ -737,7 +771,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Configured Quoter route search for all ordered targets in one wave. Direct and via-WETH candidates retain the existing fee policy, exact-output reversal and deterministic ties. Independent simulations are batched at one canonical block; ordinary member reverts remain partial failures. No pool preparation/persistence, caller-selected path, ABI, provider or target contract. Lossless amounts, no-store, existing deadline/cancellation and stage metrics. */
+        /** @description Route search for all ordered targets through one structured route engine and shared candidate scheduler. Preserves direct/via-WETH V3 fee coverage alongside the selected protocol inventory, using SDK pool math and ordinary native Quoter fallback at one canonical block. Exact-output path reversal is a compatibility projection; internal routes keep forward economic direction. Independent candidate failures remain partial failures. No caller-selected ABI, provider or target contract, wallet signing or submission. Lossless amounts, no-store and existing deadline/cancellation; RPC metrics marked coordinator are not supplier call totals. */
         post: operations["post__api_quotes_routes"];
         delete?: never;
         options?: never;
@@ -754,7 +788,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Newline-delimited progress snapshots as independent candidate reads settle at one shared block. Progress is provisional; only complete follows the existing canonicality check. Full candidate coverage, deterministic ties, deduplication, pool batches, ordinary member errors, deadline and cancellation are unchanged. Transport/reorg failure emits a redacted terminal error with optional observed RPC diagnostics. No caller-selected contract/provider or submission. */
+        /** @description Newline-delimited progress snapshots as candidates settle through the common structured route engine and scheduler. Known inventory overlaps discovery; provisional progress does not prove execution readiness, and only complete follows the existing canonicality check. Original V3 coverage and selected graph routes share SDK pricing, native fallback, candidate errors and owned-task cancellation/drain. Transport/reorg failure emits a redacted terminal error with optional observed RPC diagnostics. No caller-selected contract/provider or submission. */
         post: operations["post__api_quotes_routes_stream"];
         delete?: never;
         options?: never;
@@ -771,7 +805,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Issuance/redemption flows at one canonical context. Streams display-only models/estimates and optional complete pool-quoted, Helpers-validated qualified execution tuples while full route coverage continues. Then complete or error, with optional observed RPC diagnostics. Preserves integer slippage, exact-output calldata and the bounded redemption correction loop. No signing or submission. */
+        /** @description Recipient-less legacy Core quote API. Once the universal release is configured, modes that previously executed exact input return explicitly read-only numeric results without leg calldata or execution recipes. Pure numerical previews and true issue exact-output retain their existing behavior; use the canonical universal endpoint for new exact-input execution. */
         post: operations["post__api_quotes_intent_stream"];
         delete?: never;
         options?: never;
@@ -788,7 +822,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Configured QuoterV2 exact-input/output eth_call at a canonical block. Ordered path bytes and amount retain existing App route/tie/slippage semantics; only tuple[0] is consumed as a lossless amount. No caller-selected contract, ABI/provider, wallet signing or transaction submission. No additional hop, token or path policy. */
+        /** @description A caller-selected V3 path is normalized once to a forward structured route and priced by the same SDK quote engine and ordinary native Quoter fallback as route search, at one canonical block. Exact-output packed input retains its established reversed wire order; the result remains one lossless decimal amount. The returned Quoter address identifies the configured native reference, not the source of every successful computation. No caller-selected contract, ABI/provider, wallet signing or transaction submission, and no additional hop, token or path policy. */
         post: operations["post__api_quotes_uniswap"];
         delete?: never;
         options?: never;
@@ -1105,6 +1139,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        QuoteErrorCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        UniversalExactInputPlan: components["schemas"]["Omit<UniversalExactInputRequest,\"slippageBps\">"] & {
+            minimumOutput: string;
+            body: string;
+        };
+        "Omit<UniversalExactInputRequest,\"slippageBps\">": {
+            deadline: string;
+            recipient: string;
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            /** @enum {number} */
+            intent: 0 | 1 | 2 | 3;
+            outputCurrency: string;
+        };
+        "Record<string,unknown>": Record<string, never>;
         TradeQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -1163,28 +1215,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -1211,28 +1242,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -1279,28 +1289,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1327,28 +1316,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1512,15 +1480,167 @@ export interface components {
                         rpcReadsRequested: number;
                         rpcReadsCoalesced: number;
                         rpcReadsReused: number;
+                        /** @constant */
+                        rpcReadsScope?: "coordinator";
                         candidateCalls: number;
                         iterations: number;
                         totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
                     };
                 };
             } | {
                 /** @constant */
                 strategy: "market";
-                /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
                 request: {
                     /** @enum {string} */
                     side: "buy" | "sell";
@@ -1551,28 +1671,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1664,28 +1763,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1743,10 +1821,188 @@ export interface components {
                     metrics: {
                         candidateCalls: number;
                         totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
                     };
                 };
             };
         };
+        RoutePoolRef: components["schemas"]["Omit<MarketPoolRef,\"token0\"|\"token1\">"] & {
+            /** @description Executable identity can precede optional SDK/display metadata acquisition. */
+            token0: {
+                address: string;
+                decimals?: number;
+                chainId?: number;
+                decimalsKnown?: boolean;
+            };
+            /** @description Executable identity can precede optional SDK/display metadata acquisition. */
+            token1: {
+                address: string;
+                decimals?: number;
+                chainId?: number;
+                decimalsKnown?: boolean;
+            };
+        };
+        "Omit<MarketPoolRef,\"token0\"|\"token1\">": {
+            address?: string;
+            id: string;
+            /** @enum {string} */
+            protocol: "v2" | "v3" | "v4";
+            feePips: number;
+            tickSpacing?: number;
+            poolManager?: string;
+            hooks?: string;
+        };
+        /** @description Additive maps are optional for compatibility with prior served responses. */
         TradeQuote: ({
             /** @enum {string} */
             side: "buy" | "sell";
@@ -1768,6 +2024,12 @@ export interface components {
             metrics: {
                 totalMs: number;
                 targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         } & {
             /** @constant */
@@ -1815,28 +2077,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1863,28 +2104,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -1931,28 +2151,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -1979,28 +2178,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2164,10 +2342,170 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        } & {
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
             };
         }) | ({
             /** @enum {string} */
@@ -2190,11 +2528,16 @@ export interface components {
             metrics: {
                 totalMs: number;
                 targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
             };
         } & {
             /** @constant */
             strategy: "market";
-            /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
             providerRequest: {
                 /** @enum {string} */
                 side: "buy" | "sell";
@@ -2225,28 +2568,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2338,28 +2660,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2417,7 +2718,165 @@ export interface components {
                 metrics: {
                     candidateCalls: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        } & {
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
             };
         });
         TradeEvaluation: {
@@ -2426,7 +2885,1239 @@ export interface components {
             /** @enum {string} */
             market: "complete" | "running" | "unavailable" | "unsupported";
         };
-        TradeQuoteEvent: {
+        TradeProviderAssessments: {
+            core: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+            market: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+        /** @description One complete provider plan, without recursive provider evidence maps. */
+        CoreTradeProviderCandidate: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "core";
+            providerRequest: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                token: string;
+                quoteToken: string;
+                native: boolean;
+                amount: string;
+                adapter?: string;
+                deadline: string;
+                orderedAssets: string[];
+                targets: {
+                    inputAsset: string;
+                    outputAsset: string;
+                    amount: string;
+                }[];
+                /**
+                 * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                 * @default 100
+                 */
+                slippageBps: number;
+                retainedPlan?: {
+                    slippageBps?: number;
+                    expectedInputAmount?: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    minimumAmountOut: string;
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    expectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                };
+            };
+            providerQuote: {
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                quotes: (({
+                    adapter: string;
+                    amountIn: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    outputAsset: string;
+                }) | ({
+                    adapter: string;
+                    minimumAmountOut: string;
+                    data: string;
+                    routePlan?: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                } & {
+                    inputAsset: string;
+                    inputAmount: string;
+                }))[];
+                preview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                initialPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    orderedCoreAssets: string[];
+                } | {
+                    minimumAmountOut: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | null;
+                basketPreview: {
+                    netCygldOut: string;
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                    amountsInExact: string[];
+                    orderedCoreAssets: string[];
+                } | {
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                } | {
+                    grossCygldIn: string;
+                    projectedCoreOutputs: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        amount: string;
+                    }[];
+                    fees: {
+                        protocolFeeCygld: string;
+                        helperFeeCygld: string;
+                    };
+                };
+                displayAmount: string;
+                executionAmount: string;
+                maximumInputAmount: string;
+                slippageBps?: number;
+                /** @description Expected input before execution cushions, including direct basket input. */
+                expectedInputAmount?: string;
+                requestedGrossCygldOut?: string;
+                requestedNetCygldOut?: string;
+                remainingGrossCapacity?: string;
+                remainingNetCapacity?: string;
+                expectedOutputAmount?: string;
+                expectedCoreOutputs?: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    minimumAmount: string;
+                }[];
+                metrics: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+        MarketTradeProviderCandidate: {
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            quotedInput: string;
+            quotedOutput: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            evaluation: components["schemas"]["TradeEvaluation"];
+            metrics: {
+                totalMs: number;
+                targetReads: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+        } & {
+            /** @constant */
+            strategy: "market";
+            providerRequest: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                counterToken: string;
+                amount: string;
+                adapter?: string;
+                recipient: string;
+                deadline: string;
+                slippageBps?: number;
+                retainedPlan?: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+            };
+            providerQuote: {
+                /** @constant */
+                operation: "market";
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                amountIn: string;
+                amountOut: string;
+                totalInput: string;
+                netOutput: string;
+                grossOutput: string;
+                routedAmountIn: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                refundDust: string;
+                outputRefundEstimate?: string;
+                fee: {
+                    asset: string;
+                    ratePpm: number;
+                    amount: string;
+                    /** @constant */
+                    basis: "quoted";
+                    notional: string;
+                };
+                params: {
+                    /** @enum {number} */
+                    side: 0 | 1;
+                    counterToken: string;
+                    amount: string;
+                    bound: string;
+                    routedInput: string;
+                    feeCygld: string;
+                    recipient: string;
+                    deadline: string;
+                    adapter: string;
+                    data: string;
+                };
+                adapterData: string;
+                plan: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    amount: string;
+                    slippageBps: number;
+                    route: {
+                        /** @constant */
+                        version: 1;
+                        /** @enum {string} */
+                        executionContext: "helpers-core" | "helpers-market";
+                        /** @enum {string} */
+                        mode: "exactIn" | "exactOut";
+                        tokenIn: string;
+                        tokenOut: string;
+                        branches: {
+                            amountIn: string;
+                            hops: {
+                                pool: components["schemas"]["RoutePoolRef"];
+                                zeroForOne: boolean;
+                            }[];
+                        }[];
+                        inputAmount: string;
+                        outputAmount: string;
+                        limit: string;
+                        deadline: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                feeBeneficiaryDisplay?: {
+                    address: string;
+                    observedAt: string;
+                };
+                /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                priceImpactPpm?: string;
+                /** @enum {string} */
+                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                executionSimulationRequired?: boolean;
+                quoteVerificationUnavailable?: string;
+                searchCoverage?: {
+                    /** @constant */
+                    scope: "selected-inventory";
+                    maxHops: number;
+                    splitPercentages: number[];
+                    inventoryPools: number;
+                    catalogMonth: null | string;
+                };
+                metrics: {
+                    candidateCalls: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+        TradeProviderCandidate: components["schemas"]["CoreTradeProviderCandidate"] | components["schemas"]["MarketTradeProviderCandidate"];
+        TradeQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             value: {
@@ -2471,28 +4162,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -2608,28 +4278,7 @@ export interface components {
                                 branches: {
                                     amountIn: string;
                                     hops: {
-                                        pool: {
-                                            id: string;
-                                            /** @enum {string} */
-                                            protocol: "v2" | "v3" | "v4";
-                                            token0: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            token1: {
-                                                address: string;
-                                                decimals: number;
-                                                chainId: number;
-                                                decimalsKnown?: boolean;
-                                            };
-                                            address?: string;
-                                            feePips: number;
-                                            tickSpacing?: number;
-                                            poolManager?: string;
-                                            hooks?: string;
-                                        };
+                                        pool: components["schemas"]["RoutePoolRef"];
                                         zeroForOne: boolean;
                                     }[];
                                 }[];
@@ -2664,18 +4313,1183 @@ export interface components {
                     strategy: "core" | "market";
                     amount: string;
                 };
+                /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+                budgetRange?: {
+                    minimumBudget: string;
+                    maximumBudget?: string;
+                    quotedInput: string;
+                    quotedOutput: string;
+                };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             /** @enum {string} */
             strategy: "core" | "market";
             amount: string;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @enum {string} */
             type: "complete" | "qualified";
-            value: components["schemas"]["TradeQuote"];
-        } | {
+            value: {
+                /** @constant */
+                strategy: "universal";
+                /** @enum {string} */
+                routeFamily: "core" | "market" | "mixed";
+                /** @constant */
+                operation: "executeExactInput";
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+                plan: components["schemas"]["UniversalExactInputPlan"];
+                planDescription: components["schemas"]["Record<string,unknown>"];
+                inputs: {
+                    currency: string;
+                    amount: string;
+                }[];
+                quotedInput?: string;
+                inputMaximum?: string;
+                quotedOutput: string;
+                outputMinimum: string;
+                estimatedRetainedInputCharges: {
+                    branch: number;
+                    stage: number;
+                    currency: string;
+                    amount: string;
+                }[];
+                estimatedRecipientOutputs: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                recoveryShares: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                deployment: {
+                    helpers: string;
+                    adapter: string;
+                    /** @constant */
+                    encoding: "uniswap-routing-v1";
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                retentionDisclosure: {
+                    custodian: string;
+                    /** @constant */
+                    beneficiary: "helpers-owner-at-settlement";
+                };
+                searchCoverage: {
+                    coreSharesPercent: number[];
+                    orders: string[];
+                    maxCoreInvocations: number;
+                    maxAmmHops: number;
+                    /** @constant */
+                    scope: "selected-inventory";
+                };
+            } | ({
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                quotedInput: string;
+                quotedOutput: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                evaluation: components["schemas"]["TradeEvaluation"];
+                metrics: {
+                    totalMs: number;
+                    targetReads: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            } & {
+                /** @constant */
+                strategy: "core";
+                providerRequest: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    token: string;
+                    quoteToken: string;
+                    native: boolean;
+                    amount: string;
+                    adapter?: string;
+                    deadline: string;
+                    orderedAssets: string[];
+                    targets: {
+                        inputAsset: string;
+                        outputAsset: string;
+                        amount: string;
+                    }[];
+                    /**
+                     * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                     * @default 100
+                     */
+                    slippageBps: number;
+                    retainedPlan?: {
+                        slippageBps?: number;
+                        expectedInputAmount?: string;
+                        executionAmount: string;
+                        maximumInputAmount: string;
+                        minimumAmountOut: string;
+                        quotes: (({
+                            adapter: string;
+                            amountIn: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: components["schemas"]["RoutePoolRef"];
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            outputAsset: string;
+                        }) | ({
+                            adapter: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: components["schemas"]["RoutePoolRef"];
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            inputAsset: string;
+                            inputAmount: string;
+                        }))[];
+                        expectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            minimumAmount: string;
+                        }[];
+                    };
+                };
+                providerQuote: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    preview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    initialPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | null;
+                    basketPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    displayAmount: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    slippageBps?: number;
+                    /** @description Expected input before execution cushions, including direct basket input. */
+                    expectedInputAmount?: string;
+                    requestedGrossCygldOut?: string;
+                    requestedNetCygldOut?: string;
+                    remainingGrossCapacity?: string;
+                    remainingNetCapacity?: string;
+                    expectedOutputAmount?: string;
+                    expectedCoreOutputs?: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                    metrics: {
+                        rpcReads: number;
+                        rpcReadsRequested: number;
+                        rpcReadsCoalesced: number;
+                        rpcReadsReused: number;
+                        /** @constant */
+                        rpcReadsScope?: "coordinator";
+                        candidateCalls: number;
+                        iterations: number;
+                        totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
+                    };
+                };
+            } & {
+                providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+                providerCandidates?: {
+                    /** @description One complete provider plan, without recursive provider evidence maps. */
+                    core?: components["schemas"]["CoreTradeProviderCandidate"];
+                    market?: components["schemas"]["MarketTradeProviderCandidate"];
+                };
+            }) | ({
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                quotedInput: string;
+                quotedOutput: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                evaluation: components["schemas"]["TradeEvaluation"];
+                metrics: {
+                    totalMs: number;
+                    targetReads: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            } & {
+                /** @constant */
+                strategy: "market";
+                providerRequest: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    counterToken: string;
+                    amount: string;
+                    adapter?: string;
+                    recipient: string;
+                    deadline: string;
+                    slippageBps?: number;
+                    retainedPlan?: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                };
+                providerQuote: {
+                    /** @constant */
+                    operation: "market";
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    tokenIn: string;
+                    tokenOut: string;
+                    amountIn: string;
+                    amountOut: string;
+                    totalInput: string;
+                    netOutput: string;
+                    grossOutput: string;
+                    routedAmountIn: string;
+                    inputMaximum: string;
+                    outputMinimum: string;
+                    refundDust: string;
+                    outputRefundEstimate?: string;
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    adapterData: string;
+                    plan: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    feeBeneficiaryDisplay?: {
+                        address: string;
+                        observedAt: string;
+                    };
+                    /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                    priceImpactPpm?: string;
+                    /** @enum {string} */
+                    qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                    executionSimulationRequired?: boolean;
+                    quoteVerificationUnavailable?: string;
+                    searchCoverage?: {
+                        /** @constant */
+                        scope: "selected-inventory";
+                        maxHops: number;
+                        splitPercentages: number[];
+                        inventoryPools: number;
+                        catalogMonth: null | string;
+                    };
+                    metrics: {
+                        candidateCalls: number;
+                        totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
+                    };
+                };
+            } & {
+                providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+                providerCandidates?: {
+                    /** @description One complete provider plan, without recursive provider evidence maps. */
+                    core?: components["schemas"]["CoreTradeProviderCandidate"];
+                    market?: components["schemas"]["MarketTradeProviderCandidate"];
+                };
+            });
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "provider-qualified";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            value: components["schemas"]["TradeProviderCandidate"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "provider-assessment";
+            /** @enum {string} */
+            strategy: "core" | "market";
+            value: {
+                /** @enum {string} */
+                availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+                /** @enum {string} */
+                searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+                error?: string;
+                /** @enum {string} */
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                constraint?: {
+                    /** @enum {string} */
+                    kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                    /** @enum {string} */
+                    quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                    /** @enum {string} */
+                    limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                    requestedRaw?: string;
+                    availableRaw?: string;
+                    currentSupplyRaw?: string;
+                    limitRaw?: string;
+                };
+                /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+                diagnostics?: {
+                    rpcMethod?: string;
+                    stage?: string;
+                    elapsedMs?: number;
+                    upstreamErrorCode?: number;
+                    providerMessage?: string;
+                    httpStatus?: number;
+                    /** @enum {string} */
+                    failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                    errorSelector?: string;
+                    errorName?: string;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             /** @enum {string} */
@@ -2687,43 +5501,406 @@ export interface components {
                 completedCandidates?: number;
                 totalCandidates?: number;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "provider-error";
             /** @enum {string} */
             strategy: "core" | "market";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
-        } | {
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
             /** @enum {string} */
             strategy: "core" | "market";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
-        };
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+            providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+            providerCandidates?: {
+                /** @description One complete provider plan, without recursive provider evidence maps. */
+                core?: components["schemas"]["CoreTradeProviderCandidate"];
+                market?: components["schemas"]["MarketTradeProviderCandidate"];
+            };
+        });
         "Omit<QuoteIntentRequest,\"deadline\"|\"retainedPlan\">": {
             /** @enum {string} */
             mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
-            token: string;
             amount: string;
             targets: {
                 inputAsset: string;
                 outputAsset: string;
                 amount: string;
             }[];
+            token: string;
             native: boolean;
-            adapter?: string;
             /**
              * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
              * @default 100
              */
             slippageBps: number;
+            adapter?: string;
             quoteToken: string;
             orderedAssets: string[];
         };
@@ -2748,7 +5925,350 @@ export interface components {
             /** @constant */
             type: "native";
         });
-        MarketQuoteEvent: {
+        MarketQuoteResponse: {
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            operation: "executeExactInput";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            plan: components["schemas"]["UniversalExactInputPlan"];
+            planDescription: components["schemas"]["Record<string,unknown>"];
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            outputMinimum: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+            };
+        } | {
+            /** @constant */
+            operation: "market";
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            amountIn: string;
+            amountOut: string;
+            totalInput: string;
+            netOutput: string;
+            grossOutput: string;
+            routedAmountIn: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            refundDust: string;
+            outputRefundEstimate?: string;
+            fee: {
+                asset: string;
+                ratePpm: number;
+                amount: string;
+                /** @constant */
+                basis: "quoted";
+                notional: string;
+            };
+            params: {
+                /** @enum {number} */
+                side: 0 | 1;
+                counterToken: string;
+                amount: string;
+                bound: string;
+                routedInput: string;
+                feeCygld: string;
+                recipient: string;
+                deadline: string;
+                adapter: string;
+                data: string;
+            };
+            adapterData: string;
+            plan: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                amount: string;
+                slippageBps: number;
+                route: {
+                    /** @constant */
+                    version: 1;
+                    /** @enum {string} */
+                    executionContext: "helpers-core" | "helpers-market";
+                    /** @enum {string} */
+                    mode: "exactIn" | "exactOut";
+                    tokenIn: string;
+                    tokenOut: string;
+                    branches: {
+                        amountIn: string;
+                        hops: {
+                            pool: components["schemas"]["RoutePoolRef"];
+                            zeroForOne: boolean;
+                        }[];
+                    }[];
+                    inputAmount: string;
+                    outputAmount: string;
+                    limit: string;
+                    deadline: string;
+                };
+                params: {
+                    /** @enum {number} */
+                    side: 0 | 1;
+                    counterToken: string;
+                    amount: string;
+                    bound: string;
+                    routedInput: string;
+                    feeCygld: string;
+                    recipient: string;
+                    deadline: string;
+                    adapter: string;
+                    data: string;
+                };
+                fee: {
+                    asset: string;
+                    ratePpm: number;
+                    amount: string;
+                    /** @constant */
+                    basis: "quoted";
+                    notional: string;
+                };
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            feeBeneficiaryDisplay?: {
+                address: string;
+                observedAt: string;
+            };
+            /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+            priceImpactPpm?: string;
+            /** @enum {string} */
+            qualification: "quoter" | "sdk" | "sdk-and-quoter";
+            executionSimulationRequired?: boolean;
+            quoteVerificationUnavailable?: string;
+            searchCoverage?: {
+                /** @constant */
+                scope: "selected-inventory";
+                maxHops: number;
+                splitPercentages: number[];
+                inventoryPools: number;
+                catalogMonth: null | string;
+            };
+            metrics: {
+                candidateCalls: number;
+                totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        };
+        MarketQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             value: {
@@ -2784,28 +6304,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2834,14 +6333,91 @@ export interface components {
                     };
                 }[];
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             amount: string;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @enum {string} */
             type: "complete" | "qualified";
             value: {
+                /** @constant */
+                strategy: "universal";
+                /** @enum {string} */
+                routeFamily: "core" | "market" | "mixed";
+                /** @constant */
+                operation: "executeExactInput";
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+                plan: components["schemas"]["UniversalExactInputPlan"];
+                planDescription: components["schemas"]["Record<string,unknown>"];
+                inputs: {
+                    currency: string;
+                    amount: string;
+                }[];
+                quotedInput?: string;
+                inputMaximum?: string;
+                quotedOutput: string;
+                outputMinimum: string;
+                estimatedRetainedInputCharges: {
+                    branch: number;
+                    stage: number;
+                    currency: string;
+                    amount: string;
+                }[];
+                estimatedRecipientOutputs: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                recoveryShares: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                deployment: {
+                    helpers: string;
+                    adapter: string;
+                    /** @constant */
+                    encoding: "uniswap-routing-v1";
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                retentionDisclosure: {
+                    custodian: string;
+                    /** @constant */
+                    beneficiary: "helpers-owner-at-settlement";
+                };
+                searchCoverage: {
+                    coreSharesPercent: number[];
+                    orders: string[];
+                    maxCoreInvocations: number;
+                    maxAmmHops: number;
+                    /** @constant */
+                    scope: "selected-inventory";
+                };
+            } | {
                 /** @constant */
                 operation: "market";
                 /** @enum {string} */
@@ -2901,28 +6477,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -2980,22 +6535,346 @@ export interface components {
                 metrics: {
                     candidateCalls: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
                 };
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             completedCandidates: number;
             totalCandidates?: number;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
             code?: string;
-        };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        });
         MarketModelRequest: {
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
@@ -3321,9 +7200,9 @@ export interface components {
             chainId: number;
             observedAt: string;
         } & {
-            transaction: components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | null;
+            transaction: components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}"] | null;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3332,34 +7211,34 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId?: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x0";
+            /** @description Gas provided for transaction execution */
+            gas: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description Hash of this transaction */
             hash: string;
             /** @description Unix timestamp of when this block was included */
             blockTimestamp?: string;
-            /** @description Gas provided for transaction execution */
-            gas: string;
             /** @description Contract code or a hashed method call */
             input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
             /** @description Index of this transaction in the block or `null` if pending */
             transactionIndex: string | null;
-            /** @description Base fee per gas. */
-            gasPrice: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3368,41 +7247,41 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x1";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Base fee per gas. */
-            gasPrice: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3411,43 +7290,43 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x2";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3456,35 +7335,22 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x3";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
-            /** @description EIP-2930 Access List. */
-            accessList: {
-                address: string;
-                storageKeys: string[];
-            }[];
             /** @description List of versioned blob hashes associated with the transaction's blobs. */
             blobVersionedHashes: string[];
             /** @description Maximum total fee per gas sender is willing to pay for blob gas (in wei). */
@@ -3493,10 +7359,23 @@ export interface components {
             maxFeePerGas: string;
             /** @description Max priority fee per gas (in wei). */
             maxPriorityFeePerGas: string;
+            /** @description EIP-2930 Access List. */
+            accessList: {
+                address: string;
+                storageKeys: string[];
+            }[];
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`|null;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`|null;blockHash:`0x${string}`|null;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`|null;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string | null;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3505,30 +7384,26 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x4";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string | null;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
@@ -3548,10 +7423,14 @@ export interface components {
                 /** @description y parity. */
                 yParity: string;
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string | null;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
@@ -3690,8 +7569,8 @@ export interface components {
                 withdrawalsRoot?: string;
             } | null;
         };
-        "RpcTransaction<false>": components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}"];
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList?:undefined;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;}": {
+        "RpcTransaction<false>": components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"] | components["schemas"]["{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}"];
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId?:`0x${string}`|undefined;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x0\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList?:undefined;authorizationList?:undefined;hash:`0x${string}`;yParity?:undefined;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3700,34 +7579,34 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId?: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x0";
+            /** @description Gas provided for transaction execution */
+            gas: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description Hash of this transaction */
             hash: string;
             /** @description Unix timestamp of when this block was included */
             blockTimestamp?: string;
-            /** @description Gas provided for transaction execution */
-            gas: string;
             /** @description Contract code or a hashed method call */
             input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
             /** @description Index of this transaction in the block or `null` if pending */
             transactionIndex: string;
-            /** @description Base fee per gas. */
-            gasPrice: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x1\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice:`0x${string}`;maxFeePerBlobGas?:undefined;maxFeePerGas?:undefined;maxPriorityFeePerGas?:undefined;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3736,41 +7615,41 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x1";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Base fee per gas. */
+            gasPrice: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Base fee per gas. */
-            gasPrice: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x2\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3779,43 +7658,43 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x2";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
                 storageKeys: string[];
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:undefined;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x3\";gas:`0x${string}`;blobVersionedHashes:readonly`0x${string}`[];gasPrice?:undefined;maxFeePerBlobGas:`0x${string}`;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3824,35 +7703,22 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x3";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
-            /** @description EIP-2930 Access List. */
-            accessList: {
-                address: string;
-                storageKeys: string[];
-            }[];
             /** @description List of versioned blob hashes associated with the transaction's blobs. */
             blobVersionedHashes: string[];
             /** @description Maximum total fee per gas sender is willing to pay for blob gas (in wei). */
@@ -3861,10 +7727,23 @@ export interface components {
             maxFeePerGas: string;
             /** @description Max priority fee per gas (in wei). */
             maxPriorityFeePerGas: string;
+            /** @description EIP-2930 Access List. */
+            accessList: {
+                address: string;
+                storageKeys: string[];
+            }[];
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
-        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;from:`0x${string}`;s:`0x${string}`;to:`0x${string}`|null;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;gas:`0x${string}`;input:`0x${string}`;nonce:`0x${string}`;transactionIndex:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
+        "{blockNumber:`0x${string}`;blockHash:`0x${string}`;value:`0x${string}`;chainId:`0x${string}`;s:`0x${string}`;from:`0x${string}`;to:`0x${string}`|null;nonce:`0x${string}`;v:`0x${string}`;r:`0x${string}`;type:\"0x4\";gas:`0x${string}`;blobVersionedHashes?:undefined;gasPrice?:undefined;maxFeePerBlobGas?:undefined;maxFeePerGas:`0x${string}`;maxPriorityFeePerGas:`0x${string}`;accessList:AccessList;authorizationList?:RpcAuthorizationList|undefined;hash:`0x${string}`;blockTimestamp?:`0x${string}`|undefined;input:`0x${string}`;transactionIndex:`0x${string}`;yParity?:`0x${string}`|undefined;}": {
             /** @description Number of block containing this transaction or `null` if pending */
             blockNumber: string;
             /** @description Hash of block containing this transaction or `null` if pending */
@@ -3873,30 +7752,26 @@ export interface components {
             value: string;
             /** @description Chain ID that this transaction is valid on. */
             chainId: string;
-            /** @description Transaction sender */
-            from: string;
             /** @description ECDSA signature s */
             s: string;
+            /** @description Transaction sender */
+            from: string;
             /** @description Transaction recipient or `null` if deploying a contract */
             to: string | null;
+            /** @description Unique number identifying this transaction */
+            nonce: string;
             /** @description ECDSA recovery ID */
             v: string;
             /** @description ECDSA signature r */
             r: string;
             /** @constant */
             type: "0x4";
-            /** @description Hash of this transaction */
-            hash: string;
-            /** @description Unix timestamp of when this block was included */
-            blockTimestamp?: string;
             /** @description Gas provided for transaction execution */
             gas: string;
-            /** @description Contract code or a hashed method call */
-            input: string;
-            /** @description Unique number identifying this transaction */
-            nonce: string;
-            /** @description Index of this transaction in the block or `null` if pending */
-            transactionIndex: string;
+            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
+            maxFeePerGas: string;
+            /** @description Max priority fee per gas (in wei). */
+            maxPriorityFeePerGas: string;
             /** @description EIP-2930 Access List. */
             accessList: {
                 address: string;
@@ -3916,10 +7791,14 @@ export interface components {
                 /** @description y parity. */
                 yParity: string;
             }[];
-            /** @description Total fee per gas in wei (gasPrice/baseFeePerGas + maxPriorityFeePerGas). */
-            maxFeePerGas: string;
-            /** @description Max priority fee per gas (in wei). */
-            maxPriorityFeePerGas: string;
+            /** @description Hash of this transaction */
+            hash: string;
+            /** @description Unix timestamp of when this block was included */
+            blockTimestamp?: string;
+            /** @description Contract code or a hashed method call */
+            input: string;
+            /** @description Index of this transaction in the block or `null` if pending */
+            transactionIndex: string;
             /** @description The parity of the y-value of the secp256k1 signature. */
             yParity?: string;
         };
@@ -4246,28 +8125,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4298,28 +8156,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4352,28 +8189,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4405,28 +8221,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4457,28 +8252,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4508,28 +8282,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -4615,7 +8368,7 @@ export interface components {
                     path: string;
                     quote: string;
                     /** @enum {string} */
-                    route: "direct" | "mixed" | "viaWeth";
+                    route: "direct" | "identity" | "mixed" | "viaWeth";
                     feeInfo: string;
                     routePlan?: {
                         /** @constant */
@@ -4629,28 +8382,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -4666,7 +8398,20 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                    constraint?: {
+                        /** @enum {string} */
+                        kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                        /** @enum {string} */
+                        quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                        /** @enum {string} */
+                        limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                        requestedRaw?: string;
+                        availableRaw?: string;
+                        currentSupplyRaw?: string;
+                        limitRaw?: string;
+                    };
                     /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                     diagnostics?: {
                         rpcMethod?: string;
@@ -4677,6 +8422,8 @@ export interface components {
                         httpStatus?: number;
                         /** @enum {string} */
                         failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                        errorSelector?: string;
+                        errorName?: string;
                     };
                 }[];
             } & {
@@ -4705,7 +8452,7 @@ export interface components {
                         path: string;
                         quote: string;
                         /** @enum {string} */
-                        route: "direct" | "mixed" | "viaWeth";
+                        route: "direct" | "identity" | "mixed" | "viaWeth";
                         feeInfo: string;
                         routePlan?: {
                             /** @constant */
@@ -4719,28 +8466,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -4756,7 +8482,20 @@ export interface components {
                         path: string;
                         rpcCode: number;
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                        constraint?: {
+                            /** @enum {string} */
+                            kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                            /** @enum {string} */
+                            quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                            /** @enum {string} */
+                            limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                            requestedRaw?: string;
+                            availableRaw?: string;
+                            currentSupplyRaw?: string;
+                            limitRaw?: string;
+                        };
                         /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                         diagnostics?: {
                             rpcMethod?: string;
@@ -4767,6 +8506,8 @@ export interface components {
                             httpStatus?: number;
                             /** @enum {string} */
                             failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                            errorSelector?: string;
+                            errorName?: string;
                         };
                     }[];
                 }[];
@@ -4774,6 +8515,8 @@ export interface components {
                     candidateCalls: number;
                     rpcReads: number;
                     rpcReadsRequested: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
                     contextMs: number;
@@ -4788,7 +8531,20 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -4799,9 +8555,161 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
             };
         };
-        QuoteIntentEvent: {
+        QuoteIntentEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "model";
             /** @description Display-only source data. No transaction tuples or execution readiness. */
@@ -4829,28 +8737,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -4930,13 +8817,23 @@ export interface components {
                     };
                 } | null;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "progress";
             stage: string;
             completed: number;
             total: number;
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "estimate";
             amount: string;
@@ -4946,7 +8843,12 @@ export interface components {
                 blockHash: string;
                 observedAt: string;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "qualified";
             value: {
@@ -4975,28 +8877,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5023,28 +8904,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5208,12 +9068,205 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            } | {
+                /** @constant */
+                readOnly: true;
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                slippageBps?: number;
+                metrics?: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                displayAmount?: string;
+                executionAmount?: string;
+                maximumInputAmount?: string;
+                expectedInputAmount?: string;
+                expectedOutputAmount?: string;
+                minimumAmountOut: string;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "invalidated";
             context: {
@@ -5224,7 +9277,12 @@ export interface components {
             };
             /** @constant */
             reason?: "snapshot-changed";
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "complete";
             value: {
@@ -5253,28 +9311,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5301,28 +9338,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -5486,18 +9502,224 @@ export interface components {
                     rpcReadsRequested: number;
                     rpcReadsCoalesced: number;
                     rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
                     candidateCalls: number;
                     iterations: number;
                     totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
                 };
+                /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                quoteDiagnostics?: {
+                    /** @enum {string} */
+                    phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                    elapsedMs?: number;
+                    qualified?: boolean;
+                    inversionIteration?: number;
+                    routeWave?: {
+                        elapsedMs?: number;
+                        subphaseElapsedMs?: number;
+                        /** @enum {string} */
+                        subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                        /** @enum {string} */
+                        mode?: "exact-in" | "exact-out";
+                        legacyCandidates?: number;
+                        legacyCompleted?: number;
+                        typedEnumerated?: number;
+                        typedCompleted?: number;
+                        typedPending?: number;
+                        sdkRequests?: number;
+                        sdkWaiting?: number;
+                        sdkLockWaitMs?: number;
+                        sdkExchangeMs?: number;
+                        legs?: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                index: number;
+                                inputAsset?: string;
+                                outputAsset?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                amount?: string;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                started: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                succeeded: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                failed: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                cancelled: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                pending: number;
+                                bestAvailable: boolean;
+                                failureCounts: {
+                                    code: components["schemas"]["QuoteErrorCode"];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    count: number;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedFailureCodes: number;
+                                bestPools: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools: number;
+                            }[];
+                        };
+                    };
+                    providerQualifications?: {
+                        /** @enum {string} */
+                        provider: "core" | "market";
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempts: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        qualified: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        rejected: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        notImproved: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        superseded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        selectedAttempt?: number;
+                        /** @enum {string} */
+                        selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        firstQualifiedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        selectionMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        canonicalCompletedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        cleanupCompletedMs?: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempt: number;
+                            /** @enum {string} */
+                            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                            /** @enum {string} */
+                            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                            /** @enum {string} */
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            targetAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            minimumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountOut?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            maximumAmountIn?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            observedAmountIn?: string;
+                            /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                            startedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            completedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            elapsedMs?: number;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            executionAmount?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedInput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            quotedOutput?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            inputMaximum?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            outputMinimum?: string;
+                            pools?: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools?: number;
+                        }[];
+                    };
+                };
+            } | {
+                /** @constant */
+                readOnly: true;
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                slippageBps?: number;
+                metrics?: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                displayAmount?: string;
+                executionAmount?: string;
+                maximumInputAmount?: string;
+                expectedInputAmount?: string;
+                expectedOutputAmount?: string;
+                minimumAmountOut: string;
             };
-        } | {
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
             /** @constant */
             type: "error";
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -5508,9 +9730,246 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
             };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        });
+        RouteLeg: components["schemas"]["Partial<Record<\"index\"|\"pending\"|\"cancelled\"|\"failed\"|\"started\"|\"succeeded\"|\"omittedFailureCodes\"|\"omittedPools\",number>>"] & {
+            index: number;
+            inputAsset?: string;
+            outputAsset?: string;
+            amount?: string;
+            bestAvailable?: boolean;
+            failureCounts: {
+                code: components["schemas"]["QuoteCode"];
+                count: number;
+            }[];
+            bestPools: {
+                /** @enum {string} */
+                protocol: "v2" | "v3" | "v4";
+                poolId?: string;
+                poolAddress?: string;
+            }[];
         };
-        "Record<string,unknown>": Record<string, never>;
+        "Partial<Record<\"index\"|\"pending\"|\"cancelled\"|\"failed\"|\"started\"|\"succeeded\"|\"omittedFailureCodes\"|\"omittedPools\",number>>": {
+            index?: number;
+            pending?: number;
+            cancelled?: number;
+            failed?: number;
+            started?: number;
+            succeeded?: number;
+            omittedFailureCodes?: number;
+            omittedPools?: number;
+        };
+        /** @enum {string} */
+        QuoteCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        "Partial<Record<\"elapsedMs\"|\"subphaseElapsedMs\"|\"legacyCandidates\"|\"legacyCompleted\"|\"typedEnumerated\"|\"typedCompleted\"|\"typedPending\"|\"sdkRequests\"|\"sdkWaiting\"|\"sdkLockWaitMs\"|\"sdkExchangeMs\",number>>": {
+            elapsedMs?: number;
+            subphaseElapsedMs?: number;
+            legacyCandidates?: number;
+            legacyCompleted?: number;
+            typedEnumerated?: number;
+            typedCompleted?: number;
+            typedPending?: number;
+            sdkRequests?: number;
+            sdkWaiting?: number;
+            sdkLockWaitMs?: number;
+            sdkExchangeMs?: number;
+        };
+        ProviderQualification: {
+            attempt: number;
+            /** @enum {string} */
+            stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+            /** @enum {string} */
+            outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        } & components["schemas"]["Partial<Record<\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\"|\"quotedInput\"|\"quotedOutput\"|\"inputMaximum\"|\"outputMinimum\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
+            pools?: {
+                /** @enum {string} */
+                protocol: "v2" | "v3" | "v4";
+                poolId?: string;
+                poolAddress?: string;
+            }[];
+            omittedPools?: number;
+        };
+        "Partial<Record<\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\"|\"quotedInput\"|\"quotedOutput\"|\"inputMaximum\"|\"outputMinimum\",string>>": {
+            targetAmount?: string;
+            minimumAmountOut?: string;
+            maximumAmountOut?: string;
+            observedAmountOut?: string;
+            maximumAmountIn?: string;
+            observedAmountIn?: string;
+            executionAmount?: string;
+            quotedInput?: string;
+            quotedOutput?: string;
+            inputMaximum?: string;
+            outputMinimum?: string;
+        };
+        "Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>": {
+            elapsedMs?: number;
+            startedMs?: number;
+            completedMs?: number;
+        };
+        "Partial<Record<\"pending\"|\"cancelled\"|\"attempts\"|\"qualified\"|\"rejected\"|\"superseded\"|\"notImproved\"|\"omittedRows\"|\"firstQualifiedMs\"|\"selectionMs\"|\"canonicalCompletedMs\"|\"cleanupCompletedMs\",number>>": {
+            pending?: number;
+            cancelled?: number;
+            attempts?: number;
+            qualified?: number;
+            rejected?: number;
+            superseded?: number;
+            notImproved?: number;
+            omittedRows?: number;
+            firstQualifiedMs?: number;
+            selectionMs?: number;
+            canonicalCompletedMs?: number;
+            cleanupCompletedMs?: number;
+        };
         HelpersActivity: {
             /** @constant */
             enabled: false;
@@ -5872,6 +10331,158 @@ export interface components {
                 forkBlockHash: string;
             };
         });
+        /** @description Optional subscriber references; workId belongs to shared producer work. */
+        DiagnosticReferences: {
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        };
+        /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+        QuoteWorkDiagnostics: {
+            /** @enum {string} */
+            phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+            elapsedMs?: number;
+            qualified?: boolean;
+            inversionIteration?: number;
+            routeWave?: {
+                elapsedMs?: number;
+                subphaseElapsedMs?: number;
+                /** @enum {string} */
+                subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                /** @enum {string} */
+                mode?: "exact-in" | "exact-out";
+                legacyCandidates?: number;
+                legacyCompleted?: number;
+                typedEnumerated?: number;
+                typedCompleted?: number;
+                typedPending?: number;
+                sdkRequests?: number;
+                sdkWaiting?: number;
+                sdkLockWaitMs?: number;
+                sdkExchangeMs?: number;
+                legs?: {
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    count: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        index: number;
+                        inputAsset?: string;
+                        outputAsset?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        amount?: string;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        started: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        succeeded: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        failed: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        cancelled: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        pending: number;
+                        bestAvailable: boolean;
+                        failureCounts: {
+                            code: components["schemas"]["QuoteErrorCode"];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            count: number;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedFailureCodes: number;
+                        bestPools: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools: number;
+                    }[];
+                };
+            };
+            providerQualifications?: {
+                /** @enum {string} */
+                provider: "core" | "market";
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                attempts: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                qualified: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                rejected: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                notImproved: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                cancelled: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                superseded: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                pending: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                omittedRows: number;
+                /** @description Bounded observation count; never an execution eligibility predicate. */
+                selectedAttempt?: number;
+                /** @enum {string} */
+                selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                firstQualifiedMs?: number;
+                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                selectionMs?: number;
+                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                canonicalCompletedMs?: number;
+                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                cleanupCompletedMs?: number;
+                rows: {
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempt: number;
+                    /** @enum {string} */
+                    stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                    /** @enum {string} */
+                    outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                    /** @enum {string} */
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    targetAmount?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    minimumAmountOut?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    maximumAmountOut?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    observedAmountOut?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    maximumAmountIn?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    observedAmountIn?: string;
+                    /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                    startedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    completedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    elapsedMs?: number;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    executionAmount?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    quotedInput?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    quotedOutput?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    inputMaximum?: string;
+                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                    outputMinimum?: string;
+                    pools?: {
+                        /** @enum {string} */
+                        protocol: "v2" | "v3" | "v4";
+                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                        poolId?: string;
+                        poolAddress?: string;
+                    }[];
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedPools?: number;
+                }[];
+            };
+        };
         /** @description One user trade; Backend chooses a complete Core or market execution. */
         TradeModelRequest: {
             /** @enum {string} */
@@ -5882,6 +10493,272 @@ export interface components {
             native: boolean;
             amount: string;
             slippageBps?: number;
+        };
+        /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
+        UniversalExactInputRequest: {
+            /** @enum {number} */
+            intent: 0 | 1 | 2 | 3;
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            outputCurrency: string;
+            recipient: string;
+            deadline: string;
+            slippageBps?: number;
+        };
+        UniversalExactInputQuote: {
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            operation: "executeExactInput";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            plan: components["schemas"]["UniversalExactInputPlan"];
+            planDescription: components["schemas"]["Record<string,unknown>"];
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            outputMinimum: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+            };
+        };
+        TradeProviderAssessment: {
+            /** @enum {string} */
+            availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
+            /** @enum {string} */
+            searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
+            error?: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        };
+        TradeProviderCandidates: {
+            /** @description One complete provider plan, without recursive provider evidence maps. */
+            core?: components["schemas"]["CoreTradeProviderCandidate"];
+            market?: components["schemas"]["MarketTradeProviderCandidate"];
         };
         TradeQuoteModelPacket: {
             /** @constant */
@@ -5925,28 +10802,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -6062,28 +10918,7 @@ export interface components {
                             branches: {
                                 amountIn: string;
                                 hops: {
-                                    pool: {
-                                        id: string;
-                                        /** @enum {string} */
-                                        protocol: "v2" | "v3" | "v4";
-                                        token0: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        token1: {
-                                            address: string;
-                                            decimals: number;
-                                            chainId: number;
-                                            decimalsKnown?: boolean;
-                                        };
-                                        address?: string;
-                                        feePips: number;
-                                        tickSpacing?: number;
-                                        poolManager?: string;
-                                        hooks?: string;
-                                    };
+                                    pool: components["schemas"]["RoutePoolRef"];
                                     zeroForOne: boolean;
                                 }[];
                             }[];
@@ -6118,6 +10953,13 @@ export interface components {
                 strategy: "core" | "market";
                 amount: string;
             };
+            /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+            budgetRange?: {
+                minimumBudget: string;
+                maximumBudget?: string;
+                quotedInput: string;
+                quotedOutput: string;
+            };
         };
         ProtocolConfiguration: {
             chainId: number;
@@ -6134,15 +10976,20 @@ export interface components {
             adapter: {
                 /** @enum {string} */
                 status: "success" | "unavailable";
-                encoding: ("uniswap-multi-protocol-v1" | "uniswap-v3") | null;
+                encoding: ("uniswap-multi-protocol-v1" | "uniswap-routing-v1" | "uniswap-v3") | null;
                 observation: {
                     blockNumber: string;
                     blockHash: string;
                     observedAt: string;
                 } | null;
             };
+            universalExactInput: {
+                adapter: null | string;
+                encoding: "uniswap-routing-v1" | null;
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+            };
         };
-        /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
         MarketQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -6173,28 +11020,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6286,28 +11112,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6365,6 +11170,157 @@ export interface components {
             metrics: {
                 candidateCalls: number;
                 totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
             };
         };
         MarketQuoteModelPacket: {
@@ -6400,28 +11356,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -6462,28 +11397,7 @@ export interface components {
             branches: {
                 amountIn: string;
                 hops: {
-                    pool: {
-                        id: string;
-                        /** @enum {string} */
-                        protocol: "v2" | "v3" | "v4";
-                        token0: {
-                            address: string;
-                            decimals: number;
-                            chainId: number;
-                            decimalsKnown?: boolean;
-                        };
-                        token1: {
-                            address: string;
-                            decimals: number;
-                            chainId: number;
-                            decimalsKnown?: boolean;
-                        };
-                        address?: string;
-                        feePips: number;
-                        tickSpacing?: number;
-                        poolManager?: string;
-                        hooks?: string;
-                    };
+                    pool: components["schemas"]["RoutePoolRef"];
                     zeroForOne: boolean;
                 }[];
             }[];
@@ -6670,6 +11584,17 @@ export interface components {
                 };
                 /** @description Live configured product facts; amounts stay lossless over JSON. */
                 basketPermitIssuanceExactOut?: {
+                    /** @constant */
+                    status: "failure";
+                    /** @enum {string} */
+                    error: "contract-read-failed" | "not-configured";
+                } | {
+                    /** @constant */
+                    status: "success";
+                    value: boolean;
+                };
+                /** @description Live configured product facts; amounts stay lossless over JSON. */
+                universalExactInput?: {
                     /** @constant */
                     status: "failure";
                     /** @enum {string} */
@@ -6908,7 +11833,7 @@ export interface components {
         HelpersExecutionRequest: {
             owner: string;
             /** @enum {string} */
-            operation: "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit" | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit" | "swapExactInput" | "swapExactOutput";
+            operation: "executeExactInput" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput";
             args: unknown[];
             value?: string;
         };
@@ -6923,7 +11848,7 @@ export interface components {
             helpers: string;
             owner: string;
             /** @enum {string} */
-            operation: "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit" | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit" | "swapExactInput" | "swapExactOutput";
+            operation: "executeExactInput" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput";
             gas: string;
             /** @constant */
             blockTag: "latest";
@@ -7107,6 +12032,24 @@ export interface components {
             token: string;
             amount: string;
         };
+        BasketMaxRequest: {
+            driverToken: string;
+            maximumAmountsIn: string[];
+        };
+        BasketMax: {
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            helpers: string;
+            orderedCoreAssets: string[];
+            driverToken: string;
+            driverAmount: string;
+            maximumAmountsIn: string[];
+            netCygldOut: string;
+        };
         UniswapQuoteRequest: {
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
@@ -7157,7 +12100,7 @@ export interface components {
                     path: string;
                     quote: string;
                     /** @enum {string} */
-                    route: "direct" | "mixed" | "viaWeth";
+                    route: "direct" | "identity" | "mixed" | "viaWeth";
                     feeInfo: string;
                     routePlan?: {
                         /** @constant */
@@ -7171,28 +12114,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7208,7 +12130,20 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+                    constraint?: {
+                        /** @enum {string} */
+                        kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                        /** @enum {string} */
+                        quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                        /** @enum {string} */
+                        limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                        requestedRaw?: string;
+                        availableRaw?: string;
+                        currentSupplyRaw?: string;
+                        limitRaw?: string;
+                    };
                     /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
                     diagnostics?: {
                         rpcMethod?: string;
@@ -7219,6 +12154,8 @@ export interface components {
                         httpStatus?: number;
                         /** @enum {string} */
                         failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                        errorSelector?: string;
+                        errorName?: string;
                     };
                 }[];
             }[];
@@ -7226,6 +12163,8 @@ export interface components {
                 candidateCalls: number;
                 rpcReads: number;
                 rpcReadsRequested: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
                 rpcReadsCoalesced: number;
                 rpcReadsReused: number;
                 contextMs: number;
@@ -7277,28 +12216,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7325,28 +12243,7 @@ export interface components {
                         branches: {
                             amountIn: string;
                             hops: {
-                                pool: {
-                                    id: string;
-                                    /** @enum {string} */
-                                    protocol: "v2" | "v3" | "v4";
-                                    token0: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    token1: {
-                                        address: string;
-                                        decimals: number;
-                                        chainId: number;
-                                        decimalsKnown?: boolean;
-                                    };
-                                    address?: string;
-                                    feePips: number;
-                                    tickSpacing?: number;
-                                    poolManager?: string;
-                                    hooks?: string;
-                                };
+                                pool: components["schemas"]["RoutePoolRef"];
                                 zeroForOne: boolean;
                             }[];
                         }[];
@@ -7393,28 +12290,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -7441,28 +12317,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -7626,9 +12481,162 @@ export interface components {
                 rpcReadsRequested: number;
                 rpcReadsCoalesced: number;
                 rpcReadsReused: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
                 candidateCalls: number;
                 iterations: number;
                 totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
             };
         };
         /** @description Display-only source data. No transaction tuples or execution readiness. */
@@ -7656,28 +12664,7 @@ export interface components {
                     branches: {
                         amountIn: string;
                         hops: {
-                            pool: {
-                                id: string;
-                                /** @enum {string} */
-                                protocol: "v2" | "v3" | "v4";
-                                token0: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                token1: {
-                                    address: string;
-                                    decimals: number;
-                                    chainId: number;
-                                    decimalsKnown?: boolean;
-                                };
-                                address?: string;
-                                feePips: number;
-                                tickSpacing?: number;
-                                poolManager?: string;
-                                hooks?: string;
-                            };
+                            pool: components["schemas"]["RoutePoolRef"];
                             zeroForOne: boolean;
                         }[];
                     }[];
@@ -7757,6 +12744,42 @@ export interface components {
                 };
             } | null;
         };
+        NumericCoreQuote: {
+            /** @constant */
+            readOnly: true;
+            /** @enum {string} */
+            mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            slippageBps?: number;
+            metrics?: {
+                rpcReads: number;
+                rpcReadsRequested: number;
+                rpcReadsCoalesced: number;
+                rpcReadsReused: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
+                candidateCalls: number;
+                iterations: number;
+                totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            displayAmount?: string;
+            executionAmount?: string;
+            maximumInputAmount?: string;
+            expectedInputAmount?: string;
+            expectedOutputAmount?: string;
+            minimumAmountOut: string;
+        };
         /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
         RpcErrorDiagnostics: {
             rpcMethod?: string;
@@ -7767,6 +12790,8 @@ export interface components {
             httpStatus?: number;
             /** @enum {string} */
             failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+            errorSelector?: string;
+            errorName?: string;
         };
         ClientDiagnostic: {
             /** @enum {string} */
@@ -7789,6 +12814,64 @@ export interface components {
             walletStep?: "approval" | "signature" | "transaction";
             attemptId?: string;
             quoteId?: string;
+            requestId?: string;
+            correlationId?: string;
+            workId?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            /** @enum {string} */
+            strategy?: "core" | "market" | "universal";
+            /** @enum {string} */
+            stage?: "authorization" | "balance" | "confirmation" | "network" | "preparation" | "quote" | "simulation" | "submission";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                qualified?: boolean;
+                elapsedMs?: number;
+                inversionIteration?: number;
+                routeWave?: {
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    legs?: {
+                        count: number;
+                        omittedRows?: number;
+                        rows: components["schemas"]["RouteLeg"][];
+                    };
+                } & components["schemas"]["Partial<Record<\"elapsedMs\"|\"subphaseElapsedMs\"|\"legacyCandidates\"|\"legacyCompleted\"|\"typedEnumerated\"|\"typedCompleted\"|\"typedPending\"|\"sdkRequests\"|\"sdkWaiting\"|\"sdkLockWaitMs\"|\"sdkExchangeMs\",number>>"];
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    attempts: number;
+                    rows: components["schemas"]["ProviderQualification"][];
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                } & components["schemas"]["Partial<Record<\"pending\"|\"cancelled\"|\"attempts\"|\"qualified\"|\"rejected\"|\"superseded\"|\"notImproved\"|\"omittedRows\"|\"firstQualifiedMs\"|\"selectionMs\"|\"canonicalCompletedMs\"|\"cleanupCompletedMs\",number>>"];
+            };
+            /** @enum {string} */
+            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            tokenIn?: string;
+            tokenOut?: string;
+            amount?: string;
+            inputMaximum?: string;
+            outputMinimum?: string;
+            blockNumber?: string;
+            blockHash?: string;
             transactionHash?: string;
             durationMs?: number;
             chainId?: number;
@@ -8137,10 +13220,27 @@ export interface components {
             sandboxForkGeneration?: null | string;
         });
         PublicError: {
-            error: string;
+            requestId?: string;
+            attemptId?: string;
             correlationId?: string;
+            workId?: string;
+        } & {
+            error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
             /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
             diagnostics?: {
                 rpcMethod?: string;
@@ -8151,6 +13251,153 @@ export interface components {
                 httpStatus?: number;
                 /** @enum {string} */
                 failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
             };
         };
         AliasesRequest: components["schemas"]["OwnerAliasesRequest"];
@@ -8358,7 +13605,10 @@ export interface operations {
     get__api_protocol_facts: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8367,6 +13617,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8376,6 +13630,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8385,6 +13643,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8396,7 +13658,10 @@ export interface operations {
     get__api_protocol_config: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8405,6 +13670,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8414,6 +13683,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8423,6 +13696,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8434,7 +13711,10 @@ export interface operations {
     get__api_gold: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8443,6 +13723,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8452,6 +13736,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8461,6 +13749,67 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_quotes_universal_exact_input: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniversalExactInputRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniversalExactInputQuote"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8472,7 +13821,10 @@ export interface operations {
     post__api_quotes_market: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8485,15 +13837,23 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MarketQuote"];
+                    "application/json": components["schemas"]["MarketQuoteResponse"];
                 };
             };
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8503,6 +13863,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8514,7 +13878,10 @@ export interface operations {
     post__api_quotes_market_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8527,6 +13894,10 @@ export interface operations {
             /** @description Market model/estimate/progress/qualified, then complete or error; amount integers are decimal strings. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8536,6 +13907,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8547,7 +13922,10 @@ export interface operations {
     post__api_quotes_market_model: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8560,6 +13938,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8569,6 +13951,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8578,6 +13964,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8589,7 +13979,10 @@ export interface operations {
     post__api_quotes_trade_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8602,6 +13995,10 @@ export interface operations {
             /** @description Cached models, estimates and tagged provider progress; qualified best incumbents, then complete or error. Integers are decimal strings. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8611,6 +14008,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8622,7 +14023,10 @@ export interface operations {
     post__api_quotes_trade_model: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8635,6 +14039,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8644,6 +14052,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8653,6 +14065,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8666,7 +14082,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8675,6 +14094,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8684,6 +14107,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8693,6 +14120,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8706,7 +14137,10 @@ export interface operations {
             query: {
                 holder: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8715,6 +14149,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8724,6 +14162,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8733,6 +14175,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8746,7 +14192,10 @@ export interface operations {
             query: {
                 name: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8755,6 +14204,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8764,6 +14217,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8773,6 +14230,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8788,7 +14249,10 @@ export interface operations {
                 /** @description display opts ordinary loading out of the repeated chain check and final canonical block reread; omitted or other values retain both existing checks. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8797,6 +14261,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8806,6 +14274,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8815,6 +14287,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8830,7 +14306,10 @@ export interface operations {
                 /** @description display opts ordinary loading out of the repeated chain check and final canonical block reread; omitted, swap-preflight or other values retain both existing checks. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8839,6 +14318,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8848,6 +14331,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8857,6 +14344,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8871,7 +14362,10 @@ export interface operations {
                 holder: string;
                 tokenId: "eth" | "cygld" | "xaut" | "paxg" | "usdt" | "usdc" | "weth";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8880,6 +14374,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8889,6 +14387,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8898,6 +14400,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8911,7 +14417,10 @@ export interface operations {
             query: {
                 holder: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8920,6 +14429,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8929,6 +14442,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8938,6 +14455,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8951,7 +14472,10 @@ export interface operations {
             query: {
                 surface: "core" | "staking" | "governance-diamond";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8960,6 +14484,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8969,6 +14497,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8978,6 +14510,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8992,7 +14528,10 @@ export interface operations {
                 surface: "core" | "staking" | "governance-diamond";
                 account?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9001,6 +14540,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9010,6 +14553,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9019,6 +14566,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9030,7 +14581,10 @@ export interface operations {
     post__api_transaction_recovery_redemption: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9043,6 +14597,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9052,6 +14610,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9061,6 +14623,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9072,7 +14638,10 @@ export interface operations {
     post__api_transaction_permit2_approval_gas: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9085,6 +14654,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9094,6 +14667,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9103,6 +14680,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9116,7 +14697,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9125,6 +14709,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9134,6 +14722,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9143,6 +14735,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9154,7 +14750,10 @@ export interface operations {
     post__api_governance_safe_transaction_hash: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9167,6 +14766,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9176,6 +14779,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9185,6 +14792,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9196,7 +14807,10 @@ export interface operations {
     post__api_governance_safe_execution: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9209,6 +14823,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9218,6 +14836,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9227,6 +14849,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9238,7 +14864,10 @@ export interface operations {
     post__api_transaction_helpers_execution: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9251,6 +14880,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9260,6 +14893,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9269,6 +14906,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9282,7 +14923,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9291,6 +14935,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9300,6 +14948,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9309,6 +14961,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9320,7 +14976,10 @@ export interface operations {
     get__api_transaction_wait_head: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9329,6 +14988,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9338,6 +15001,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9347,6 +15014,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9360,7 +15031,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9369,6 +15043,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9378,6 +15056,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9387,6 +15069,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9400,7 +15086,10 @@ export interface operations {
             query: {
                 hash: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9409,6 +15098,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9418,6 +15111,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9427,6 +15124,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9440,7 +15141,10 @@ export interface operations {
             query: {
                 blockNumber: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9449,6 +15153,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9458,6 +15166,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9467,6 +15179,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9480,7 +15196,10 @@ export interface operations {
             query: {
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9489,6 +15208,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9498,6 +15221,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9507,6 +15234,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9518,7 +15249,10 @@ export interface operations {
     get__api_transaction_fees: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9527,6 +15261,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9536,6 +15274,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9545,6 +15287,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9558,7 +15304,10 @@ export interface operations {
             query: {
                 asset: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9567,6 +15316,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9576,6 +15329,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9585,6 +15342,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9596,7 +15357,10 @@ export interface operations {
     get__api_protocol_recovery_assets: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9605,6 +15369,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9614,6 +15382,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9623,6 +15395,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9634,7 +15410,10 @@ export interface operations {
     post__api_account_permit2: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9647,6 +15426,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9656,6 +15439,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9665,6 +15452,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9681,7 +15472,10 @@ export interface operations {
                 /** @description balance reads only selected holder balance/context; metadata fields and authorization are explicitly not-requested. Default and other values retain optional discovery. */
                 purpose?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9690,6 +15484,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9699,6 +15497,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9708,6 +15510,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9722,7 +15528,10 @@ export interface operations {
                 token: string;
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9731,6 +15540,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9740,6 +15553,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9749,6 +15566,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9760,7 +15581,10 @@ export interface operations {
     post__api_transaction_token_approval_gas: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9773,6 +15597,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9782,6 +15610,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9791,6 +15623,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9804,7 +15640,10 @@ export interface operations {
             query: {
                 owner: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9813,6 +15652,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9822,6 +15665,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9831,6 +15678,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9842,7 +15693,10 @@ export interface operations {
     get__api_governance_core_facts: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9851,6 +15705,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9860,6 +15718,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9869,6 +15731,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9883,9 +15749,13 @@ export interface operations {
                 adapter?: string;
                 tokenPermitIssuance?: "true";
                 basketPermitIssuance?: "true";
+                universalExactInput?: "true";
                 marketSwap?: "true";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9894,6 +15764,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9903,6 +15777,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9912,6 +15790,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9925,7 +15807,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9934,6 +15819,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9943,6 +15832,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9952,6 +15845,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9965,7 +15862,10 @@ export interface operations {
             query: {
                 address: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9974,6 +15874,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9983,6 +15887,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9992,6 +15900,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10003,7 +15915,10 @@ export interface operations {
     post__api_quotes_basket_preview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10016,6 +15931,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10025,6 +15944,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10034,6 +15957,67 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_quotes_basket_max: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BasketMaxRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasketMax"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10045,7 +16029,10 @@ export interface operations {
     post__api_quotes_token_preview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10058,6 +16045,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10067,6 +16058,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10076,6 +16071,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10087,7 +16086,10 @@ export interface operations {
     post__api_quotes_routes: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10100,6 +16102,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10109,6 +16115,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10118,6 +16128,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10129,7 +16143,10 @@ export interface operations {
     post__api_quotes_routes_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10142,6 +16159,10 @@ export interface operations {
             /** @description One RouteSearchEvent JSON object per line; progress, then complete or error. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10151,6 +16172,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10162,7 +16187,10 @@ export interface operations {
     post__api_quotes_intent_stream: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10175,6 +16203,10 @@ export interface operations {
             /** @description One QuoteIntentEvent per line; optional model/estimate/progress/qualified, then complete or error. */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10184,6 +16216,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10195,7 +16231,10 @@ export interface operations {
     post__api_quotes_uniswap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10208,6 +16247,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10217,6 +16260,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10226,6 +16273,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10237,7 +16288,10 @@ export interface operations {
     get__api_fx: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10246,6 +16300,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10255,6 +16313,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10264,6 +16326,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10275,7 +16341,10 @@ export interface operations {
     get__api_activity_core: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10284,6 +16353,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10293,6 +16366,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10302,6 +16379,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10313,7 +16394,10 @@ export interface operations {
     get__api_activity_helpers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10322,6 +16406,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10331,6 +16419,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10340,6 +16432,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10356,7 +16452,10 @@ export interface operations {
                 poolAddress?: string;
                 poolManager?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10365,6 +16464,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10374,6 +16477,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10383,6 +16490,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10394,7 +16505,10 @@ export interface operations {
     get__api_activity_safe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10403,6 +16517,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10412,6 +16530,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10421,6 +16543,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10432,7 +16558,10 @@ export interface operations {
     post__api_diagnostics: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10445,6 +16574,10 @@ export interface operations {
             /** @description Existing response envelope */
             202: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10457,6 +16590,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10468,7 +16605,10 @@ export interface operations {
     get__api_dashboard_onchain_summary: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10477,6 +16617,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10486,6 +16630,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10495,6 +16643,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10510,7 +16662,10 @@ export interface operations {
                 offset?: string;
                 blockHash?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10519,6 +16674,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10528,6 +16687,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10537,6 +16700,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10548,7 +16715,10 @@ export interface operations {
     post__api_rpc: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10561,6 +16731,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10570,6 +16744,10 @@ export interface operations {
             /** @description Remote entry bearer rejected before JSON-RPC parsing */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10579,6 +16757,10 @@ export interface operations {
             /** @description Existing single/batch JSON-RPC error with preserved IDs */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10590,7 +16772,10 @@ export interface operations {
     post__api_governance_owner_aliases: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10603,6 +16788,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10612,6 +16801,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10621,6 +16814,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10632,7 +16829,10 @@ export interface operations {
     post__api_quote_pool_cache: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10645,6 +16845,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10654,6 +16858,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10663,6 +16871,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10674,7 +16886,10 @@ export interface operations {
     post__api_pools_snapshot: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10687,6 +16902,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10696,6 +16915,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10705,6 +16928,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10719,7 +16946,10 @@ export interface operations {
                 tokenA?: string;
                 tokenB?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10728,6 +16958,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10737,6 +16971,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10746,6 +16984,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10757,7 +16999,10 @@ export interface operations {
     post__api_safe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10770,6 +17015,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10779,6 +17028,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10788,6 +17041,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10799,7 +17056,10 @@ export interface operations {
     post__api_safe_events: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10812,6 +17072,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10821,6 +17085,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10830,6 +17098,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10841,7 +17113,10 @@ export interface operations {
     post__api_faucet: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10854,6 +17129,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10863,6 +17142,10 @@ export interface operations {
             /** @description Remote API entry requires its environment's backend bearer */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10872,6 +17155,10 @@ export interface operations {
             /** @description Safe faucet failure with stable code and backend log reference */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10883,7 +17170,10 @@ export interface operations {
     get__api_internal_onchain_indexer_reconcile: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10892,6 +17182,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10901,6 +17195,10 @@ export interface operations {
             /** @description Private worker bearer rejected */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10910,6 +17208,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10924,7 +17226,10 @@ export interface operations {
                 force?: "1";
                 diagnostic?: "1";
             };
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10938,6 +17243,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10947,6 +17256,10 @@ export interface operations {
             /** @description Existing response envelope */
             202: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10956,6 +17269,10 @@ export interface operations {
             /** @description Existing response envelope */
             409: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10965,6 +17282,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10976,7 +17297,10 @@ export interface operations {
     get__api_internal_onchain_indexer_fork_generation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10985,6 +17309,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10994,6 +17322,10 @@ export interface operations {
             /** @description Private worker bearer rejected */
             401: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11003,6 +17335,10 @@ export interface operations {
             /** @description Existing route-specific errors; see compatibility fixtures */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11014,7 +17350,10 @@ export interface operations {
     post__api_internal_onchain_indexer_fork_generation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11027,6 +17366,10 @@ export interface operations {
             /** @description Existing response envelope */
             200: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11036,6 +17379,10 @@ export interface operations {
             /** @description Existing response envelope */
             409: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11045,6 +17392,10 @@ export interface operations {
             /** @description Existing response envelope */
             default: {
                 headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
                     [name: string]: unknown;
                 };
                 content: {

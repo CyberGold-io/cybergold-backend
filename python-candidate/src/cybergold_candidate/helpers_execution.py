@@ -16,14 +16,21 @@ from web3 import Web3
 from .protocol_facts import handle_protocol_facts
 from .safe_transaction import Address, UInt
 from .transaction_nonce import NonceRpc
+from .quote_errors import rpc_failure
+from .preview_errors import preview_error
+from .rpc_diagnostics import error_diagnostics, rpc_call
 
 ABI = json.loads(Path(__file__).with_name('helpers-execution-abi.json').read_text())
-Operation = Literal['issueFromBasketExactInWithPermit2', 'issueFromBasketExactOutWithPermit2',
-                    'issueFromBasketExactInWithMixedPermits', 'issueFromBasketExactOutWithMixedPermits',
-                    'issueFromTokenExactOutWithPermit2', 'issueFromTokenExactOutWithPermit', 'issueFromTokenExactOut', 'issueFromNativeExactOut',
-                    'redeemToBasketExactIn', 'redeemToBasketExactInWithPermit',
-                    'redeemToTokenExactIn', 'redeemToTokenExactInWithPermit',
-                    'redeemToNativeExactIn', 'redeemToNativeExactInWithPermit', 'swapExactInput', 'swapExactOutput']
+# Public identities from the Helpers basket-router errors; no return arguments
+# or signature/calldata bytes are retained in diagnostics.
+REVERT_NAMES = {Web3.to_hex(Web3.keccak(text=signature))[:10]:
+    (signature.split('(')[0], signature.partition('(')[2][:-1].split(',') if not signature.endswith('()') else [])
+    for signature in ('ZeroInputAmount()', 'InsufficientInput()', 'InsufficientOutput(uint256,uint256)',
+        'PermitExpired(uint256,uint256)', 'PermitAmountTooLow(uint256,uint256)',
+        'PermitAllowanceTooLow(uint256,uint256)', 'Permit2AmountTooLow(uint256,uint256)',
+        'NativeValueMismatch(uint256,uint256)', 'AdapterNotApproved(address)',
+        'CoreInputAboveMaximum(address,uint256,uint256)', 'Error(string)', 'Panic(uint256)')}
+Operation = Literal['issueFromBasketExactOutWithMixedPermits', 'issueFromBasketExactOutWithPermit2', 'issueFromNativeExactOut', 'issueFromTokenExactOut', 'issueFromTokenExactOutWithPermit', 'issueFromTokenExactOutWithPermit2', 'swapExactOutput', 'executeExactInput']
 
 
 class HelpersExecutionRequest(BaseModel):
@@ -51,6 +58,36 @@ def argument(value, parameter):
 
 
 class HelpersExecutionRpc(NonceRpc):
+    async def execution_read(self, method, params, stage):
+        try:
+            # The outer context retains this operation's stage if its backend
+            # deadline cancels the transport before an RPC exception exists.
+            with rpc_call(method, stage=stage):
+                result = await self.w3.provider.make_request(method, params)
+        except Exception as error:
+            diagnostics = error_diagnostics(error)
+            if diagnostics:
+                error.rpc_diagnostics = {**diagnostics, 'stage': stage}
+            raise
+        if 'error' in result:
+            upstream = result['error']
+            error = preview_error(upstream) or rpc_failure(upstream)
+            diagnostics = {**(error_diagnostics(upstream) or {}), 'stage': stage, 'rpcMethod': method}
+            data = upstream.get('data')
+            if isinstance(data, str) and re.fullmatch(r'0x(?:[0-9a-fA-F]{2}){4,}', data):
+                selector = data[:10].lower()
+                diagnostics['errorSelector'] = selector
+                if selector in REVERT_NAMES:
+                    name, types = REVERT_NAMES[selector]
+                    try:
+                        self.w3.codec.decode(types, bytes.fromhex(data[10:]))
+                        diagnostics['errorName'] = name
+                    except Exception:
+                        pass  # Unknown/malformed arguments retain selector only.
+            error.rpc_diagnostics = diagnostics
+            raise error
+        return result
+
     async def estimate(self, helpers, payload):
         method = next(row for row in ABI if row['name'] == payload.operation)
         args = [argument(value, parameter) for value, parameter in zip(payload.args, method['inputs'], strict=True)]
@@ -60,13 +97,9 @@ class HelpersExecutionRpc(NonceRpc):
             transaction['value'] = hex(int(payload.value))
         # The existing fee hint first simulates, then estimates latest state.
         # Native reverts and ABI decoding errors retain that ordering.
-        result = await self.w3.provider.make_request('eth_call', [transaction, 'latest'])
-        if 'error' in result:
-            raise ValueError('Helpers execution simulation failed')
+        result = await self.execution_read('eth_call', [transaction, 'latest'], 'helpers-simulation')
         self.w3.codec.decode([collapse_if_tuple(output) for output in method['outputs']], bytes.fromhex(result['result'][2:]))
-        result = await self.w3.provider.make_request('eth_estimateGas', [transaction])
-        if 'error' in result:
-            raise ValueError('Helpers execution gas estimation failed')
+        result = await self.execution_read('eth_estimateGas', [transaction], 'helpers-gas-estimation')
         return int(result['result'], 16)
 
 
