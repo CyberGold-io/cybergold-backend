@@ -25,10 +25,13 @@ from .quote_errors import public_quote_error, QuoteFailure
 from .quote_budget import budget_entry, current_budget, SearchStopped
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation
-from .uniswap_routes import RoutePlan, market_routes, supported_route, pool_identity, route_identity
+from .uniswap_routes import RoutePlan, market_routes, supported_route, pool_identity, route_identity, resize_branches
 from .uniswap_state import ZERO
+from .uniswap_v4 import tick_prefetch_scope
 from .quote_models import PoolBaseline, LegModel
-from .route_quote_engine import RouteQuoteEngine
+from .route_quote_engine import RouteQuoteEngine, route_snapshot_scope
+from .market_capacity import maximum_filled_input
+from .capacity_cache import VerifiedCapacityCache, capacity_key, pool_capacity_facts
 from .route_encoding import ADAPTER_TYPE, encode_adapter, encode_route
 from .quote_cache import IntentSharing
 from .rpc_diagnostics import (quote_work_scope, quote_phase, quote_qualified, start_route_work,
@@ -152,9 +155,62 @@ class MarketQuotes(RouteQuoteEngine):
         self.request_resolver = request_resolver
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
         self.models = OrderedDict()
+        self.fill_capacity = VerifiedCapacityCache()
         self.generation = None
         self.sharing = IntentSharing(SimpleNamespace(settings=settings,
             routes=SimpleNamespace(rpc=registry.get_rpc()), get=self._get), head=self.head)
+
+    async def quote_market_branches(self, branches, mode, amount, block):
+        try:
+            value = await self.quote_branches(branches, mode, amount, block)
+        except InvalidPreview as error:
+            if getattr(error, 'sdk_partial_fill', False):
+                failure = QuoteFailure('quote-insufficient-liquidity')
+                failure.sdk_result = getattr(error, 'sdk_result', None)
+                raise failure from error
+            raise
+        if not value.get('fullyFilled', True):
+            failure = QuoteFailure('quote-insufficient-liquidity')
+            failure.sdk_result = value
+            raise failure
+        return value
+
+    async def quote_purchase_budget(self, request, branches, amount, rate, block):
+        """Return a smaller fully settled purchase when liquidity limits funding."""
+        with route_snapshot_scope() as snapshots:
+            try:
+                return branches, await self.quote_market_branches(branches, 'exactIn', amount, block)
+            except QuoteFailure as error:
+                initial = getattr(error, 'sdk_result', None)
+                if error.code != 'quote-insufficient-liquidity' or initial is None:
+                    raise
+            if int(initial['amountOut']) <= quoted_fee(int(initial['amountOut']), rate):
+                raise QuoteFailure('quote-insufficient-liquidity')
+            total = sum(int(branch['amountIn']) for branch in branches)
+            identity = {'adapter': request['adapter'].lower(), 'feeRatePpm': rate,
+                'counterToken': request['counterToken'].lower(), 'direction': 'buy',
+                'branches': [{'weight': str(Fraction(int(branch['amountIn']), total)),
+                    'hops': [(pool_identity(hop['pool']), hop['zeroForOne']) for hop in branch['hops']]}
+                    for branch in branches]}
+            def key():
+                return capacity_key('market-fill', chain=self.registry.chain, block=block, identity=identity,
+                    facts={name: pool_capacity_facts(value) for name, value in snapshots.items()})
+            cached = self.fill_capacity.get(key()) if snapshots else None
+            async def probe(funding):
+                allocated = resize_branches(branches, funding)
+                try:
+                    return await self.quote_market_branches(allocated, 'exactIn', funding, block)
+                except QuoteFailure as error:
+                    if error.code != 'quote-insufficient-liquidity':
+                        raise
+                    return None
+            funding, raw = await maximum_filled_input(amount, initial, probe,
+                cached=int(cached['maximumInput']) if cached else None)
+            if not funding or raw is None or int(raw['amountOut']) <= quoted_fee(int(raw['amountOut']), rate):
+                raise QuoteFailure('quote-insufficient-liquidity')
+            if snapshots:
+                self.fill_capacity.remember(key(), {'maximumInput': str(funding)})
+            return resize_branches(branches, funding), raw
 
     async def head(self):
         rpc = self.registry.get_rpc()
@@ -182,6 +238,7 @@ class MarketQuotes(RouteQuoteEngine):
         if generation is not None and generation != self.generation:
             self.generation = generation
             self.models.clear()
+            self.fill_capacity.clear()
             await self.registry.observe_generation(generation)
             if self.recipient_cache:
                 self.recipient_cache.reset()
@@ -275,10 +332,10 @@ class MarketQuotes(RouteQuoteEngine):
         if side == 'buy':
             if exact_in:
                 fee = int(retained['fee']['amount']) if retained else quoted_fee(amount_out, rate)
-                net, total, notional = amount_out-fee, request_amount, amount_out
+                net, total, notional = amount_out-fee, amount_in, amount_out
                 bound = int(retained['params']['bound']) if retained else floor(net, tolerance)
                 limit = bound+fee
-                input_maximum, output_minimum = request_amount, bound
+                input_maximum, output_minimum = amount_in, bound
             else:
                 gross, fee = gross_buy_target(request_amount, rate) if retained is None else (
                     request_amount+int(retained['fee']['amount']), int(retained['fee']['amount']))
@@ -314,7 +371,8 @@ class MarketQuotes(RouteQuoteEngine):
             'inputAmount': str(amount_in), 'outputAmount': str(amount_out), 'limit': str(limit), 'deadline': request['deadline']}
         data = encode_route(route, request['adapter'])
         params = {'side': 0 if side == 'buy' else 1, 'counterToken': request['counterToken'],
-            'amount': request['amount'], 'bound': str(bound), 'routedInput': str(notional) if side == 'sell' and exact_in else '0',
+            'amount': str(amount_in) if side == 'buy' and exact_in else request['amount'],
+            'bound': str(bound), 'routedInput': str(notional) if side == 'sell' and exact_in else '0',
             'feeCygld': str(fee), 'recipient': request['recipient'], 'deadline': request['deadline'],
             'adapter': request['adapter'], 'data': data}
         fee_facts = deepcopy(retained['fee']) if retained else {'asset': cygld, 'ratePpm': rate, 'amount': str(fee),
@@ -365,6 +423,7 @@ class MarketQuotes(RouteQuoteEngine):
         return await self.sharing.get(request, on_update or ignore)
 
     @quote_work_scope
+    @tick_prefetch_scope()
     async def _get(self, request, on_update=None, *, block=None):
         budget = current_budget()
         request = MarketQuoteRequest.model_validate(request).model_dump()
@@ -412,7 +471,7 @@ class MarketQuotes(RouteQuoteEngine):
             retained = request.get('retainedPlan')
             if retained:
                 async def retained_quote():
-                    nonlocal diagnostic_best
+                    nonlocal diagnostic_best, quote_amount
                     probe = provider_qualification_begin('retained-validation', provider='market')
                     priced, pricing_started = False, False
                     with provider_qualification_scope(probe):
@@ -424,14 +483,24 @@ class MarketQuotes(RouteQuoteEngine):
                                 if retained['params'][name].lower() != request[name].lower():
                                     raise InvalidPreview('Retained market '+name+' changed.')
                             target = int(retained['params']['routedInput']) if side == 'sell' and exact_in else (
-                                amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else amount)
+                                amount+int(retained['fee']['amount']) if side == 'buy' and not exact_in else (
+                                    int(retained['params']['amount']) if side == 'buy' and exact_in else amount))
+                            if side == 'buy' and exact_in:
+                                if target > amount:
+                                    raise InvalidPreview('Retained market funding exceeds the input budget.')
+                                quote_amount = target
                             branches = self.resolve_market_branches(retained['route']['branches'], token_in, token_out, mode, target)
                             provider_qualification_stage('route-pricing')
                             route_count('typedEnumerated')
                             route_leg_started(diagnostic_leg, amount=str(target))
                             pricing_started = True
                             async with engine_work(self.semaphore):
-                                raw = await self.quote_branches(branches, mode, target, block)
+                                try:
+                                    raw = await self.quote_market_branches(branches, mode, target, block)
+                                except QuoteFailure as error:
+                                    if side == 'buy' and exact_in and error.code == 'quote-insufficient-liquidity':
+                                        raise InvalidPreview('Retained market funding is no longer fully fillable.') from error
+                                    raise
                             route_leg_finished(diagnostic_leg, 'succeeded', best={'routePlan': {'branches': branches}})
                             priced = True
                             diagnostic_best = int(raw['amountOut' if exact_in else 'amountIn'])
@@ -483,18 +552,21 @@ class MarketQuotes(RouteQuoteEngine):
                     pass
             completed = 0
             best = None
-            rpc_error, context_error = None, None
+            rpc_error, liquidity_error, context_error = None, None, None
             pools = []
             lock = asyncio.Lock()
             async def evaluate(branches):
-                nonlocal best, completed, rpc_error, context_error, diagnostic_best
+                nonlocal best, completed, rpc_error, liquidity_error, context_error, diagnostic_best
                 probe = provider_qualification_begin('route-pricing', provider='market')
                 route_leg_started(diagnostic_leg, amount=str(quote_amount))
                 priced = False
                 with provider_qualification_scope(probe):
                     try:
                         async with engine_work(self.semaphore):
-                            raw = await self.quote_branches(branches, mode, quote_amount, block)
+                            if side == 'buy' and exact_in:
+                                branches, raw = await self.quote_purchase_budget(request, branches, quote_amount, rate, block)
+                            else:
+                                raw = await self.quote_market_branches(branches, mode, quote_amount, block)
                             observed = int(raw['amountOut' if exact_in else 'amountIn'])
                             improves_pricing = diagnostic_best is None or (
                                 observed > diagnostic_best if exact_in else observed < diagnostic_best)
@@ -552,6 +624,8 @@ class MarketQuotes(RouteQuoteEngine):
                         provider_qualification_finish(probe, 'rejected', error)
                         if code.startswith('rpc-'):
                             rpc_error = error
+                        elif code == 'quote-insufficient-liquidity':
+                            liquidity_error = error
                     finally:
                         route_count('typedCompleted')
                         async with lock:
@@ -590,6 +664,8 @@ class MarketQuotes(RouteQuoteEngine):
             if best is None:
                 if rpc_error:
                     raise rpc_error
+                if liquidity_error:
+                    raise liquidity_error
                 raise QuoteFailure('quote-no-route')
             final_validation = provider_qualification_begin('canonicality', provider='market')
             with provider_qualification_scope(final_validation):

@@ -35,7 +35,7 @@ def request(side='buy', mode='exact-in', **changes):
 
 
 def core_quote(side='buy', mode='exact-in', *, amount_in=100, amount_out=190, minimum=170,
-               expected_input=100, maximum=110):
+               expected_input=100, maximum=110, capacity_limited=False):
     return {'mode': ('issue-' if side == 'buy' else 'redeem-')+mode,
         'context': deepcopy(CONTEXT), 'quotes': [],
         'preview': {'fees': {'protocolFeeCygld': '2', 'helperFeeCygld': '1'},
@@ -46,6 +46,8 @@ def core_quote(side='buy', mode='exact-in', *, amount_in=100, amount_out=190, mi
         'expectedInputAmount': str(expected_input), 'expectedOutputAmount': str(amount_out),
         'executionAmount': str(amount_out if side == 'buy' else amount_in),
         'maximumInputAmount': str(maximum if side == 'buy' else 0), 'slippageBps': 100,
+        **({'requestedGrossCygldOut': str(amount_out+100), 'remainingGrossCapacity': str(amount_out)}
+           if capacity_limited else {}),
         'expectedCoreOutputs': [], 'metrics': {'totalMs': 1}}
 
 
@@ -156,6 +158,130 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(next(f for f in frames if f['type'] == 'qualified')['value']['strategy'], 'market')
         engines.hold_core.set()
         self.assertEqual((await operation)['strategy'], 'core')
+
+    async def test_budget_purchase_ranks_usable_output_and_keeps_provider_spending_terms(self):
+        for winner in ('core', 'market'):
+            with self.subTest(winner=winner):
+                engines = self.engines(
+                    core_quote(amount_out=125 if winner == 'core' else 120, expected_input=30, maximum=31),
+                    market_quote(amount_in=29, amount_out=125 if winner == 'market' else 120,
+                                 minimum=118, maximum=29))
+                result = await engines.quotes.get(request(amount='100'), lambda _: asyncio.sleep(0))
+                self.assertEqual(result['strategy'], winner)
+                self.assertEqual(result['quotedInput'], '30' if winner == 'core' else '29')
+                self.assertEqual(result['inputMaximum'], '31' if winner == 'core' else '29')
+                self.assertEqual(result['quotedOutput'], '125')
+                self.assertEqual(engines.core_calls[0][0]['amount'], '100')
+                self.assertEqual(engines.market_calls[0][0]['amount'], '100')
+
+    async def test_selected_budget_range_is_published_before_competing_search_finishes(self):
+        engines = self.engines(core_quote(amount_out=125, expected_input=30, maximum=31, capacity_limited=True),
+                               market_quote(amount_out=120, maximum=100))
+        engines.hold_market = asyncio.Event()
+        frames, selected = [], asyncio.Event()
+        async def publish(frame):
+            frames.append(frame)
+            if frame['type'] == 'model' and frame['value'].get('budgetRange'):
+                selected.set()
+        operation = asyncio.create_task(engines.quotes.get(request(), publish))
+        await asyncio.wait_for(selected.wait(), 2)
+        self.assertFalse(operation.done())
+        packet = next(frame['value'] for frame in frames if frame['type'] == 'model'
+                      and frame['value'].get('budgetRange'))
+        self.assertEqual(packet['budgetRange'], {'minimumBudget': '31',
+                                               'quotedInput': '30', 'quotedOutput': '125'})
+        # No route calls or fresh head acquisition are needed for a new budget
+        # below or above the original budget in the Backend-established range.
+        before = (engines.heads, engines.models, len(engines.core_calls), len(engines.market_calls))
+        for amount in ('50', '200'):
+            model = await engines.quotes.get_model({key: value for key, value in request(amount=amount).items()
+                                                   if key not in ('recipient', 'deadline')})
+            self.assertEqual(model['estimate'], {'strategy': 'core', 'amount': '125'})
+            self.assertEqual(model['budgetRange'], packet['budgetRange'])
+            self.assertEqual((engines.heads, engines.models, len(engines.core_calls), len(engines.market_calls)), before)
+        engines.hold_market.set()
+        self.assertEqual((await operation)['strategy'], 'core')
+        # The later losing full-spend provider must not erase the selected range.
+        self.assertEqual(engines.quotes.packet({**request(amount='50'), 'adapter': ADAPTER})['budgetRange'],
+                         packet['budgetRange'])
+
+    async def test_selected_invalidation_publishes_a_cleared_budget_range(self):
+        engines = self.engines()
+        hold, observed = asyncio.Event(), asyncio.Event()
+        async def core(value, publish, **_kwargs):
+            quote = core_quote(amount_out=125, expected_input=30, maximum=31, capacity_limited=True)
+            await publish({'type': 'qualified', 'value': quote})
+            await observed.wait()
+            await publish({'type': 'invalidated'})
+            await hold.wait()
+            raise QuoteFailure('quote-no-route')
+        engines.core.get = core
+        engines.hold_market = asyncio.Event()
+        frames, cleared = [], asyncio.Event()
+        async def publish(frame):
+            frames.append(frame)
+            if frame['type'] == 'model' and frame['value'].get('budgetRange'):
+                observed.set()
+            if frame['type'] == 'model' and not frame['value'].get('budgetRange') and any(
+                    value['type'] == 'invalidated' for value in frames):
+                cleared.set()
+        operation = asyncio.create_task(engines.quotes.get(request(), publish))
+        await asyncio.wait_for(cleared.wait(), 2)
+        self.assertTrue(any(frame['type'] == 'model' and frame['value'].get('budgetRange') for frame in frames))
+        self.assertNotIn('budgetRange', engines.quotes.packet({**request(), 'adapter': ADAPTER}))
+        hold.set()
+        engines.hold_market.set()
+        await operation
+
+    async def test_model_request_finishing_after_qualification_contains_the_current_range(self):
+        engines = self.engines(core_quote(amount_out=125, expected_input=30, maximum=31, capacity_limited=True),
+                               market_quote(amount_out=120, maximum=100))
+        acquiring, release = asyncio.Event(), asyncio.Event()
+        async def acquire(value, *, block):
+            acquiring.set()
+            await release.wait()
+            return engines.packet(value)
+        engines.market.get_model = acquire
+        model_request = {key: value for key, value in request(amount='50').items()
+                         if key not in ('recipient', 'deadline')}
+        model_task = asyncio.create_task(engines.quotes.get_model(model_request))
+        await asyncio.wait_for(acquiring.wait(), 2)
+        await engines.quotes.get(request(), lambda _: asyncio.sleep(0))
+        release.set()
+        packet = await model_task
+        self.assertEqual(packet['budgetRange']['quotedInput'], '30')
+        self.assertEqual(packet['estimate'], {'strategy': 'core', 'amount': '125'})
+
+    async def test_a_fresh_selected_full_spend_quote_clears_the_prior_capacity_display(self):
+        engines = self.engines(core_quote(amount_out=125, expected_input=30, maximum=31, capacity_limited=True),
+                               market_quote(amount_out=120, maximum=100))
+        await engines.quotes.get(request(), lambda _: asyncio.sleep(0))
+        self.assertIn('budgetRange', engines.quotes.packet({**request(), 'adapter': ADAPTER}))
+        engines.market_value = market_quote(amount_in=100, amount_out=200, maximum=100)
+        frames = []
+        result = await engines.quotes.get(request(), lambda frame: asyncio.sleep(0, result=frames.append(frame)))
+        self.assertEqual(result['strategy'], 'market')
+        self.assertNotIn('budgetRange', engines.quotes.packet({**request(), 'adapter': ADAPTER}))
+        self.assertNotIn('budgetRange', [frame['value'] for frame in frames if frame['type'] == 'model'][-1])
+
+    async def test_uncapped_improved_core_execution_does_not_freeze_larger_budget_at_old_output(self):
+        intent, _provider, route, wire = service()
+        self.addAsyncCleanup(route.close)
+        async def improved_execution(path, amount):
+            return amount if path[:20] == bytes.fromhex(WETH[2:]) else (amount+1)//2
+        wire.on_quote = improved_execution
+        engines = self.engines()
+        engines.core.get = intent.get
+        engines.market_error = QuoteFailure('quote-no-route')
+        engines.market.estimate = lambda _packet, value: str(int(value['amount'])*3)
+        first = await engines.quotes.get(request(counterToken=WETH), lambda _: asyncio.sleep(0))
+        self.assertEqual((first['quotedInput'], first['inputMaximum'], first['quotedOutput']), ('50', '52', '100'))
+        self.assertEqual(first['providerQuote']['remainingGrossCapacity'], str(10**30))
+        packet = engines.quotes.packet({**request(counterToken=WETH, amount='200'), 'adapter': ADAPTER})
+        self.assertNotIn('budgetRange', packet)
+        self.assertEqual(packet['estimate'], {'strategy': 'market', 'amount': '600'})
+        second = await engines.quotes.get(request(counterToken=WETH, amount='200'), lambda _: asyncio.sleep(0))
+        self.assertEqual((second['quotedInput'], second['inputMaximum'], second['quotedOutput']), ('100', '102', '200'))
 
     async def test_first_qualified_survives_slow_failed_competitor(self):
         engines = self.engines()
@@ -584,15 +710,16 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
                 zero, protected = results
                 self.assertEqual(zero['quotedOutput'], protected['quotedOutput'])
                 self.assertEqual(zero['quotedInput'], protected['quotedInput'])
-                self.assertEqual(zero['inputMaximum'], protected['inputMaximum'])
                 if side == 'buy':
-                    # Actual fixed mint remains 15000, funded by a 10000 input
-                    # ceiling; nominal sourcing costs 7500 in both cases.
+                    # The fixed mint remains 15000 and nominal sourcing costs
+                    # 7500. Funding includes only the selected route cushions,
+                    # within the unchanged 10000 budget.
                     self.assertEqual(zero['quotedOutput'], '15000')
                     self.assertEqual(zero['providerQuote']['executionAmount'], '15000')
                     self.assertEqual(protected['providerQuote']['executionAmount'], '15000')
                     self.assertEqual(zero['quotedInput'], '7500')
-                    self.assertEqual(zero['inputMaximum'], '10000')
+                    self.assertEqual(zero['inputMaximum'], '7500')
+                    self.assertEqual(protected['inputMaximum'], '7576')
                     self.assertEqual(zero['outputMinimum'], protected['outputMinimum'])
                     self.assertEqual(zero['outputMinimum'], '15000')
                     self.assertEqual([q['amountIn'] for q in zero['providerQuote']['quotes']], ['3750', '3750'])

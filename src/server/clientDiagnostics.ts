@@ -33,7 +33,7 @@ export type ClientDiagnostic = {
   constraint?: QuoteConstraint;
   quoteDiagnostics?: ProjectedQuoteDiagnostics;
   errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "redemption-supply-exceeded" | "redemption-capacity-exceeded" | "rpc-rate-limit" | "rpc-timeout"
-    | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout" | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable"
+    | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout" | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable"
     | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-invalid-input" | "quote-request-limit";
   tokenIn?: string;
   tokenOut?: string;
@@ -63,7 +63,7 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
     side: ["buy", "sell"], strategy: ["core", "market", "universal"],
     stage: ["quote", "balance", "network", "authorization", "preparation", "simulation", "submission", "confirmation"],
     errorClassification: ["insufficient-protocol-supply", "issuance-cap-exceeded", "redemption-supply-exceeded", "redemption-capacity-exceeded", "rpc-rate-limit", "rpc-timeout",
-      "rpc-unavailable", "rpc-access-denied", "quote-timeout", "quote-no-route", "quote-contract-reverted", "quote-unavailable",
+      "rpc-unavailable", "rpc-access-denied", "quote-timeout", "quote-no-route", "quote-insufficient-liquidity", "quote-contract-reverted", "quote-unavailable",
       "quote-service-unavailable", "quote-stream-interrupted", "quote-invalid-input", "quote-request-limit"],
   };
   for (const [key, values] of Object.entries(enums)) {

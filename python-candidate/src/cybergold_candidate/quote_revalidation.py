@@ -160,7 +160,7 @@ async def revalidate(request, previous, rpc, block, basket, token, preview, metr
         needed = sum(raw for asset, raw in quantities if asset.lower() == request['quoteToken'].lower())
         expected_input += needed
         needed += sum(int(row['amountIn']) for row in quotes)
-        maximum = int(previous['maximumInputAmount']) if request['mode'] == 'issue-exact-in' else needed
+        maximum = needed
         if needed > int(previous['maximumInputAmount']):
             provider_qualification_stage('tolerance', maximumAmountIn=previous['maximumInputAmount'],
                 observedAmountIn=str(needed))

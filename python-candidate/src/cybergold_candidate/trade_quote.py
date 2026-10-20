@@ -5,7 +5,6 @@ terms; wallet authorization and signed full-call simulation remain separate.
 """
 import asyncio
 from copy import deepcopy
-from fractions import Fraction
 import json
 import time
 from types import SimpleNamespace
@@ -16,15 +15,14 @@ from eth_abi.exceptions import EncodingError
 from pydantic import BaseModel, Field
 from web3 import Web3
 
-from .basket_arithmetic import BasketArithmetic
 from .basket_preview import InvalidPreview
-from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
+from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
 from .quote_errors import QuoteFailure, public_quote_error
 from .rpc_diagnostics import bind_quote_error, quote_failure_context
-from .quote_models import LegModel, PoolBaseline
+from .fast_trade_estimates import FastTradeEstimates, model_estimate
 from .recovery_rpc import SnapshotChanged
 from .route_search import WETH
 from .wallet_balances import TOKENS
@@ -154,83 +152,13 @@ def score(request, value):
     return int(value['quotedOutput']) if request['mode'] == 'exact-in' else -int(value['quotedInput'])
 
 
-def model_estimate(packet, request):
-    """Existing factorized Core/Helpers display arithmetic, without chain reads."""
-    if not packet.get('protocol'):
-        return None
-    try:
-        source = packet['protocol']['state']
-        state = {name: [int(v) for v in value] if name in ('weights', 'conversions', 'available', 'recoveryShares', 'recoveryValues')
-                 else int(value) if name in ('issueFee', 'helperFee', 'redeemFee', 'supply', 'maxSupply', 'effectiveCap') else value
-                 for name, value in source.items()}
-        basket = BasketArithmetic(state)
-        counter = request['counterToken'].lower()
-        def predict(asset, amount, *, inverse=False, buy=False):
-            if asset.lower() == counter:
-                return amount
-            values = []
-            for row in packet['routes']:
-                pair = (counter, asset.lower()) if buy else (asset.lower(), counter)
-                if (row['tokens'][0].lower(), row['tokens'][-1].lower()) != pair:
-                    continue
-                def f(value):
-                    return Fraction(int(value['numerator']), int(value['denominator']))
-                baseline = PoolBaseline(f(row['exchangeRate']), f(row['feeRetention']),
-                    f(row['localImpact']) if row.get('localImpact') else None) if row.get('exchangeRate') else None
-                model = LegModel([(int(p['input']), int(p['output'])) for p in row['points']], baseline)
-                value = model.predict(amount, 'anchored' if model.points and baseline else 'local' if baseline else 'larger', inverse)
-                if value is not None:
-                    values.append(value)
-            if not values:
-                raise ValueError('Indicative route unavailable')
-            return min(values) if inverse else max(values)
-        amount = int(request['amount'])
-        if request['side'] == 'buy':
-            if request['mode'] == 'exact-out':
-                result = basket.issue(amount, includes_helper=True)
-                return str(sum(predict(asset, int(value), inverse=True, buy=True)
-                    for asset, value in zip(state['assets'], result['amountsInExact'], strict=True) if value))
-            budgets = {row['outputAsset'].lower(): int(row['amount']) for row in packet['intent']['targets']}
-            # Direct input was omitted from swap targets by the seed builder.
-            used = sum(budgets.values())
-            reserve = [amount-used if asset.lower() == counter else predict(asset, budgets.get(asset.lower(), 0), buy=True)
-                       if budgets.get(asset.lower(), 0) else 0 for asset in state['assets']]
-            return str(basket.issue_in(reserve)['netCygldOut'])
-        def output(gross, *, protected=False):
-            projected = basket.redeem_in(gross)['projectedCoreOutputs']
-            values = []
-            for row in projected:
-                if row['kind'] != 0 or not int(row['amount']):
-                    continue
-                value = predict(row['token'], int(row['amount']))
-                if protected and row['token'].lower() != counter:
-                    value = floor(value, request['slippageBps'])
-                values.append(value)
-            return sum(values)
-        if request['mode'] == 'exact-in':
-            return str(output(amount))
-        seed = basket.redeem_out([int(next((t['amount'] for t in packet['intent']['targets']
-                         if t['inputAsset'].lower() == asset.lower()), '0')) for asset in state['assets']]
-            + [0]*len(state['recoveryShares']))['grossCygldIn']
-        for _ in range(11):
-            received = output(seed, protected=True)
-            if amount <= received <= ceil(amount, request['slippageBps']):
-                return str(seed)
-            if received <= 0:
-                return None
-            next_seed = seed*amount//received
-            seed = next_seed if next_seed != seed else seed+(1 if received < amount else -1)
-    except (ValueError, KeyError, ZeroDivisionError):
-        pass
-    return None
-
-
 class TradeQuotes:
     def __init__(self, settings, core, market, *, request_resolver=None, basis_reader=None):
         self.settings, self.core, self.market = settings, core, market
         self.request_resolver, self.basis_reader = request_resolver, basis_reader
         self.history = getattr(core, 'history', None)
         self.basis, self.basis_epoch = None, None
+        self.fast_estimates = FastTradeEstimates()
         self.sharing = IntentSharing(SimpleNamespace(settings=settings, routes=core.routes, get=self._get),
             rpc_factory=core.routes.rpc_factory, head=market.head)
 
@@ -290,6 +218,13 @@ class TradeQuotes:
                 raise
         return list(values[0]), list(map(int, values[1])), counts['issued']
 
+    def estimate_scope(self):
+        return (self.settings.NEXT_PUBLIC_CHAIN_ID,
+                self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS.lower(),
+                self.settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS.lower(),
+                self.history.epoch if self.history else None,
+                getattr(self.market, 'generation', None))
+
     def packet(self, request, provider_models=None):
         intent = {name: deepcopy(request[name]) for name in TradeModelRequest.model_fields}
         packet = {'namespace': 'trade', 'intent': intent, 'models': []}
@@ -309,9 +244,7 @@ class TradeQuotes:
             amount = self.market.estimate(value, adapted)
             if amount is not None:
                 estimates.append(('market', amount))
-        if estimates:
-            strategy, amount = max(estimates, key=lambda row: (int(row[1]) if request['mode'] == 'exact-in' else -int(row[1]), row[0] == 'core'))
-            packet['estimate'] = {'strategy': strategy, 'amount': amount}
+        packet.update(self.fast_estimates.packet(request, estimates, scope=self.estimate_scope()))
         return packet
 
     async def acquire_models(self, request, block):
@@ -335,6 +268,8 @@ class TradeQuotes:
     async def get_model(self, request):
         request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
         packet = self.packet(request)
+        if packet.get('budgetRange') and packet.get('estimate'):
+            return packet
         if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol')) for row in packet['models']) and packet['models']:
             return packet
         # Cold model acquisition reuses the providers' lightweight baselines;
@@ -424,7 +359,9 @@ class TradeQuotes:
             selected = max(candidates.values(), key=lambda row: (score(request, row), row['strategy'] == 'core')) if candidates else None
             if selected is not None and selected != winner:
                 winner = deepcopy(selected)
+                self.fast_estimates.remember_selected(request, winner, scope=self.estimate_scope())
                 await on_update({'type': 'qualified', 'value': decorate(winner)})
+                await evidence({'type': 'model', 'value': self.packet(request)})
             elif selected is None:
                 winner = None
 
@@ -473,14 +410,18 @@ class TradeQuotes:
                             if frame.get('reason') == 'snapshot-changed':
                                 context_error = SnapshotChanged('Recovery snapshot changed; restart discovery', retry=1)
                                 candidates.clear()
+                                self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                                 if winner:
                                     await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
                                 await select()
+                                await evidence({'type': 'model', 'value': self.packet(request)})
                             else:
                                 candidates.pop(strategy, None)
                                 if winner and winner['strategy'] == strategy:
+                                    self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                                     await on_update({'type': 'invalidated', 'strategy': strategy})
                                     await select()
+                                    await evidence({'type': 'model', 'value': self.packet(request)})
                             if budget:
                                 budget.ready = bool(candidates)
                             for name in (('core', 'market') if context_error is not None else (strategy,)):
@@ -520,14 +461,17 @@ class TradeQuotes:
                 provider_errors[strategy] = public_quote_error(error)
                 code = provider_errors[strategy]['code']
                 search_outcomes[strategy] = ('timeout' if code in ('quote-timeout', 'rpc-timeout') else
-                                             'complete' if code == 'quote-no-route' else 'error')
+                                             'complete' if code in ('quote-no-route', 'quote-insufficient-liquidity',
+                                                                    'issuance-cap-exceeded') else 'error')
                 if isinstance(error, SnapshotChanged):
                     async with lock:
                         context_error = error
+                        self.fast_estimates.invalidate(request, scope=self.estimate_scope())
                         if winner:
                             await on_update({'type': 'invalidated', 'strategy': winner['strategy']})
                         candidates.clear()
                         await select()
+                        await evidence({'type': 'model', 'value': self.packet(request)})
                 await on_update({'type': 'provider-error', 'strategy': strategy, **public_quote_error(error)})
                 for name in (('core', 'market') if context_error is not None else (strategy,)):
                     await assessment(name)
@@ -555,8 +499,18 @@ class TradeQuotes:
                 await assessment(strategy, final)
             if final:
                 winner = max(final.values(), key=lambda row: (score(request, row), row['strategy'] == 'core'))
+                self.fast_estimates.remember_selected(request, winner, scope=self.estimate_scope())
+                await evidence({'type': 'model', 'value': self.packet(request)})
                 return decorate(winner, final)
             error = next(iter(errors.values()), QuoteFailure('quote-no-route'))
+            # A full Core cap does not prevent Market purchases. When that
+            # independent provider also fails, expose why it could not fill
+            # the request; retain the cap reason in Core's assessment.
+            core_error = errors.get('core')
+            if (getattr(core_error, 'code', None) == 'issuance-cap-exceeded'
+                    and (getattr(core_error, 'constraint', None) or {}).get('availableRaw') == '0'
+                    and 'market' in errors):
+                error = errors['market']
             bind_quote_error(error, next((error_quote_diagnostics[strategy]
                 for strategy, value in errors.items() if value is error), None))
             raise error

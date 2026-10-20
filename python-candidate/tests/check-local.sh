@@ -60,6 +60,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_market_canonical_a
 python-candidate/.venv/bin/python python-candidate/tests/test_snapshot_copy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_quote.py
+python-candidate/.venv/bin/python python-candidate/tests/test_fast_trade_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_budget.py
 python-candidate/.venv/bin/python python-candidate/tests/test_budget_providers.py
 python-candidate/.venv/bin/python python-candidate/tests/test_budget_timeout_diagnostics.py
@@ -218,6 +219,10 @@ python-candidate/.venv/bin/python python-candidate/tests/test_alias_canonical.py
 python-candidate/.venv/bin/python python-candidate/tests/test_audit_remediations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_search.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_intent.py
+python-candidate/.venv/bin/python python-candidate/tests/test_issuance_search_stop.py
+python-candidate/.venv/bin/python python-candidate/tests/test_exhausted_issuance_capacity.py
+python-candidate/.venv/bin/python python-candidate/tests/test_capacity_cache.py
+python-candidate/.venv/bin/python python-candidate/tests/test_market_liquidity_exhaustion.py
 python-candidate/.venv/bin/python python-candidate/tests/test_selected_forward_replay.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_intent_cold_seed.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_experiments.py

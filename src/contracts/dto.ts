@@ -415,7 +415,7 @@ export type QuoteConstraint = {
 export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exceeded"
   | "redemption-supply-exceeded" | "redemption-capacity-exceeded"
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
-  | "quote-no-route" | "quote-contract-reverted" | "quote-unavailable";
+  | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable";
 
 /**
  * Bounded observation count; never an execution eligibility predicate.
@@ -644,6 +644,8 @@ export type TradeQuoteModelPacket = {
   namespace: "trade"; intent: TradeModelRequest;
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
   estimate?: { strategy: "core" | "market"; amount: string };
+  /** Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+  budgetRange?: { minimumBudget: string; maximumBudget?: string; quotedInput: string; quotedOutput: string };
 };
 export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: TradeQuoteModelPacket }

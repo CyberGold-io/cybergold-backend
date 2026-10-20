@@ -114,6 +114,22 @@ test('JSONL worker continues after malformed input and reports missing coverage'
   assert.equal(rows[2].result.amountOut,'1992');
 });
 
+test('JSONL worker identifies SDK minimum-input rounding without classifying unrelated errors',async()=>{
+  const child=spawn(process.execPath,['src/uniswap-sdk/worker.ts'],{stdio:['pipe','pipe','pipe']});
+  let out='',err='';child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
+  const tiny={...pair,reserve0:'100000000',reserve1:'1000000'};
+  child.stdin.end([
+    {id:'small',operation:'quote',mode:'exactIn',amount:'100',zeroForOne:true,pools:[tiny]},
+    {id:'ordinary',operation:'unknown',pools:[]},
+    {id:'ok',operation:'quote',mode:'exactIn',amount:'101',zeroForOne:true,pools:[tiny]},
+  ].map(row=>JSON.stringify(row)).join('\n')+'\n');
+  const [exit]=await once(child,'exit');assert.equal(exit,0,err);
+  const rows=out.trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(rows[0].error.code,'SDK_INPUT_TOO_SMALL');
+  assert.equal(rows[1].error.code,'SDK_ERROR');
+  assert.equal(rows[2].result.amountOut,'1');
+});
+
 test('Universal Router SDK 2.2 command reference has the extra hop price tuple field',async()=>{
   const { RoutePlanner, CommandType, UniversalRouterVersion }=require('@uniswap/universal-router-sdk');
   const { AbiCoder }=require('@ethersproject/abi');
