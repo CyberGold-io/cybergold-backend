@@ -7296,6 +7296,7 @@
           "insufficient-protocol-supply",
           "issuance-cap-exceeded",
           "quote-contract-reverted",
+          "quote-insufficient-liquidity",
           "quote-no-route",
           "quote-timeout",
           "quote-unavailable",
@@ -9173,6 +9174,7 @@
                                             "insufficient-protocol-supply",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
+                                            "quote-insufficient-liquidity",
                                             "quote-no-route",
                                             "quote-timeout",
                                             "quote-unavailable",
@@ -10454,6 +10456,7 @@
                                             "insufficient-protocol-supply",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
+                                            "quote-insufficient-liquidity",
                                             "quote-no-route",
                                             "quote-timeout",
                                             "quote-unavailable",
@@ -12669,6 +12672,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -14090,6 +14094,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -14353,6 +14358,7 @@
                   "insufficient-protocol-supply",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
+                  "quote-insufficient-liquidity",
                   "quote-no-route",
                   "quote-timeout",
                   "quote-unavailable",
@@ -14841,6 +14847,7 @@
                                 "insufficient-protocol-supply",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
                                 "quote-no-route",
                                 "quote-timeout",
                                 "quote-unavailable",
@@ -15024,6 +15031,7 @@
                   "insufficient-protocol-supply",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
+                  "quote-insufficient-liquidity",
                   "quote-no-route",
                   "quote-timeout",
                   "quote-unavailable",
@@ -15512,6 +15520,7 @@
                                 "insufficient-protocol-supply",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
                                 "quote-no-route",
                                 "quote-timeout",
                                 "quote-unavailable",
@@ -17601,6 +17610,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -19002,6 +19012,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -20032,6 +20043,29 @@
                           "amount",
                           "strategy"
                         ]
+                      },
+                      "budgetRange": {
+                        "description": "Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound.",
+                        "type": "object",
+                        "properties": {
+                          "minimumBudget": {
+                            "type": "string"
+                          },
+                          "maximumBudget": {
+                            "type": "string"
+                          },
+                          "quotedInput": {
+                            "type": "string"
+                          },
+                          "quotedOutput": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "minimumBudget",
+                          "quotedInput",
+                          "quotedOutput"
+                        ]
                       }
                     },
                     "required": [
@@ -20247,6 +20281,7 @@
                           "insufficient-protocol-supply",
                           "issuance-cap-exceeded",
                           "quote-contract-reverted",
+                          "quote-insufficient-liquidity",
                           "quote-no-route",
                           "quote-timeout",
                           "quote-unavailable",
@@ -20735,6 +20770,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -21000,6 +21036,7 @@
                       "insufficient-protocol-supply",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
+                      "quote-insufficient-liquidity",
                       "quote-no-route",
                       "quote-timeout",
                       "quote-unavailable",
@@ -21488,6 +21525,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -21719,6 +21757,7 @@
                       "insufficient-protocol-supply",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
+                      "quote-insufficient-liquidity",
                       "quote-no-route",
                       "quote-timeout",
                       "quote-unavailable",
@@ -22207,6 +22246,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -23762,6 +23802,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -24483,6 +24524,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -30825,6 +30867,7 @@
                                   "insufficient-protocol-supply",
                                   "issuance-cap-exceeded",
                                   "quote-contract-reverted",
+                                  "quote-insufficient-liquidity",
                                   "quote-no-route",
                                   "quote-timeout",
                                   "quote-unavailable",
@@ -31165,6 +31208,7 @@
                                   "insufficient-protocol-supply",
                                   "issuance-cap-exceeded",
                                   "quote-contract-reverted",
+                                  "quote-insufficient-liquidity",
                                   "quote-no-route",
                                   "quote-timeout",
                                   "quote-unavailable",
@@ -31355,6 +31399,7 @@
                   "insufficient-protocol-supply",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
+                  "quote-insufficient-liquidity",
                   "quote-no-route",
                   "quote-timeout",
                   "quote-unavailable",
@@ -31843,6 +31888,7 @@
                                 "insufficient-protocol-supply",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
                                 "quote-no-route",
                                 "quote-timeout",
                                 "quote-unavailable",
@@ -34055,6 +34101,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -35732,6 +35779,7 @@
                                         "insufficient-protocol-supply",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
+                                        "quote-insufficient-liquidity",
                                         "quote-no-route",
                                         "quote-timeout",
                                         "quote-unavailable",
@@ -35937,6 +35985,7 @@
                       "insufficient-protocol-supply",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
+                      "quote-insufficient-liquidity",
                       "quote-no-route",
                       "quote-timeout",
                       "quote-unavailable",
@@ -36425,6 +36474,7 @@
                                     "insufficient-protocol-supply",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
                                     "quote-no-route",
                                     "quote-timeout",
                                     "quote-unavailable",
@@ -36690,6 +36740,7 @@
           "insufficient-protocol-supply",
           "issuance-cap-exceeded",
           "quote-contract-reverted",
+          "quote-insufficient-liquidity",
           "quote-no-route",
           "quote-timeout",
           "quote-unavailable",
@@ -36782,6 +36833,7 @@
                   "insufficient-protocol-supply",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
+                  "quote-insufficient-liquidity",
                   "quote-no-route",
                   "quote-timeout",
                   "quote-unavailable",
@@ -38841,6 +38893,7 @@
                         "insufficient-protocol-supply",
                         "issuance-cap-exceeded",
                         "quote-contract-reverted",
+                        "quote-insufficient-liquidity",
                         "quote-no-route",
                         "quote-timeout",
                         "quote-unavailable",
@@ -39057,6 +39110,7 @@
               "insufficient-protocol-supply",
               "issuance-cap-exceeded",
               "quote-contract-reverted",
+              "quote-insufficient-liquidity",
               "quote-no-route",
               "quote-timeout",
               "quote-unavailable",
@@ -39545,6 +39599,7 @@
                             "insufficient-protocol-supply",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
+                            "quote-insufficient-liquidity",
                             "quote-no-route",
                             "quote-timeout",
                             "quote-unavailable",
@@ -40518,6 +40573,29 @@
             "required": [
               "amount",
               "strategy"
+            ]
+          },
+          "budgetRange": {
+            "description": "Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound.",
+            "type": "object",
+            "properties": {
+              "minimumBudget": {
+                "type": "string"
+              },
+              "maximumBudget": {
+                "type": "string"
+              },
+              "quotedInput": {
+                "type": "string"
+              },
+              "quotedOutput": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "minimumBudget",
+              "quotedInput",
+              "quotedOutput"
             ]
           }
         },
@@ -41768,6 +41846,7 @@
                             "insufficient-protocol-supply",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
+                            "quote-insufficient-liquidity",
                             "quote-no-route",
                             "quote-timeout",
                             "quote-unavailable",
@@ -45166,6 +45245,7 @@
                           "insufficient-protocol-supply",
                           "issuance-cap-exceeded",
                           "quote-contract-reverted",
+                          "quote-insufficient-liquidity",
                           "quote-no-route",
                           "quote-timeout",
                           "quote-unavailable",
@@ -47138,6 +47218,7 @@
                             "insufficient-protocol-supply",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
+                            "quote-insufficient-liquidity",
                             "quote-no-route",
                             "quote-timeout",
                             "quote-unavailable",
@@ -48089,6 +48170,7 @@
               "insufficient-protocol-supply",
               "issuance-cap-exceeded",
               "quote-contract-reverted",
+              "quote-insufficient-liquidity",
               "quote-invalid-input",
               "quote-no-route",
               "quote-request-limit",
@@ -49880,6 +49962,7 @@
                   "insufficient-protocol-supply",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
+                  "quote-insufficient-liquidity",
                   "quote-no-route",
                   "quote-timeout",
                   "quote-unavailable",
@@ -50368,6 +50451,7 @@
                                 "insufficient-protocol-supply",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
                                 "quote-no-route",
                                 "quote-timeout",
                                 "quote-unavailable",

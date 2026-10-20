@@ -1,8 +1,11 @@
 import { createInterface } from "node:readline";
+import { createRequire } from "node:module";
 import { runRequest } from "./engine.ts";
 import { MissingPoolState } from "./types.ts";
 import type { PoolCoverage, SdkRequest } from "./types.ts";
 
+const require = createRequire(import.meta.url);
+const { InsufficientInputAmountError } = require("@uniswap/v2-sdk") as typeof import("@uniswap/v2-sdk");
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const pending: SdkRequest[] = [];
 const controllers = new Map<string | number, AbortController>();
@@ -27,7 +30,9 @@ async function handle(request: SdkRequest) {
     controller.signal.throwIfAborted();
     waiting.set(request.id, { resolve, reject });
     reply({ id: request.id, stateRequest: [{ poolId: missing.poolId,
-      wordPositions: missing.wordPositions, ticks: missing.ticks }] });
+      wordPositions: missing.wordPositions, ticks: missing.ticks,
+      ...(missing.zeroForOne === undefined ? {} : { zeroForOne: missing.zeroForOne }),
+      ...(missing.activeLiquidity === undefined ? {} : { activeLiquidity: missing.activeLiquidity }) }] });
   });
   try {
     controller.signal.throwIfAborted();
@@ -45,8 +50,11 @@ async function handle(request: SdkRequest) {
   } catch (error) {
     if (abandoned.has(request.id)) return;
     if (error instanceof MissingPoolState) reply({ id: request.id, missingState: [{
-      poolId: error.poolId, wordPositions: error.wordPositions, ticks: error.ticks }] });
-    else reply({ id: request.id, error: { code: controller.signal.aborted ? "CANCELLED" : "SDK_ERROR",
+      poolId: error.poolId, wordPositions: error.wordPositions, ticks: error.ticks,
+      ...(error.zeroForOne === undefined ? {} : { zeroForOne: error.zeroForOne }),
+      ...(error.activeLiquidity === undefined ? {} : { activeLiquidity: error.activeLiquidity }) }] });
+    else reply({ id: request.id, error: { code: controller.signal.aborted ? "CANCELLED"
+      : error instanceof InsufficientInputAmountError ? "SDK_INPUT_TOO_SMALL" : "SDK_ERROR",
       message: error instanceof Error ? error.message : String(error) } });
   } finally {
     controllers.delete(request.id); waiting.delete(request.id);

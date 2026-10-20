@@ -19,7 +19,7 @@ from .preview_errors import KnownPreviewError
 from .quote_errors import QuoteFailure, RpcTimeout, rpc_failure, public_quote_error
 from .quote_budget import current_budget, SearchStopped
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
-from .issuance_capacity import capacity_amounts, read_capacity
+from .issuance_capacity import capacity_amounts, read_capacity, read_supply_capacity, exhausted_capacity_error
 from .route_encoding import encode_route
 from .route_work_slots import engine_work
 from .uniswap_routes import resize_branches, v3_plan
@@ -156,9 +156,6 @@ class QuoteIntent:
             raise RpcTimeout('RPC context acquisition timed out') from None
         context = {'chainId': rpc.chain_id, 'blockNumber': str(block['number']),
                    'blockHash': block['hash'], 'observedAt': self.now()}
-        if self.history and epoch == self.history.epoch:
-            self.history.ensure_known_routes(engine, request, block, context)
-            self.history.ensure_state(rpc, block, context)
         metrics = {'rpcReads': 3, 'rpcReadsRequested': 3, 'rpcReadsCoalesced': 0,
                    'rpcReadsReused': 0, 'rpcReadsScope': 'coordinator', 'candidateCalls': 0, 'iterations': 0}
         memo, estimates = {}, set()
@@ -167,6 +164,7 @@ class QuoteIntent:
         qualified = None
         pending_qualification, qualifying = None, None
         capacity_state = None
+        supply_values = None
         route_searches = {}
         expected_input_gross = None
         context_error = None
@@ -174,7 +172,8 @@ class QuoteIntent:
         async def capacity(rows):
             nonlocal capacity_state
             if capacity_state is None:
-                capacity_state = asyncio.create_task(read_capacity(rpc, self.settings, block, metrics, shared=quoted_ranking))
+                capacity_state = asyncio.create_task(read_capacity(rpc, self.settings, block, metrics,
+                    shared=quoted_ranking, supply_values=supply_values))
             values = await asyncio.shield(capacity_state)
             return capacity_amounts(request, [row['best']['quote'] for row in rows], values)
 
@@ -530,7 +529,9 @@ class QuoteIntent:
                 return issue_input_bounds(legs(targets, rows, 'exact-out', protect=False), amount, direct, slippage_bps)
             def early(rows):
                 quotes = execution_quotes(rows)
-                maximum = amount if initial else direct + sum(int(leg['amountIn']) for leg in quotes)
+                maximum = direct + sum(int(leg['amountIn']) for leg in quotes)
+                if initial is not None:
+                    maximum = min(amount, maximum)
                 if initial is None:
                     expected = direct + sum(int(row['best']['quote']) for row in rows)
                     schedule(lambda: asyncio.sleep(0, result=expected), str)
@@ -545,7 +546,12 @@ class QuoteIntent:
                 schedule_qualification(checked)
             rows = await search(targets, 'exact-out', 'execution', early)
             quotes = execution_quotes(rows)
-            maximum = amount if initial else direct + sum(int(leg['amountIn']) for leg in quotes)
+            # The budget limits the route cushions above. Only the direct lots
+            # and those protected swap ceilings need to be funded, including
+            # when issuance capacity reduces the executable purchase.
+            maximum = direct + sum(int(leg['amountIn']) for leg in quotes)
+            if initial is not None:
+                maximum = min(amount, maximum)
             quote_phase('final-preview')
             final = await preview(token, issue_request('exact-out', quotes, maximum, net))
             same_order(final['orderedCoreAssets'], request['orderedAssets'])
@@ -851,6 +857,16 @@ class QuoteIntent:
 
         retained_key = json.dumps({key: value for key, value in request.items() if key not in ('deadline', 'retainedPlan')}, sort_keys=True)
         async def selection():
+            nonlocal supply_values
+            if request['mode'].startswith('issue'):
+                quote_phase('capacity')
+                supply_values = await read_supply_capacity(rpc, self.settings, block, metrics, shared=quoted_ranking)
+                if error := exhausted_capacity_error(supply_values):
+                    await rpc.assert_canonical(block)
+                    raise error
+            if self.history and epoch == self.history.epoch:
+                self.history.ensure_known_routes(engine, request, block, context)
+                self.history.ensure_state(rpc, block, context)
             incumbent = self.retained.get(retained_key) if self.retain_plans and rpc.chain_id == 1 else None
             result = None
             prior = None

@@ -56,10 +56,14 @@ export class MissingPoolState extends Error {
   poolId: string;
   wordPositions: number[];
   ticks: number[];
-  constructor(poolId: string, words: number[] = [], ticks: number[] = []) {
+  zeroForOne?: boolean;
+  activeLiquidity?: string;
+  constructor(poolId: string, words: number[] = [], ticks: number[] = [], zeroForOne?: boolean, activeLiquidity?: string) {
     super(`Missing canonical state for ${poolId}`);
     this.poolId = poolId;
     this.wordPositions = words;
     this.ticks = ticks;
+    this.zeroForOne = zeroForOne;
+    this.activeLiquidity = activeLiquidity;
   }
 }

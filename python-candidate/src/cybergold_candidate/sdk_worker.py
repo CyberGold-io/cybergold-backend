@@ -12,6 +12,10 @@ class SdkWorkerError(RuntimeError):
     pass
 
 
+class SdkInputTooSmall(SdkWorkerError):
+    """The SDK cannot produce a raw output unit from this exact input."""
+
+
 class MissingPoolState(SdkWorkerError):
     def __init__(self, requests):
         super().__init__('SDK quote needs additional observed pool state')
@@ -99,6 +103,8 @@ class SdkWorker:
                 if response.get('missingState'):
                     raise MissingPoolState(response['missingState'])
                 if response.get('error'):
+                    if isinstance(response['error'], dict) and response['error'].get('code') == 'SDK_INPUT_TOO_SMALL':
+                        raise SdkInputTooSmall('SDK quote unavailable')
                     raise SdkWorkerError('SDK quote unavailable')
                 return value
         except asyncio.CancelledError as error:

@@ -13,7 +13,8 @@ import time
 from web3 import Web3
 from web3.exceptions import BlockNotFound
 
-from .uniswap_v4 import POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view
+from .uniswap_v4 import (POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view,
+    read_tick_bitmap_words, begin_tick_prefetch)
 from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
 from .uniswap_routes import pool_key, v4_pool_id
@@ -472,6 +473,33 @@ class PoolRegistry:
             return word, value
         for word, bitmap in await owned_reads(*(read_word(word) for word in missing_words)):
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
+        if pool['protocol'] == 'v4':
+            # A large swap can exhaust its funded range and then traverse
+            # thousands of empty words. Acquire the remaining direction at
+            # once, instead of one RPC and SDK continuation per empty word.
+            # Empty gaps are never treated as global liquidity exhaustion.
+            current_word = (int(snapshot['tick'])//spacing) >> 8
+            positions = set()
+            for request in requests:
+                direction = request.get('zeroForOne')
+                if type(direction) is not bool or request.get('activeLiquidity') != '0':
+                    continue
+                for word in request.get('wordPositions', []):
+                    if word == current_word or int(words[word]['bitmap']):
+                        continue
+                    lower, upper = ((-887272//spacing) >> 8, word) if direction else (
+                        word, (887272//spacing) >> 8)
+                    positions.update(range(lower, upper+1))
+            missing = sorted(positions-words.keys())
+            if missing and begin_tick_prefetch(pool, block):
+                try:
+                    coverage = await read_tick_bitmap_words(rpc.read_function,
+                        pool.get('poolManager', rpc.pool_manager), pool['id'], missing, block)
+                    words.update({word: {'wordPosition': word, 'bitmap': str(bitmap)} for word, bitmap in coverage})
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    pass  # Optional prefetch failure retains ordinary demanded reads.
         needed = {int(tick) for request in requests for tick in request.get('ticks', [])}
         for word in requested_words:
             bits = int(words[word]['bitmap'])
