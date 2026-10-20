@@ -27,6 +27,19 @@ test("diagnostics retain signed safe codes and only the four-byte selector", () 
   }
 });
 
+test("insufficient Market liquidity survives top-level and nested diagnostic projection", () => {
+  const result = projectClientDiagnostic({ operation: "quote", outcome: "failed",
+    errorClassification: "quote-insufficient-liquidity", quoteDiagnostics: {
+      routeWave: { legs: { count: 1, rows: [{ index: 0,
+        failureCounts: [{ code: "quote-insufficient-liquidity", count: 1 }] }] } },
+      providerQualifications: { provider: "market", attempts: 1, rejected: 1,
+        rows: [{ attempt: 1, stage: "route-pricing", outcome: "rejected", code: "quote-insufficient-liquidity" }] },
+    } });
+  assert.equal(result.errorClassification, "quote-insufficient-liquidity");
+  assert.equal(result.quoteDiagnostics?.routeWave?.legs?.rows[0].failureCounts[0].code, "quote-insufficient-liquidity");
+  assert.equal(result.quoteDiagnostics?.providerQualifications?.rows[0].code, "quote-insufficient-liquidity");
+});
+
 test("browser quote diagnostics survive the real collector without leaking raw provider fields", async () => {
   let output = "";
   const stream = new Writable({ write(chunk, _encoding, done) { output += chunk.toString(); done(); } });

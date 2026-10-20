@@ -1123,7 +1123,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        QuoteErrorCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        QuoteErrorCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
         TradeQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -1563,7 +1563,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -1900,7 +1900,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2426,7 +2426,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2798,7 +2798,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2862,7 +2862,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -2993,7 +2993,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -3042,7 +3042,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -3173,7 +3173,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -3672,7 +3672,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4038,7 +4038,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4283,6 +4283,13 @@ export interface components {
                     strategy: "core" | "market";
                     amount: string;
                 };
+                /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+                budgetRange?: {
+                    minimumBudget: string;
+                    maximumBudget?: string;
+                    quotedInput: string;
+                    quotedOutput: string;
+                };
             };
         }) | ({
             requestId?: string;
@@ -4332,7 +4339,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -4463,7 +4470,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4534,7 +4541,7 @@ export interface components {
             strategy: "core" | "market";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -4665,7 +4672,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4726,7 +4733,7 @@ export interface components {
             type: "error";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -4857,7 +4864,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -5262,7 +5269,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -5449,7 +5456,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -7014,7 +7021,7 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                     /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                     constraint?: {
                         /** @enum {string} */
@@ -7098,7 +7105,7 @@ export interface components {
                         path: string;
                         rpcCode: number;
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                         constraint?: {
                             /** @enum {string} */
@@ -7147,7 +7154,7 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -7278,7 +7285,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -7800,7 +7807,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -8199,7 +8206,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -8252,7 +8259,7 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -8383,7 +8390,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -8453,7 +8460,7 @@ export interface components {
             omittedPools?: number;
         };
         /** @enum {string} */
-        QuoteCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        QuoteCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
         "Partial<Record<\"elapsedMs\"|\"subphaseElapsedMs\"|\"legacyCandidates\"|\"legacyCompleted\"|\"typedEnumerated\"|\"typedCompleted\"|\"typedPending\"|\"sdkRequests\"|\"sdkWaiting\"|\"sdkLockWaitMs\"|\"sdkExchangeMs\",number>>": {
             elapsedMs?: number;
             subphaseElapsedMs?: number;
@@ -8474,7 +8481,7 @@ export interface components {
             /** @enum {string} */
             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
         } & components["schemas"]["Partial<Record<\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\"|\"quotedInput\"|\"quotedOutput\"|\"inputMaximum\"|\"outputMinimum\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
             pools?: {
                 /** @enum {string} */
@@ -8989,7 +8996,7 @@ export interface components {
                     /** @enum {string} */
                     outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                     /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                     targetAmount?: string;
                     /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -9048,7 +9055,7 @@ export interface components {
             searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
             error?: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -9179,7 +9186,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -9418,6 +9425,13 @@ export interface components {
                 /** @enum {string} */
                 strategy: "core" | "market";
                 amount: string;
+            };
+            /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
+            budgetRange?: {
+                minimumBudget: string;
+                maximumBudget?: string;
+                quotedInput: string;
+                quotedOutput: string;
             };
         };
         ProtocolConfiguration: {
@@ -9735,7 +9749,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -10573,7 +10587,7 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                     /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                     constraint?: {
                         /** @enum {string} */
@@ -11040,7 +11054,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -11271,7 +11285,7 @@ export interface components {
                 } & components["schemas"]["Partial<Record<\"pending\"|\"cancelled\"|\"attempts\"|\"qualified\"|\"rejected\"|\"superseded\"|\"notImproved\"|\"omittedRows\"|\"firstQualifiedMs\"|\"selectionMs\"|\"canonicalCompletedMs\"|\"cleanupCompletedMs\",number>>"];
             };
             /** @enum {string} */
-            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            errorClassification?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             tokenIn?: string;
             tokenOut?: string;
             amount?: string;
@@ -11634,7 +11648,7 @@ export interface components {
         } & {
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -11765,7 +11779,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */

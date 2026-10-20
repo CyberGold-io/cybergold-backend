@@ -16,6 +16,7 @@ MESSAGES = {
     'rpc-access-denied': 'RPC provider refused access. Please retry later.',
     'quote-timeout': 'Quote calculation timed out. Please retry.',
     'quote-no-route': 'No exchange route is available for this amount.',
+    'quote-insufficient-liquidity': 'The Market does not have enough liquidity to fill this amount. Reduce the amount.',
     'quote-contract-reverted': 'The contract rejected the quote for this amount.',
     'quote-unavailable': 'The quote service could not complete this request. Please retry.',
 }

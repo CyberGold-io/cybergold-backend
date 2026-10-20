@@ -22,6 +22,13 @@ ERRORS = {
 }
 
 
+def zero_amount_issue_error(error, mode):
+    """This Helpers error is ambiguous between dust and exhausted issuance."""
+    selector = Web3.to_hex(Web3.keccak(text='AmountTooSmallAfterFees()'))[:10]
+    data = error.get('data')
+    return mode.startswith('issue-') and isinstance(data, str) and data.lower() == selector
+
+
 def preview_error(error, *, mode=None, arguments=None):
     """Decode known ABI errors only; never expose provider diagnostics."""
     data = error.get('data')

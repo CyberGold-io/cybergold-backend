@@ -29,9 +29,9 @@ class CoveredTicks implements TickDataProvider {
     this.signal = signal;
     this.loader = loader;
   }
-  async acquire(words: number[], ticks: number[]) {
-    if (!this.loader) throw new MissingPoolState(this.pool.id, words, ticks);
-    const observations = await this.loader(new MissingPoolState(this.pool.id, words, ticks));
+  async acquire(words: number[], ticks: number[], zeroForOne?: boolean, activeLiquidity?: string) {
+    if (!this.loader) throw new MissingPoolState(this.pool.id, words, ticks, zeroForOne, activeLiquidity);
+    const observations = await this.loader(new MissingPoolState(this.pool.id, words, ticks, zeroForOne, activeLiquidity));
     this.signal?.throwIfAborted();
     for (const observed of observations) {
       if (observed.id !== this.pool.id) continue;
@@ -50,13 +50,14 @@ class CoveredTicks implements TickDataProvider {
     if (!value) throw new MissingPoolState(this.pool.id, [], [index]);
     return { liquidityGross: j(value.liquidityGross), liquidityNet: j(value.liquidityNet) };
   }
-  async nextInitializedTickWithinOneWord(tick: number, lte: boolean, spacing: number): Promise<[number, boolean]> {
+  async nextInitializedTickWithinOneWord(tick: number, lte: boolean, spacing: number,
+    activeLiquidity?: { toString(): string }): Promise<[number, boolean]> {
     this.signal?.throwIfAborted();
     if (++this.steps % 64 === 0) await setImmediate(undefined, { signal: this.signal });
     const compressed = Math.floor(tick / spacing);
     const position = (lte ? compressed : compressed + 1) >> 8;
     let bitmap = this.words.get(position);
-    if (bitmap === undefined) { await this.acquire([position], []); bitmap = this.words.get(position); }
+    if (bitmap === undefined) { await this.acquire([position], [], lte, activeLiquidity?.toString()); bitmap = this.words.get(position); }
     if (bitmap === undefined) throw new MissingPoolState(this.pool.id, [position]);
     // Bitmap proves absence as well as presence. Use SDK traversal, not an
     // incomplete TickListDataProvider that would assert global net liquidity.

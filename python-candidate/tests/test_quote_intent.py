@@ -121,6 +121,7 @@ class QuoteWire(Wire):
         super().__init__()
         self.provider = None
         self.capacity_batches = []
+        self.capacity_values = {}
 
     async def send(self, request):
         payload = json.loads(request.content)
@@ -136,6 +137,7 @@ class QuoteWire(Wire):
                      'basketCygldPerUnitFp18': [10**18] if direct else [10**18, 10**18],
                      'issuanceFeePpm': 0, 'helperFeePpm': 0, 'totalSupply': 0,
                      'maxTotalSupply': cap, 'effectiveCygldSupplyCap': cap}
+            state.update(self.capacity_values)
             rows = []
             for row in payload:
                 name, output = reads[row['params'][0]['data'][:10]]
@@ -166,7 +168,10 @@ class DirectProvider(Provider):
             value = {'orderedCoreAssets': [WETH], 'amountsInExact': [args['netCygldOut']], 'fees': fees}
         elif function.fn_name == 'previewIssueFromTokenExactIn':
             self.assert_no_legs(args)
-            value = {'orderedCoreAssets': [WETH], 'netCygldOut': args['params']['inputAmount'], 'fees': fees}
+            amount = args['params']['inputAmount']
+            value = {'orderedCoreAssets': [WETH],
+                     'netCygldOut': min(amount, self.issue_cap) if self.issue_cap is not None else amount,
+                     'fees': fees}
         elif function.fn_name == 'previewIssueFromTokenExactOut':
             self.assert_no_legs(args)
             value = {'orderedCoreAssets': [WETH], 'fees': fees}
@@ -834,6 +839,59 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fresh['preview']['minimumAmountOut'], '198')
             self.assertEqual(fresh['expectedCoreOutputs'], result['expectedCoreOutputs'])
 
+    async def test_capped_purchase_funds_only_usable_output_and_retains_its_spending_ceiling(self):
+        for chain_id in (1, 31338):
+            for native in (False, True):
+                with self.subTest(chain_id=chain_id, native=native):
+                    intent, provider, route, _wire = service(chain_id)
+                    self.addAsyncCleanup(route.close)
+                    intent.retain_plans = True
+                    provider.issue_cap = 150
+                    value = request('issue-exact-in', native)
+                    first = await intent.get(value, lambda frame: asyncio.sleep(0))
+                    self.assertEqual(value['amount'], '100')
+                    self.assertEqual(first['executionAmount'], '150')
+                    self.assertEqual(first['expectedInputAmount'], '76')
+                    self.assertEqual(first['maximumInputAmount'], '78')
+                    self.assertEqual(sum(int(leg['amountIn']) for leg in first['quotes']), 78)
+                    # More issuance capacity is not permission to spend more
+                    # when checking an already selected quote.
+                    provider.issue_cap = 200
+                    provider.block_hash = '0x' + 'c' * 64
+                    checked = await intent.get({**value, 'retainedPlan': retained_plan(first)},
+                                               lambda frame: asyncio.sleep(0))
+                    self.assertEqual(checked['executionAmount'], '150')
+                    self.assertEqual(checked['expectedInputAmount'], '76')
+                    self.assertEqual(checked['maximumInputAmount'], '78')
+                    name, args, _ = next(row for row in reversed(provider.contract_calls)
+                        if row[0] in ('previewIssueFromTokenExactOut', 'previewIssueFromNativeExactOut'))
+                    params = args['params']
+                    self.assertEqual(params['maximumNativeIn' if native else 'maximumInputAmount'], 78)
+                    self.assertEqual(params['netCygldOut'], 150)
+
+    async def test_required_purchase_routes_cannot_expand_the_original_budget(self):
+        for native in (False, True):
+            with self.subTest(native=native):
+                intent, provider, route, wire = service()
+                self.addAsyncCleanup(route.close)
+                # An initial exact-input route may support more issuance than
+                # the eventual exact-output execution routes can fund.
+                async def inconsistent(path, amount):
+                    return amount * 2 if path[:20] == bytes.fromhex(WETH[2:]) else amount
+                wire.on_quote = inconsistent
+                frames = []
+                with self.assertRaises(Exception) as failure:
+                    await intent.get(request('issue-exact-in', native),
+                        lambda frame: asyncio.sleep(0, result=frames.append(frame)))
+                self.assertEqual(public_quote_error(failure.exception)['code'], 'quote-contract-reverted')
+                finals = [args for name, args, _ in provider.contract_calls
+                          if name in ('previewIssueFromTokenExactOut', 'previewIssueFromNativeExactOut')]
+                self.assertTrue(finals)
+                for final in finals:
+                    self.assertEqual(final['params']['maximumNativeIn' if native else 'maximumInputAmount'], 100)
+                    self.assertGreater(sum(leg['amountIn'] for leg in list(final.values())[1]), 100)
+                self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
+
     async def test_purchase_targets_full_output_after_fees_including_a_supply_cap(self):
         for native in (False, True):
             for cap in (None, 150):
@@ -845,7 +903,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(int(result['displayAmount']), expected)
                     self.assertEqual(int(result['executionAmount']), expected)
                     self.assertEqual(result['preview']['fees'], {'protocolFeeCygld': '1', 'helperFeeCygld': '2'})
-                    self.assertEqual(result['maximumInputAmount'], '100')
+                    self.assertEqual(result['maximumInputAmount'], '79' if cap else '100')
                     name, args, _ = next(row for row in reversed(provider.contract_calls)
                         if row[0] in ('previewIssueFromTokenExactOut', 'previewIssueFromNativeExactOut'))
                     self.assertEqual(args['params']['netCygldOut'], expected)
@@ -1086,6 +1144,26 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['executionAmount'], '100')
                 self.assertEqual(result['displayAmount'], '100')
 
+
+    async def test_capped_direct_asset_purchase_funds_only_required_basket_lot(self):
+        provider, wire = DirectProvider(), QuoteWire()
+        wire.provider = provider
+        provider.issue_cap = 60
+        route = RouteSearch(SETTINGS, RouteSearchRpc(SETTINGS, AsyncWeb3(provider),
+            httpx.AsyncClient(transport=httpx.MockTransport(wire.send))))
+        install_fixture_engine(route)
+        self.addAsyncCleanup(route.close)
+        value = {**request('issue-exact-in'), 'orderedAssets': [WETH], 'targets': [], 'adapter': ''}
+        result = await QuoteIntent(SETTINGS, route).get(value, lambda event: asyncio.sleep(0))
+        self.assertEqual(value['amount'], '100')
+        self.assertEqual(result['executionAmount'], '60')
+        self.assertEqual(result['expectedInputAmount'], '60')
+        self.assertEqual(result['maximumInputAmount'], '60')
+        self.assertEqual(result['quotes'], [])
+        self.assertEqual(wire.batches, [])
+        final = next(args for name, args, _ in reversed(provider.contract_calls)
+                     if name == 'previewIssueFromTokenExactOut')
+        self.assertEqual(final['params']['maximumInputAmount'], 60)
 
     async def test_all_eight_paths_share_one_context_and_keep_abi_bounds(self):
         for mode in ('issue-exact-in','issue-exact-out','redeem-exact-in','redeem-exact-out'):

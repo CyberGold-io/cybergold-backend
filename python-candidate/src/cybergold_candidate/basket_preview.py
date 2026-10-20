@@ -12,7 +12,8 @@ from web3 import AsyncWeb3, Web3
 
 from .recovery_rpc import RecoveryRpc, abi_value
 from .rpc_transport import rpc_provider
-from .preview_errors import preview_error, KnownPreviewError
+from .preview_errors import preview_error, KnownPreviewError, zero_amount_issue_error
+from .issuance_capacity import read_supply_capacity, exhausted_capacity_error
 from .quote_errors import rpc_failure, public_quote_error
 from .trade_observation import QuoteObservation, failure
 
@@ -76,6 +77,7 @@ class BasketPreviewRpc(RecoveryRpc):
     methods = METHODS
 
     def __init__(self, settings, w3=None):
+        self.settings = settings
         self.chain_id = int(settings.NEXT_PUBLIC_CHAIN_ID)
         self.helpers = Web3.to_checksum_address(settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
         self.w3 = w3 or AsyncWeb3(rpc_provider(settings.RPC_URL, settings.RPC_AUTHORIZATION))
@@ -105,6 +107,8 @@ class BasketPreviewRpc(RecoveryRpc):
         if 'error' in response:
             _, arguments = self.contract.decode_function_input(data)
             known = preview_error(response['error'], mode=mode, arguments=arguments)
+            if known is None and zero_amount_issue_error(response['error'], mode):
+                known = exhausted_capacity_error(await read_supply_capacity(self, self.settings, block))
             if known:
                 raise known
             raise rpc_failure(response['error'])

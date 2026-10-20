@@ -6,6 +6,8 @@ pricing methods are implementation details of a canonical forward route.
 import asyncio
 from .route_work_slots import engine_work
 from copy import deepcopy
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from fractions import Fraction
 import json
@@ -21,8 +23,21 @@ from .uniswap_routes import (candidate_branches, supported_route, resize_branche
     pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
     market_anchor, LEGACY_V3_ADAPTERS)
 from .uniswap_state import ZERO
+from .uniswap_v4 import tick_prefetch_scope
 from .wallet_balances import TOKENS
 
+_quote_snapshots = ContextVar('route_quote_snapshots', default=None)
+
+
+@contextmanager
+def route_snapshot_scope():
+    """Reuse immutable observations across one route's SDK funding probes."""
+    snapshots = {}
+    token = _quote_snapshots.set(snapshots)
+    try:
+        yield snapshots
+    finally:
+        _quote_snapshots.reset(token)
 
 
 class RouteQuoteEngine:
@@ -222,15 +237,25 @@ class RouteQuoteEngine:
         branches = RouteQuoteEngine.enrich_branches(self, branches)
         value = await self.quote_sdk_branches(branches, mode, amount, block)
         if not value.get('settled', True):
-            raise InvalidPreview('Unsettled current-operation intermediate currency.')
+            error = InvalidPreview('Unsettled current-operation intermediate currency.')
+            error.sdk_partial_fill = not value.get('fullyFilled', True)
+            error.sdk_result = value
+            raise error
         if mode == 'exactOut' and not value.get('fullyFilled', True):
-            raise InvalidPreview('Exact-output target cannot be filled.')
+            error = InvalidPreview('Exact-output target cannot be filled.')
+            error.sdk_partial_fill = True
+            error.sdk_result = value
+            raise error
         value['qualification'] = 'sdk'
         return value
 
+    @tick_prefetch_scope()
     async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate=None, canonical=None):
         branches = RouteQuoteEngine.enrich_branches(self, branches)
-        canonical = canonical if canonical is not None else {}
+        if canonical is None:
+            canonical = _quote_snapshots.get()
+        if canonical is None:
+            canonical = {}
         snapshots = {}
         pools = {}
         for branch in branches:

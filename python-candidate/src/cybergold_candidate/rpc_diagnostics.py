@@ -31,7 +31,7 @@ _PROVIDER_STAGES = {'composition', 'basket-preview', 'initial-preview', 'executi
                 'route-pricing', 'fee-bounds', 'qualification', 'retained-validation'}
 _PROVIDER_OUTCOMES = {'running', 'qualified', 'rejected', 'not-improved', 'cancelled', 'superseded'}
 _QUOTE_CODES = {'rpc-rate-limit', 'rpc-timeout', 'rpc-unavailable', 'rpc-access-denied',
-                'quote-timeout', 'quote-no-route', 'quote-contract-reverted', 'quote-unavailable',
+                'quote-timeout', 'quote-no-route', 'quote-insufficient-liquidity', 'quote-contract-reverted', 'quote-unavailable',
                 'insufficient-protocol-supply', 'issuance-cap-exceeded',
                 'redemption-supply-exceeded', 'redemption-capacity-exceeded'}
 _LEG_ROWS, _LEG_CODES, _LEG_POOLS, _PROVIDER_ROWS = 16, 16, 8, 8
