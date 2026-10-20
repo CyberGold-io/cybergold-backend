@@ -2,11 +2,18 @@
 from web3 import Web3
 
 from .uniswap_routes import LEGACY_V3_ADAPTERS, standalone_v3, v3_path
+from .routing_encoding import encode_routing
 
 
 ZERO = '0x'+'00'*20
 ADAPTER_TYPE = '(bool,uint256,uint256,(uint256,(uint8,address,uint24,int24,address,bytes)[])[])'
 PROTOCOL = {'v2': 0, 'v3': 1, 'v4': 2}
+ROUTING_ADAPTERS = set()
+
+
+def register_routing_adapter(address):
+    """Bind a release-configured deployed identity; never redirect captured data."""
+    ROUTING_ADAPTERS.add(address.lower())
 
 
 def encode_adapter(plan):
@@ -31,6 +38,8 @@ def encode_route(plan, adapter=None):
     including on the multi-protocol adapter. Its typed per-hop counterpart has
     different custody/gas behavior, so format normalization must not change it.
     """
+    if adapter and adapter.lower() in ROUTING_ADAPTERS:
+        return encode_routing(plan)
     legacy = bool(adapter) and adapter.lower() in LEGACY_V3_ADAPTERS
     whole_v3 = standalone_v3(plan)
     if legacy or (plan['executionContext'] == 'helpers-core' and whole_v3):

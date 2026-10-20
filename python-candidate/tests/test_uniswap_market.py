@@ -1055,14 +1055,15 @@ for line in sys.stdin:
         self.assertTrue(self.registry.cursors['v4']['pending'])
         self.assertNotIn(C, self.registry.inventory)
 
-    async def test_market_execution_abi_accepts_native_permit_full_lot(self):
+    async def test_historical_market_execution_abi_accepts_native_permit_full_lot(self):
+        from cybergold_candidate.helpers_router_facts import PROBE_ABI as historical_abi
         quote = await self.quotes.get(self.request)
-        function = next(row for row in ABI if row['name'] == 'swapExactInput')
+        function = next(row for row in historical_abi if row['name'] == 'swapExactInput')
         funding = {'mode': 1, 'nativePermit': {'value': '1002', 'deadline': '9999999999', 'v': 27,
             'r': '0x'+'00'*32, 's': '0x'+'00'*32}, 'permit2': {'permit': {'permitted': {'token': A,
             'amount': '0'}, 'nonce': '0', 'deadline': '0'}, 'signature': '0x'}}
         params = [argument(quote['params'], function['inputs'][0]), argument(funding, function['inputs'][1])]
-        encoded = Web3().eth.contract(abi=ABI).encode_abi('swapExactInput', args=params)
+        encoded = Web3().eth.contract(abi=historical_abi).encode_abi('swapExactInput', args=params)
         self.assertTrue(encoded.startswith('0x'))
         self.assertEqual(params[0][4], 1000)
         self.assertEqual(params[1][1][0], 1002)

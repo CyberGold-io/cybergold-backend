@@ -16,6 +16,8 @@ from .app_tokens import configured_tokens
 from .helpers_router_facts import ABI
 from .protocol_facts import ProtocolFactsRpc
 from .quote_errors import QuoteFailure
+from .routing_encoding import ROUTING_ENCODING
+from .route_encoding import register_routing_adapter
 
 # Reviewed deployed encodings. Preference is explicit, independent of set order.
 SUPPORTED_ADAPTERS = (
@@ -25,10 +27,11 @@ SUPPORTED_ADAPTERS = (
 APPROVAL_TOPIC = Web3.to_hex(Web3.keccak(text='AdapterApprovalUpdated(address,bool)'))
 
 
-def select_adapter(approved):
+def select_adapter(approved, successor=None):
     available = {address.lower() for address in approved}
+    supported = (((successor.lower(), ROUTING_ENCODING),) if successor else ()) + SUPPORTED_ADAPTERS
     return next(((Web3.to_checksum_address(address), encoding)
-                 for address, encoding in SUPPORTED_ADAPTERS if address in available), (None, None))
+                 for address, encoding in supported if address in available), (None, None))
 
 
 def configured_address(settings, name):
@@ -41,6 +44,9 @@ class ProtocolConfiguration:
         self.settings, self.store, self.rpc = settings, store, rpc
         self.chain = int(settings.NEXT_PUBLIC_CHAIN_ID)
         self.helpers = configured_address(settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS')
+        self.routing_adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
+        if self.routing_adapter:
+            register_routing_adapter(self.routing_adapter)
         self.generation_reader = generation_reader
         self.now = now or time.time
         self.generation, self.value = None, None
@@ -239,7 +245,7 @@ class ProtocolConfiguration:
             address = next(iter(addresses)) if len(addresses) == 1 else None
         if not address:
             cached = await self.load(wait=False)
-            address, _encoding = select_adapter(cached['approved']) if cached else (None, None)
+            address, _encoding = select_adapter(cached['approved'], self.routing_adapter) if cached else (None, None)
         if not address:
             raise QuoteFailure('quote-unavailable')
         value['adapter'] = address
@@ -247,7 +253,7 @@ class ProtocolConfiguration:
 
     async def get(self):
         cached = await self.load(wait=False)
-        address, encoding = select_adapter(cached['approved']) if cached else (None, None)
+        address, encoding = select_adapter(cached['approved'], self.routing_adapter) if cached else (None, None)
         core = configured_address(self.settings, 'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS')
         contracts = {'core': core, 'helpers': self.helpers,
             'governance': configured_address(self.settings, 'NEXT_PUBLIC_GOVERNANCE_DIAMOND_ADDRESS'),
@@ -259,7 +265,10 @@ class ProtocolConfiguration:
         return {'chainId': self.chain, 'contracts': contracts, 'tokens': configured_tokens(core, self.chain),
                 'sandboxForkGeneration': self.generation,
                 'adapter': {'status': 'success' if address else 'unavailable',
-                            'encoding': encoding, 'observation': observation}}
+                            'encoding': encoding, 'observation': observation},
+                'universalExactInput': {'adapter': self.routing_adapter,
+                    'encoding': ROUTING_ENCODING if self.routing_adapter else None,
+                    'settlementPolicy': 'protocol-retained-input'}}
 
     async def close(self):
         tasks = tuple(self.tasks)

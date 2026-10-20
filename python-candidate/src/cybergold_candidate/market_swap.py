@@ -354,6 +354,9 @@ class MarketQuotes(RouteQuoteEngine):
 
     @budget_entry
     async def get(self, request, on_update=None):
+        universal = getattr(self, 'universal_quotes', None)
+        if universal and universal.adapter and request.get('mode') == 'exact-in' and not request.get('retainedPlan'):
+            return await universal.scalar_request(request, on_update)
         budget = current_budget()
         if self.request_resolver:
             request = await budget.prepare(self.request_resolver(request))

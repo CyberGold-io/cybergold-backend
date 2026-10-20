@@ -25,11 +25,37 @@ export type ProtocolConfiguration = {
   tokens: ProtocolConfiguredToken[];
   sandboxForkGeneration: string | null;
   adapter: { status: "success" | "unavailable";
-    encoding: "uniswap-multi-protocol-v1" | "uniswap-v3" | null;
+    encoding: "uniswap-multi-protocol-v1" | "uniswap-v3" | "uniswap-routing-v1" | null;
     observation: { blockNumber: string; blockHash: string; observedAt: string } | null };
+  universalExactInput: { adapter: string | null; encoding: "uniswap-routing-v1" | null;
+    settlementPolicy: "protocol-retained-input" };
 };
 
 /** Market swaps transfer existing CYGLD; never use Core basket economics. */
+export type UniversalExactInputRequest = {
+  intent: 0 | 1 | 2 | 3;
+  inputs: { currency: string; amount: string }[];
+  outputCurrency: string; recipient: string; deadline: string; slippageBps?: number;
+};
+export type UniversalExactInputPlan = Omit<UniversalExactInputRequest, "slippageBps"> & {
+  minimumOutput: string; body: string;
+};
+export type UniversalExactInputQuote = {
+  strategy: "universal"; routeFamily: "core" | "market" | "mixed";
+  operation: "executeExactInput"; settlementPolicy: "protocol-retained-input";
+  plan: UniversalExactInputPlan; planDescription: Record<string, unknown>;
+  inputs: { currency: string; amount: string }[];
+  quotedInput?: string; inputMaximum?: string; quotedOutput: string; outputMinimum: string;
+  estimatedRetainedInputCharges: { branch: number; stage: number; currency: string; amount: string }[];
+  estimatedRecipientOutputs: { kind: number; token: string; id: string; amount: string }[];
+  fees: { coreProtocolFeeCygld: string; coreHelpersFeeCygld: string; marketFeeCygld: string };
+  recoveryShares: { kind: number; token: string; id: string; amount: string }[];
+  deployment: { helpers: string; adapter: string; encoding: "uniswap-routing-v1" };
+  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
+  searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
+    maxAmmHops: number; scope: "selected-inventory" };
+};
 export type MarketQuoteRequest = {
   side: "buy" | "sell"; mode: "exact-in" | "exact-out";
   counterToken: string; amount: string; adapter?: string; recipient: string;
@@ -136,10 +162,11 @@ export type MarketQuoteModelPacket = {
 /** Optional subscriber references; workId belongs to shared producer work. */
 export type DiagnosticReferences = { requestId?: string; attemptId?: string; correlationId?: string; workId?: string };
 
+export type MarketQuoteResponse = MarketQuote | UniversalExactInputQuote;
 export type MarketQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: MarketQuoteModelPacket }
   | { type: "estimate"; amount: string }
-  | { type: "qualified" | "complete"; value: MarketQuote }
+  | { type: "qualified" | "complete"; value: MarketQuote | UniversalExactInputQuote }
   | { type: "progress"; completedCandidates: number; totalCandidates?: number }
   | { type: "invalidated" }
   | { type: "error"; error: string; code?: string; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
@@ -247,12 +274,7 @@ export type SafeTransactionHashRequest = { address: string; to: string; value: s
 export type SafeExecutionRequest = Omit<SafeTransactionHashRequest, "nonce"> & { executor: string; executorNonce: string; signatures: string };
 export type SafeExecution = { context: ProtocolFacts["context"]; address: string; executor: string; executorNonce: string;
   success: boolean; blockTag: "latest" };
-export type HelpersExecutionRequest = { owner: string; operation: "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithPermit2"
-  | "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactOutWithMixedPermits"
-  | "issueFromTokenExactOutWithPermit2" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOut" | "issueFromNativeExactOut"
-  | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit"
-  | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit"
-  | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "swapExactInput" | "swapExactOutput"; args: unknown[]; value?: string };
+export type HelpersExecutionRequest = { owner: string; operation: "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput" | "executeExactInput"; args: unknown[]; value?: string };
 export type HelpersExecution = { context: ProtocolFacts["context"]; helpers: string; owner: string;
   operation: HelpersExecutionRequest["operation"]; gas: string; blockTag: "latest" };
 export type TransactionFees = { context: ProtocolFacts["context"]; maxFeePerGas: string; maxPriorityFeePerGas: string };
@@ -302,7 +324,7 @@ export type HelpersRouterFacts = {
     wrappedNative: FactRead<string>; owner: FactRead<string>;
     approvedAdapters: FactRead<string[]>; paused: FactRead<boolean>; tokenPermitIssuance?: FactRead<boolean>;
     basketPermitIssuanceExactIn?: FactRead<boolean>; basketPermitIssuanceExactOut?: FactRead<boolean>;
-    marketSwapExactInput?: FactRead<boolean>; marketSwapExactOutput?: FactRead<boolean> };
+    universalExactInput?: FactRead<boolean>; marketSwapExactInput?: FactRead<boolean>; marketSwapExactOutput?: FactRead<boolean> };
 };
 export type GovernanceSafePrincipal = {
   context: ProtocolFacts["context"];
@@ -562,13 +584,19 @@ export type QuoteModelPacket = {
     };
   };
 };
+export type NumericCoreQuote = {
+  readOnly: true; mode: QuoteIntentRequest["mode"]; context: QuoteIntent["context"];
+  slippageBps?: number; metrics?: QuoteIntent["metrics"]; displayAmount?: string;
+  executionAmount?: string; maximumInputAmount?: string; expectedInputAmount?: string;
+  expectedOutputAmount?: string; minimumAmountOut: string;
+};
 export type QuoteIntentEvent = DiagnosticReferences & (
   | { type: "model"; value: QuoteModelPacket }
   | { type: "progress"; stage: string; completed: number; total: number }
   | { type: "estimate"; amount: string; context: BasketPreview["context"] }
-  | { type: "qualified"; value: QuoteIntent }
+  | { type: "qualified"; value: QuoteIntent | NumericCoreQuote }
   | { type: "invalidated"; context: BasketPreview["context"]; reason?: "snapshot-changed" }
-  | { type: "complete"; value: QuoteIntent }
+  | { type: "complete"; value: QuoteIntent | NumericCoreQuote }
   | { type: "error"; error: string; correlationId: string; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 
 /** One user trade; Backend chooses a complete Core or market execution. */
@@ -620,7 +648,7 @@ export type TradeQuoteModelPacket = {
 export type TradeQuoteEvent = DiagnosticReferences & (
   | { type: "model"; value: TradeQuoteModelPacket }
   | { type: "estimate"; strategy: "core" | "market"; amount: string }
-  | { type: "qualified" | "complete"; value: TradeQuote }
+  | { type: "qualified" | "complete"; value: TradeQuote | UniversalExactInputQuote }
   | { type: "provider-qualified"; strategy: "core" | "market"; value: TradeProviderCandidate }
   | { type: "provider-assessment"; strategy: "core" | "market"; value: TradeProviderAssessment }
   | { type: "progress"; strategy: "core" | "market"; value: { stage?: string; completed?: number; total?: number; completedCandidates?: number; totalCandidates?: number } }
@@ -634,6 +662,8 @@ export interface ContractSchemas {
   DiagnosticReferences: DiagnosticReferences;
   QuoteWorkDiagnostics: QuoteWorkDiagnostics;
   TradeModelRequest: TradeModelRequest;
+  UniversalExactInputRequest: UniversalExactInputRequest;
+  UniversalExactInputQuote: UniversalExactInputQuote;
   TradeQuoteRequest: TradeQuoteRequest;
   TradeQuote: TradeQuote;
   TradeProviderCandidate: TradeProviderCandidate;
@@ -645,6 +675,7 @@ export interface ContractSchemas {
   ProtocolConfiguration: ProtocolConfiguration;
   MarketQuoteRequest: MarketQuoteRequest;
   MarketQuote: MarketQuote;
+  MarketQuoteResponse: MarketQuoteResponse;
   MarketQuoteEvent: MarketQuoteEvent;
   MarketQuoteModelPacket: MarketQuoteModelPacket;
   MarketModelRequest: MarketModelRequest;
@@ -708,6 +739,7 @@ export interface ContractSchemas {
   QuoteIntentRequest: QuoteIntentRequest;
   QuoteIntent: QuoteIntent;
   QuoteModelPacket: QuoteModelPacket;
+  NumericCoreQuote: NumericCoreQuote;
   QuoteIntentEvent: QuoteIntentEvent;
   RpcErrorDiagnostics: RpcErrorDiagnostics;
   ClientDiagnostic: ClientDiagnostic;

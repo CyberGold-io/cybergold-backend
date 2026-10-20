@@ -67,7 +67,7 @@ def service(provider):
 
 class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
     async def test_actual_viem_payloads_native_values_and_wide_gas(self):
-        self.assertEqual(len(ROWS), 32)
+        self.assertEqual(len(ROWS), 16)
         for row in ROWS:
             provider = Provider()
             result = await service(provider).get(HelpersExecutionRequest.model_validate(row['payload']))
@@ -75,9 +75,9 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result['blockTag'], 'latest')
             self.assertEqual([call for call in provider.calls if call['method'] in ('eth_call', 'eth_estimateGas')], row['calls'])
 
-    async def test_mixed_basket_payload_preserves_order_native_amount_and_compact_permit2_subset(self):
+    async def test_true_exact_out_mixed_basket_preserves_order_permit_amount_and_compact_permit2_subset(self):
         rows = [row for row in ROWS if row['payload']['operation'].endswith('WithMixedPermits')]
-        self.assertEqual(len(rows), 4)
+        self.assertEqual(len(rows), 2)
         for row in rows:
             provider = Provider()
             payload = HelpersExecutionRequest.model_validate(row['payload'])

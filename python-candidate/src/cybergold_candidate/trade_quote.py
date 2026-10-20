@@ -346,10 +346,29 @@ class TradeQuotes:
 
     @budget_entry
     async def get(self, request, on_update):
+        universal = getattr(self, 'universal_quotes', None)
+        if universal and universal.adapter and request.get('mode') == 'exact-in' and not request.get('retainedPlan'):
+            return await universal.scalar_request(request, on_update)
         budget = current_budget()
         request = await budget.prepare(self.resolve(validate(TradeQuoteRequest.model_validate(request).model_dump())))
         await budget.prepare(on_update({'type': 'model', 'value': self.packet(request)}))
-        return await self.sharing.get(request, on_update)
+        bridge = universal and universal.adapter and request['side'] == 'sell' and request['mode'] == 'exact-out' and not request.get('retainedPlan')
+        async def publish(frame):
+            if bridge:
+                candidate = frame.get('value', {})
+                if frame['type'] in ('qualified', 'provider-qualified') and candidate.get('strategy') == 'core':
+                    return
+                frame = deepcopy(frame)
+                frame.get('value', {}).get('providerCandidates', {}).pop('core', None)
+                frame.get('providerCandidates', {}).pop('core', None)
+            await on_update(frame)
+        result = await self.sharing.get(request, publish)
+        if bridge:
+            if result['strategy'] == 'core':
+                return await universal.core_sale_from_legacy(request, result, on_update)
+            result = deepcopy(result)
+            result.get('providerCandidates', {}).pop('core', None)
+        return result
 
     async def _get(self, request, on_update, *, block):
         started, target_reads = time.perf_counter(), 0

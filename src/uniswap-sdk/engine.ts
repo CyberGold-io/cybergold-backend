@@ -6,7 +6,7 @@ import type { PoolSnapshot, SdkRequest, StateLoader, SwapResult } from "./types.
 
 // Select the supported CommonJS exports; no dependency owns an RPC provider.
 const require = createRequire(import.meta.url);
-const { Token, CurrencyAmount } = require("@uniswap/sdk-core") as typeof import("@uniswap/sdk-core");
+const { Token, Ether, CurrencyAmount } = require("@uniswap/sdk-core") as typeof import("@uniswap/sdk-core");
 const { Pair } = require("@uniswap/v2-sdk") as typeof import("@uniswap/v2-sdk");
 const { Pool: V3Pool, TickList, TickMath, v3Swap } = require("@uniswap/v3-sdk") as typeof import("@uniswap/v3-sdk");
 const { Pool: V4Pool } = require("@uniswap/v4-sdk") as typeof import("@uniswap/v4-sdk");
@@ -14,6 +14,18 @@ const { MixedRouteSDK } = require("@uniswap/router-sdk") as typeof import("@unis
 const JSBI = require("jsbi") as typeof import("jsbi").default;
 const j = (value: string | number) => JSBI.BigInt(value);
 const token = (value: PoolSnapshot["token0"]) => new Token(value.chainId, value.address, value.decimals, value.symbol);
+
+// The existing product Sandbox forks Ethereum Mainnet, including its WETH
+// deployment. SDK Core has no native wrapper mapping for this local chain ID.
+class SandboxEther extends Ether {
+  constructor() { super(31338); }
+  override get wrapped() {
+    return new Token(31338, "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", 18, "WETH");
+  }
+}
+const sandboxEther = new SandboxEther();
+const currency = (value: PoolSnapshot["token0"]) => value.address.toLowerCase() === "0x0000000000000000000000000000000000000000"
+  ? (value.chainId === 31338 ? sandboxEther : Ether.onChain(value.chainId)) : token(value);
 
 class CoveredTicks implements TickDataProvider {
   pool: PoolSnapshot;
@@ -77,7 +89,7 @@ function sdkPool(pool: PoolSnapshot, signal?: AbortSignal, loader?: StateLoader)
   if (pool.protocol === "v2") return new Pair(CurrencyAmount.fromRawAmount(a, pool.reserve0!), CurrencyAmount.fromRawAmount(b, pool.reserve1!));
   const ticks = new CoveredTicks(pool, signal, loader);
   if (pool.protocol === "v3") return new V3Pool(a, b, pool.feePips!, pool.sqrtRatioX96!, pool.liquidity!, pool.tick!, ticks);
-  return new V4Pool(a, b, pool.lpFee!, pool.tickSpacing!, pool.hooks ?? "0x0000000000000000000000000000000000000000", pool.sqrtRatioX96!, pool.liquidity!, pool.tick!, ticks);
+  return new V4Pool(currency(pool.token0), currency(pool.token1), pool.lpFee!, pool.tickSpacing!, pool.hooks ?? "0x0000000000000000000000000000000000000000", pool.sqrtRatioX96!, pool.liquidity!, pool.tick!, ticks);
 }
 
 export async function quotePool(pool: PoolSnapshot, mode: "exactIn" | "exactOut", amount: string,
@@ -105,7 +117,7 @@ export async function quotePool(pool: PoolSnapshot, mode: "exactIn" | "exactOut"
   const spacing = pool.tickSpacing!;
   if (pool.protocol === "v4") {
     // Validate canonical PoolKey inputs with the V4 SDK, retaining original fee.
-    new V4Pool(t0, t1, pool.lpFee!, spacing, pool.hooks ?? "0x0000000000000000000000000000000000000000",
+    new V4Pool(currency(pool.token0), currency(pool.token1), pool.lpFee!, spacing, pool.hooks ?? "0x0000000000000000000000000000000000000000",
       pool.sqrtRatioX96!, pool.liquidity!, pool.tick!, provider);
     const packed = pool.protocolFee ?? 0;
     const protocolFee = zeroForOne ? packed & 0xfff : (packed >> 12) & 0xfff;
@@ -144,8 +156,8 @@ export async function runRequest(request: SdkRequest, signal?: AbortSignal, load
     const first = branch.hops[0], last = branch.hops.at(-1)!;
     const firstPool = poolAt(first.poolId), lastPool = poolAt(last.poolId);
     new MixedRouteSDK(branch.hops.map(h => sdkPool(poolAt(h.poolId), signal, loader)),
-      token(first.zeroForOne ? firstPool.token0 : firstPool.token1),
-      token(last.zeroForOne ? lastPool.token1 : lastPool.token0));
+      currency(first.zeroForOne ? firstPool.token0 : firstPool.token1),
+      currency(last.zeroForOne ? lastPool.token1 : lastPool.token0));
     if (mode === "exactOut" && branch.hops.every(hop => poolAt(hop.poolId).protocol === "v2")) {
       let funding = request.amount!;
       // Backward input planning observes each original pair without mutating it.
