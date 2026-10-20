@@ -16,6 +16,8 @@ from .helpers_execution import ABI as EXECUTION_ABI
 from eth_utils.abi import collapse_if_tuple
 
 ABI = json.loads(Path(__file__).with_name('helpers-router-facts-abi.json').read_text())
+# Historical selector identities are read-only observations, never active executors.
+PROBE_ABI = EXECUTION_ABI + json.loads(Path(__file__).with_name('helpers-historical-probe-abi.json').read_text())
 FIELDS = ('helperFeePpm', 'permit2', 'wrappedNative', 'owner', 'approvedAdapters', 'paused')
 
 
@@ -33,7 +35,7 @@ class HelpersRouterFacts:
         self.configuration_scope = configuration_scope
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
 
-    async def get(self, adapter=None, *, token_permit=False, basket_permit=False, market_swap=False):
+    async def get(self, adapter=None, *, token_permit=False, basket_permit=False, market_swap=False, universal_exact_input=False):
         configuration_scope = self.configuration_scope() if self.configuration_scope else None
         if self.rpc is None:
             self.rpc = ProtocolFactsRpc(self.settings, abi=ABI)
@@ -67,7 +69,7 @@ class HelpersRouterFacts:
                     return {'status': 'failure', 'error': 'not-configured'}
                 else:
                     try:
-                        entry = next(row for row in EXECUTION_ABI if row['name'] == name)
+                        entry = next(row for row in PROBE_ABI if row['name'] == name)
                         signature = entry['name'] + '(' + ','.join(collapse_if_tuple(part) for part in entry['inputs']) + ')'
                         selector = Web3.keccak(text=signature)[:4]
                         data = Web3.keccak(text='facetAddress(bytes4)')[:4] + self.rpc.w3.codec.encode(['bytes4'], [selector])
@@ -86,6 +88,8 @@ class HelpersRouterFacts:
             if basket_permit:
                 for mode in ('ExactIn', 'ExactOut'):
                     permit_issuance['basketPermitIssuance' + mode] = await installed('issueFromBasket' + mode + 'WithMixedPermits')
+            if universal_exact_input:
+                permit_issuance['universalExactInput'] = await installed('executeExactInput')
             if market_swap:
                 for mode in ('Input', 'Output'):
                     permit_issuance['marketSwapExact' + mode] = await installed('swapExact' + mode)
@@ -120,7 +124,8 @@ async def handle_helpers_router_facts(request, service):
     token_permit = request.query_params.get('tokenPermitIssuance') == 'true'
     basket_permit = request.query_params.get('basketPermitIssuance') == 'true'
     market_swap = request.query_params.get('marketSwap') == 'true'
-    bound = SimpleNamespace(get=lambda: service.get(adapter, token_permit=token_permit, basket_permit=basket_permit, market_swap=market_swap)) if (
-        service and (adapter is not None or token_permit or basket_permit or market_swap)) else service
+    universal_exact_input = request.query_params.get('universalExactInput') == 'true'
+    bound = SimpleNamespace(get=lambda: service.get(adapter, token_permit=token_permit, basket_permit=basket_permit, market_swap=market_swap, universal_exact_input=universal_exact_input)) if (
+        service and (adapter is not None or token_permit or basket_permit or market_swap or universal_exact_input)) else service
     return await handle_protocol_facts(request, bound, 'helpers-router-facts',
                                        'Helpers configuration is temporarily unavailable.')

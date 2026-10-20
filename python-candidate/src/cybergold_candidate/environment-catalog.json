@@ -208,5 +208,10 @@
     "name": "SAFE_TX_SERVICE_URL",
     "kind": "url",
     "required": false
+  },
+  {
+    "name": "CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS",
+    "kind": "address",
+    "required": false
   }
 ]

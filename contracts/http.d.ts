@@ -49,6 +49,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/universal-exact-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Gross-funded universal exact-input plans for scalar Core/Market mixtures and direct basket issue/redemption. One joint Core invocation per candidate; 0/25/50/75/100 Core allocation and both mixed orders replay shared AMM pools in execution order. Measured unused AMM input is a disclosed protocol charge held by Helpers under its current owner. Native ETH and WETH are distinct currencies. The configured successor address is required; no signing, submission, deployment, or silent legacy-plan rebinding. */
+        post: operations["post__api_quotes_universal_exact_input"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/market": {
         parameters: {
             query?: never;
@@ -58,7 +75,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Market-only CYGLD swaps through Helpers and the approved multi-protocol adapter. Quoter-qualified raw AMM amounts, quoted ceiling-rounded CYGLD fee, inclusive funding and net user bounds; never Core basket previews. Native permit signing and actual full-call simulation remain in the wallet flow. The cached beneficiary is advisory; Helpers resolves its live owner internally. No signing, submission or quote-time fee-recipient RPC. */
+        /** @description Fresh exact-input requests delegate to the universal coordinator quote service when its release is configured, returning a disclosed Core/Market/mixed plan. True exact-output and captured legacy plans keep their original address, encoding, and refund semantics. Wallet funding, signing, full-call simulation and submission remain in the App. */
         post: operations["post__api_quotes_market"];
         delete?: never;
         options?: never;
@@ -108,7 +125,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description One CYGLD trading intent compares complete Core and supported market candidates after their existing fees. Backend owns basket targets and default adapter selection; one pinned context, progressive qualified winners, tagged retained execution and ordinary independent provider errors. Wallet signing, actual signed-call simulation and submission remain browser-owned. */
+        /** @description Fresh exact-input trades use the universal Core/Market allocation grid when the universal release is configured. True exact-output preserves existing provider selection. A fresh output-target Core-sale winner becomes a newly disclosed Core-only universal quote at its solved gross input, preserving accepted scalar and Core vector minima. Captured legacy plans never silently change address or encoding. Signing and submission remain in the App. */
         post: operations["post__api_quotes_trade_stream"];
         delete?: never;
         options?: never;
@@ -650,7 +667,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Optional tokenPermitIssuance=true observes the native single-token selector; basketPermitIssuance=true separately observes mixed basket exact-in and exact-out selectors through existing Diamond facetAddress reads. Absence remains false and read failure remains unavailable; callers can retain the installed legacy Permit2 basket operation. Signing/submission stay browser-owned. */
+        /** @description Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Historical tokenPermitIssuance/basketPermitIssuance probes report selector installation for retained deployments; universalExactInput=true separately observes the canonical executeExactInput selector through the same Diamond facetAddress read. Absence remains false and read failure remains unavailable. Signing/submission stay browser-owned. */
         get: operations["get__api_governance_helpers_facts"];
         put?: never;
         post?: never;
@@ -788,7 +805,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Issuance/redemption flows at one canonical context. Streams display-only models/estimates and optional complete pool-quoted, Helpers-validated qualified execution tuples while full route coverage continues. Then complete or error, with optional observed RPC diagnostics. Preserves integer slippage, exact-output calldata and the bounded redemption correction loop. No signing or submission. */
+        /** @description Recipient-less legacy Core quote API. Once the universal release is configured, modes that previously executed exact input return explicitly read-only numeric results without leg calldata or execution recipes. Pure numerical previews and true issue exact-output retain their existing behavior; use the canonical universal endpoint for new exact-input execution. */
         post: operations["post__api_quotes_intent_stream"];
         delete?: never;
         options?: never;
@@ -1124,6 +1141,22 @@ export interface components {
     schemas: {
         /** @enum {string} */
         QuoteErrorCode: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        UniversalExactInputPlan: components["schemas"]["Omit<UniversalExactInputRequest,\"slippageBps\">"] & {
+            minimumOutput: string;
+            body: string;
+        };
+        "Omit<UniversalExactInputRequest,\"slippageBps\">": {
+            deadline: string;
+            recipient: string;
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            /** @enum {number} */
+            intent: 0 | 1 | 2 | 3;
+            outputCurrency: string;
+        };
+        "Record<string,unknown>": Record<string, never>;
         TradeQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -1608,7 +1641,6 @@ export interface components {
             } | {
                 /** @constant */
                 strategy: "market";
-                /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
                 request: {
                     /** @enum {string} */
                     side: "buy" | "sell";
@@ -2506,7 +2538,6 @@ export interface components {
         } & {
             /** @constant */
             strategy: "market";
-            /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
             providerRequest: {
                 /** @enum {string} */
                 side: "buy" | "sell";
@@ -3746,7 +3777,6 @@ export interface components {
         } & {
             /** @constant */
             strategy: "market";
-            /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
             providerRequest: {
                 /** @enum {string} */
                 side: "buy" | "sell";
@@ -4310,7 +4340,949 @@ export interface components {
         } & {
             /** @enum {string} */
             type: "complete" | "qualified";
-            value: components["schemas"]["TradeQuote"];
+            value: {
+                /** @constant */
+                strategy: "universal";
+                /** @enum {string} */
+                routeFamily: "core" | "market" | "mixed";
+                /** @constant */
+                operation: "executeExactInput";
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+                plan: components["schemas"]["UniversalExactInputPlan"];
+                planDescription: components["schemas"]["Record<string,unknown>"];
+                inputs: {
+                    currency: string;
+                    amount: string;
+                }[];
+                quotedInput?: string;
+                inputMaximum?: string;
+                quotedOutput: string;
+                outputMinimum: string;
+                estimatedRetainedInputCharges: {
+                    branch: number;
+                    stage: number;
+                    currency: string;
+                    amount: string;
+                }[];
+                estimatedRecipientOutputs: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                recoveryShares: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                deployment: {
+                    helpers: string;
+                    adapter: string;
+                    /** @constant */
+                    encoding: "uniswap-routing-v1";
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                retentionDisclosure: {
+                    custodian: string;
+                    /** @constant */
+                    beneficiary: "helpers-owner-at-settlement";
+                };
+                searchCoverage: {
+                    coreSharesPercent: number[];
+                    orders: string[];
+                    maxCoreInvocations: number;
+                    maxAmmHops: number;
+                    /** @constant */
+                    scope: "selected-inventory";
+                };
+            } | ({
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                quotedInput: string;
+                quotedOutput: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                evaluation: components["schemas"]["TradeEvaluation"];
+                metrics: {
+                    totalMs: number;
+                    targetReads: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            } & {
+                /** @constant */
+                strategy: "core";
+                providerRequest: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    token: string;
+                    quoteToken: string;
+                    native: boolean;
+                    amount: string;
+                    adapter?: string;
+                    deadline: string;
+                    orderedAssets: string[];
+                    targets: {
+                        inputAsset: string;
+                        outputAsset: string;
+                        amount: string;
+                    }[];
+                    /**
+                     * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
+                     * @default 100
+                     */
+                    slippageBps: number;
+                    retainedPlan?: {
+                        slippageBps?: number;
+                        expectedInputAmount?: string;
+                        executionAmount: string;
+                        maximumInputAmount: string;
+                        minimumAmountOut: string;
+                        quotes: (({
+                            adapter: string;
+                            amountIn: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: components["schemas"]["RoutePoolRef"];
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            outputAsset: string;
+                        }) | ({
+                            adapter: string;
+                            minimumAmountOut: string;
+                            data: string;
+                            routePlan?: {
+                                /** @constant */
+                                version: 1;
+                                /** @enum {string} */
+                                executionContext: "helpers-core" | "helpers-market";
+                                /** @enum {string} */
+                                mode: "exactIn" | "exactOut";
+                                tokenIn: string;
+                                tokenOut: string;
+                                branches: {
+                                    amountIn: string;
+                                    hops: {
+                                        pool: components["schemas"]["RoutePoolRef"];
+                                        zeroForOne: boolean;
+                                    }[];
+                                }[];
+                                inputAmount: string;
+                                outputAmount: string;
+                                limit: string;
+                                deadline: string;
+                            };
+                        } & {
+                            inputAsset: string;
+                            inputAmount: string;
+                        }))[];
+                        expectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            minimumAmount: string;
+                        }[];
+                    };
+                };
+                providerQuote: {
+                    /** @enum {string} */
+                    mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    quotes: (({
+                        adapter: string;
+                        amountIn: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        outputAsset: string;
+                    }) | ({
+                        adapter: string;
+                        minimumAmountOut: string;
+                        data: string;
+                        routePlan?: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                    } & {
+                        inputAsset: string;
+                        inputAmount: string;
+                    }))[];
+                    preview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    initialPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        orderedCoreAssets: string[];
+                    } | {
+                        minimumAmountOut: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | null;
+                    basketPreview: {
+                        netCygldOut: string;
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                        amountsInExact: string[];
+                        orderedCoreAssets: string[];
+                    } | {
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    } | {
+                        grossCygldIn: string;
+                        projectedCoreOutputs: {
+                            kind: number;
+                            token: string;
+                            id: string;
+                            amount: string;
+                        }[];
+                        fees: {
+                            protocolFeeCygld: string;
+                            helperFeeCygld: string;
+                        };
+                    };
+                    displayAmount: string;
+                    executionAmount: string;
+                    maximumInputAmount: string;
+                    slippageBps?: number;
+                    /** @description Expected input before execution cushions, including direct basket input. */
+                    expectedInputAmount?: string;
+                    requestedGrossCygldOut?: string;
+                    requestedNetCygldOut?: string;
+                    remainingGrossCapacity?: string;
+                    remainingNetCapacity?: string;
+                    expectedOutputAmount?: string;
+                    expectedCoreOutputs?: {
+                        kind: number;
+                        token: string;
+                        id: string;
+                        minimumAmount: string;
+                    }[];
+                    metrics: {
+                        rpcReads: number;
+                        rpcReadsRequested: number;
+                        rpcReadsCoalesced: number;
+                        rpcReadsReused: number;
+                        /** @constant */
+                        rpcReadsScope?: "coordinator";
+                        candidateCalls: number;
+                        iterations: number;
+                        totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
+                    };
+                };
+            } & {
+                providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+                providerCandidates?: {
+                    /** @description One complete provider plan, without recursive provider evidence maps. */
+                    core?: components["schemas"]["CoreTradeProviderCandidate"];
+                    market?: components["schemas"]["MarketTradeProviderCandidate"];
+                };
+            }) | ({
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                tokenIn: string;
+                tokenOut: string;
+                quotedInput: string;
+                quotedOutput: string;
+                inputMaximum: string;
+                outputMinimum: string;
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                evaluation: components["schemas"]["TradeEvaluation"];
+                metrics: {
+                    totalMs: number;
+                    targetReads: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+            } & {
+                /** @constant */
+                strategy: "market";
+                providerRequest: {
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    counterToken: string;
+                    amount: string;
+                    adapter?: string;
+                    recipient: string;
+                    deadline: string;
+                    slippageBps?: number;
+                    retainedPlan?: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                };
+                providerQuote: {
+                    /** @constant */
+                    operation: "market";
+                    /** @enum {string} */
+                    side: "buy" | "sell";
+                    /** @enum {string} */
+                    mode: "exact-in" | "exact-out";
+                    tokenIn: string;
+                    tokenOut: string;
+                    amountIn: string;
+                    amountOut: string;
+                    totalInput: string;
+                    netOutput: string;
+                    grossOutput: string;
+                    routedAmountIn: string;
+                    inputMaximum: string;
+                    outputMinimum: string;
+                    refundDust: string;
+                    outputRefundEstimate?: string;
+                    fee: {
+                        asset: string;
+                        ratePpm: number;
+                        amount: string;
+                        /** @constant */
+                        basis: "quoted";
+                        notional: string;
+                    };
+                    params: {
+                        /** @enum {number} */
+                        side: 0 | 1;
+                        counterToken: string;
+                        amount: string;
+                        bound: string;
+                        routedInput: string;
+                        feeCygld: string;
+                        recipient: string;
+                        deadline: string;
+                        adapter: string;
+                        data: string;
+                    };
+                    adapterData: string;
+                    plan: {
+                        /** @enum {string} */
+                        side: "buy" | "sell";
+                        /** @enum {string} */
+                        mode: "exact-in" | "exact-out";
+                        amount: string;
+                        slippageBps: number;
+                        route: {
+                            /** @constant */
+                            version: 1;
+                            /** @enum {string} */
+                            executionContext: "helpers-core" | "helpers-market";
+                            /** @enum {string} */
+                            mode: "exactIn" | "exactOut";
+                            tokenIn: string;
+                            tokenOut: string;
+                            branches: {
+                                amountIn: string;
+                                hops: {
+                                    pool: components["schemas"]["RoutePoolRef"];
+                                    zeroForOne: boolean;
+                                }[];
+                            }[];
+                            inputAmount: string;
+                            outputAmount: string;
+                            limit: string;
+                            deadline: string;
+                        };
+                        params: {
+                            /** @enum {number} */
+                            side: 0 | 1;
+                            counterToken: string;
+                            amount: string;
+                            bound: string;
+                            routedInput: string;
+                            feeCygld: string;
+                            recipient: string;
+                            deadline: string;
+                            adapter: string;
+                            data: string;
+                        };
+                        fee: {
+                            asset: string;
+                            ratePpm: number;
+                            amount: string;
+                            /** @constant */
+                            basis: "quoted";
+                            notional: string;
+                        };
+                    };
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    feeBeneficiaryDisplay?: {
+                        address: string;
+                        observedAt: string;
+                    };
+                    /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+                    priceImpactPpm?: string;
+                    /** @enum {string} */
+                    qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                    executionSimulationRequired?: boolean;
+                    quoteVerificationUnavailable?: string;
+                    searchCoverage?: {
+                        /** @constant */
+                        scope: "selected-inventory";
+                        maxHops: number;
+                        splitPercentages: number[];
+                        inventoryPools: number;
+                        catalogMonth: null | string;
+                    };
+                    metrics: {
+                        candidateCalls: number;
+                        totalMs: number;
+                    } & {
+                        firstQualifiedMs?: number;
+                        selectionMs?: number;
+                        canonicalCompletedMs?: number;
+                        cleanupCompletedMs?: number;
+                        finalizationMs?: number;
+                    };
+                    /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+                    quoteDiagnostics?: {
+                        /** @enum {string} */
+                        phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                        elapsedMs?: number;
+                        qualified?: boolean;
+                        inversionIteration?: number;
+                        routeWave?: {
+                            elapsedMs?: number;
+                            subphaseElapsedMs?: number;
+                            /** @enum {string} */
+                            subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                            /** @enum {string} */
+                            mode?: "exact-in" | "exact-out";
+                            legacyCandidates?: number;
+                            legacyCompleted?: number;
+                            typedEnumerated?: number;
+                            typedCompleted?: number;
+                            typedPending?: number;
+                            sdkRequests?: number;
+                            sdkWaiting?: number;
+                            sdkLockWaitMs?: number;
+                            sdkExchangeMs?: number;
+                            legs?: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedRows: number;
+                                rows: {
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    index: number;
+                                    inputAsset?: string;
+                                    outputAsset?: string;
+                                    /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                    amount?: string;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    started: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    succeeded: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    failed: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    cancelled: number;
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    pending: number;
+                                    bestAvailable: boolean;
+                                    failureCounts: {
+                                        code: components["schemas"]["QuoteErrorCode"];
+                                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                                        count: number;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedFailureCodes: number;
+                                    bestPools: {
+                                        /** @enum {string} */
+                                        protocol: "v2" | "v3" | "v4";
+                                        /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                        poolId?: string;
+                                        poolAddress?: string;
+                                    }[];
+                                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                                    omittedPools: number;
+                                }[];
+                            };
+                        };
+                        providerQualifications?: {
+                            /** @enum {string} */
+                            provider: "core" | "market";
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            attempts: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            qualified: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            rejected: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            notImproved: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            superseded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedRows: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            selectedAttempt?: number;
+                            /** @enum {string} */
+                            selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            firstQualifiedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            selectionMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            canonicalCompletedMs?: number;
+                            /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                            cleanupCompletedMs?: number;
+                            rows: {
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                attempt: number;
+                                /** @enum {string} */
+                                stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                                /** @enum {string} */
+                                outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                                /** @enum {string} */
+                                code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                targetAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                minimumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountOut?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                maximumAmountIn?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                observedAmountIn?: string;
+                                /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                                startedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                completedMs?: number;
+                                /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                                elapsedMs?: number;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                executionAmount?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedInput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                quotedOutput?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                inputMaximum?: string;
+                                /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                                outputMinimum?: string;
+                                pools?: {
+                                    /** @enum {string} */
+                                    protocol: "v2" | "v3" | "v4";
+                                    /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                    poolId?: string;
+                                    poolAddress?: string;
+                                }[];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                omittedPools?: number;
+                            }[];
+                        };
+                    };
+                };
+            } & {
+                providerAssessments?: components["schemas"]["TradeProviderAssessments"];
+                providerCandidates?: {
+                    /** @description One complete provider plan, without recursive provider evidence maps. */
+                    core?: components["schemas"]["CoreTradeProviderCandidate"];
+                    market?: components["schemas"]["MarketTradeProviderCandidate"];
+                };
+            });
         }) | ({
             requestId?: string;
             attemptId?: string;
@@ -4923,12 +5895,12 @@ export interface components {
             }[];
             token: string;
             native: boolean;
-            adapter?: string;
             /**
              * @description Execution tolerance in basis points; omitted defaults to 100 (1%).
              * @default 100
              */
             slippageBps: number;
+            adapter?: string;
             quoteToken: string;
             orderedAssets: string[];
         };
@@ -4953,6 +5925,344 @@ export interface components {
             /** @constant */
             type: "native";
         });
+        MarketQuoteResponse: {
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            operation: "executeExactInput";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            plan: components["schemas"]["UniversalExactInputPlan"];
+            planDescription: components["schemas"]["Record<string,unknown>"];
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            outputMinimum: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+            };
+        } | {
+            /** @constant */
+            operation: "market";
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @enum {string} */
+            mode: "exact-in" | "exact-out";
+            tokenIn: string;
+            tokenOut: string;
+            amountIn: string;
+            amountOut: string;
+            totalInput: string;
+            netOutput: string;
+            grossOutput: string;
+            routedAmountIn: string;
+            inputMaximum: string;
+            outputMinimum: string;
+            refundDust: string;
+            outputRefundEstimate?: string;
+            fee: {
+                asset: string;
+                ratePpm: number;
+                amount: string;
+                /** @constant */
+                basis: "quoted";
+                notional: string;
+            };
+            params: {
+                /** @enum {number} */
+                side: 0 | 1;
+                counterToken: string;
+                amount: string;
+                bound: string;
+                routedInput: string;
+                feeCygld: string;
+                recipient: string;
+                deadline: string;
+                adapter: string;
+                data: string;
+            };
+            adapterData: string;
+            plan: {
+                /** @enum {string} */
+                side: "buy" | "sell";
+                /** @enum {string} */
+                mode: "exact-in" | "exact-out";
+                amount: string;
+                slippageBps: number;
+                route: {
+                    /** @constant */
+                    version: 1;
+                    /** @enum {string} */
+                    executionContext: "helpers-core" | "helpers-market";
+                    /** @enum {string} */
+                    mode: "exactIn" | "exactOut";
+                    tokenIn: string;
+                    tokenOut: string;
+                    branches: {
+                        amountIn: string;
+                        hops: {
+                            pool: components["schemas"]["RoutePoolRef"];
+                            zeroForOne: boolean;
+                        }[];
+                    }[];
+                    inputAmount: string;
+                    outputAmount: string;
+                    limit: string;
+                    deadline: string;
+                };
+                params: {
+                    /** @enum {number} */
+                    side: 0 | 1;
+                    counterToken: string;
+                    amount: string;
+                    bound: string;
+                    routedInput: string;
+                    feeCygld: string;
+                    recipient: string;
+                    deadline: string;
+                    adapter: string;
+                    data: string;
+                };
+                fee: {
+                    asset: string;
+                    ratePpm: number;
+                    amount: string;
+                    /** @constant */
+                    basis: "quoted";
+                    notional: string;
+                };
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            feeBeneficiaryDisplay?: {
+                address: string;
+                observedAt: string;
+            };
+            /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
+            priceImpactPpm?: string;
+            /** @enum {string} */
+            qualification: "quoter" | "sdk" | "sdk-and-quoter";
+            executionSimulationRequired?: boolean;
+            quoteVerificationUnavailable?: string;
+            searchCoverage?: {
+                /** @constant */
+                scope: "selected-inventory";
+                maxHops: number;
+                splitPercentages: number[];
+                inventoryPools: number;
+                catalogMonth: null | string;
+            };
+            metrics: {
+                candidateCalls: number;
+                totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        };
         MarketQuoteEvent: ({
             requestId?: string;
             attemptId?: string;
@@ -5041,6 +6351,73 @@ export interface components {
             /** @enum {string} */
             type: "complete" | "qualified";
             value: {
+                /** @constant */
+                strategy: "universal";
+                /** @enum {string} */
+                routeFamily: "core" | "market" | "mixed";
+                /** @constant */
+                operation: "executeExactInput";
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+                plan: components["schemas"]["UniversalExactInputPlan"];
+                planDescription: components["schemas"]["Record<string,unknown>"];
+                inputs: {
+                    currency: string;
+                    amount: string;
+                }[];
+                quotedInput?: string;
+                inputMaximum?: string;
+                quotedOutput: string;
+                outputMinimum: string;
+                estimatedRetainedInputCharges: {
+                    branch: number;
+                    stage: number;
+                    currency: string;
+                    amount: string;
+                }[];
+                estimatedRecipientOutputs: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                recoveryShares: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    amount: string;
+                }[];
+                deployment: {
+                    helpers: string;
+                    adapter: string;
+                    /** @constant */
+                    encoding: "uniswap-routing-v1";
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                retentionDisclosure: {
+                    custodian: string;
+                    /** @constant */
+                    beneficiary: "helpers-owner-at-settlement";
+                };
+                searchCoverage: {
+                    coreSharesPercent: number[];
+                    orders: string[];
+                    maxCoreInvocations: number;
+                    maxAmmHops: number;
+                    /** @constant */
+                    scope: "selected-inventory";
+                };
+            } | {
                 /** @constant */
                 operation: "market";
                 /** @enum {string} */
@@ -7848,6 +9225,41 @@ export interface components {
                         }[];
                     };
                 };
+            } | {
+                /** @constant */
+                readOnly: true;
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                slippageBps?: number;
+                metrics?: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                displayAmount?: string;
+                executionAmount?: string;
+                maximumInputAmount?: string;
+                expectedInputAmount?: string;
+                expectedOutputAmount?: string;
+                minimumAmountOut: string;
             };
         }) | ({
             requestId?: string;
@@ -8247,6 +9659,41 @@ export interface components {
                         }[];
                     };
                 };
+            } | {
+                /** @constant */
+                readOnly: true;
+                /** @enum {string} */
+                mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                slippageBps?: number;
+                metrics?: {
+                    rpcReads: number;
+                    rpcReadsRequested: number;
+                    rpcReadsCoalesced: number;
+                    rpcReadsReused: number;
+                    /** @constant */
+                    rpcReadsScope?: "coordinator";
+                    candidateCalls: number;
+                    iterations: number;
+                    totalMs: number;
+                } & {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                };
+                displayAmount?: string;
+                executionAmount?: string;
+                maximumInputAmount?: string;
+                expectedInputAmount?: string;
+                expectedOutputAmount?: string;
+                minimumAmountOut: string;
             };
         }) | ({
             requestId?: string;
@@ -8523,7 +9970,6 @@ export interface components {
             canonicalCompletedMs?: number;
             cleanupCompletedMs?: number;
         };
-        "Record<string,unknown>": Record<string, never>;
         HelpersActivity: {
             /** @constant */
             enabled: false;
@@ -9048,6 +10494,87 @@ export interface components {
             amount: string;
             slippageBps?: number;
         };
+        /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
+        UniversalExactInputRequest: {
+            /** @enum {number} */
+            intent: 0 | 1 | 2 | 3;
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            outputCurrency: string;
+            recipient: string;
+            deadline: string;
+            slippageBps?: number;
+        };
+        UniversalExactInputQuote: {
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            operation: "executeExactInput";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            plan: components["schemas"]["UniversalExactInputPlan"];
+            planDescription: components["schemas"]["Record<string,unknown>"];
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            outputMinimum: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+            };
+        };
         TradeProviderAssessment: {
             /** @enum {string} */
             availability: "not-run" | "pending" | "qualified" | "unavailable" | "unsupported";
@@ -9449,15 +10976,20 @@ export interface components {
             adapter: {
                 /** @enum {string} */
                 status: "success" | "unavailable";
-                encoding: ("uniswap-multi-protocol-v1" | "uniswap-v3") | null;
+                encoding: ("uniswap-multi-protocol-v1" | "uniswap-routing-v1" | "uniswap-v3") | null;
                 observation: {
                     blockNumber: string;
                     blockHash: string;
                     observedAt: string;
                 } | null;
             };
+            universalExactInput: {
+                adapter: null | string;
+                encoding: "uniswap-routing-v1" | null;
+                /** @constant */
+                settlementPolicy: "protocol-retained-input";
+            };
         };
-        /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
         MarketQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -10062,6 +11594,17 @@ export interface components {
                     value: boolean;
                 };
                 /** @description Live configured product facts; amounts stay lossless over JSON. */
+                universalExactInput?: {
+                    /** @constant */
+                    status: "failure";
+                    /** @enum {string} */
+                    error: "contract-read-failed" | "not-configured";
+                } | {
+                    /** @constant */
+                    status: "success";
+                    value: boolean;
+                };
+                /** @description Live configured product facts; amounts stay lossless over JSON. */
                 marketSwapExactInput?: {
                     /** @constant */
                     status: "failure";
@@ -10290,7 +11833,7 @@ export interface components {
         HelpersExecutionRequest: {
             owner: string;
             /** @enum {string} */
-            operation: "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit" | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit" | "swapExactInput" | "swapExactOutput";
+            operation: "executeExactInput" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput";
             args: unknown[];
             value?: string;
         };
@@ -10305,7 +11848,7 @@ export interface components {
             helpers: string;
             owner: string;
             /** @enum {string} */
-            operation: "issueFromBasketExactInWithMixedPermits" | "issueFromBasketExactInWithPermit2" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "redeemToBasketExactIn" | "redeemToBasketExactInWithPermit" | "redeemToNativeExactIn" | "redeemToNativeExactInWithPermit" | "redeemToTokenExactIn" | "redeemToTokenExactInWithPermit" | "swapExactInput" | "swapExactOutput";
+            operation: "executeExactInput" | "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput";
             gas: string;
             /** @constant */
             blockTag: "latest";
@@ -11201,6 +12744,42 @@ export interface components {
                 };
             } | null;
         };
+        NumericCoreQuote: {
+            /** @constant */
+            readOnly: true;
+            /** @enum {string} */
+            mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            slippageBps?: number;
+            metrics?: {
+                rpcReads: number;
+                rpcReadsRequested: number;
+                rpcReadsCoalesced: number;
+                rpcReadsReused: number;
+                /** @constant */
+                rpcReadsScope?: "coordinator";
+                candidateCalls: number;
+                iterations: number;
+                totalMs: number;
+            } & {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            };
+            displayAmount?: string;
+            executionAmount?: string;
+            maximumInputAmount?: string;
+            expectedInputAmount?: string;
+            expectedOutputAmount?: string;
+            minimumAmountOut: string;
+        };
         /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
         RpcErrorDiagnostics: {
             rpcMethod?: string;
@@ -11241,7 +12820,7 @@ export interface components {
             /** @enum {string} */
             side?: "buy" | "sell";
             /** @enum {string} */
-            strategy?: "core" | "market";
+            strategy?: "core" | "market" | "universal";
             /** @enum {string} */
             stage?: "authorization" | "balance" | "confirmation" | "network" | "preparation" | "quote" | "simulation" | "submission";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
@@ -12182,6 +13761,63 @@ export interface operations {
             };
         };
     };
+    post__api_quotes_universal_exact_input: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniversalExactInputRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniversalExactInputQuote"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
     post__api_quotes_market: {
         parameters: {
             query?: never;
@@ -12208,7 +13844,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MarketQuote"];
+                    "application/json": components["schemas"]["MarketQuoteResponse"];
                 };
             };
             /** @description Remote API entry requires its environment's backend bearer */
@@ -14113,6 +15749,7 @@ export interface operations {
                 adapter?: string;
                 tokenPermitIssuance?: "true";
                 basketPermitIssuance?: "true";
+                universalExactInput?: "true";
                 marketSwap?: "true";
             };
             header?: {

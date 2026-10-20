@@ -69,14 +69,14 @@ class QuoteObservation:
             result['workId'] = self.work_id
         kind = frame['type']
         strategy = frame.get('strategy') or (frame.get('value') or {}).get('strategy') or self.strategy or 'none'
-        strategy = strategy if strategy in ('core', 'market') else 'none'
+        strategy = strategy if strategy in ('core', 'market', 'universal') else 'none'
         if kind == 'provider-error':
             result = {**failure(self.request, None, self.operation,
                                strategy=strategy, work_id=self.work_id,
                                payload={key: frame[key] for key in ('error', 'code', 'constraint', 'diagnostics', 'quoteDiagnostics') if key in frame}),
                       'type': kind, 'strategy': strategy}
             observe(lambda: self.metrics.quote_provider_outcomes.labels(self.operation, strategy, 'failed').inc())
-        if kind in ('qualified', 'complete') and self.first is None:
+        if kind in ('qualified', 'complete') and not (frame.get('value') or {}).get('readOnly') and self.first is None:
             self.first = time.perf_counter()-self.started
             observe(lambda: self.metrics.quote_first_executable.labels(self.operation, self.mode).observe(self.first))
         if kind in ('qualified', 'invalidated', 'provider-error', 'complete', 'error'):

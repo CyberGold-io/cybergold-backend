@@ -3,3 +3,9 @@
 713a2d43019139c18730157b9de01618a2314ad2:python-candidate/native-process-qualification.json:generic-api-key:33
 713a2d43019139c18730157b9de01618a2314ad2:python-candidate/tests/node-token-preview-reference.ts:generic-api-key:6
 713a2d43019139c18730157b9de01618a2314ad2:python-candidate/tests/node-token-preview-reference.ts:generic-api-key:7
+# Public CYGLD/PAXG/XAUT addresses in retained exact-input fork result token fields.
+008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:73
+008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:97
+008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:169
+008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:175
+008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:199

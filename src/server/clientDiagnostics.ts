@@ -28,7 +28,7 @@ export type ClientDiagnostic = {
   correlationId?: string;
   workId?: string;
   side?: "buy" | "sell";
-  strategy?: "core" | "market";
+  strategy?: "core" | "market" | "universal";
   stage?: "quote" | "balance" | "network" | "authorization" | "preparation" | "simulation" | "submission" | "confirmation";
   constraint?: QuoteConstraint;
   quoteDiagnostics?: ProjectedQuoteDiagnostics;
@@ -60,7 +60,7 @@ export function projectClientDiagnostic(input: unknown): ClientDiagnostic {
     reason: ["wallet_rejected", "rpc_error", "contract_reverted", "wrong_chain", "unknown"],
     direction: ["issue", "redeem"], route: ["basket", "token"], inputMode: ["exact-in", "exact-out"],
     walletStep: ["approval", "signature", "transaction"],
-    side: ["buy", "sell"], strategy: ["core", "market"],
+    side: ["buy", "sell"], strategy: ["core", "market", "universal"],
     stage: ["quote", "balance", "network", "authorization", "preparation", "simulation", "submission", "confirmation"],
     errorClassification: ["insufficient-protocol-supply", "issuance-cap-exceeded", "redemption-supply-exceeded", "redemption-capacity-exceeded", "rpc-rate-limit", "rpc-timeout",
       "rpc-unavailable", "rpc-access-denied", "quote-timeout", "quote-no-route", "quote-insufficient-liquidity", "quote-contract-reverted", "quote-unavailable",

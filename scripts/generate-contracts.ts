@@ -34,8 +34,11 @@ operation("/api/protocol/config", "get", "ProtocolConfiguration", undefined, {
   description: "Configured deployment anchors and the App's initial token catalog, with a cached supported adapter selected from the canonical Helpers allowlist. No request-time chain RPC, routing-infrastructure exposure, signing or submission. Missing optional roots/adapter remain independent; live pause, roles and pre-sign observations keep their existing APIs. Sandbox generation uses the existing durable reset context.",
 });
 operation("/api/gold", "get", "Gold");
-operation("/api/quotes/market", "post", "MarketQuote", "MarketQuoteRequest", {
-  description: "Market-only CYGLD swaps through Helpers and the approved multi-protocol adapter. Quoter-qualified raw AMM amounts, quoted ceiling-rounded CYGLD fee, inclusive funding and net user bounds; never Core basket previews. Native permit signing and actual full-call simulation remain in the wallet flow. The cached beneficiary is advisory; Helpers resolves its live owner internally. No signing, submission or quote-time fee-recipient RPC.",
+operation("/api/quotes/universal-exact-input", "post", "UniversalExactInputQuote", "UniversalExactInputRequest", {
+  description: "Gross-funded universal exact-input plans for scalar Core/Market mixtures and direct basket issue/redemption. One joint Core invocation per candidate; 0/25/50/75/100 Core allocation and both mixed orders replay shared AMM pools in execution order. Measured unused AMM input is a disclosed protocol charge held by Helpers under its current owner. Native ETH and WETH are distinct currencies. The configured successor address is required; no signing, submission, deployment, or silent legacy-plan rebinding.",
+});
+operation("/api/quotes/market", "post", "MarketQuoteResponse", "MarketQuoteRequest", {
+  description: "Fresh exact-input requests delegate to the universal coordinator quote service when its release is configured, returning a disclosed Core/Market/mixed plan. True exact-output and captured legacy plans keep their original address, encoding, and refund semantics. Wallet funding, signing, full-call simulation and submission remain in the App.",
 });
 operation("/api/quotes/market/stream", "post", "MarketQuoteEvent", "MarketQuoteRequest", {
   responses: { "200": { description: "Market model/estimate/progress/qualified, then complete or error; amount integers are decimal strings.",
@@ -45,7 +48,7 @@ operation("/api/quotes/market/model", "post", "MarketQuoteModelPacket", "MarketM
   description: "Amount-independent market model acquisition for an active view, without prior successful quotes, wallet signing or a mandatory tick scan. Canonical pool baseline plus contextual organic raw-AMM points; missing optional model state leaves ordinary quotes available.",
 });
 operation("/api/quotes/trade/stream", "post", "TradeQuoteEvent", "TradeQuoteRequest", {
-  description: "One CYGLD trading intent compares complete Core and supported market candidates after their existing fees. Backend owns basket targets and default adapter selection; one pinned context, progressive qualified winners, tagged retained execution and ordinary independent provider errors. Wallet signing, actual signed-call simulation and submission remain browser-owned.",
+  description: "Fresh exact-input trades use the universal Core/Market allocation grid when the universal release is configured. True exact-output preserves existing provider selection. A fresh output-target Core-sale winner becomes a newly disclosed Core-only universal quote at its solved gross input, preserving accepted scalar and Core vector minima. Captured legacy plans never silently change address or encoding. Signing and submission remain in the App.",
   responses: { "200": { description: "Cached models, estimates and tagged provider progress; qualified best incumbents, then complete or error. Integers are decimal strings.", content: { "application/x-ndjson": { schema: ref("TradeQuoteEvent") } } }, default: response(ref("PublicError")) },
 });
 operation("/api/quotes/trade/model", "post", "TradeQuoteModelPacket", "TradeModelRequest", {
@@ -167,8 +170,9 @@ operation("/api/governance/helpers-facts", "get", "HelpersRouterFacts", undefine
   parameters: [{ name: "adapter", in: "query", required: false, schema: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" } },
     { name: "tokenPermitIssuance", in: "query", required: false, schema: { type: "string", enum: ["true"] } },
     { name: "basketPermitIssuance", in: "query", required: false, schema: { type: "string", enum: ["true"] } },
+    { name: "universalExactInput", in: "query", required: false, schema: { type: "string", enum: ["true"] } },
     { name: "marketSwap", in: "query", required: false, schema: { type: "string", enum: ["true"] } }],
-  description: "Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Optional tokenPermitIssuance=true observes the native single-token selector; basketPermitIssuance=true separately observes mixed basket exact-in and exact-out selectors through existing Diamond facetAddress reads. Absence remains false and read failure remains unavailable; callers can retain the installed legacy Permit2 basket operation. Signing/submission stay browser-owned.",
+  description: "Configured Helpers fee, Permit2, wrapped native token, owner, complete adapter allowlist and pause state at one canonical block. Optional App swap-adapter address adds its native code-presence observation at that block, preserving the existing pre-submission check. Lossless fee and per-field failures; no caller-selected ABI, method or provider. Adapter approval is membership in this same canonical enumerable allowlist. Historical tokenPermitIssuance/basketPermitIssuance probes report selector installation for retained deployments; universalExactInput=true separately observes the canonical executeExactInput selector through the same Diamond facetAddress read. Absence remains false and read failure remains unavailable. Signing/submission stay browser-owned.",
 });
 operation("/api/governance/safe-principal", "get", "GovernanceSafePrincipal", undefined, {
   parameters: [{ name: "address", in: "query", required: true, schema: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" } }],
@@ -196,7 +200,7 @@ operation("/api/quotes/routes/stream", "post", "RouteSearchEvent", "RouteSearchR
     default: response(ref("PublicError")) },
 });
 operation("/api/quotes/intent/stream", "post", "QuoteIntentEvent", "QuoteIntentRequest", {
-  description: "Issuance/redemption flows at one canonical context. Streams display-only models/estimates and optional complete pool-quoted, Helpers-validated qualified execution tuples while full route coverage continues. Then complete or error, with optional observed RPC diagnostics. Preserves integer slippage, exact-output calldata and the bounded redemption correction loop. No signing or submission.",
+  description: "Recipient-less legacy Core quote API. Once the universal release is configured, modes that previously executed exact input return explicitly read-only numeric results without leg calldata or execution recipes. Pure numerical previews and true issue exact-output retain their existing behavior; use the canonical universal endpoint for new exact-input execution.",
   responses: { "200": { description: "One QuoteIntentEvent per line; optional model/estimate/progress/qualified, then complete or error.", content: { "application/x-ndjson": { schema: ref("QuoteIntentEvent") } } }, default: response(ref("PublicError")) },
 });
 operation("/api/quotes/uniswap", "post", "UniswapQuote", "UniswapQuoteRequest", {

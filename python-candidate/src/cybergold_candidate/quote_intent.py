@@ -1021,18 +1021,30 @@ class QuoteIntent:
             await drain()
 
 
+def numeric_core_quote(value):
+    """Old recipient-less Core API is a numerical read after executor migration."""
+    fields = ('mode', 'context', 'slippageBps', 'metrics', 'displayAmount', 'executionAmount',
+              'maximumInputAmount', 'expectedInputAmount', 'expectedOutputAmount')
+    return {'readOnly': True, **{key: deepcopy(value[key]) for key in fields if key in value},
+            'minimumAmountOut': str(value.get('preview', {}).get('minimumAmountOut', '0'))}
+
+
 async def handle_quote_intent(request, service):
     try:
         value = REQUEST.validate_python(await request.json()).model_dump()
         validate(value)
     except ValueError:
         return JSONResponse({'error': 'Invalid quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
+    universal = getattr(service, 'universal_quotes', None)
+    read_only = universal and universal.adapter and value['mode'] != 'issue-exact-out'
     observation = QuoteObservation(request, value, 'core')
 
     async def events():
         queue = asyncio.Queue()
         history = getattr(service, 'history', None)
         async def publish(event):
+            if read_only and event['type'] in ('qualified', 'complete'):
+                event = {**event, 'value': numeric_core_quote(event['value'])}
             epoch = history.epoch if history and event['type'] == 'model' else None
             await queue.put((observation.event(event), epoch))
         async def produce():

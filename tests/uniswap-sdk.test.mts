@@ -250,3 +250,58 @@ test('active continued cancellation preserves a foreign paused calculation and s
   worker.send(pairRequest('after-active-cancel'));assert.equal((await worker.next()).id,'after-active-cancel');
   assert.deepEqual(await worker.finish(),[]);
 });
+
+test('native V4 currencies retain numeric swap and mixed route replay semantics',async()=>{
+  const native={...t0,address:'0x0000000000000000000000000000000000000000'};
+  const v4={...concentrated,id:'native-v4',protocol:'v4' as const,token0:native,lpFee:3000,protocolFee:0,
+    hooks:'0x0000000000000000000000000000000000000000'};
+  for(const direction of [true,false]) {
+    const expected=await quotePool(concentrated,'exactIn','1000000000000',direction);
+    const actual=await quotePool(v4,'exactIn','1000000000000',direction);
+    assert.equal(actual.amountOut,expected.amountOut);
+    const mixed=await runRequest({id:3,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',pools:[v4],
+      route:{branches:[{amountIn:'1000000000000',hops:[{poolId:v4.id,zeroForOne:direction}]}]}});
+    assert.equal(mixed.amountOut,actual.amountOut);
+    assert.ok(Array.isArray(mixed.postState));
+    assert.equal(mixed.postState[0].token0.address,native.address);
+  }
+});
+
+test('native V4 / V3 / V2 mixed hops replay in native input/output on Mainnet and Mainnet-backed Sandbox',async()=>{
+  for(const chainId of [1,31338]) {
+  const native={...t0,chainId,address:'0x0000000000000000000000000000000000000000'};
+  const t2={...t1,chainId,address:'0x0000000000000000000000000000000000000003'};
+  const t3={...t1,chainId,address:'0x0000000000000000000000000000000000000004'};
+  const v4={...concentrated,id:'native-first',protocol:'v4' as const,token0:native,token1:{...t1,chainId},lpFee:3000,protocolFee:0,
+    hooks:'0x0000000000000000000000000000000000000000'};
+  const v3={...concentrated,id:'middle-v3',token0:{...t1,chainId},token1:t2};
+  const v2={...pair,id:'last-v2',token0:t2,token1:t3};
+  for(const direction of [true,false]) {
+    const ordered=direction?[v4,v3,v2]:[v2,v3,v4];
+    let expected='1000000000000';
+    for(const pool of ordered) expected=(await quotePool(pool,'exactIn',expected,direction)).amountOut;
+    const result=await runRequest({id:4,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',
+      pools:[v4,v3,v2],route:{branches:[{amountIn:'1000000000000',hops:ordered.map(pool=>({poolId:pool.id,zeroForOne:direction}))}]}});
+    assert.equal(result.amountOut,expected);
+    assert.ok("settled" in result);
+    assert.equal(result.settled,true);
+  }
+  }
+});
+
+test('Sandbox native/WETH boundary retains the Mainnet-backed wrapped identity',async()=>{
+  const chainId=31338;
+  const native={...t0,chainId,address:'0x0000000000000000000000000000000000000000'};
+  const asset={...t1,chainId};
+  const output={...t1,chainId,address:'0x0000000000000000000000000000000000000003'};
+  const wrapped={...t1,chainId,address:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'};
+  const v4={...concentrated,id:'sandbox-native',protocol:'v4' as const,token0:native,token1:asset,
+    lpFee:3000,protocolFee:0,hooks:'0x0000000000000000000000000000000000000000'};
+  const v3={...concentrated,id:'sandbox-weth',token0:output,token1:wrapped};
+  const expectedFirst=await quotePool(v4,'exactIn','1000000000000',false);
+  const expected=await quotePool(v3,'exactIn',expectedFirst.amountOut,false);
+  const result=await runRequest({id:5,operation:'simulateRoute',mode:'exactIn',amount:'1000000000000',
+    pools:[v4,v3],route:{branches:[{amountIn:'1000000000000',hops:[
+      {poolId:v4.id,zeroForOne:false},{poolId:v3.id,zeroForOne:false}]}]}});
+  assert.equal(result.amountOut,expected.amountOut);
+});

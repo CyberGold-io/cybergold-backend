@@ -260,6 +260,79 @@
   },
   {
     "type": "event",
+    "name": "MarketSwapExecuted",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "counterToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum IMarketSwap.MarketSide"
+      },
+      {
+        "name": "exactInput",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "swapInput",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "inputRefund",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "outputRefund",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeCygld",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OwnershipTransferCanceled",
     "inputs": [
       {
@@ -490,7 +563,7 @@
   },
   {
     "type": "event",
-    "name": "MarketSwapExecuted",
+    "name": "ExactInputExecuted",
     "inputs": [
       {
         "name": "payer",
@@ -505,58 +578,193 @@
         "internalType": "address"
       },
       {
-        "name": "counterToken",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "side",
+        "name": "intent",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum IMarketSwap.MarketSide"
+        "internalType": "enum ITradeExactInput.Intent"
       },
       {
-        "name": "exactInput",
-        "type": "bool",
+        "name": "result",
+        "type": "tuple",
         "indexed": false,
-        "internalType": "bool"
-      },
-      {
-        "name": "swapInput",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "amountOut",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "inputRefund",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "outputRefund",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "feeCygld",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "feeRecipient",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
+        "internalType": "struct ITradeExactInput.TradeResult",
+        "components": [
+          {
+            "name": "acquiredInputs",
+            "type": "tuple[]",
+            "internalType": "struct ITradeExactInput.AssetAmount[]",
+            "components": [
+              {
+                "name": "currency",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "stages",
+            "type": "tuple[]",
+            "internalType": "struct ITradeExactInput.StageResult[]",
+            "components": [
+              {
+                "name": "branch",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "stage",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "inputCurrency",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "outputCurrency",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "fundedInput",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "returnedInput",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "consumedInput",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "inputGain",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "recipientOutputs",
+            "type": "tuple[]",
+            "internalType": "struct ICoreRedemption.TokenAmount[]",
+            "components": [
+              {
+                "name": "kind",
+                "type": "uint8",
+                "internalType": "enum ICoreRedemption.TokenKind"
+              },
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "id",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "recoveryShares",
+            "type": "tuple[]",
+            "internalType": "struct ICoreRedemption.TokenAmount[]",
+            "components": [
+              {
+                "name": "kind",
+                "type": "uint8",
+                "internalType": "enum ICoreRedemption.TokenKind"
+              },
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "id",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "retainedInputs",
+            "type": "tuple[]",
+            "internalType": "struct ITradeExactInput.RetainedInputCharge[]",
+            "components": [
+              {
+                "name": "branch",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "stage",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "currency",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "coreProtocolFeeCygld",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "coreHelpersFeeCygld",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "marketFeeCygld",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "retainedCustodian",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "feeBeneficiaryAtSettlement",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
       }
     ],
     "anonymous": false

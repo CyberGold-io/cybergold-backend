@@ -30,12 +30,7 @@ REVERT_NAMES = {Web3.to_hex(Web3.keccak(text=signature))[:10]:
         'PermitAllowanceTooLow(uint256,uint256)', 'Permit2AmountTooLow(uint256,uint256)',
         'NativeValueMismatch(uint256,uint256)', 'AdapterNotApproved(address)',
         'CoreInputAboveMaximum(address,uint256,uint256)', 'Error(string)', 'Panic(uint256)')}
-Operation = Literal['issueFromBasketExactInWithPermit2', 'issueFromBasketExactOutWithPermit2',
-                    'issueFromBasketExactInWithMixedPermits', 'issueFromBasketExactOutWithMixedPermits',
-                    'issueFromTokenExactOutWithPermit2', 'issueFromTokenExactOutWithPermit', 'issueFromTokenExactOut', 'issueFromNativeExactOut',
-                    'redeemToBasketExactIn', 'redeemToBasketExactInWithPermit',
-                    'redeemToTokenExactIn', 'redeemToTokenExactInWithPermit',
-                    'redeemToNativeExactIn', 'redeemToNativeExactInWithPermit', 'swapExactInput', 'swapExactOutput']
+Operation = Literal['issueFromBasketExactOutWithMixedPermits', 'issueFromBasketExactOutWithPermit2', 'issueFromNativeExactOut', 'issueFromTokenExactOut', 'issueFromTokenExactOutWithPermit', 'issueFromTokenExactOutWithPermit2', 'swapExactOutput', 'executeExactInput']
 
 
 class HelpersExecutionRequest(BaseModel):

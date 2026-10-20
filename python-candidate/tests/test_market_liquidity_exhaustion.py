@@ -17,6 +17,7 @@ from cybergold_candidate.uniswap_v4 import tick_prefetch_scope
 from cybergold_candidate.uniswap_routes import resize_branches
 from cybergold_candidate.market_fee import quoted_fee
 from cybergold_candidate.market_capacity import maximum_filled_input
+from cybergold_candidate.universal_quote import UniversalQuotes
 
 CORE = '0x'+'6'*40
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -119,6 +120,33 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         # their existing refundable original-input partial-fill behavior.
         core_leg = await quotes.quote_branches(self.branches(registry, 10**18), 'exactIn', 10**18, BLOCK)
         self.assertFalse(core_leg['fullyFilled'])
+
+    async def test_universal_exact_input_keeps_gross_budget_when_legacy_purchase_resizes_funding(self):
+        quotes, registry, _rpc = await self.fixture([(-60, 60, 10**18)])
+        budget = 10**18
+        legacy = await quotes._get(self.purchase(registry, budget), block=BLOCK)
+        self.assertLess(int(legacy['inputMaximum']), budget)
+        settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
+            NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'2'*40,
+            CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS='0x'+'7'*40)
+        universal = UniversalQuotes(settings, quotes)
+        request = {'intent': 0, 'inputs': [{'currency': registry.seed['token0']['address'], 'amount': str(budget)}],
+            'outputCurrency': CORE, 'recipient': '0x'+'8'*40, 'deadline': '2000000000', 'slippageBps': 100}
+        # The same finite-liquidity SDK result is retainable at the declared
+        # universal conversion endpoint. It does not enter the legacy budget
+        # resizer, and the compiled execution still acquires all original Q.
+        value = await universal.candidate(request, 0, 'core-first', BLOCK, [], [], first=True)
+        self.assertEqual(value['operation'], 'executeExactInput')
+        self.assertEqual(value['settlementPolicy'], 'protocol-retained-input')
+        self.assertEqual(value['quotedInput'], str(budget))
+        self.assertEqual(value['inputMaximum'], str(budget))
+        self.assertEqual(value['plan']['inputs'], request['inputs'])
+        self.assertEqual(value['planDescription']['branches'][0]['amountIn'], str(budget))
+        retained = value['estimatedRetainedInputCharges']
+        self.assertEqual(len(retained), 1)
+        self.assertEqual(retained[0]['currency'].lower(), request['inputs'][0]['currency'].lower())
+        self.assertGreater(int(retained[0]['amount']), 0)
+        self.assertGreater(int(value['quotedOutput']), 0)
 
     def purchase(self, registry, budget, token=None):
         return {'side': 'buy', 'mode': 'exact-in', 'counterToken': token or registry.seed['token0']['address'],

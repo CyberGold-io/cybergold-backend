@@ -55,6 +55,7 @@ from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import MarketQuotes, DailyRecipientCache
 from .trade_quote import TradeQuotes
+from .universal_quote import UniversalQuotes
 from .shared_reads import SharedReads
 
 
@@ -119,7 +120,13 @@ def create_configured_app(settings=None, database=None, client=None):
     routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
+    universal_quotes = UniversalQuotes(settings, market_quotes)
+    market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
+    trade_quotes.universal_quotes = universal_quotes
+    shared_core_quotes = IntentSharing(core_quotes, rpc_factory=route_rpc,
+                                      request_resolver=configuration.resolve_request)
+    shared_core_quotes.universal_quotes = universal_quotes
 
     async def close_runtime():
         await pool_reads.close()
@@ -187,9 +194,9 @@ def create_configured_app(settings=None, database=None, client=None):
                       token_preview=TokenPreview(settings),
                       uniswap_quote=UniswapQuote(settings, engine=market_quotes),
                       route_search=routes,
-                      quote_intent=IntentSharing(core_quotes,
-                          rpc_factory=route_rpc, request_resolver=configuration.resolve_request),
+                      quote_intent=shared_core_quotes,
                       trade_quotes=trade_quotes,
+                      universal_quotes=universal_quotes,
                       governance_core_facts=GovernanceCoreFacts(settings),
                       wallet_balances=WalletBalances(settings),
                       token_balance=TokenBalance(settings),
