@@ -176,6 +176,9 @@ def execute(w3, payer, helpers, quote, label):
 async def qualify(url, deployment=None):
     w3 = Web3(Web3.HTTPProvider(url))
     chain_id = w3.eth.chain_id
+    entry = w3.eth.get_block('latest')
+    context = {'mode': 'standalone-pinned-fork' if deployment is None else 'owned-staged-fork',
+               'entryBlockNumber': entry.number, 'entryBlockHash': Web3.to_hex(entry.hash)}
     admin = w3.eth.accounts[0]
     # Well-known Anvil addresses can have real Mainnet EIP7702 code at a fork
     # snapshot. Use a fresh fork-only impersonated payer, with no signing key.
@@ -199,7 +202,9 @@ async def qualify(url, deployment=None):
         assert selector_count == 45
     print(json.dumps({'stage': 'local-deployment-complete', 'helpers': helpers.address,
                       'selectorCount': selector_count, 'creationTemplateSha256': identities,
-                      'forkBlock': PIN, 'forkBlockHash': Web3.to_hex(w3.eth.get_block(PIN).hash)}), flush=True)
+                      'executionContext': context,
+                      **({'forkBlock': PIN, 'forkBlockHash': Web3.to_hex(w3.eth.get_block(PIN).hash)}
+                         if deployment is None else {})}), flush=True)
     settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID=str(chain_id), NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
         NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=helpers.address, CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS=adapter,
         RPC_URL=url, RPC_AUTHORIZATION=None)
@@ -261,7 +266,8 @@ async def qualify(url, deployment=None):
         issue_request = {**request, 'intent': 2, 'inputs': [{'currency': asset, 'amount': str(amounts.get(asset.lower(), 0))} for asset in assets]}
         issue = await quotes.get(issue_request)
         execute(w3, payer, helpers, issue, 'basket-issue-public-quote')
-        print(json.dumps({'qualification': 'passed', 'forkBlock': PIN, 'localChainId': chain_id,
+        print(json.dumps({'qualification': 'passed', 'executionContext': context,
+                          **({'forkBlock': PIN} if deployment is None else {}), 'localChainId': chain_id,
                           'helpers': helpers.address, 'adapter': adapter,
                           'sdkRequestCount': engine.sdk.sequence, 'executedCases': 6,
                           'publicQuoteExecutions': 4, 'explicitGridCandidateExecutions': 2}), flush=True)
