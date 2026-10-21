@@ -7,13 +7,15 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from web3 import Web3
+from web3 import AsyncWeb3, Web3
+from web3.providers import AsyncBaseProvider
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.market_swap import MarketQuotes
 from cybergold_candidate.quote_errors import QuoteFailure, public_quote_error
 from cybergold_candidate.sdk_worker import SdkWorker, SdkInputTooSmall
-from cybergold_candidate.uniswap_state import PoolRegistry
-from cybergold_candidate.uniswap_v4 import tick_prefetch_scope
+from cybergold_candidate.uniswap_state import PoolRegistry, UniswapRpc
+from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.uniswap_v4 import read_tick_bitmap_words, tick_prefetch_scope
 from cybergold_candidate.uniswap_routes import resize_branches
 from cybergold_candidate.market_fee import quoted_fee
 from cybergold_candidate.market_capacity import maximum_filled_input
@@ -386,6 +388,124 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(QuoteFailure) as failure:
             await quotes.quote_market_branches(self.branches(registry, 10**18), 'exactIn', 10**18, BLOCK)
         self.assertEqual(failure.exception.code, 'quote-insufficient-liquidity')
+
+
+class V4BitmapBatchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_demanded_read_does_not_wait_for_unrelated_bulk_batches(self):
+        class Provider(AsyncBaseProvider):
+            def __init__(self):
+                super().__init__()
+                self.entered, self.release = asyncio.Event(), asyncio.Event()
+                self.bulk_calls = 0
+
+            async def make_request(self, method, params):
+                self_outer.assertEqual(method, 'eth_call')
+                self_outer.assertEqual(params[1], {'blockHash': BLOCK['hash'], 'requireCanonical': True})
+                data = bytes.fromhex(params[0]['data'][2:])
+                if data[:4] == Web3.keccak(text='extsload(bytes32[])')[:4]:
+                    slots, = Web3().codec.decode(['bytes32[]'], data[4:])
+                    self.bulk_calls += 1
+                    self.entered.set()
+                    await self.release.wait()
+                    types, values = ['bytes32[]'], [[bytes(32)] * len(slots)]
+                else:
+                    self_outer.assertEqual(data[:4], Web3.keccak(text='getTickBitmap(bytes32,int16)')[:4])
+                    types, values = ['uint256'], [7]
+                return {'jsonrpc': '2.0', 'id': 1, 'result': '0x' + Web3().codec.encode(types, values).hex()}
+
+            async def disconnect(self):
+                pass
+
+        self_outer = self
+        provider = Provider()
+        rpc = UniswapRpc(SETTINGS, AsyncWeb3(provider))
+        self.addAsyncCleanup(rpc.close)
+        pool_id = '0x' + '7' * 64
+        bulk = asyncio.create_task(read_tick_bitmap_words(rpc.read_function,
+            rpc.pool_manager, pool_id, list(range(1024)), BLOCK))
+        demand = None
+        try:
+            await asyncio.wait_for(provider.entered.wait(), 1)
+            demand = asyncio.create_task(rpc.read_function(rpc.state_view,
+                'getTickBitmap(bytes32,int16)', ['bytes32', 'int16'],
+                [bytes.fromhex(pool_id[2:]), -1], ['uint256'], BLOCK))
+            self.assertEqual(await asyncio.wait_for(demand, 1), (7,))
+            self.assertFalse(bulk.done())
+            self.assertEqual(provider.bulk_calls, 1)
+        finally:
+            provider.release.set()
+            if demand is not None and not demand.done():
+                demand.cancel()
+            await asyncio.gather(bulk, *([demand] if demand is not None else []), return_exceptions=True)
+
+    async def test_every_requested_word_retains_order_and_wide_bitmap_values(self):
+        rpc = LiquidityRpc([(-6144, -6000, 10**18)])
+        pool_id = '0x' + '7' * 64
+        rpc.bind({'id': pool_id})
+        rpc.words[-257], rpc.words[259] = (1 << 256) - 1, 1 << 255
+        positions = list(range(259, -258, -1))
+        actual = await read_tick_bitmap_words(rpc.read_function,
+            rpc.pool_manager, pool_id, positions, BLOCK)
+        self.assertEqual(actual, [(word, rpc.words.get(word, 0)) for word in positions])
+        self.assertEqual(rpc.bulk_words, positions)
+        self.assertEqual([len(args[0]) for name, args in rpc.calls
+                          if name == 'extsload(bytes32[])'], [128, 128, 128, 128, 5])
+
+    async def test_cancellation_drains_the_active_batch_without_starting_future_batches(self):
+        entered, drained = asyncio.Event(), asyncio.Event()
+        calls = 0
+        async def suspended(*_args):
+            nonlocal calls
+            calls += 1
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+        task = asyncio.create_task(read_tick_bitmap_words(suspended,
+            '0x' + '4' * 40, '0x' + '7' * 64, list(range(1024)), BLOCK))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertTrue(drained.is_set())
+            self.assertEqual(calls, 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_observed_canonical_disproof_propagates_with_its_identity(self):
+        error = SnapshotChanged('Synthetic canonical bitmap disproof')
+        calls = 0
+        async def disproved(_address, signature, _inputs, args, _outputs, block):
+            nonlocal calls
+            self.assertEqual(signature, 'extsload(bytes32[])')
+            self.assertEqual(block, BLOCK)
+            calls += 1
+            if calls == 2:
+                raise error
+            return ([bytes(32)] * len(args[0]),)
+        with self.assertRaises(SnapshotChanged) as raised:
+            await read_tick_bitmap_words(disproved, '0x' + '4' * 40,
+                '0x' + '7' * 64, list(range(512)), BLOCK)
+        self.assertIs(raised.exception, error)
+        self.assertEqual(calls, 2)
+
+    async def test_ordinary_error_does_not_start_a_future_batch_to_observe_another_error(self):
+        ordinary = OSError('Synthetic first-batch error')
+        calls = 0
+        async def failed(*_args):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ordinary
+            raise SnapshotChanged('Unrequested future-batch disproof')
+        with self.assertRaises(OSError) as raised:
+            await read_tick_bitmap_words(failed, '0x' + '4' * 40,
+                '0x' + '7' * 64, list(range(512)), BLOCK)
+        self.assertIs(raised.exception, ordinary)
+        self.assertEqual(calls, 1)
 
 
 if __name__ == '__main__': unittest.main()
