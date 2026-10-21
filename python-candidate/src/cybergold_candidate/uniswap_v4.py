@@ -9,7 +9,6 @@ from contextvars import ContextVar
 
 from eth_utils.abi import collapse_if_tuple
 from web3 import Web3
-from .recovery_rpc import SnapshotChanged
 
 _tick_prefetch_attempts = ContextVar('tick_prefetch_attempts', default=None)
 
@@ -119,15 +118,8 @@ async def read_tick_bitmap_words(read_function, manager, pool_id, positions, blo
         values, = await read_function(manager, 'extsload(bytes32[])', ['bytes32[]'], [slots], ['bytes32[]'], block)
         return [(position, int.from_bytes(value, 'big')) for position, value in zip(batch, values, strict=True)]
     # Batches only bound calldata, not coverage: every requested word is read.
-    tasks = [asyncio.create_task(read_batch(positions[index:index+128]))
-             for index in range(0, len(positions), 128)]
-    try:
-        return [row for batch in await asyncio.gather(*tasks) for row in batch]
-    finally:
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
-        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
-        if disproof is not None:
-            raise disproof
+    # Keep optional bulk work from queuing every batch ahead of required reads.
+    result = []
+    for index in range(0, len(positions), 128):
+        result.extend(await read_batch(positions[index:index+128]))
+    return result

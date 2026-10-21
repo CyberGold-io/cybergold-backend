@@ -501,10 +501,13 @@ class PoolRegistry:
                 except Exception:
                     pass  # Optional prefetch failure retains ordinary demanded reads.
         needed = {int(tick) for request in requests for tick in request.get('ticks', [])}
-        for word in requested_words:
-            bits = int(words[word]['bitmap'])
-            if bits:
-                needed.update(((word << 8)+bit)*spacing for bit in range(256) if bits & (1 << bit))
+        # V3 bitmap traversal needs indexes only. The SDK requests liquidity
+        # rows separately when its swap actually reaches an initialized tick.
+        if pool['protocol'] == 'v4':
+            for word in requested_words:
+                bits = int(words[word]['bitmap'])
+                if bits:
+                    needed.update(((word << 8)+bit)*spacing for bit in range(256) if bits & (1 << bit))
         async def read_tick(index):
             if pool['protocol'] == 'v4':
                 value = await read_state_view(rpc.read_function, rpc.state_view, 'getTickLiquidity', block,
