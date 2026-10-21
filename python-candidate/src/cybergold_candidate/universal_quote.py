@@ -223,11 +223,12 @@ class UniversalQuotes:
                 next(hop for hop in (route if source.lower() == self.core.lower() else reversed(route))
                      if 'pool' in hop)['pool']) == anchor]
         if first:
-            # Preserve the existing V3 seed's prompt executable candidate before
-            # cold, possibly uninitialized V4 connector keys. Refinement still
-            # explores every selected protocol/path and split allocation.
+            # Keep the V3 seed ahead of newly discovered V2 and noncanonical V4
+            # paths, including after their addresses become known. A thin V2
+            # acquisition must not displace the prompt Core candidate. Refinement
+            # still compares every selected protocol/path and split allocation.
             canonical_edge = pool_identity(registry.seed)
-            selected.sort(key=lambda route: (sum(hop['pool']['protocol'] == 'v4' and
+            selected.sort(key=lambda route: (sum(hop['pool']['protocol'] != 'v3' and
                 pool_identity(hop['pool']) != canonical_edge for hop in route if 'pool' in hop),
                 sum(hop['pool']['protocol'] == 'v3' and not hop['pool'].get('address') for hop in route if 'pool' in hop),
                 sum(hop['pool']['protocol'] == 'v3' and hop['pool']['feePips'] != 3000 for hop in route if 'pool' in hop), len(route)))
