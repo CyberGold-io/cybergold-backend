@@ -1653,7 +1653,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
             'sqrtRatioX96': str(1 << 96), 'tick': 1, 'liquidity': '1000',
             'context': {'chainId': 31338, 'blockNumber': str(BLOCK['number']), 'blockHash': BLOCK['hash']},
             'bitmapWords': [], 'ticks': []}
-        self.requests = [{'poolId': C, 'wordPositions': [0], 'ticks': []}]
+        self.requests = [{'poolId': C, 'wordPositions': [0], 'ticks': [0]}]
 
     async def start(self, snapshot=None, requests=None):
         task = asyncio.create_task(self.registry.extend_ticks(
@@ -1696,11 +1696,13 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
     async def test_completed_fill_rereads_changed_sandbox_state_at_the_same_header(self):
         self.rpc.release.set()
         first = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
-        self.rpc.bitmap, self.rpc.gross = 2, 200
+        self.rpc.bitmap, self.rpc.gross = 3, 200
         second = await self.registry.extend_ticks(self.snapshot, self.requests, BLOCK)
         self.assertEqual(self.rpc.calls, Counter({'tickBitmap(int16)': 2, 'ticks(int24)': 2}))
         self.assertEqual(first['ticks'], [{'index': 0, 'liquidityGross': '100', 'liquidityNet': '0'}])
-        self.assertEqual(second['ticks'], [{'index': 10, 'liquidityGross': '200', 'liquidityNet': '10'}])
+        self.assertEqual(second['ticks'], [{'index': 0, 'liquidityGross': '200', 'liquidityNet': '0'}])
+        self.assertEqual(first['bitmapWords'], [{'wordPosition': 0, 'bitmap': '1'}])
+        self.assertEqual(second['bitmapWords'], [{'wordPosition': 0, 'bitmap': '3'}])
         self.assertEqual(self.registry.pending.completed, {})
         self.assertEqual(self.registry.observed, {})
 
@@ -1749,7 +1751,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
         with_extra = deepcopy(self.snapshot)
         with_extra['bitmapWords'] = [{'wordPosition': 9, 'bitmap': '0'}]
         first = await self.start(with_extra)
-        self.rpc.bitmap = 2
+        self.rpc.bitmap = 3
         second = asyncio.create_task(self.registry.extend_ticks(self.snapshot, self.requests, BLOCK))
         self.addAsyncCleanup(self.stop, second)
         async def both_started():
@@ -1759,7 +1761,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
         self.rpc.release.set()
         a, b = await asyncio.gather(first, second)
         self.assertEqual(next(row for row in a['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '1')
-        self.assertEqual(next(row for row in b['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '2')
+        self.assertEqual(next(row for row in b['bitmapWords'] if row['wordPosition'] == 0)['bitmap'], '3')
         self.assertEqual(self.rpc.calls['tickBitmap(int16)'], 2)
 
     async def test_unequal_baseline_snapshots_do_not_share_a_fill(self):
@@ -1777,7 +1779,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
     async def test_unequal_coverage_requests_keep_their_own_words_and_ticks(self):
         first = await self.start()
         second = asyncio.create_task(self.registry.extend_ticks(
-            self.snapshot, [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+            self.snapshot, [{'poolId': C, 'wordPositions': [1], 'ticks': [2560]}], BLOCK))
         self.addAsyncCleanup(self.stop, second)
         await asyncio.sleep(0)
         self.assertEqual(sum(key[0] == 'tick-fill' for key in self.registry.pending.pending), 2)
@@ -1794,7 +1796,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
         self.snapshot['liquidity'] = '9000'
         self.requests[0]['wordPositions'].append(1)
         second = asyncio.create_task(self.registry.extend_ticks(original,
-            [{'poolId': C, 'wordPositions': [0], 'ticks': []}], BLOCK))
+            [{'poolId': C, 'wordPositions': [0], 'ticks': [0]}], BLOCK))
         self.addAsyncCleanup(self.stop, second)
         await self.joined()
         self.rpc.release.set()
@@ -1808,7 +1810,7 @@ class PendingTickFillTests(unittest.IsolatedAsyncioTestCase):
         self.snapshot['context']['chainId'] = 1
         first = await self.start()
         second = asyncio.create_task(self.registry.extend_ticks(self.snapshot,
-            [{'poolId': C, 'wordPositions': [1], 'ticks': []}], BLOCK))
+            [{'poolId': C, 'wordPositions': [1], 'ticks': [2560]}], BLOCK))
         self.addAsyncCleanup(self.stop, second)
         async def both_started():
             while self.rpc.active != 2:

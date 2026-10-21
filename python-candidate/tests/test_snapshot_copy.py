@@ -57,7 +57,7 @@ class SnapshotPersistenceTests(unittest.IsolatedAsyncioTestCase):
             'nestedUnknown': {'rows': [{'value': 'original'}]},
             'bitmapWords': [{'wordPosition': 9, 'bitmap': '1'}],
             'ticks': [{'index': 23040, 'liquidityGross': '7', 'liquidityNet': '3'}]}
-        requests = [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}]
+        requests = [{'poolId': source['id'], 'wordPositions': [0], 'ticks': [0]}]
         first = asyncio.create_task(registry.extend_ticks(source, requests, BLOCK))
         await asyncio.wait_for(rpc.started.wait(), 1)
         second = asyncio.create_task(registry.extend_ticks(deepcopy(source), requests, BLOCK))
@@ -159,7 +159,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(registry.observed, {})
         self.assertEqual(rpc.active, 0)
 
-    async def test_v3_v4_eager_empty_sparse_dense_and_bounded_integer_semantics(self):
+    async def test_v3_demand_v4_eager_empty_sparse_dense_and_bounded_integer_semantics(self):
         patterns = [0, 1, 1 << 255, (1 << 256) - 1, sum((1 << bit for bit in range(0, 256, 2))), -1, (1 << 300) + (1 << 255) + 1, -(1 << 300)]
         for protocol in ('v3', 'v4'):
             for bitmap in patterns:
@@ -168,7 +168,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
                     registry = self.registry(rpc)
                     source = _bitmap_snapshot(protocol)
                     original = deepcopy(source)
-                    expected = sorted(_bitmap_expected_indices(-1, bitmap))
+                    expected = sorted(_bitmap_expected_indices(-1, bitmap)) if protocol == 'v4' else []
                     result = await registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [-1], 'ticks': []}], _BITMAP_BLOCK)
                     self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [-1])
                     self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
@@ -176,6 +176,30 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(result['ticks'], [{'index': tick, 'liquidityGross': str(1000 + abs(tick)), 'liquidityNet': str(-tick - 1)} for tick in expected])
                     self.assertEqual(source, original)
                     self.assert_drained(registry, rpc)
+
+    async def test_v3_dense_bitmap_returns_without_unrequested_ticks_then_fills_demanded_row(self):
+        rpc = _BitmapExpansionRpc({0: (1 << 256) - 1},
+            error=AssertionError('V3 bitmap must not prefetch tick rows'))
+        registry = self.registry(rpc)
+        source = _bitmap_snapshot('v3')
+        original = deepcopy(source)
+        covered = await registry.extend_ticks(source,
+            [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
+        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
+        self.assertEqual(covered['bitmapWords'], [{'wordPosition': 0, 'bitmap': str((1 << 256) - 1)}])
+        self.assertEqual(covered['ticks'], [])
+        self.assertEqual(source, original)
+        rpc.error = None
+        filled = await registry.extend_ticks(covered,
+            [{'poolId': source['id'], 'wordPositions': [], 'ticks': [10, 10]}], _BITMAP_BLOCK)
+        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [10])
+        self.assertEqual(filled['bitmapWords'], covered['bitmapWords'])
+        self.assertEqual(filled['ticks'], [{'index': 10, 'liquidityGross': '1010', 'liquidityNet': '-11'}])
+        self.assertEqual(covered['ticks'], [])
+        self.assertEqual(source, original)
+        self.assert_drained(registry, rpc)
 
     async def test_known_coverage_explicit_ticks_duplicate_words_and_mutable_copies(self):
         for protocol in ('v3', 'v4'):
@@ -187,8 +211,9 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
             requested = deepcopy(requests)
             result = await registry.extend_ticks(source, requests, _BITMAP_BLOCK)
             self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [1])
-            self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [13, 20, 2580])
-            self.assertEqual([row['index'] for row in result['ticks']], [0, 13, 20, 2580])
+            expected = [13, 20, 2580] if protocol == 'v4' else [13]
+            self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
+            self.assertEqual([row['index'] for row in result['ticks']], [0, *expected])
             self.assertEqual(result['ticks'][0], original['ticks'][0])
             self.assertEqual(source, original)
             self.assertEqual(requests, requested)
@@ -199,12 +224,12 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(source, original)
             self.assert_drained(registry, rpc)
 
-    async def test_shared_subscriber_cancellation_preserves_eager_foreign_read(self):
+    async def test_shared_subscriber_cancellation_preserves_foreign_tick_read(self):
         for protocol in ('v3', 'v4'):
             rpc = _BitmapExpansionRpc({0: 3}, block_phase='tick')
             registry = self.registry(rpc)
             source = _bitmap_snapshot(protocol)
-            requests = [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}]
+            requests = [{'poolId': source['id'], 'wordPositions': [0], 'ticks': [0, 10]}]
             first = asyncio.create_task(registry.extend_ticks(source, requests, _BITMAP_BLOCK))
             await rpc.started.wait()
             second = asyncio.create_task(registry.extend_ticks(deepcopy(source), requests, _BITMAP_BLOCK))
@@ -227,14 +252,14 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
                 registry = self.registry(rpc)
                 source = _bitmap_snapshot(protocol)
                 with self.assertRaises(type(error)) as raised:
-                    await registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
+                    await registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [0], 'ticks': [0, 10]}], _BITMAP_BLOCK)
                 self.assertIs(raised.exception, error)
                 self.assert_drained(registry, rpc)
             for phase in ('bitmap', 'tick'):
                 rpc = _BitmapExpansionRpc({0: 3}, block_phase=phase)
                 registry = self.registry(rpc)
                 source = _bitmap_snapshot(protocol)
-                task = asyncio.create_task(registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK))
+                task = asyncio.create_task(registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [0], 'ticks': [0, 10]}], _BITMAP_BLOCK))
                 await rpc.started.wait()
                 task.cancel()
                 with self.assertRaises(asyncio.CancelledError):
