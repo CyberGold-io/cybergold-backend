@@ -246,6 +246,38 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(entered.is_set());self.assertTrue(finished)
         self.assertGreater(int(result['quotedOutput']),0)
 
+    async def test_warm_discovery_keeps_v3_seed_first_without_removing_refinement_routes(self):
+        service=Quotes(Engine());registry=service.engine.registry
+        seeded=pool(OTHER,PAXG,'0x'+'66'*20);seeded['protocol']='v3'
+        thin_v2=pool(OTHER,PAXG,'0x'+'22'*20)
+        alternative_v4=pool(OTHER,PAXG,'0x'+'33'*20,True)
+        priced=[]
+        async def price(route,amount,*_):
+            protocol=route[0]['pool']['protocol'];priced.append(protocol)
+            output=max(1,amount//1000) if protocol=='v2' else amount*({'v3':3,'v4':4}[protocol])
+            return amount,output
+        service.price_path=price
+        registry.inventory={seeded['id']:seeded}
+        _,cold,_=await service.conversion(OTHER,PAXG,1000,BLOCK,{}, {},first=True)
+        self.assertEqual(cold,3000)
+        # Discovery adds a real but nearly exhausted V2 acquisition. Its tiny
+        # output would leave a large Core residual requiring slower V4 coverage.
+        registry.inventory.update({thin_v2['id']:thin_v2,alternative_v4['id']:alternative_v4})
+        for observed in (True,False):
+            with self.subTest(seedAddressObserved=observed):
+                if observed: seeded['address']=seeded['id']
+                else: seeded.pop('address',None)
+                priced.clear()
+                _,warm,_=await service.conversion(OTHER,PAXG,1000,BLOCK,{}, {},first=True)
+                self.assertEqual(warm,cold)
+                self.assertEqual(priced,['v3'])
+        # The initial preference is not eligibility: ordinary refinement still
+        # compares V2/V3/V4, including split paths, and can choose another protocol.
+        priced.clear()
+        _,refined,_=await service.conversion(OTHER,PAXG,1000,BLOCK,{}, {},first=False)
+        self.assertEqual(set(priced),{'v2','v3','v4'})
+        self.assertEqual(refined,4000)
+
     async def test_real_sdk_engine_replays_pool_post_state_across_core_and_market_branches(self):
         from cybergold_candidate.route_quote_engine import RouteQuoteEngine
         from cybergold_candidate.shared_reads import SharedReads
