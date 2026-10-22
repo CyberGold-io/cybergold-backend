@@ -902,3 +902,22 @@ For the staged Ops rehearsal, the same entrypoint consumes `OWNED_FORK_RPC_URL`
 and `HELPERS_EXACT_INPUT_DEPLOYMENT`; it exercises the supplied activation using
 only its fresh fork payer and leaves the owner/executor nonce alone. No real
 deployment address or approval default is configured by this qualification.
+
+## Sandbox faucet funding
+
+Backend forwards authenticated faucet requests to the private loopback funding
+service. That service tops up ETH, PAXG, XAUT, USDC and USDT with native
+`anvil_setBalance` and `anvil_dealERC20` assignments. It preserves balances above
+the fixed targets and verifies balances before returning the existing success
+payload. The service retains request idempotency and the wallet cooldown.
+
+No transaction hash or receipt is returned. These Sandbox state edits do not
+mine a block, emit transfer events, or update total supply. Wallet balance reads
+remain uncached even when the block hash is unchanged, and HTTP responses carry
+`Cache-Control: no-store`. A partial write can still return `REQUEST_UNCERTAIN`;
+the existing replacement-request-ID response lets the caller retry safely with
+a new ID, filling only remaining deficits. CYGLD is not a faucet allocation.
+
+The funding engine is deployed independently from Backend. Promoting Backend
+alone does not update that private service; integrated Sandbox acceptance must
+exercise the deployed engine before the exact `dev` to `main` promotion.
