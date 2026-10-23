@@ -12,6 +12,17 @@ from cybergold_candidate.preview_errors import KnownPreviewError, preview_error
 from cybergold_candidate.quote_errors import public_quote_error
 
 
+SHORTAGES = (
+    ('InsufficientCygldSupply', 'redemption-supply-exceeded'),
+    ('InsufficientReserveBalance', 'insufficient-reserve-balance'),
+    ('InsufficientRecoveryShares', 'insufficient-recovery-shares'),
+)
+
+
+def selector(name):
+    return Web3.to_hex(Web3.keccak(text=name+'()'))[:10]
+
+
 class Provider(AsyncBaseProvider):
     def __init__(self, data):
         super().__init__()
@@ -37,14 +48,33 @@ class PreviewErrors(unittest.IsolatedAsyncioTestCase):
             raw += Web3().codec.encode(['uint256']*3, [1, 2, 3]).hex()
             self.assertEqual(preview_error({'data': raw}).code, 'issuance-cap-exceeded')
 
+    def test_explicit_shortages_keep_their_resource_without_guessing_amounts(self):
+        for name, code in SHORTAGES:
+            for mode in (None, 'redeem-exact-in', 'redeem-exact-out'):
+                with self.subTest(name=name, mode=mode):
+                    error = preview_error({'data': selector(name), 'message': 'private provider text'}, mode=mode)
+                    payload = public_quote_error(error)
+                    self.assertEqual(payload['code'], code)
+                    if code == 'redemption-supply-exceeded':
+                        self.assertEqual(payload['constraint'], {'kind': 'redemption-supply', 'quantity': 'gross-cygld-input'})
+                    else:
+                        self.assertNotIn('constraint', payload)
+                    self.assertNotIn('private', json.dumps(payload))
+        for arguments in ({'grossCygldIn': 123}, {'params': {'grossCygldIn': 123}}):
+            error = preview_error({'data': selector('InsufficientCygldSupply')},
+                mode='redeem-exact-in', arguments=arguments)
+            self.assertEqual(error.constraint['requestedRaw'], '123')
+
     def test_unknown_transport_and_malformed_replies_are_not_business_errors(self):
-        for data in (None, {}, '0x12345678', '0xnothex'):
+        for data in (None, {}, '0x12345678', '0xnothex',
+                *(selector(name)+'zz' for name, _ in SHORTAGES)):
             self.assertIsNone(preview_error({'data': data, 'message': 'private upstream text'}))
-        selector = Web3.to_hex(Web3.keccak(text='MaxTotalSupplyExceeded(uint256,uint256,uint256)'))[:10]
-        self.assertIsNone(preview_error({'data': selector}))
+        cap_selector = Web3.to_hex(Web3.keccak(text='MaxTotalSupplyExceeded(uint256,uint256,uint256)'))[:10]
+        self.assertIsNone(preview_error({'data': cap_selector}))
 
     async def test_focused_api_preserves_failure_status_specific_code_and_no_extra_calls(self):
-        for data, expected in (('0x33aa101c', 'redemption-supply-exceeded'), ('0x12345678', 'quote-contract-reverted')):
+        for data, expected in (('0x33aa101c', 'redemption-supply-exceeded'),
+                *((selector(name), code) for name, code in SHORTAGES), ('0x12345678', 'quote-contract-reverted')):
             provider = Provider(data)
             cfg = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID=1, NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'1'*40)
             preview = BasketPreview(cfg, BasketPreviewRpc(cfg, AsyncWeb3(provider)))
@@ -80,25 +110,31 @@ class PreviewErrors(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('availableRaw', public_quote_error(error)['constraint'])
         unknown_context = preview_error({'data': '0x33aa101c'})
         self.assertEqual(unknown_context.code, 'insufficient-protocol-supply')
-        self.assertIn('or redeemable collateral', str(unknown_context))
+        self.assertIn('supply or redemption capacity', str(unknown_context))
 
-    async def test_token_and_native_previews_share_the_same_exact_input_error(self):
+    async def test_token_and_native_previews_preserve_shortage_codes(self):
         from cybergold_candidate.token_preview import TokenPreview, TokenPreviewRpc
-        for mode in ('redeem-token-exact-in', 'redeem-native-exact-in'):
-            provider = Provider('0x33aa101c')
-            cfg = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID=1, NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'1'*40)
-            preview = TokenPreview(cfg, TokenPreviewRpc(cfg, AsyncWeb3(provider)))
-            app = create_app(token_preview=preview)
-            value = {'mode': mode, 'grossCygldIn': '123456789012345678901234567890', 'quotes': []}
-            if mode == 'redeem-token-exact-in':
-                value['outputToken'] = '0x'+'2'*40
-            async with app.router.lifespan_context(app), httpx.AsyncClient(
-                    transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
-                response = await client.post('/api/quotes/token-preview', json=value)
-            self.assertEqual(response.status_code, 503)
-            self.assertEqual(response.json()['code'], 'redemption-supply-exceeded')
-            self.assertEqual(response.json()['constraint']['requestedRaw'], value['grossCygldIn'])
-            self.assertEqual(provider.calls.count('eth_call'), 1)
+        for data, code in (('0x33aa101c', 'redemption-supply-exceeded'),
+                *((selector(name), code) for name, code in SHORTAGES)):
+            for mode in ('redeem-token-exact-in', 'redeem-native-exact-in'):
+                with self.subTest(mode=mode, code=code):
+                    provider = Provider(data)
+                    cfg = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID=1, NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'1'*40)
+                    preview = TokenPreview(cfg, TokenPreviewRpc(cfg, AsyncWeb3(provider)))
+                    app = create_app(token_preview=preview)
+                    value = {'mode': mode, 'grossCygldIn': '123456789012345678901234567890', 'quotes': []}
+                    if mode == 'redeem-token-exact-in':
+                        value['outputToken'] = '0x'+'2'*40
+                    async with app.router.lifespan_context(app), httpx.AsyncClient(
+                            transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+                        response = await client.post('/api/quotes/token-preview', json=value)
+                    self.assertEqual(response.status_code, 503)
+                    self.assertEqual(response.json()['code'], code)
+                    if code == 'redemption-supply-exceeded':
+                        self.assertEqual(response.json()['constraint']['requestedRaw'], value['grossCygldIn'])
+                    else:
+                        self.assertNotIn('constraint', response.json())
+                    self.assertEqual(provider.calls.count('eth_call'), 1)
 
     async def test_authoritative_cap_and_input_supply_errors_precede_all_route_search(self):
         from test_quote_intent import service, request
@@ -153,13 +189,16 @@ class PreviewErrors(unittest.IsolatedAsyncioTestCase):
             async def json(self):
                 return {'mode':'redeem-exact-in','token':'0x'+'1'*40,'quoteToken':'0x'+'1'*40,
                         'native':False,'amount':'100','adapter':'0x'+'2'*40,'deadline':'1000','orderedAssets':[]}
-        class Service:
-            async def get(self, request, update):
-                raise KnownPreviewError('insufficient-protocol-supply', 'The redemption amount exceeds available CYGLD supply.')
-        response = await handle_quote_intent(Request(), Service())
-        events = [json.loads(row) async for row in response.body_iterator]
-        self.assertEqual(events[-1]['code'], 'insufficient-protocol-supply')
-        self.assertEqual(events[-1]['type'], 'error')
+        for data, code in (('0x33aa101c', 'insufficient-protocol-supply'),
+                *((selector(name), code) for name, code in SHORTAGES)):
+            class Service:
+                async def get(self, request, update):
+                    raise preview_error({'data': data, 'message': 'private provider text'})
+            response = await handle_quote_intent(Request(), Service())
+            events = [json.loads(row) async for row in response.body_iterator]
+            self.assertEqual(events[-1]['code'], code)
+            self.assertEqual(events[-1]['type'], 'error')
+            self.assertNotIn('private provider text', json.dumps(events))
 
 
 if __name__ == '__main__':

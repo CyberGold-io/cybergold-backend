@@ -7413,6 +7413,8 @@
       "QuoteErrorCode": {
         "enum": [
           "insufficient-protocol-supply",
+          "insufficient-recovery-shares",
+          "insufficient-reserve-balance",
           "issuance-cap-exceeded",
           "quote-contract-reverted",
           "quote-insufficient-liquidity",
@@ -9364,6 +9366,8 @@
                                         "code": {
                                           "enum": [
                                             "insufficient-protocol-supply",
+                                            "insufficient-recovery-shares",
+                                            "insufficient-reserve-balance",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
                                             "quote-insufficient-liquidity",
@@ -10645,6 +10649,8 @@
                                         "code": {
                                           "enum": [
                                             "insufficient-protocol-supply",
+                                            "insufficient-recovery-shares",
+                                            "insufficient-reserve-balance",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
                                             "quote-insufficient-liquidity",
@@ -12861,6 +12867,8 @@
                                     "code": {
                                       "enum": [
                                         "insufficient-protocol-supply",
+                                        "insufficient-recovery-shares",
+                                        "insufficient-reserve-balance",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
                                         "quote-insufficient-liquidity",
@@ -14282,6 +14290,8 @@
                                     "code": {
                                       "enum": [
                                         "insufficient-protocol-supply",
+                                        "insufficient-recovery-shares",
+                                        "insufficient-reserve-balance",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
                                         "quote-insufficient-liquidity",
@@ -14546,6 +14556,8 @@
               "code": {
                 "enum": [
                   "insufficient-protocol-supply",
+                  "insufficient-recovery-shares",
+                  "insufficient-reserve-balance",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
                   "quote-insufficient-liquidity",
@@ -15035,6 +15047,8 @@
                             "code": {
                               "enum": [
                                 "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
                                 "quote-insufficient-liquidity",
@@ -15219,6 +15233,8 @@
               "code": {
                 "enum": [
                   "insufficient-protocol-supply",
+                  "insufficient-recovery-shares",
+                  "insufficient-reserve-balance",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
                   "quote-insufficient-liquidity",
@@ -15708,6 +15724,8 @@
                             "code": {
                               "enum": [
                                 "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
                                 "quote-insufficient-liquidity",
@@ -17798,6 +17816,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -19199,6 +19219,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -22548,6 +22570,8 @@
                                                 "code": {
                                                   "enum": [
                                                     "insufficient-protocol-supply",
+                                                    "insufficient-recovery-shares",
+                                                    "insufficient-reserve-balance",
                                                     "issuance-cap-exceeded",
                                                     "quote-contract-reverted",
                                                     "quote-insufficient-liquidity",
@@ -23969,6 +23993,8 @@
                                                 "code": {
                                                   "enum": [
                                                     "insufficient-protocol-supply",
+                                                    "insufficient-recovery-shares",
+                                                    "insufficient-reserve-balance",
                                                     "issuance-cap-exceeded",
                                                     "quote-contract-reverted",
                                                     "quote-insufficient-liquidity",
@@ -24291,6 +24317,8 @@
                       "code": {
                         "enum": [
                           "insufficient-protocol-supply",
+                          "insufficient-recovery-shares",
+                          "insufficient-reserve-balance",
                           "issuance-cap-exceeded",
                           "quote-contract-reverted",
                           "quote-insufficient-liquidity",
@@ -24780,6 +24808,8 @@
                                     "code": {
                                       "enum": [
                                         "insufficient-protocol-supply",
+                                        "insufficient-recovery-shares",
+                                        "insufficient-reserve-balance",
                                         "issuance-cap-exceeded",
                                         "quote-contract-reverted",
                                         "quote-insufficient-liquidity",
@@ -25046,6 +25076,8 @@
                   "code": {
                     "enum": [
                       "insufficient-protocol-supply",
+                      "insufficient-recovery-shares",
+                      "insufficient-reserve-balance",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
                       "quote-insufficient-liquidity",
@@ -25535,6 +25567,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -25767,6 +25801,8 @@
                   "code": {
                     "enum": [
                       "insufficient-protocol-supply",
+                      "insufficient-recovery-shares",
+                      "insufficient-reserve-balance",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
                       "quote-insufficient-liquidity",
@@ -26256,6 +26292,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -27730,6 +27768,8 @@
                             "code": {
                               "enum": [
                                 "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
                                 "quote-insufficient-liquidity",
@@ -29392,6 +29432,8 @@
                                         "code": {
                                           "enum": [
                                             "insufficient-protocol-supply",
+                                            "insufficient-recovery-shares",
+                                            "insufficient-reserve-balance",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
                                             "quote-insufficient-liquidity",
@@ -30116,6 +30158,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -36459,6 +36503,8 @@
                               "code": {
                                 "enum": [
                                   "insufficient-protocol-supply",
+                                  "insufficient-recovery-shares",
+                                  "insufficient-reserve-balance",
                                   "issuance-cap-exceeded",
                                   "quote-contract-reverted",
                                   "quote-insufficient-liquidity",
@@ -36800,6 +36846,8 @@
                               "code": {
                                 "enum": [
                                   "insufficient-protocol-supply",
+                                  "insufficient-recovery-shares",
+                                  "insufficient-reserve-balance",
                                   "issuance-cap-exceeded",
                                   "quote-contract-reverted",
                                   "quote-insufficient-liquidity",
@@ -36991,6 +37039,8 @@
               "code": {
                 "enum": [
                   "insufficient-protocol-supply",
+                  "insufficient-recovery-shares",
+                  "insufficient-reserve-balance",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
                   "quote-insufficient-liquidity",
@@ -37480,6 +37530,8 @@
                             "code": {
                               "enum": [
                                 "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
                                 "quote-insufficient-liquidity",
@@ -39695,6 +39747,8 @@
                                         "code": {
                                           "enum": [
                                             "insufficient-protocol-supply",
+                                            "insufficient-recovery-shares",
+                                            "insufficient-reserve-balance",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
                                             "quote-insufficient-liquidity",
@@ -41509,6 +41563,8 @@
                                         "code": {
                                           "enum": [
                                             "insufficient-protocol-supply",
+                                            "insufficient-recovery-shares",
+                                            "insufficient-reserve-balance",
                                             "issuance-cap-exceeded",
                                             "quote-contract-reverted",
                                             "quote-insufficient-liquidity",
@@ -41849,6 +41905,8 @@
                   "code": {
                     "enum": [
                       "insufficient-protocol-supply",
+                      "insufficient-recovery-shares",
+                      "insufficient-reserve-balance",
                       "issuance-cap-exceeded",
                       "quote-contract-reverted",
                       "quote-insufficient-liquidity",
@@ -42338,6 +42396,8 @@
                                 "code": {
                                   "enum": [
                                     "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
                                     "issuance-cap-exceeded",
                                     "quote-contract-reverted",
                                     "quote-insufficient-liquidity",
@@ -42604,6 +42664,8 @@
       "QuoteCode": {
         "enum": [
           "insufficient-protocol-supply",
+          "insufficient-recovery-shares",
+          "insufficient-reserve-balance",
           "issuance-cap-exceeded",
           "quote-contract-reverted",
           "quote-insufficient-liquidity",
@@ -42697,6 +42759,8 @@
               "code": {
                 "enum": [
                   "insufficient-protocol-supply",
+                  "insufficient-recovery-shares",
+                  "insufficient-reserve-balance",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
                   "quote-insufficient-liquidity",
@@ -44754,6 +44818,8 @@
                     "code": {
                       "enum": [
                         "insufficient-protocol-supply",
+                        "insufficient-recovery-shares",
+                        "insufficient-reserve-balance",
                         "issuance-cap-exceeded",
                         "quote-contract-reverted",
                         "quote-insufficient-liquidity",
@@ -45293,6 +45359,8 @@
           "code": {
             "enum": [
               "insufficient-protocol-supply",
+              "insufficient-recovery-shares",
+              "insufficient-reserve-balance",
               "issuance-cap-exceeded",
               "quote-contract-reverted",
               "quote-insufficient-liquidity",
@@ -45782,6 +45850,8 @@
                         "code": {
                           "enum": [
                             "insufficient-protocol-supply",
+                            "insufficient-recovery-shares",
+                            "insufficient-reserve-balance",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
                             "quote-insufficient-liquidity",
@@ -48061,6 +48131,8 @@
                         "code": {
                           "enum": [
                             "insufficient-protocol-supply",
+                            "insufficient-recovery-shares",
+                            "insufficient-reserve-balance",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
                             "quote-insufficient-liquidity",
@@ -51485,6 +51557,8 @@
                       "code": {
                         "enum": [
                           "insufficient-protocol-supply",
+                          "insufficient-recovery-shares",
+                          "insufficient-reserve-balance",
                           "issuance-cap-exceeded",
                           "quote-contract-reverted",
                           "quote-insufficient-liquidity",
@@ -53458,6 +53532,8 @@
                         "code": {
                           "enum": [
                             "insufficient-protocol-supply",
+                            "insufficient-recovery-shares",
+                            "insufficient-reserve-balance",
                             "issuance-cap-exceeded",
                             "quote-contract-reverted",
                             "quote-insufficient-liquidity",
@@ -54543,6 +54619,8 @@
           "errorClassification": {
             "enum": [
               "insufficient-protocol-supply",
+              "insufficient-recovery-shares",
+              "insufficient-reserve-balance",
               "issuance-cap-exceeded",
               "quote-contract-reverted",
               "quote-insufficient-liquidity",
@@ -56335,6 +56413,8 @@
               "code": {
                 "enum": [
                   "insufficient-protocol-supply",
+                  "insufficient-recovery-shares",
+                  "insufficient-reserve-balance",
                   "issuance-cap-exceeded",
                   "quote-contract-reverted",
                   "quote-insufficient-liquidity",
@@ -56824,6 +56904,8 @@
                             "code": {
                               "enum": [
                                 "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
                                 "issuance-cap-exceeded",
                                 "quote-contract-reverted",
                                 "quote-insufficient-liquidity",

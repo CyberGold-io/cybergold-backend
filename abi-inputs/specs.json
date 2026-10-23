@@ -3,9 +3,9 @@
     "input": "coreDiamond.json",
     "output": "src/contracts/generated/coreDiamond.ts",
     "prefix": "CORE_DIAMOND",
-    "provenance": "Rendering fields deterministically reconstructed from unchanged generated module; not original compiler evidence",
-    "originalModuleSha256": "ccbe5b3dd333a2e048c8215c353725342d3509f687c36e3c614523b654b4820c",
-    "banner": "// Generated from the compiled release facets. Do not edit by hand.\n"
+    "provenance": "Rendering fields from cybergold-protocol generated/abi/CoreDiamond.json at 33d2f7f1ac8b1baad2e34c0c21c88d28835b11ef",
+    "banner": "// Generated from the compiled release facets. Do not edit by hand.\n",
+    "moduleSha256": "f98b5ce8b96be3850751d1c36732a94ff31f5f8b2a8d68d287d229d2734e1412"
   },
   {
     "input": "governanceDiamond.json",
