@@ -23,7 +23,7 @@ def timestamp():
 def create_app(client=None, now=timestamp, safe_activity=None, core_activity=None,
                rpc_url=None, rpc_authorization=None, rpc_timeout_seconds=15, liquidity_positions=None,
                dashboard=None, on_shutdown=None, pool_cache=None, safe_service_url=None,
-               safe_timeout_seconds=15, safe_status=None, faucet_settings=None, faucet_timeout_seconds=20,
+               safe_timeout_seconds=15, safe_status=None, faucet_settings=None, faucet_timeout_seconds=20, faucet_service=None,
                recovery=None,diagnostic_logger=None,release=None,aliases=None,protocol_facts=None,protocol_configuration=None,
                shared_market=None,pool_producer=None,helpers_activity=None,pool_activity=None,basket_preview=None,basket_max=None,governance_core_facts=None,
                wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None,universal_quotes=None):
@@ -57,7 +57,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     from .safe_service import SafeService, handle_safe_service
     safe_service=SafeService(client,safe_service_url,safe_timeout_seconds)
     from .faucet import Faucet, handle_faucet
-    faucet=Faucet(client,**(faucet_settings or {}),timeout_seconds=faucet_timeout_seconds)
+    faucet=(Faucet(client,**(faucet_settings or {}),timeout_seconds=faucet_timeout_seconds)
+            if faucet_service is None else faucet_service)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -66,6 +67,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 await protocol_configuration.start()
             yield
         finally:
+            if faucet_service is not None:
+                await faucet_service.close()
             if protocol_configuration:
                 await protocol_configuration.close()
             for feed in feeds.values():

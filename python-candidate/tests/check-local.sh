@@ -96,6 +96,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_safe_service.py "$
 python-candidate/.venv/bin/python python-candidate/tests/test_safe_status.py "$candidate_reference_dir/safe-status.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_faucet.py "$candidate_reference_dir/faucet.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_faucet_error_diagnostics_http.py
+python-candidate/.venv/bin/python python-candidate/tests/test_sandbox_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_recovery_reader.py "$candidate_reference_dir/recovery-reader.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_recovery_rpc.py "$candidate_reference_dir/recovery-rpc.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_recovery_http.py "$candidate_reference_dir/recovery-http.json"

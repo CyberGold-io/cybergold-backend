@@ -57,6 +57,7 @@ from .market_swap import MarketQuotes, DailyRecipientCache
 from .trade_quote import TradeQuotes
 from .universal_quote import UniversalQuotes
 from .shared_reads import SharedReads
+from .sandbox_funding import SandboxFunding
 
 
 def safe_history_profile(settings):
@@ -183,10 +184,12 @@ def create_configured_app(settings=None, database=None, client=None):
                       uniswap_registry=uniswap_registry,
                       safe_service_url=settings.SAFE_TX_SERVICE_URL,
                       safe_status=SafeStatus(database,chain,lambda:safe_history_profile(settings)[0]),
-                      faucet_settings={'enabled':settings.FORK_FAUCET_ENABLED=='1',
-                          'url':settings.FORK_FAUCET_SERVICE_URL,'token':settings.FORK_FAUCET_SERVICE_TOKEN,
-                          'script_path':settings.FORK_FAUCET_SCRIPT_PATH,'faucet_home':settings.FORK_FAUCET_HOME,
-                          'foundry_bin':settings.FOUNDRY_BIN_DIR},
+                      faucet_service=SandboxFunding(client=client,
+                          enabled=settings.FORK_FAUCET_ENABLED=='1',
+                          rpc_url=settings.FORK_FAUCET_RPC_URL,
+                          rpc_authorization=settings.FORK_FAUCET_RPC_AUTHORIZATION,
+                          state_root=settings.FORK_FAUCET_STATE_ROOT,
+                          generation_file=settings.FORK_FAUCET_GENERATION_FILE),
                       recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history, pool_reads=pool_reads),
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
