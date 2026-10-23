@@ -69,8 +69,8 @@ class PreviewErrors(unittest.IsolatedAsyncioTestCase):
         for data in (None, {}, '0x12345678', '0xnothex',
                 *(selector(name)+'zz' for name, _ in SHORTAGES)):
             self.assertIsNone(preview_error({'data': data, 'message': 'private upstream text'}))
-        selector = Web3.to_hex(Web3.keccak(text='MaxTotalSupplyExceeded(uint256,uint256,uint256)'))[:10]
-        self.assertIsNone(preview_error({'data': selector}))
+        cap_selector = Web3.to_hex(Web3.keccak(text='MaxTotalSupplyExceeded(uint256,uint256,uint256)'))[:10]
+        self.assertIsNone(preview_error({'data': cap_selector}))
 
     async def test_focused_api_preserves_failure_status_specific_code_and_no_extra_calls(self):
         for data, expected in (('0x33aa101c', 'redemption-supply-exceeded'),
