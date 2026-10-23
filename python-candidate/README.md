@@ -905,19 +905,37 @@ deployment address or approval default is configured by this qualification.
 
 ## Sandbox faucet funding
 
-Backend forwards authenticated faucet requests to the private loopback funding
-service. That service tops up ETH, PAXG, XAUT, USDC and USDT with native
+The serving Backend owns funding in the `cybergold_candidate.sandbox_funding`
+package. Its RPC client, native balance operations and durable request state
+stay in that package; the existing `/api/faucet` route handles HTTP validation,
+error responses and correlation IDs. An API request never invokes a separate
+funding service or a shell script.
+
+The package tops up ETH, PAXG, XAUT, USDC and USDT with native
 `anvil_setBalance` and `anvil_dealERC20` assignments. It preserves balances above
-the fixed targets and verifies balances before returning the existing success
-payload. The service retains request idempotency and the wallet cooldown.
+the fixed targets. Successful native RPC results complete funding; the App
+refreshes displayed balances after the request. Existing request
+idempotency and the wallet cooldown remain. CYGLD is not a faucet allocation.
+
+Configure the API with `FORK_FAUCET_ENABLED=1`, its private
+`FORK_FAUCET_RPC_URL` and optional `FORK_FAUCET_RPC_AUTHORIZATION`, the durable
+`FORK_FAUCET_STATE_ROOT`, and `FORK_FAUCET_GENERATION_FILE`. The generation file
+comes from the Anvil launcher and rotates on a fresh generation. Hosted
+containers mount its parent directory read-only so an atomic file replacement
+is visible, and mount the existing generation-scoped faucet state read/write.
+The state layout preserves the previous service's SQLite request and cooldown
+history. These settings are private Backend configuration; the browser receives
+neither RPC credentials nor an administrative endpoint. The serving API ignores
+the retired `FORK_FAUCET_SERVICE_URL`, `FORK_FAUCET_SERVICE_TOKEN` and legacy
+script settings. The retained adapter fixtures remain comparison tooling.
 
 No transaction hash or receipt is returned. These Sandbox state edits do not
 mine a block, emit transfer events, or update total supply. Wallet balance reads
 remain uncached even when the block hash is unchanged, and HTTP responses carry
 `Cache-Control: no-store`. A partial write can still return `REQUEST_UNCERTAIN`;
-the existing replacement-request-ID response lets the caller retry safely with
-a new ID, filling only remaining deficits. CYGLD is not a faucet allocation.
+the existing replacement-request-ID response lets the caller retry with a new
+ID, filling only remaining deficits.
 
-The funding engine is deployed independently from Backend. Promoting Backend
-alone does not update that private service; integrated Sandbox acceptance must
-exercise the deployed engine before the exact `dev` to `main` promotion.
+A hosted upgrade retires the old service and gives the Backend its private RPC
+and existing state mounts. The owner performs that server rollout; integrated
+shared Sandbox acceptance precedes the exact `dev` to `main` promotion.

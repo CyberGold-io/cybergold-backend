@@ -1,4 +1,4 @@
-"""Existing loopback funding adapter. Backend ingress owns client bearer auth."""
+"""Faucet HTTP contract and retained adapter comparisons."""
 import asyncio
 import ipaddress
 import json
@@ -13,6 +13,7 @@ import uuid
 from fastapi.responses import JSONResponse
 import httpx
 
+from .sandbox_funding.errors import FundingError
 from .raw_journal import strict_address
 from .rpc_http import parse_json
 from .telemetry import observe
@@ -246,6 +247,9 @@ async def handle_faucet(request,service):
     try:
         result=await service.fund(body['address'],body.get('requestId'),requester)
         return JSONResponse(result,headers={'Cache-Control':'no-store'})
+    except FundingError as native_failure:
+        failure = FaucetError(native_failure.code, native_failure.retry, native_failure.replace, native_failure.diagnostics)
+        return error(str(failure),failure.status,failure.retry,failure.replace,failure.code,failure.diagnostics)
     except FaucetError as failure:
         return error(str(failure),failure.status,failure.retry,failure.replace,failure.code,failure.diagnostics)
     except Exception:return error('Fork faucet is temporarily unavailable.',500,code='INTERNAL_ERROR')
