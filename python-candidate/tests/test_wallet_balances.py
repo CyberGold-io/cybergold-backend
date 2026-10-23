@@ -96,6 +96,40 @@ class WalletBalancesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(inner[-1][2][:4], Web3.keccak(text='getEthBalance(address)')[:4])
         self.assertEqual(provider.codec.decode(['address'], inner[-1][2][4:])[0], REFERENCE['rows'][0]['holder'])
 
+    async def test_same_block_refresh_observes_faucet_assignments(self):
+        # Native Anvil faucet assignments change balances without mining. The
+        # same holder/hash must be read again rather than served from a cache.
+        provider = Provider()
+        observer = service(provider)
+        holder = REFERENCE['rows'][0]['holder']
+        before = await observer.get(holder, ordinary=True)
+        original = provider.make_request
+
+        async def assigned_balances(method, params):
+            response = await original(method, params)
+            if method == 'eth_call':
+                values = [0, 5_000_000, 5 * 10**18, 10_000 * 10**6, 10_000 * 10**6, 0, 10 * 10**18]
+                response['result'] = '0x' + provider.codec.encode(['(bool,bytes)[]'], [[
+                    (True, provider.codec.encode(['uint256'], [value])) for value in values
+                ]]).hex()
+            return response
+
+        provider.make_request = assigned_balances
+        app = create_app(wallet_balances=observer)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            response = await client.get('/api/account/wallet-balances', params={'holder':holder, 'purpose':'display'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        after = response.json()
+        self.assertEqual(after['context']['blockHash'], before['context']['blockHash'])
+        self.assertEqual(after['context']['blockNumber'], before['context']['blockNumber'])
+        self.assertEqual(after['native']['value'], str(10 * 10**18))
+        self.assertEqual([row['balance']['value'] for row in after['tokens']],
+                         ['0', '5000000', str(5 * 10**18), '10000000000', '10000000000', '0'])
+        self.assertNotEqual(before['native'], after['native'])
+        self.assertEqual([method for method, _ in provider.calls],
+                         ['eth_getBlockByNumber', 'eth_call', 'eth_getBlockByNumber', 'eth_call'])
+
     async def test_two_concurrent_wallets_do_not_share_holder_or_amount(self):
         observer = service(Provider())
         values = await asyncio.gather(*(observer.get(row['holder'], ordinary=True) for row in REFERENCE['rows']))
