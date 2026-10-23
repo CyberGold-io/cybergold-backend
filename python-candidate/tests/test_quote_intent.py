@@ -1105,26 +1105,33 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(route.engine.semaphore._value, 8)
 
     async def test_decoded_core_rejection_invalidates_retained_plan_before_normal_search(self):
-        intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
-        intent.retain_plans = True
-        await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
-        provider.block_hash = '0x'+'c'*64
-        original, rejected = provider.make_request, False
-        async def reject_selected(method, params):
-            nonlocal rejected
-            if method == 'eth_call' and not rejected:
-                rejected = True
-                return {'jsonrpc':'2.0','id':1,'error':{'code':3,'data':'0x33aa101c','message':'private provider detail'}}
-            return await original(method, params)
-        provider.make_request = reject_selected
-        events = []
         from cybergold_candidate.preview_errors import KnownPreviewError
-        with self.assertRaises(KnownPreviewError):
-            await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0, result=events.append(frame)))
-        self.assertTrue(rejected)
-        self.assertEqual(events[0]['type'], 'invalidated')
-        # The same pinned failed Core preview is reused by normal search;
-        # it is not retried or promoted to an executable stale plan.
+        for name, code in (('InsufficientSupply', 'redemption-supply-exceeded'),
+                ('InsufficientCygldSupply', 'redemption-supply-exceeded'),
+                ('InsufficientReserveBalance', 'insufficient-reserve-balance'),
+                ('InsufficientRecoveryShares', 'insufficient-recovery-shares')):
+            with self.subTest(name=name):
+                intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
+                intent.retain_plans = True
+                await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+                provider.block_hash = '0x'+'c'*64
+                original, rejected = provider.make_request, False
+                data = Web3.to_hex(Web3.keccak(text=name+'()'))[:10]
+                async def reject_selected(method, params):
+                    nonlocal rejected
+                    if method == 'eth_call' and not rejected:
+                        rejected = True
+                        return {'jsonrpc':'2.0','id':1,'error':{'code':3,'data':data,'message':'private provider detail'}}
+                    return await original(method, params)
+                provider.make_request = reject_selected
+                events = []
+                with self.assertRaises(KnownPreviewError) as failure:
+                    await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0, result=events.append(frame)))
+                self.assertEqual(failure.exception.code, code)
+                self.assertTrue(rejected)
+                self.assertEqual(events[0]['type'], 'invalidated')
+                # The same pinned failed Core preview is reused by normal search;
+                # it is not retried or promoted to an executable stale plan.
 
     async def test_direct_quotes_do_not_require_an_adapter_and_keep_mixed_redemption_outputs(self):
         for mode in ('issue-exact-in', 'issue-exact-out', 'redeem-exact-in'):

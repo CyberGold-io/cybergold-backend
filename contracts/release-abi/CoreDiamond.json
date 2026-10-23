@@ -2510,7 +2510,17 @@
     },
     {
       "type": "error",
-      "name": "InsufficientSupply",
+      "name": "InsufficientCygldSupply",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientRecoveryShares",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientReserveBalance",
       "inputs": []
     },
     {
@@ -8694,8 +8704,56 @@
       },
       {
         "type": "error",
-        "signature": "InsufficientSupply()",
-        "notice": "A redemption or burn requires more CYGLD supply than is currently available.",
+        "signature": "InsufficientCygldSupply()",
+        "notice": "A redemption requires more CYGLD than the current total supply.",
+        "details": "",
+        "params": {},
+        "returns": {},
+        "sourcePaths": [
+          "packages/1_core/src/interfaces/ICoreTypes.sol"
+        ],
+        "status": "documented",
+        "origins": [
+          "basketAdmin",
+          "controllerConfig",
+          "issuance",
+          "preview",
+          "rebalance",
+          "recoveryAdmin",
+          "recoveryPoolSettlement",
+          "redemption",
+          "reserveLifecycle"
+        ],
+        "scope": "product"
+      },
+      {
+        "type": "error",
+        "signature": "InsufficientRecoveryShares()",
+        "notice": "A requested recovery-share output exceeds the Core-attached participation units currently available.",
+        "details": "",
+        "params": {},
+        "returns": {},
+        "sourcePaths": [
+          "packages/1_core/src/interfaces/ICoreTypes.sol"
+        ],
+        "status": "documented",
+        "origins": [
+          "basketAdmin",
+          "controllerConfig",
+          "issuance",
+          "preview",
+          "rebalance",
+          "recoveryAdmin",
+          "recoveryPoolSettlement",
+          "redemption",
+          "reserveLifecycle"
+        ],
+        "scope": "product"
+      },
+      {
+        "type": "error",
+        "signature": "InsufficientReserveBalance()",
+        "notice": "A requested reserve-token output exceeds the ordinary reserve currently available to the operation.",
         "details": "",
         "params": {},
         "returns": {},

@@ -142,31 +142,42 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(call['method'] in ('eth_call', 'eth_estimateGas', 'eth_chainId', 'eth_getBlockByNumber') for call in provider.calls))
 
     async def test_simulation_and_estimation_preserve_rpc_stage_and_known_revert_identity(self):
-        selector = AsyncWeb3.to_hex(AsyncWeb3.keccak(text='NativeValueMismatch(uint256,uint256)'))[:10]
-        data = selector+AsyncWeb3().codec.encode(['uint256','uint256'], [100, 99]).hex()
-        for method, stage in [('eth_call','helpers-simulation'), ('eth_estimateGas','helpers-gas-estimation')]:
-            with self.subTest(method=method):
-                provider = Provider(failure=method)
-                provider.error_override = {'code': 3, 'message': 'execution reverted https://password@private.invalid', 'data': data}
-                app = create_app(helpers_execution=service(provider))
-                async with app.router.lifespan_context(app), httpx.AsyncClient(
-                        transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
-                    with self.assertLogs('cybergold.candidate', level='ERROR') as logs:
-                        result = await client.post('/api/transaction/helpers-execution', json=ROWS[0]['payload'])
-                payload = result.json()
-                diagnostic = payload['diagnostics']
-                self.assertEqual(payload['code'], 'quote-contract-reverted')
-                self.assertEqual(diagnostic['rpcMethod'], method)
-                self.assertEqual(diagnostic['stage'], stage)
-                self.assertEqual(diagnostic['upstreamErrorCode'], 3)
-                self.assertEqual(diagnostic['errorSelector'], selector)
-                self.assertEqual(diagnostic['errorName'], 'NativeValueMismatch')
-                record = json.loads(logs.records[-1].getMessage())
-                self.assertEqual(record['diagnostics'], diagnostic)
-                self.assertEqual(record['requestId'], result.headers['X-CyberGold-Request-Id'])
-                self.assertEqual(record['correlationId'], payload['correlationId'])
-                self.assertNotIn(data, result.text+record.__repr__())
-                self.assertNotIn('password', result.text+record.__repr__())
+        for signature, types, values, code in (
+                ('NativeValueMismatch(uint256,uint256)', ['uint256','uint256'], [100, 99], 'quote-contract-reverted'),
+                ('InsufficientCygldSupply()', [], [], 'redemption-supply-exceeded'),
+                ('InsufficientReserveBalance()', [], [], 'insufficient-reserve-balance'),
+                ('InsufficientRecoveryShares()', [], [], 'insufficient-recovery-shares')):
+            selector = AsyncWeb3.to_hex(AsyncWeb3.keccak(text=signature))[:10]
+            data = selector+AsyncWeb3().codec.encode(types, values).hex()
+            for method, stage in [('eth_call','helpers-simulation'), ('eth_estimateGas','helpers-gas-estimation')]:
+                with self.subTest(method=method, signature=signature):
+                    provider = Provider(failure=method)
+                    provider.error_override = {'code': 3, 'message': 'execution reverted https://password@private.invalid', 'data': data}
+                    app = create_app(helpers_execution=service(provider))
+                    async with app.router.lifespan_context(app), httpx.AsyncClient(
+                            transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+                        with self.assertLogs('cybergold.candidate', level='ERROR') as logs:
+                            result = await client.post('/api/transaction/helpers-execution', json=ROWS[0]['payload'])
+                    payload = result.json()
+                    diagnostic = payload['diagnostics']
+                    self.assertEqual(result.status_code, 503)
+                    self.assertEqual(payload['code'], code)
+                    self.assertEqual(diagnostic['rpcMethod'], method)
+                    self.assertEqual(diagnostic['stage'], stage)
+                    self.assertEqual(diagnostic['upstreamErrorCode'], 3)
+                    self.assertEqual(diagnostic['errorSelector'], selector)
+                    self.assertEqual(diagnostic['errorName'], signature.split('(')[0])
+                    self.assertEqual(sum(row['method'] == method for row in provider.calls), 1)
+                    if method == 'eth_call':
+                        self.assertFalse(any(row['method'] == 'eth_estimateGas' for row in provider.calls))
+                    record = json.loads(logs.records[-1].getMessage())
+                    self.assertEqual(record['diagnostics'], diagnostic)
+                    self.assertEqual(record['requestId'], result.headers['X-CyberGold-Request-Id'])
+                    self.assertEqual(record['correlationId'], payload['correlationId'])
+                    # Selectors are public diagnostics; encoded return arguments stay private.
+                    if types:
+                        self.assertNotIn(data, result.text+record.__repr__())
+                    self.assertNotIn('password', result.text+record.__repr__())
 
     async def test_backend_deadline_retains_the_simulation_stage_without_inventing_provider_error(self):
         provider = Provider(blocked=True)

@@ -25,8 +25,12 @@ cases.push({body:{...base,requestId:'secret',correlationId:'secret',workId:'secr
   blockNumber:'1\n',blockHash:'secret',errorClassification:'secret'}});
 for(const errorClassification of ['quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit'])
   cases.push({body:{...base,errorClassification}});
-for(const errorClassification of ['redemption-supply-exceeded','redemption-capacity-exceeded'])
-  cases.push({body:{...base,errorClassification}});
+for(const errorClassification of ['redemption-supply-exceeded','redemption-capacity-exceeded',
+  'insufficient-reserve-balance','insufficient-recovery-shares','insufficient-protocol-supply'])
+  cases.push({body:{...base,errorClassification,quoteDiagnostics:{
+    routeWave:{legs:{count:1,rows:[{index:0,failureCounts:[{code:errorClassification,count:1}]}]}},
+    providerQualifications:{provider:'core',attempts:1,rejected:1,
+      rows:[{attempt:1,stage:'basket-preview',outcome:'rejected',code:errorClassification}]}}}});
 for(const constraint of [null, true, {}, {kind:'issuance-cap',quantity:'gross-cygld-mint',limitKind:'effective-supply-cap',
   requestedRaw:'20',availableRaw:'10',currentSupplyRaw:'90',limitRaw:'100',private:'fixture-private-constraint'},
   {kind:'redemption-supply',quantity:'gross-cygld-input',requestedRaw:'100'},

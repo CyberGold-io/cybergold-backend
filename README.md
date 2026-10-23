@@ -184,12 +184,13 @@ and observed acceptance are separate steps under the existing Ops controller.
 `contracts/extraction-baseline.json` records the original source files and
 hashes. Logical indexer/schema versions and advisory lock identities are
 preserved; a changed source hash does not require resetting an existing DB.
-`contracts/abi-source.json` retains the extraction's canonical Protocol artifact
-revision. With the Protocol repository alongside this checkout,
-`node scripts/generate-contract-abis.mjs --check` verifies the two consumed
-ABIs against that exact revision without moving the Protocol working tree.
-Update that pin deliberately for a later contract release, then run the same
-command without `--check` to regenerate. `node scripts/snapshot-source-identity.mjs`
+`contracts/abi-source.json` records each selected Core and Governance ABI's
+Protocol artifact path and producer commit. The generator reads the bundled
+`contracts/release-abi/*.json` files; a sibling Protocol checkout is not needed.
+`node scripts/generate-contract-abis.mjs --check` verifies the generated modules
+against those selected files. For a contract release, update only the selected
+artifact and its producer record, then run the same command without `--check`
+to regenerate. `node scripts/snapshot-source-identity.mjs`
 prints the source-binding digest used in backend image labels and Ops snapshots.
 `tests/contracts/private-next-baseline.json` captures 64 real HTTP responses
 from the production Next build at the extraction commit, compared with the

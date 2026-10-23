@@ -21,11 +21,12 @@ from .preview_errors import preview_error
 from .rpc_diagnostics import error_diagnostics, rpc_call
 
 ABI = json.loads(Path(__file__).with_name('helpers-execution-abi.json').read_text())
-# Public identities from the Helpers basket-router errors; no return arguments
+# Public identities from Core and the Helpers basket-router errors; no return arguments
 # or signature/calldata bytes are retained in diagnostics.
 REVERT_NAMES = {Web3.to_hex(Web3.keccak(text=signature))[:10]:
     (signature.split('(')[0], signature.partition('(')[2][:-1].split(',') if not signature.endswith('()') else [])
-    for signature in ('ZeroInputAmount()', 'InsufficientInput()', 'InsufficientOutput(uint256,uint256)',
+    for signature in ('InsufficientCygldSupply()', 'InsufficientReserveBalance()', 'InsufficientRecoveryShares()',
+        'ZeroInputAmount()', 'InsufficientInput()', 'InsufficientOutput(uint256,uint256)',
         'PermitExpired(uint256,uint256)', 'PermitAmountTooLow(uint256,uint256)',
         'PermitAllowanceTooLow(uint256,uint256)', 'Permit2AmountTooLow(uint256,uint256)',
         'NativeValueMismatch(uint256,uint256)', 'AdapterNotApproved(address)',
