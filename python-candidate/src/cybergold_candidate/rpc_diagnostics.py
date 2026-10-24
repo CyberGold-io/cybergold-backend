@@ -33,7 +33,8 @@ _PROVIDER_OUTCOMES = {'running', 'qualified', 'rejected', 'not-improved', 'cance
 _QUOTE_CODES = {'rpc-rate-limit', 'rpc-timeout', 'rpc-unavailable', 'rpc-access-denied',
                 'quote-timeout', 'quote-no-route', 'quote-insufficient-liquidity', 'quote-contract-reverted', 'quote-unavailable',
                 'insufficient-protocol-supply', 'issuance-cap-exceeded',
-                'redemption-supply-exceeded', 'redemption-capacity-exceeded'}
+                'redemption-supply-exceeded', 'redemption-capacity-exceeded',
+                'insufficient-reserve-balance', 'insufficient-recovery-shares'}
 _LEG_ROWS, _LEG_CODES, _LEG_POOLS, _PROVIDER_ROWS = 16, 16, 8, 8
 _stages = {'eth_chainId': 'chain-head', 'eth_blockNumber': 'chain-head', 'eth_getBlockByNumber': 'block-read',
            'eth_getBlockByHash': 'block-read', 'eth_call': 'contract-read',

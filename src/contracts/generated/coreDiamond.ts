@@ -1154,7 +1154,17 @@ export const CORE_DIAMOND_ABI = [
   },
   {
     "type": "error",
-    "name": "InsufficientSupply",
+    "name": "InsufficientCygldSupply",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientRecoveryShares",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientReserveBalance",
     "inputs": []
   },
   {

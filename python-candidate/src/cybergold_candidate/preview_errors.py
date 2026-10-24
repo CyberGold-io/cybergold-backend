@@ -12,8 +12,14 @@ class KnownPreviewError(ValueError):
 ERRORS = {
     Web3.to_hex(Web3.keccak(text=signature))[:10]: (types, code, message)
     for signature, types, code, message in (
+        ('InsufficientCygldSupply()', [], 'redemption-supply-exceeded',
+         'The CYGLD input exceeds the available total supply for redemption.'),
+        ('InsufficientReserveBalance()', [], 'insufficient-reserve-balance',
+         'The requested output exceeds the available collateral reserve.'),
+        ('InsufficientRecoveryShares()', [], 'insufficient-recovery-shares',
+         'The requested recovery output exceeds the available Core-attached shares.'),
         ('InsufficientSupply()', [], 'insufficient-protocol-supply',
-         'The redemption exceeds available CYGLD supply or redeemable collateral reserves.'),
+         'The Core redemption exceeds available supply or redemption capacity.'),
         ('MaxTotalSupplyExceeded(uint256,uint256,uint256)', ['uint256'] * 3, 'issuance-cap-exceeded',
          'The issuance amount exceeds the CYGLD supply limit.'),
         ('CygldSupplyCapExceeded(uint256,uint256,uint256)', ['uint256'] * 3, 'issuance-cap-exceeded',
@@ -51,20 +57,21 @@ def preview_error(error, *, mode=None, arguments=None):
                       'limitKind': 'maximum-total-supply' if data[:10].lower() == maximum else 'effective-supply-cap',
                       'requestedRaw': str(requested), 'availableRaw': str(max(0, limit-current)),
                       'currentSupplyRaw': str(current), 'limitRaw': str(limit)}
-    elif code == 'insufficient-protocol-supply' and isinstance(mode, str) and mode.startswith('redeem-'):
-        # Core reuses InsufficientSupply for total-supply and reserve-minimum
+    elif code == 'redemption-supply-exceeded' or (code == 'insufficient-protocol-supply'
+            and isinstance(mode, str) and mode.startswith('redeem-') and mode.endswith('-exact-in')):
+        # Legacy Core reuses InsufficientSupply for total-supply and output-minimum
         # failures. Only the focused exact-input method disambiguates it.
-        if mode.endswith('-exact-in'):
+        if code == 'insufficient-protocol-supply':
             code = 'redemption-supply-exceeded'
             message = 'The CYGLD redemption input exceeds the available protocol supply after Helpers fees.'
-            constraint = {'kind': 'redemption-supply', 'quantity': 'gross-cygld-input'}
-            arguments = arguments if isinstance(arguments, dict) else {}
-            params = arguments.get('params', arguments)
-            requested = params.get('grossCygldIn') if isinstance(params, dict) else None
-            if isinstance(requested, int) and 0 <= requested < 2**256:
-                constraint['requestedRaw'] = str(requested)
-        elif mode.endswith('-exact-out'):
-            code = 'redemption-capacity-exceeded'
-            message = 'The redemption output minimum exceeds redeemable collateral reserves or the available CYGLD supply.'
-            constraint = {'kind': 'redemption-capacity', 'quantity': 'core-output-minima'}
+        constraint = {'kind': 'redemption-supply', 'quantity': 'gross-cygld-input'}
+        arguments = arguments if isinstance(arguments, dict) else {}
+        params = arguments.get('params', arguments)
+        requested = params.get('grossCygldIn') if isinstance(params, dict) else None
+        if isinstance(requested, int) and 0 <= requested < 2**256:
+            constraint['requestedRaw'] = str(requested)
+    elif code == 'insufficient-protocol-supply' and isinstance(mode, str) and mode.startswith('redeem-') and mode.endswith('-exact-out'):
+        code = 'redemption-capacity-exceeded'
+        message = 'The redemption output minimum exceeds redeemable collateral reserves or the available CYGLD supply.'
+        constraint = {'kind': 'redemption-capacity', 'quantity': 'core-output-minima'}
     return KnownPreviewError(code, message, constraint=constraint)

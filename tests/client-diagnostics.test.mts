@@ -40,6 +40,18 @@ test("insufficient Market liquidity survives top-level and nested diagnostic pro
   assert.equal(result.quoteDiagnostics?.providerQualifications?.rows[0].code, "quote-insufficient-liquidity");
 });
 
+test("Core shortages remain distinct in top-level and nested diagnostic projection", () => {
+  for (const code of ["redemption-supply-exceeded", "insufficient-reserve-balance", "insufficient-recovery-shares", "insufficient-protocol-supply"]) {
+    const result = projectClientDiagnostic({ operation: "quote", outcome: "failed", errorClassification: code,
+      quoteDiagnostics: { routeWave: { legs: { count: 1, rows: [{ index: 0, failureCounts: [{ code, count: 1 }] }] } },
+        providerQualifications: { provider: "core", attempts: 1, rejected: 1,
+          rows: [{ attempt: 1, stage: "basket-preview", outcome: "rejected", code }] } } });
+    assert.equal(result.errorClassification, code);
+    assert.equal(result.quoteDiagnostics?.routeWave?.legs?.rows[0].failureCounts[0].code, code);
+    assert.equal(result.quoteDiagnostics?.providerQualifications?.rows[0].code, code);
+  }
+});
+
 test("browser quote diagnostics survive the real collector without leaking raw provider fields", async () => {
   let output = "";
   const stream = new Writable({ write(chunk, _encoding, done) { output += chunk.toString(); done(); } });

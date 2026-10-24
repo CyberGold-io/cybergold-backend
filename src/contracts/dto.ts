@@ -414,6 +414,7 @@ export type QuoteConstraint = {
 
 export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exceeded"
   | "redemption-supply-exceeded" | "redemption-capacity-exceeded"
+  | "insufficient-reserve-balance" | "insufficient-recovery-shares"
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
   | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable";
 
