@@ -70,6 +70,34 @@ def copy_pool_snapshot(snapshot):
     return {key: result[key] for key in snapshot}
 
 
+def merge_pool_coverage(previous, current):
+    """Own the current observation, retaining same-pool/hash scalar coverage.
+
+    Different hashes keep the existing replacement semantics, including explicit
+    rewind/reorg recovery. Only canonical observations call this function;
+    hypothetical candidate post-state is not published by the registry.
+    """
+    if current is None:
+        return None
+    result = copy_pool_snapshot(current)
+    def identity(observation):
+        address = (observation.get('poolManager') if observation['protocol'] == 'v4'
+            else observation.get('address', observation['id']))
+        # The configured registry/store scope supplies an omitted default
+        # PoolManager; existing observations need not repeat that metadata.
+        return observation['protocol'], (address or '').lower(), observation['id'].lower()
+    if (previous is None or identity(previous) != identity(current)
+            or previous['context']['blockHash'].lower() != current['context']['blockHash'].lower()):
+        return result
+    for field, index in (('bitmapWords', 'wordPosition'), ('ticks', 'index')):
+        if field not in previous and field not in current:
+            continue
+        rows = {int(row[index]): dict(row) for row in previous.get(field, [])}
+        rows.update({int(row[index]): dict(row) for row in current.get(field, [])})
+        result[field] = [rows[key] for key in sorted(rows)]
+    return result
+
+
 async def owned_reads(*operations):
     """Drain this acquisition's subscriptions; preserve canonical disproof."""
     tasks = [asyncio.create_task(operation) for operation in operations]
@@ -157,12 +185,31 @@ class UniswapStore:
                 self.ready = True
 
     async def save(self, namespace, identity, value):
-        namespace = self.scope+namespace
+        stored_namespace = self.scope+namespace
         await self.prepare()
         async with self.database.connection() as connection:
+            if namespace == 'observation' and self.chain == 1:
+                # The row lock also covers two API/worker processes. Inserting
+                # first supplies that lock target when this is a cold pool.
+                # Sandbox retains same-header replacement: its fork state may
+                # change without a different block hash between acquisitions.
+                async with connection.transaction():
+                    key = (self.chain, self.core, stored_namespace, identity)
+                    await connection.execute('''INSERT INTO cybergold_uniswap_state
+                        VALUES (%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING''',
+                        (*key, json.dumps(value)))
+                    cursor = await connection.execute('''SELECT payload FROM cybergold_uniswap_state
+                        WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s
+                        FOR UPDATE''', key)
+                    previous = (await cursor.fetchone())['payload']
+                    merged = merge_pool_coverage(previous, value)
+                    await connection.execute('''UPDATE cybergold_uniswap_state SET payload=%s::jsonb
+                        WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s''',
+                        (json.dumps(merged), *key))
+                return
             await connection.execute('''INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)
                 ON CONFLICT(chain_id,core_address,namespace,identity) DO UPDATE SET payload=EXCLUDED.payload''',
-                (self.chain, self.core, namespace, identity, json.dumps(value)))
+                (self.chain, self.core, stored_namespace, identity, json.dumps(value)))
 
     async def save_protocol_configuration(self, identity, value):
         """Order this advisory snapshot across API/worker writers only.
@@ -311,7 +358,9 @@ class PoolRegistry:
                         for identity, row in observations.items():
                             old = self.observed.get(identity)
                             if old is None or int(row['context']['blockNumber']) > int(old['context']['blockNumber']):
-                                self.observed[identity] = row
+                                self.observed[identity] = merge_pool_coverage(old, row)
+                            elif row['context']['blockHash'].lower() == old['context']['blockHash'].lower():
+                                self.observed[identity] = merge_pool_coverage(old, row)
                     self.discovery_month = self.cursors.get('catalog', {}).get('month')
                 except Exception:
                     pass  # Persistence is optional to exact provider quoting.
@@ -353,9 +402,10 @@ class PoolRegistry:
 
     def publish_observation(self, state):
         if self.chain == 1:
+            state = merge_pool_coverage(self.observed.get(state['id']), state)
             if self.observed.get(state['id']) == state:
                 return
-            self.observed[state['id']] = deepcopy(state)
+            self.observed[state['id']] = state
         self.persist('observation', state['id'], state)
 
     def acquire_pool(self, pool, block):
@@ -738,6 +788,9 @@ class PoolRegistry:
                     acquired = (old['context'], rows)
                     self.observed[pool['id']] = state
                     self.persist('observation', pool['id'], state)
+                elif (int(old['context']['blockNumber']) == block['number']
+                        and old['context']['blockHash'].lower() != block['hash'].lower()):
+                    await self.snapshot(pool, block)
             except Exception:
                 # Reorg/gap/unknown baseline: invalidate coverage, then an ordinary
                 # canonical resnapshot; do not admit incomplete logs as exact state.

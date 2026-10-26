@@ -3,12 +3,14 @@ import asyncio
 from copy import deepcopy
 from pathlib import Path
 import sys
+import time
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from cybergold_candidate.uniswap_state import PoolRegistry, copy_pool_snapshot
+from cybergold_candidate.uniswap_state import PoolRegistry, copy_pool_snapshot, merge_pool_coverage
 from test_uniswap_market import A, BLOCK, POOL, TickFillRpc
 
 
@@ -87,6 +89,134 @@ class SnapshotPersistenceTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(*tuple(registry.background))
         self.assertEqual(rpc.calls['tickBitmap(int16)'], 1)
         self.assertEqual(registry.pending.pending, {})
+
+
+def _reuse_snapshot(word, tick, *, block_hash=BLOCK['hash'], block_number=BLOCK['number']):
+    return {**deepcopy(POOL), 'protocol': 'v3', 'tickSpacing': 10,
+        'sqrtRatioX96': str(1 << 96), 'tick': 1, 'liquidity': '1000',
+        'context': {'chainId': 1, 'blockNumber': str(block_number), 'blockHash': block_hash},
+        'nestedUnknown': {'rows': [{'value': 'original'}]},
+        'bitmapWords': [{'wordPosition': word, 'bitmap': str(1 << (word % 256))}],
+        'ticks': [{'index': tick, 'liquidityGross': '7', 'liquidityNet': '3'}]}
+
+
+class ObservationCoverageTests(unittest.TestCase):
+    def test_same_hash_union_is_owned_and_retains_unknown_scalar_row_fields(self):
+        first, second = _reuse_snapshot(0, 0), _reuse_snapshot(1, 2560)
+        first['ticks'][0]['extra'] = 'keep'
+        merged = merge_pool_coverage(first, second)
+        self.assertEqual([row['wordPosition'] for row in merged['bitmapWords']], [0, 1])
+        self.assertEqual([row['index'] for row in merged['ticks']], [0, 2560])
+        self.assertEqual(merged['ticks'][0]['extra'], 'keep')
+        merged['ticks'][0]['liquidityGross'] = 'mutated'
+        merged['nestedUnknown']['rows'][0]['value'] = 'mutated'
+        self.assertEqual(first['ticks'][0]['liquidityGross'], '7')
+        self.assertEqual(second['nestedUnknown']['rows'][0]['value'], 'original')
+
+    def test_duplicate_rows_remain_unique_and_different_hash_replaces_coverage(self):
+        first = _reuse_snapshot(0, 0)
+        same = merge_pool_coverage(first, deepcopy(first))
+        self.assertEqual(same, first)
+        changed = _reuse_snapshot(1, 2560, block_hash='0x' + 'cd' * 32,
+            block_number=BLOCK['number'] - 1)
+        self.assertEqual(merge_pool_coverage(first, changed), changed)
+        self.assertIsNone(merge_pool_coverage(first, None))
+
+    def test_same_hash_does_not_merge_different_physical_pool(self):
+        first, second = _reuse_snapshot(0, 0), _reuse_snapshot(1, 2560)
+        second['address'] = '0x' + '5' * 40
+        self.assertEqual(merge_pool_coverage(first, second), second)
+        first['protocol'] = second['protocol'] = 'v4'
+        merged = merge_pool_coverage(first, second)
+        self.assertEqual([row['wordPosition'] for row in merged['bitmapWords']], [0, 1])
+        first['poolManager'], second['poolManager'] = '0x' + '6' * 40, '0x' + '7' * 40
+        self.assertEqual(merge_pool_coverage(first, second), second)
+
+
+class ObservationReuseTests(unittest.IsolatedAsyncioTestCase):
+    def registry(self, *, store=None, chain=1, rpc=None):
+        registry = PoolRegistry(SimpleNamespace(NEXT_PUBLIC_CHAIN_ID=str(chain),
+            NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A), rpc=rpc, store=store)
+        self.addAsyncCleanup(registry.close)
+        return registry
+
+    async def test_publication_preserves_existing_same_hash_coverage_and_input_ownership(self):
+        registry = self.registry()
+        first, second = _reuse_snapshot(0, 0), _reuse_snapshot(1, 2560)
+        registry.publish_observation(first)
+        registry.publish_observation(second)
+        observed = registry.observed[first['id']]
+        self.assertEqual([row['wordPosition'] for row in observed['bitmapWords']], [0, 1])
+        self.assertEqual([row['index'] for row in observed['ticks']], [0, 2560])
+        first['ticks'][0]['liquidityGross'] = 'first-mutated'
+        second['nestedUnknown']['rows'][0]['value'] = 'second-mutated'
+        self.assertEqual(observed['ticks'][0]['liquidityGross'], '7')
+        self.assertEqual(observed['nestedUnknown']['rows'][0]['value'], 'original')
+
+    async def test_reload_merges_same_hash_but_retains_existing_different_hash_ordering(self):
+        first, second = _reuse_snapshot(0, 0), _reuse_snapshot(1, 2560)
+        class Store:
+            rows = {first['id']: second}
+            async def load(self, namespace):
+                return deepcopy(self.rows) if namespace == 'observation' else {}
+        store = Store()
+        registry = self.registry(store=store)
+        registry.observed[first['id']] = first
+        await registry._load()
+        self.assertEqual([row['wordPosition'] for row in registry.observed[first['id']]['bitmapWords']], [0, 1])
+        older = _reuse_snapshot(2, 5120, block_hash='0x' + 'cd' * 32,
+            block_number=BLOCK['number'] - 1)
+        store.rows = {older['id']: older}
+        registry.loaded_at = time.monotonic() - 61
+        await registry._load()
+        self.assertEqual(registry.observed[first['id']]['context']['blockHash'], BLOCK['hash'])
+        newer = _reuse_snapshot(3, 7680, block_hash='0x' + 'ef' * 32,
+            block_number=BLOCK['number'] + 1)
+        store.rows = {newer['id']: newer}
+        registry.loaded_at = time.monotonic() - 61
+        await registry._load()
+        self.assertEqual(registry.observed[first['id']], newer)
+
+    async def test_sandbox_publication_keeps_fresh_same_header_acquisitions_independent(self):
+        saved = []
+        class Store:
+            async def save(self, namespace, identity, value):
+                saved.append(value)
+        registry = self.registry(store=Store(), chain=31338)
+        first, second = _reuse_snapshot(0, 0), _reuse_snapshot(1, 2560)
+        registry.publish_observation(first)
+        registry.publish_observation(second)
+        await asyncio.gather(*tuple(registry.background))
+        self.assertEqual(registry.observed, {})
+        self.assertEqual(saved, [first, second])
+
+    async def test_monitor_reacquires_same_height_replacement_and_reuses_unchanged_hash(self):
+        replacement = {'number': BLOCK['number'], 'hash': '0x' + 'cd' * 32}
+        class Rpc:
+            calls = []
+            async def read_function(self, address, signature, inputs, args, outputs, block):
+                self.calls.append((signature, deepcopy(block)))
+                if signature == 'getReserves()':
+                    return 111, 222, 0
+                raise AssertionError(signature)
+            async def close(self):
+                pass
+        rpc = Rpc()
+        registry = self.registry(rpc=rpc)
+        registry.inventory = {POOL['id']: deepcopy(POOL)}
+        old = {**deepcopy(POOL), 'reserve0': '1', 'reserve1': '2', 'ticks': [], 'bitmapWords': [],
+            'context': {'chainId': 1, 'blockNumber': str(BLOCK['number']), 'blockHash': BLOCK['hash']}}
+        registry.observed[POOL['id']] = old
+        registry.monitor_activity = AsyncMock()
+        await registry.monitor(BLOCK)
+        self.assertEqual(rpc.calls, [])
+        await registry.monitor(replacement)
+        observed = registry.observed[POOL['id']]
+        self.assertEqual(observed['context']['blockHash'], replacement['hash'])
+        self.assertEqual((observed['reserve0'], observed['reserve1']), ('111', '222'))
+        self.assertEqual(rpc.calls, [('getReserves()', replacement)])
+        self.assertEqual(old['context']['blockHash'], BLOCK['hash'])
+        self.assertEqual(registry.monitor_activity.await_count, 2)
 
 
 from cybergold_candidate.recovery_rpc import SnapshotChanged

@@ -55,6 +55,9 @@ export type UniversalExactInputQuote = {
   retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
   searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
     maxAmmHops: number; scope: "selected-inventory" };
+  /** Producer clocks, distinct from client request or browser journey duration. */
+  metrics?: QuoteSelectionMetrics & { totalMs: number; timeToFirstWholePlanMs: number | null;
+    searchMs: number | null; selectionReason: "complete" | "best-initial" | "first-extension" | "timeout" | null };
 };
 export type MarketQuoteRequest = {
   side: "buy" | "sell"; mode: "exact-in" | "exact-out";
@@ -154,7 +157,8 @@ export type MarketQuoteModelPacket = {
   intent: { side: "buy" | "sell"; mode: "exact-in" | "exact-out"; counterToken: string; adapter: string };
   cygld: string; feeRatePpm: number;
   routes: { route: MarketRoutePlan; amountIn: string; amountOut: string;
-    points: { amountIn: string; amountOut: string }[];
+    points: { amountIn: string; amountOut: string; context?: MarketQuote["context"];
+      requestedAmount?: string; family?: string; feeRatePpm?: number; routeIdentity?: string }[];
     exchangeRate?: { numerator: string; denominator: string };
     feeRetention?: { numerator: string; denominator: string };
     localImpact?: { numerator: string; denominator: string } }[];

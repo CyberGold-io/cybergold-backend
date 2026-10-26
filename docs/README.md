@@ -17,3 +17,4 @@ canonical_for: Backend public documentation navigation
 - [Python runtime and qualification](../python-candidate/README.md).
 - [Uniswap SDK runtime](uniswap-sdk-runtime.md).
 - [Unified trading model](unified-trading.md).
+- [Quoter foundation and observations](quoter.md).

@@ -55,7 +55,7 @@ from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import MarketQuotes, DailyRecipientCache
 from .trade_quote import TradeQuotes
-from .universal_quote import UniversalQuotes
+from .quoter import Quoter
 from .shared_reads import SharedReads
 from .sandbox_funding import SandboxFunding
 
@@ -121,7 +121,7 @@ def create_configured_app(settings=None, database=None, client=None):
     routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
-    universal_quotes = UniversalQuotes(settings, market_quotes)
+    universal_quotes = Quoter(settings, market_quotes)
     market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
     trade_quotes.universal_quotes = universal_quotes

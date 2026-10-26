@@ -64,6 +64,27 @@ def market_family(request, chain, core):
     return json.dumps(['market', request['side'], request['mode'], request['counterToken'].lower(),
         request['adapter'].lower()], separators=(',', ':'))
 
+
+def market_route_observation_identity(route):
+    """Ordered physical pools and split weights, independent of display metadata."""
+    total = sum(int(branch['amountIn']) for branch in route['branches'])
+    return json.dumps([(str(Fraction(int(branch['amountIn']), total)) if total else '1',
+        [(pool_identity(hop['pool']), hop['zeroForOne']) for hop in branch['hops']])
+        for branch in route['branches']], separators=(',', ':'))
+
+
+def market_sample_identity(point):
+    """A point owns its observation; a packet's later context cannot supply it."""
+    context = point.get('context')
+    fields = ('family', 'feeRatePpm', 'routeIdentity', 'requestedAmount')
+    if not isinstance(context, dict) or context.get('chainId') is None or not context.get('blockHash'):
+        return None
+    if any(name not in point for name in fields):
+        return None
+    return (str(context['chainId']), str(context['blockHash']).lower(),
+            *(point[name] for name in fields))
+
+
 class DailyRecipientCache:
     """Advisory owner observation. Quotes never acquire/refresh this over RPC."""
     def __init__(self, store=None, helpers=None, now=None):
@@ -301,18 +322,34 @@ class MarketQuotes(RouteQuoteEngine):
     def estimate(self, packet, request):
         exact_in = request['mode'] == 'exact-in'
         rate = packet['feeRatePpm']
+        amount = int(request['amount'])
+        raw = routed_sell_budget(amount, rate)[0] if request['side'] == 'sell' and exact_in else (
+            gross_buy_target(amount, rate)[0] if request['side'] == 'buy' and not exact_in else amount)
+        registry = getattr(self, 'registry', None)
         values = []
         for row in packet['routes']:
-            if 'exchangeRate' not in row:
-                continue
-            def f(value):
-                return Fraction(int(value['numerator']), int(value['denominator']))
-            baseline = PoolBaseline(f(row['exchangeRate']), f(row['feeRetention']),
-                f(row['localImpact']) if 'localImpact' in row else None)
-            amount = int(request['amount'])
-            raw = routed_sell_budget(amount, rate)[0] if request['side'] == 'sell' and exact_in else (
-                gross_buy_target(amount, rate)[0] if request['side'] == 'buy' and not exact_in else amount)
-            predicted = LegModel(baseline=baseline).predict(raw, 'local', inverse=not exact_in)
+            point = None
+            # Match the Pool State Store's immutable completed-observation
+            # boundary. Sandbox state can change at the same block/hash, so
+            # its recorded points stay advisory until full pre-state identity
+            # is available; the existing baseline still handles that request.
+            if registry is not None and registry.chain == 1 and row.get('points'):
+                identity = market_sample_identity({'context': packet.get('context'),
+                    'family': market_family(request, registry.chain, registry.core),
+                    'feeRatePpm': rate, 'routeIdentity': market_route_observation_identity(row['route']),
+                    'requestedAmount': str(raw)})
+                point = next((point for point in reversed(row['points'])
+                    if identity is not None and identity[0] == str(registry.chain)
+                    and market_sample_identity(point) == identity), None)
+            predicted = int(point['amountOut' if exact_in else 'amountIn']) if point is not None else None
+            if predicted is None:
+                if 'exchangeRate' not in row:
+                    continue
+                def f(value):
+                    return Fraction(int(value['numerator']), int(value['denominator']))
+                baseline = PoolBaseline(f(row['exchangeRate']), f(row['feeRetention']),
+                    f(row['localImpact']) if 'localImpact' in row else None)
+                predicted = LegModel(baseline=baseline).predict(raw, 'local', inverse=not exact_in)
             if predicted:
                 if request['side'] == 'buy' and exact_in:
                     predicted -= quoted_fee(predicted, rate)
@@ -320,6 +357,36 @@ class MarketQuotes(RouteQuoteEngine):
                     predicted += quoted_fee(predicted, rate)
                 values.append(predicted)
         return str(max(values) if exact_in else min(values)) if values else None
+
+    def remember_model_quote(self, request, result, rate, quote_amount, generation):
+        """Remember canonical Market route results in raw AMM coordinates only.
+
+        Universal whole-plan candidates do not enter this writer. Each point
+        retains the state and fee/request scope of the completed calculation.
+        """
+        if generation != self.generation:
+            return
+        family = market_family(request, self.registry.chain, self.registry.core)
+        identity = market_route_observation_identity(result['plan']['route'])
+        old = self.models.get(family, {'routes': []})
+        same_route = next((row for row in old['routes']
+            if market_route_observation_identity(row['route']) == identity), None)
+        points = same_route['points'] if same_route else []
+        point = {'amountIn': result['amountIn'], 'amountOut': result['amountOut'],
+            'context': deepcopy(result['context']), 'family': family, 'feeRatePpm': rate,
+            'routeIdentity': identity,
+            # Exact-output raw amounts can overshoot their requested target.
+            # Exact-input capacity quotes instead record their actual funding.
+            'requestedAmount': result['amountIn'] if request['mode'] == 'exact-in' else str(quote_amount)}
+        sample_identity = market_sample_identity(point)
+        points = [row for row in points if market_sample_identity(row) != sample_identity][-31:]+[point]
+        metadata = {name: same_route[name] for name in ('exchangeRate', 'feeRetention', 'localImpact')
+            if same_route and name in same_route}
+        self.models[family] = {**self.packet(request), 'context': deepcopy(result['context']), 'routes': [
+            {'route': deepcopy(result['plan']['route']), 'amountIn': result['amountIn'],
+             'amountOut': result['amountOut'], 'points': points, **metadata}]}
+        while len(self.models) > 128:
+            self.models.popitem(last=False)
 
     def make_quote(self, request, branches, raw, rate, block, *, retained=None):
         side, mode = request['side'], request['mode']
@@ -697,25 +764,7 @@ class MarketQuotes(RouteQuoteEngine):
                     cached = None
                 if cached:
                     result['feeBeneficiaryDisplay'] = {name: cached[name] for name in ('address', 'observedAt')}
-            family = market_family(request, self.registry.chain, self.registry.core)
-            old = self.models.get(family, {'routes': []})
-            def signature(route):
-                total = sum(int(branch['amountIn']) for branch in route['branches'])
-                return [(str(Fraction(int(branch['amountIn']), total)) if total else '1',
-                    [(hop['pool']['id'], hop['zeroForOne']) for hop in branch['hops']])
-                    for branch in route['branches']]
-            same_route = next((row for row in old['routes'] if signature(row['route']) == signature(result['plan']['route'])), None)
-            points = same_route['points'] if same_route else []
-            points = [row for row in points if row['amountIn'] != result['amountIn']][-31:]+[
-                {'amountIn': result['amountIn'], 'amountOut': result['amountOut']}]
-            metadata = {name: same_route[name] for name in ('exchangeRate', 'feeRetention', 'localImpact')
-                if same_route and name in same_route}
-            if model_generation == self.generation:
-                self.models[family] = {**self.packet(request), 'context': result['context'], 'routes': [
-                    {'route': result['plan']['route'], 'amountIn': result['amountIn'], 'amountOut': result['amountOut'],
-                        'points': points, **metadata}]}
-            while len(self.models) > 128:
-                self.models.popitem(last=False)
+            self.remember_model_quote(request, result, rate, quote_amount, model_generation)
             await emit({'type': 'model', 'value': self.packet(request)})
             quote_qualified(True)
             if diagnostics := current_quote_diagnostics():

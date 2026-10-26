@@ -20155,6 +20155,41 @@
                                                 },
                                                 "amountOut": {
                                                   "type": "string"
+                                                },
+                                                "context": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "chainId": {
+                                                      "type": "number"
+                                                    },
+                                                    "blockNumber": {
+                                                      "type": "string"
+                                                    },
+                                                    "blockHash": {
+                                                      "type": "string"
+                                                    },
+                                                    "observedAt": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "blockHash",
+                                                    "blockNumber",
+                                                    "chainId",
+                                                    "observedAt"
+                                                  ]
+                                                },
+                                                "requestedAmount": {
+                                                  "type": "string"
+                                                },
+                                                "family": {
+                                                  "type": "string"
+                                                },
+                                                "feeRatePpm": {
+                                                  "type": "number"
+                                                },
+                                                "routeIdentity": {
+                                                  "type": "string"
                                                 }
                                               },
                                               "required": [
@@ -20618,6 +20653,74 @@
                               "maxCoreInvocations",
                               "orders",
                               "scope"
+                            ]
+                          },
+                          "metrics": {
+                            "description": "Producer clocks, distinct from client request or browser journey duration.",
+                            "allOf": [
+                              {
+                                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                                "type": "object",
+                                "properties": {
+                                  "firstQualifiedMs": {
+                                    "type": "number"
+                                  },
+                                  "selectionMs": {
+                                    "type": "number"
+                                  },
+                                  "canonicalCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "cleanupCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "finalizationMs": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "totalMs": {
+                                    "type": "number"
+                                  },
+                                  "timeToFirstWholePlanMs": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "searchMs": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "selectionReason": {
+                                    "anyOf": [
+                                      {
+                                        "enum": [
+                                          "best-initial",
+                                          "complete",
+                                          "first-extension",
+                                          "timeout"
+                                        ],
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "searchMs",
+                                  "selectionReason",
+                                  "timeToFirstWholePlanMs",
+                                  "totalMs"
+                                ]
+                              }
                             ]
                           }
                         },
@@ -26885,6 +26988,74 @@
                   "orders",
                   "scope"
                 ]
+              },
+              "metrics": {
+                "description": "Producer clocks, distinct from client request or browser journey duration.",
+                "allOf": [
+                  {
+                    "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                    "type": "object",
+                    "properties": {
+                      "firstQualifiedMs": {
+                        "type": "number"
+                      },
+                      "selectionMs": {
+                        "type": "number"
+                      },
+                      "canonicalCompletedMs": {
+                        "type": "number"
+                      },
+                      "cleanupCompletedMs": {
+                        "type": "number"
+                      },
+                      "finalizationMs": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "totalMs": {
+                        "type": "number"
+                      },
+                      "timeToFirstWholePlanMs": {
+                        "type": [
+                          "null",
+                          "number"
+                        ]
+                      },
+                      "searchMs": {
+                        "type": [
+                          "null",
+                          "number"
+                        ]
+                      },
+                      "selectionReason": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "best-initial",
+                              "complete",
+                              "first-extension",
+                              "timeout"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "searchMs",
+                      "selectionReason",
+                      "timeToFirstWholePlanMs",
+                      "totalMs"
+                    ]
+                  }
+                ]
               }
             },
             "required": [
@@ -28151,6 +28322,41 @@
                                   },
                                   "amountOut": {
                                     "type": "string"
+                                  },
+                                  "context": {
+                                    "type": "object",
+                                    "properties": {
+                                      "chainId": {
+                                        "type": "number"
+                                      },
+                                      "blockNumber": {
+                                        "type": "string"
+                                      },
+                                      "blockHash": {
+                                        "type": "string"
+                                      },
+                                      "observedAt": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "blockHash",
+                                      "blockNumber",
+                                      "chainId",
+                                      "observedAt"
+                                    ]
+                                  },
+                                  "requestedAmount": {
+                                    "type": "string"
+                                  },
+                                  "family": {
+                                    "type": "string"
+                                  },
+                                  "feeRatePpm": {
+                                    "type": "number"
+                                  },
+                                  "routeIdentity": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
@@ -28548,6 +28754,74 @@
                               "maxCoreInvocations",
                               "orders",
                               "scope"
+                            ]
+                          },
+                          "metrics": {
+                            "description": "Producer clocks, distinct from client request or browser journey duration.",
+                            "allOf": [
+                              {
+                                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                                "type": "object",
+                                "properties": {
+                                  "firstQualifiedMs": {
+                                    "type": "number"
+                                  },
+                                  "selectionMs": {
+                                    "type": "number"
+                                  },
+                                  "canonicalCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "cleanupCompletedMs": {
+                                    "type": "number"
+                                  },
+                                  "finalizationMs": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "totalMs": {
+                                    "type": "number"
+                                  },
+                                  "timeToFirstWholePlanMs": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "searchMs": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "selectionReason": {
+                                    "anyOf": [
+                                      {
+                                        "enum": [
+                                          "best-initial",
+                                          "complete",
+                                          "first-extension",
+                                          "timeout"
+                                        ],
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "searchMs",
+                                  "selectionReason",
+                                  "timeToFirstWholePlanMs",
+                                  "totalMs"
+                                ]
+                              }
                             ]
                           }
                         },
@@ -45307,6 +45581,74 @@
               "orders",
               "scope"
             ]
+          },
+          "metrics": {
+            "description": "Producer clocks, distinct from client request or browser journey duration.",
+            "allOf": [
+              {
+                "description": "Producer selection includes context and first qualification; terminal work is measured separately.",
+                "type": "object",
+                "properties": {
+                  "firstQualifiedMs": {
+                    "type": "number"
+                  },
+                  "selectionMs": {
+                    "type": "number"
+                  },
+                  "canonicalCompletedMs": {
+                    "type": "number"
+                  },
+                  "cleanupCompletedMs": {
+                    "type": "number"
+                  },
+                  "finalizationMs": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "totalMs": {
+                    "type": "number"
+                  },
+                  "timeToFirstWholePlanMs": {
+                    "type": [
+                      "null",
+                      "number"
+                    ]
+                  },
+                  "searchMs": {
+                    "type": [
+                      "null",
+                      "number"
+                    ]
+                  },
+                  "selectionReason": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "best-initial",
+                          "complete",
+                          "first-extension",
+                          "timeout"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "searchMs",
+                  "selectionReason",
+                  "timeToFirstWholePlanMs",
+                  "totalMs"
+                ]
+              }
+            ]
           }
         },
         "required": [
@@ -46729,6 +47071,41 @@
                                       "type": "string"
                                     },
                                     "amountOut": {
+                                      "type": "string"
+                                    },
+                                    "context": {
+                                      "type": "object",
+                                      "properties": {
+                                        "chainId": {
+                                          "type": "number"
+                                        },
+                                        "blockNumber": {
+                                          "type": "string"
+                                        },
+                                        "blockHash": {
+                                          "type": "string"
+                                        },
+                                        "observedAt": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "blockHash",
+                                        "blockNumber",
+                                        "chainId",
+                                        "observedAt"
+                                      ]
+                                    },
+                                    "requestedAmount": {
+                                      "type": "string"
+                                    },
+                                    "family": {
+                                      "type": "string"
+                                    },
+                                    "feeRatePpm": {
+                                      "type": "number"
+                                    },
+                                    "routeIdentity": {
                                       "type": "string"
                                     }
                                   },
@@ -48482,6 +48859,41 @@
                         "type": "string"
                       },
                       "amountOut": {
+                        "type": "string"
+                      },
+                      "context": {
+                        "type": "object",
+                        "properties": {
+                          "chainId": {
+                            "type": "number"
+                          },
+                          "blockNumber": {
+                            "type": "string"
+                          },
+                          "blockHash": {
+                            "type": "string"
+                          },
+                          "observedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "blockHash",
+                          "blockNumber",
+                          "chainId",
+                          "observedAt"
+                        ]
+                      },
+                      "requestedAmount": {
+                        "type": "string"
+                      },
+                      "family": {
+                        "type": "string"
+                      },
+                      "feeRatePpm": {
+                        "type": "number"
+                      },
+                      "routeIdentity": {
                         "type": "string"
                       }
                     },

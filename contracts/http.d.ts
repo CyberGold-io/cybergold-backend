@@ -4292,6 +4292,16 @@ export interface components {
                             points: {
                                 amountIn: string;
                                 amountOut: string;
+                                context?: {
+                                    chainId: number;
+                                    blockNumber: string;
+                                    blockHash: string;
+                                    observedAt: string;
+                                };
+                                requestedAmount?: string;
+                                family?: string;
+                                feeRatePpm?: number;
+                                routeIdentity?: string;
                             }[];
                             exchangeRate?: {
                                 numerator: string;
@@ -4406,6 +4416,19 @@ export interface components {
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
+                };
+                /** @description Producer clocks, distinct from client request or browser journey duration. */
+                metrics?: {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                } & {
+                    totalMs: number;
+                    timeToFirstWholePlanMs: null | number;
+                    searchMs: null | number;
+                    selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
                 };
             } | ({
                 /** @enum {string} */
@@ -5992,6 +6015,19 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
             };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+            };
         } | {
             /** @constant */
             operation: "market";
@@ -6318,6 +6354,16 @@ export interface components {
                     points: {
                         amountIn: string;
                         amountOut: string;
+                        context?: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        requestedAmount?: string;
+                        family?: string;
+                        feeRatePpm?: number;
+                        routeIdentity?: string;
                     }[];
                     exchangeRate?: {
                         numerator: string;
@@ -6416,6 +6462,19 @@ export interface components {
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
+                };
+                /** @description Producer clocks, distinct from client request or browser journey duration. */
+                metrics?: {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                } & {
+                    totalMs: number;
+                    timeToFirstWholePlanMs: null | number;
+                    searchMs: null | number;
+                    selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
                 };
             } | {
                 /** @constant */
@@ -10574,6 +10633,19 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
             };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+            };
         };
         TradeProviderAssessment: {
             /** @enum {string} */
@@ -10932,6 +11004,16 @@ export interface components {
                         points: {
                             amountIn: string;
                             amountOut: string;
+                            context?: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            requestedAmount?: string;
+                            family?: string;
+                            feeRatePpm?: number;
+                            routeIdentity?: string;
                         }[];
                         exchangeRate?: {
                             numerator: string;
@@ -11370,6 +11452,16 @@ export interface components {
                 points: {
                     amountIn: string;
                     amountOut: string;
+                    context?: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    requestedAmount?: string;
+                    family?: string;
+                    feeRatePpm?: number;
+                    routeIdentity?: string;
                 }[];
                 exchangeRate?: {
                     numerator: string;
