@@ -22,7 +22,7 @@ from .sdk_worker import SdkWorker, MissingPoolState
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
     pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
     market_anchor, LEGACY_V3_ADAPTERS)
-from .uniswap_state import ZERO
+from .uniswap_state import ZERO, same_observed_pool
 from .uniswap_v4 import tick_prefetch_scope
 from .wallet_balances import TOKENS
 
@@ -83,12 +83,22 @@ class RouteQuoteEngine:
     async def route_baseline(self, plan, block):
         """Indicative marginal/impact metadata; exact swap arithmetic is SDK-owned."""
         plan = {**plan, 'branches': RouteQuoteEngine.enrich_branches(self, plan['branches'])}
+        states = {}
+        for branch in plan['branches']:
+            for hop in branch['hops']:
+                identity = pool_identity(hop['pool'])
+                if identity not in states:
+                    states[identity] = await self.registry.snapshot(hop['pool'], block)
+        return self.baseline_from_states(plan, states)
+
+    def baseline_from_states(self, plan, states):
+        """The same baseline arithmetic over already acquired canonical facts."""
         branches = []
         total = sum(int(branch['amountIn']) for branch in plan['branches'])
         for branch in plan['branches']:
             rate, retention, impact = Fraction(1), Fraction(1), Fraction(0)
             for hop in branch['hops']:
-                state = await self.registry.snapshot(hop['pool'], block)
+                state = states[pool_identity(hop['pool'])]
                 baseline = self.baseline(state, hop['zeroForOne'])
                 if baseline.local_impact is None:
                     raise ValueError('Indicative pool impact unavailable')
@@ -262,7 +272,13 @@ class RouteQuoteEngine:
             for hop in branch['hops']:
                 pool = hop['pool']
                 pools.setdefault(pool['id'], pool)
-        missing = {identity: pool for identity, pool in pools.items() if identity not in canonical}
+        def bank_state(bank, pool):
+            if bank is None:
+                return None
+            direct = bank.get(pool['id'])
+            return direct if direct is not None else next((state for state in bank.values()
+                if same_observed_pool(state, pool)), None)
+        missing = {identity: pool for identity, pool in pools.items() if bank_state(canonical, pool) is None}
         reads = {identity: asyncio.create_task(self.registry.snapshot(pool, block))
                  for identity, pool in missing.items()} if len(missing) > 1 else {}
         try:
@@ -270,9 +286,11 @@ class RouteQuoteEngine:
             # route order, preserving canonical insertion and read-error priority.
             for identity, pool in pools.items():
                 if identity not in canonical:
-                    canonical[identity] = await reads[identity] if reads else await self.registry.snapshot(pool, block)
-                snapshots[identity] = deepcopy(candidate.get(identity, canonical[identity])
-                    if candidate is not None else canonical[identity])
+                    previous = bank_state(canonical, pool)
+                    canonical[identity] = ({**deepcopy(previous), 'id': identity} if previous is not None
+                        else await reads[identity] if reads else await self.registry.snapshot(pool, block))
+                private = bank_state(candidate, pool)
+                snapshots[identity] = {**deepcopy(private if private is not None else canonical[identity]), 'id': identity}
         finally:
             # These subscriptions are owned here; SharedReads preserves other
             # subscribers and cancels a producer only when nobody still needs it.
@@ -292,6 +310,10 @@ class RouteQuoteEngine:
                 if needed:
                     observed = await self.registry.extend_ticks(canonical[identity], needed, block)
                     canonical[identity] = observed
+                    for alias, state in list(canonical.items()):
+                        if alias != identity and same_observed_pool(state, observed):
+                            canonical[alias] = {**state, 'ticks': deepcopy(observed['ticks']),
+                                'bitmapWords': deepcopy(observed['bitmapWords'])}
                     snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
                     observations.append({'id': identity, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']})
             return observations
@@ -304,6 +326,9 @@ class RouteQuoteEngine:
                     # Compact postState carries only changing fields. Keep
                     # canonical coverage in this isolated candidate bank.
                     for post in value['postState']:
+                        for alias, state in list(candidate.items()):
+                            if alias != post['id'] and same_observed_pool(state, snapshots[post['id']]):
+                                candidate.pop(alias)
                         candidate[post['id']] = {**snapshots[post['id']], **post}
                 return value
             except MissingPoolState as missing:

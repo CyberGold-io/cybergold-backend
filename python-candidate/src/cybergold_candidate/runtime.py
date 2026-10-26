@@ -55,7 +55,10 @@ from .quote_correction import delayed_local_step
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import MarketQuotes, DailyRecipientCache
 from .trade_quote import TradeQuotes
-from .quoter import Quoter
+from .universal_quote import UniversalQuotes
+from .tx_preparation import TransactionPreparation
+from .economic_quotes import EconomicQuotes
+from .quoter.store import EconomicQuoteStore
 from .shared_reads import SharedReads
 from .sandbox_funding import SandboxFunding
 
@@ -121,7 +124,13 @@ def create_configured_app(settings=None, database=None, client=None):
     routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
-    universal_quotes = Quoter(settings, market_quotes)
+    universal_quotes = UniversalQuotes(settings, market_quotes)
+    observe_quote_scope = configuration.load if chain == 31338 and settings.DATABASE_URL else None
+    transaction_preparation = TransactionPreparation(universal_quotes, observe_scope=observe_quote_scope)
+    # Per-block Core fee observations belong to the saved quote's original
+    # context. A process-local history must not fragment the shared lookup key.
+    economic_quotes = EconomicQuotes(universal_quotes, EconomicQuoteStore(settings, uniswap_registry),
+                                     observe_scope=observe_quote_scope)
     market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
     trade_quotes.universal_quotes = universal_quotes
@@ -199,7 +208,7 @@ def create_configured_app(settings=None, database=None, client=None):
                       route_search=routes,
                       quote_intent=shared_core_quotes,
                       trade_quotes=trade_quotes,
-                      universal_quotes=universal_quotes,
+                      universal_quotes=universal_quotes, transaction_preparation=transaction_preparation, economic_quotes=economic_quotes,
                       governance_core_facts=GovernanceCoreFacts(settings),
                       wallet_balances=WalletBalances(settings),
                       token_balance=TokenBalance(settings),

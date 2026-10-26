@@ -1,71 +1,154 @@
 ---
-title: CyberGold Quoter foundation
+title: CyberGold Quoter and transaction preparation
 doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
 last_reviewed: 2026-10-26
-canonical_for: Quoter component entry point and initial observation corrections
+canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
-# CyberGold Quoter foundation
+# CyberGold Quoter and transaction preparation
 
-`cybergold_candidate.quoter.Quoter` is the production whole-plan component.
-Runtime construction uses that name. The existing `universal_quote` module is
-an HTTP/import compatibility adapter: `UniversalQuotes` references the same
-class, and `/api/quotes/universal-exact-input` keeps its existing contract.
-There is one implementation and one Uniswap SDK calculator.
+The local implementation separates economic quoting from transaction
+preparation. It has one whole-plan Quoter in `cybergold_candidate.quoter`, one
+Backend Fast Estimator and one shared Uniswap SDK Bridge. The runtime retains
+`UniversalQuotes` as the temporary execution-shaped adapter for older callers;
+its economic methods use that same Quoter implementation. These source changes
+do not establish deployment or profile adoption.
 
-This first slice preserves both search passes, the eight scalar allocation/order
-choices, Core previews, private candidate pool state, retained-input accounting
-and the five-second/first-usable-extension stopping policy. A normal zero-output
-conversion now tries its existing alternatives; an all-zero conversion retains
-its ordinary outcome. Completed scalar results compare net requested output,
-then lower declared input funding on equal output. This does not construct a
-reduced-funding plan or order incomparable basket vectors by summed raw units.
+## API responsibilities
 
-## Measurements
+| Endpoint | Consumes | Produces |
+| --- | --- | --- |
+| `POST /api/economic-quotes` | Economic Request: intent, ordered input budgets and requested output currency; optional `refresh` transport flag. | Economic Quote with a selected semantic plan, declared funding, expected net output, fees, retained inputs and original observation context. |
+| `POST /api/economic-estimates` | Existing scalar `TradeModelRequest`. | Existing `TradeQuoteModelPacket`, containing the one Backend-selected advisory estimate and producer model observations. |
+| `POST /api/tx-preparations` | Selected Economic Quote, sender/recipient, chosen execution tolerance and any already accepted bounds. | Unsigned Helpers execution plan, authorization quantities, newly evaluated economics and execution deadline. |
 
-Completed JSON quotes expose optional `metrics` alongside their economic terms:
+An Economic Quote has no recipient, transaction deadline, slippage minimum,
+signature or encoded transaction body. Its `plan.body` contains semantic Core
+and conversion instructions, not calldata. `plan.allocations` and
+`plan.conversions` retain the chosen order and routes needed for replay.
+`/api/quotes/universal-exact-input` remains a compatibility adapter that compiles
+the old response shape, including an optional semantic `economicQuote` for
+preparation. Existing clear pool/governance/Core-preview interfaces retain
+their responsibilities.
 
-- `timeToFirstWholePlanMs`: producer start to first completed qualified plan.
-- `searchMs`: producer start to the earlier of selection-clock stop or completion
-  of owned search work, before terminal canonical verification.
-- `totalMs`: producer start through required finalization.
-- `selectionReason`: existing complete/initial/extension/timeout clock outcome.
+## Budgets, funding and consumption
 
-Context acquisition belongs to the producer time. The existing selection,
-canonical and cleanup clocks remain separately available. `finalizationMs` for
-this response is `totalMs - searchMs`, including delayed canonical verification
-even when search ends naturally. These fields are not client network time or
-browser navigation time, and unit-fixture timings are not deployment benchmarks.
+`EconomicRequest.inputs` expresses the input budget. `EconomicQuote.inputs`
+expresses the plan's declared funding: the amount Helpers acquires. The current
+search normally declares the full input budget. It does not yet reconstruct a
+new lower-funded plan by subtracting retained amounts.
 
-## Exact observations and pool reuse
+`conversionObservations` records each evaluated conversion's input/output
+currencies, funded input, simulated consumed input and output. Consumption is
+the amount used by that conversion's actual SDK replay. It can be lower than
+the funded amount. These are per-conversion quantities, potentially in
+different currencies; adding their raw units does not produce whole-trade
+spending. Settlement receipts remain the evidence for actual mined debits and
+credits. Returned input follows the existing Helpers retained-charge policy.
 
-Canonical Market samples retain their own block/request/route/fee coordinates.
-Matching raw-route samples are used before the existing fee transformation once;
-legacy/mismatched points use the existing local baseline. The same immutable
-Mainnet observation boundary as the pool store applies to exact reuse. Mutable
-Sandbox same-header observations remain advisory rather than becoming an exact
-match solely through a block hash. No generalized curve or cross-size scaling
-is enabled by this correction.
+Complete scalar results compare net requested output first, then lower declared
+funding on an equal-output tie in the same input currency. Basket vectors keep
+their existing comparison behavior. This comparison does not discover smaller
+funding by itself.
 
-Same-pool/hash Mainnet bitmap/tick coverage merges on publication, reload and
-transactional PostgreSQL saves. Different-hash replacement and Sandbox fresh
-same-header acquisition retain their current behavior. Monitoring now reacquires
-a replacement block at equal height through the existing snapshot path.
+## Shared historical quotes and explicit Refresh
 
-Focused regressions are in `test_quoter_foundation.py`,
-`test_market_sample_observations.py` and `test_snapshot_copy.py`, included in the
-existing local suite. `native_pool_observation_reuse.py` exercises two actual
-database pools and concurrent writes against an explicitly caller-owned
-`DATABASE_URL`, without RPC. It does not create or mutate a deployed database.
+The existing PostgreSQL infrastructure stores one last successfully committed
+whole quote per normalized economic request and configuration scope. Scope
+includes chain/Core/Helpers/adapter, fork generation and static fee-affecting
+runtime policy. It excludes head, recipient, execution deadline and tolerance.
+Mutable onchain Core/helper fees belong to the quote's observed block, like
+pool prices; process-local knowledge of a newer fee observation does not create
+a different shared lookup key.
 
-## Remaining migration
+An ordinary matching request can return the stored quote and its original
+context. It is a historical observation, not a freshly executable transaction.
+The new namespace is bounded to 4,096 economic records per existing
+chain/Core/generation scope, with whole-record saves and oldest-save pruning.
+Concurrent saves do not mix plan/output/context fields. Cache read/write errors
+leave ordinary search and preparation available.
 
-The existing response still packages an executable plan. Deadline-free economic
-request/result types, reusable selected-plan evaluation, `/api/economic-quotes`,
-`/api/tx-preparations`, shared completed-quote storage and the frontend lifecycle
-are subsequent work. The class/package extraction alone does not complete those
-boundaries. Universal Router remains execution infrastructure behind the
-adapter; Uniswap onchain Quoter is a distinct integration scheduled for cleanup.
+`refresh: true` bypasses using the stored quote as the answer. The Quoter may
+replay its semantic plan as a seed, but must evaluate at the current state.
+Search success replaces the complete saved record. Search failure leaves the
+previous record intact and is returned as a failed Refresh. Browser display
+copies can retain that previous observation while showing the error.
+
+## Search and selected-plan preparation
+
+The first-result and detailed passes, eight scalar allocation/order choices,
+Core previews and private ordered pool replay remain. The comparison window
+is five seconds. Only if no usable whole plan exists can search continue for
+up to ten more seconds; its first usable result then ends selection. A
+zero-output conversion tries its existing alternatives, while an all-zero
+conversion retains its ordinary outcome. No progressive scheduler, V3 bitmap
+batching policy or reduced-funding construction is enabled by this migration.
+
+Transaction Preparation replays the selected routes and allocations through
+`quoter.evaluate`; it does not discover a replacement route. It binds scalar
+and full Core-output minima from the selected observation and chosen tolerance
+before repricing. Already accepted input maxima and frozen minima are retained.
+A changed-state result that cannot meet them returns the ordinary preparation
+error. It cannot lower the accepted minimum or enlarge the debit to succeed.
+Helpers/adapter deployment binding is preserved so a captured wallet batch
+cannot be silently retargeted.
+
+After replay, preparation assigns the existing execution deadline as current
+time plus 600 seconds and compiles the Helpers body. Browsing consumes none of
+that lifetime; execution after the deadline fails onchain. Token permits and
+Permit2 retain their own authorization expiries. The response is unsigned and
+the endpoint does not broadcast. The App retains its existing post-approval
+Market/mixed signed-call simulation and pure-Core advisory fee-estimation/batch
+behavior.
+
+## Estimation and pool reuse
+
+The Fast Estimator reuses an exact route sample only when its route, request,
+original state and fee coordinates match. Existing raw-route input/output
+coordinates receive the existing fee transformation once. Other cases retain
+the baseline formula. Changed shared pool facts refresh derived model
+parameters; they do not start a whole-plan search. A mixed whole quote is not
+assigned to an unrelated productive Market route as training data.
+
+Resolved V2/V3 addresses share canonical pool observations and persistence
+across seed/catalog aliases. SDK payloads retain coherent caller IDs, while
+candidate-private post-state follows the same physical pool even when catalog
+metadata arrives between conversions. Hypothetical post-state is never
+published as canonical. Compatible same-pool/hash Mainnet coverage merges
+during publication, reload and transactional saves. Equal-height replacement
+hashes use the existing snapshot path.
+
+The existing immutable Mainnet boundary is unchanged. Sandbox can mutate state
+without changing its header: fresh same-header acquisitions still replace
+state and old samples remain advisory. The raw RPC LRU remains 4,096 entries
+total across block hashes per API process, without a head-change purge or TTL.
+
+The unused Uniswap onchain Quoter ABI/config/metadata dependency is retired
+from the production pricing path. Retained Node comparison fixtures may use a
+test-only oracle. SDK arithmetic remains the pricing implementation; Universal
+Router remains execution infrastructure behind the routing adapter.
+
+## Measurements and remaining qualification
+
+Completed searches expose producer time to first whole plan, search duration,
+total duration and selection reason. Final canonical verification belongs to
+total/finalization time, rather than search duration. Safe operation evidence
+distinguishes Quoter search/lookup, Fast Estimator and Transaction Preparation.
+Stored quote metrics describe its original search, not the latency of a later
+lookup. Client HTTP and browser journey times remain separate.
+
+Focused correctness controls are included in the Python local suite. Native
+PostgreSQL controls exercise actual independent connections, concurrent
+coverage/whole-record writes and scoped bounds against caller-owned disposable
+databases, without RPC. `native_economic_api_processes.py` additionally starts
+two independent local Uvicorn API processes and HTTP clients: a process whose
+fixture provider cannot acquire a head still retrieves the other process's
+original SQL-saved quote, including after a failed explicit Refresh. Its
+deterministic pricing fixture proves cross-process reuse, not AMM latency.
+The App's paired measurement loop and tiny USDT cases
+are implemented, but real owned-fork adapter/configuration and baseline/candidate
+measurements remain pending. Fixture timings are not cold/warm performance
+results, and local checks do not complete WS7's profile qualification.

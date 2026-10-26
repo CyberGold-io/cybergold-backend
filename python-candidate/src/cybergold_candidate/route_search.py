@@ -16,7 +16,8 @@ from web3 import Web3
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .pool_producer import PoolRpc
 from .shared_reads import SharedReads
-from .uniswap_quote import UniswapQuoteRpc
+from .telemetry import getter_reads, rpc_exchange
+from .uniswap_quote import QuoteContextRpc
 from .wallet_balances import TOKENS
 from .quote_errors import QuoteFailure, public_quote_error
 from .uniswap_routes import LEGACY_V3_ADAPTERS, initial_v3_branches, standalone_v3, v3_path
@@ -48,7 +49,7 @@ def validate_target(target):
         token_in = Web3.to_checksum_address(target['inputAsset'])
         token_out = Web3.to_checksum_address(target['outputAsset'])
         amount = int(target['amount'])
-        # The same uint256 domain is used by the existing Quoter ABI.
+        # Preserve the route amount's established uint256 domain.
         Web3().codec.encode(['uint256'], [amount])
     except Exception as error:
         raise InvalidPreview('Invalid route search input.') from error
@@ -81,7 +82,7 @@ def public_rows(rows):
     return result
 
 
-class RouteSearchRpc(UniswapQuoteRpc):
+class RouteSearchRpc(QuoteContextRpc):
     def __init__(self, settings, w3=None, client=None, *, pool_reads=None):
         super().__init__(settings, w3)
         self.pools = PoolRpc(settings, self.w3)
@@ -98,7 +99,7 @@ class RouteSearchRpc(UniswapQuoteRpc):
             {'to': address, 'data': calldata},
             {'blockHash': block['hash'], 'requireCanonical': True}]}
             for index, (address, calldata) in enumerate(calls)]
-        with rpc_call('eth_call', stage='route-search', secrets=self.rpc_secrets) as call:
+        with rpc_exchange(len(payload)), rpc_call('eth_call', stage='route-search', secrets=self.rpc_secrets) as call:
             response = await self.client.post(self.url, json=payload)
             response.raise_for_status()
             by_id = {row['id']: {**row, 'error': call.rpc_error(row['error'])} if 'error' in row else row
@@ -113,7 +114,10 @@ class RouteSearchRpc(UniswapQuoteRpc):
         # Mainnet hash-addressed state is immutable. Sandbox can change state
         # under the same header via administrative overrides, so it retains
         # only overlapping reads, never a completed pool observation.
-        return await self.pool_reads.many(keys, produce, retain=self.chain_id == 1, counts=counts)
+        try:
+            return await self.pool_reads.many(keys, produce, retain=self.chain_id == 1, counts=counts)
+        finally:
+            getter_reads(counts)
 
     async def close(self):
         if self.owns_pool_reads:
@@ -201,7 +205,7 @@ class RouteSearch:
                 await self.rpc.assert_canonical(block)
             finished = time.perf_counter()
             context_reads = 3 if owns_context else 0
-            return {'mode': request['mode'], 'quoter': self.rpc.quoter, 'results': public_rows(results),
+            return {'mode': request['mode'], 'qualification': 'sdk', 'results': public_rows(results),
                 'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
                             'blockHash': block['hash'], 'observedAt': self.now()},
                 # Engine state acquisition and SDK IPC are not counted

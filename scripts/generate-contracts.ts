@@ -13,6 +13,16 @@ for (const [name, value] of Object.entries(schema.properties ?? {})) {
 }
 const schemas = JSON.parse(JSON.stringify(definitions)
   .replaceAll("#/definitions/", "#/components/schemas/"));
+// TJS emits an open Record as a bare object. OpenAPI TypeScript interprets
+// that as Record<string, never>; retain the source type's declared values.
+if (schemas["Record<string,unknown>"]) {
+  schemas["Record<string,unknown>"].additionalProperties = true;
+}
+if (schemas["Record<string,Record<string,unknown>>"]) {
+  schemas["Record<string,Record<string,unknown>>"].additionalProperties = {
+    $ref: "#/components/schemas/Record%3Cstring%2Cunknown%3E",
+  };
+}
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const json = (schema: object) => ({ "application/json": { schema } });
 const response = (schema: object, description = "Existing response envelope") => ({ description, content: json(schema) });
@@ -34,6 +44,15 @@ operation("/api/protocol/config", "get", "ProtocolConfiguration", undefined, {
   description: "Configured deployment anchors and the App's initial token catalog, with a cached supported adapter selected from the canonical Helpers allowlist. No request-time chain RPC, routing-infrastructure exposure, signing or submission. Missing optional roots/adapter remain independent; live pause, roles and pre-sign observations keep their existing APIs. Sandbox generation uses the existing durable reset context.",
 });
 operation("/api/gold", "get", "Gold");
+operation("/api/economic-quotes", "post", "EconomicQuote", "EconomicQuoteRequest", {
+  description: "Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast.",
+});
+operation("/api/tx-preparations", "post", "PreparedTransaction", "TransactionPreparationRequest", {
+  description: "Replay only the selected semantic plan at current state. Bind accepted input/output guards before repricing and start the ten-minute execution lifetime during unsigned preparation. No replacement-route discovery, signing or broadcast.",
+});
+operation("/api/economic-estimates", "post", "TradeQuoteModelPacket", "TradeModelRequest", {
+  description: "One Backend Fast Estimator; advisory Core/Market estimate and model evidence, independent of transaction preparation. Existing model callers retain their compatibility endpoints during migration.",
+});
 operation("/api/quotes/universal-exact-input", "post", "UniversalExactInputQuote", "UniversalExactInputRequest", {
   description: "Gross-funded universal exact-input plans for scalar Core/Market mixtures and direct basket issue/redemption. One joint Core invocation per candidate; 0/25/50/75/100 Core allocation and both mixed orders replay shared AMM pools in execution order. Measured unused AMM input is a disclosed protocol charge held by Helpers under its current owner. Native ETH and WETH are distinct currencies. The configured successor address is required; no signing, submission, deployment, or silent legacy-plan rebinding.",
 });

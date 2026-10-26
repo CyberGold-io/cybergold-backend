@@ -48,7 +48,7 @@ class FixtureRouteEngine(RouteQuoteEngine):
     def __init__(self, settings, rpc):
         registry = PoolRegistry(settings, rpc=FixturePoolRpc(rpc))
         registry.inventory = {}
-        super().__init__(settings, registry, ProgrammableSdk(rpc))
+        super().__init__(settings, registry, ProgrammableSdk(rpc, settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS))
         async def snapshot(pool, block, **_kwargs):
             read = registry.get_rpc().read_function
             address, = await read(rpc.pools.factory, 'getPool(address,address,uint24)',
@@ -71,8 +71,8 @@ class FixtureRouteEngine(RouteQuoteEngine):
 
 class ProgrammableSdk:
     """Opaque SDK replies supplied by the existing in-memory price oracle."""
-    def __init__(self, rpc):
-        self.rpc = rpc
+    def __init__(self, rpc, oracle):
+        self.rpc, self.oracle = rpc, oracle
 
     async def close(self):
         pass
@@ -96,7 +96,7 @@ class ProgrammableSdk:
                     self.rpc.w3.codec.encode(['bytes', 'uint256'], [bytes.fromhex(path[2:]), amount]))
                 # This is the test's programmable in-memory oracle transport;
                 # production RouteQuoteEngine contains no contract price call.
-                row, = await self.rpc.call_batch([(self.rpc.quoter, data)], block)
+                row, = await self.rpc.call_batch([(self.oracle, data)], block)
                 if 'error' in row:
                     raise rpc_failure(row['error'])
                 quoted, *_ = self.rpc.w3.codec.decode(['uint256', 'uint160[]', 'uint32[]', 'uint256'],

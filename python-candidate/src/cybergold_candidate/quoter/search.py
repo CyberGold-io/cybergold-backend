@@ -14,9 +14,7 @@ from itertools import combinations
 from web3 import Web3
 
 from ..basket_preview import BasketPreviewRpc, InvalidPreview
-from ..exact_input_plan import UniversalExactInputRequest, compile_plan
-from ..execution_tolerance import floor
-from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
+from .types import EconomicRequest
 from ..protocol_config import configured_address
 from ..quote_budget import budget_entry, current_budget, SearchStopped, budget_context, QuoteBudget
 from ..quote_errors import QuoteFailure, public_quote_error, rpc_failure
@@ -37,7 +35,7 @@ CORE_SHARES = (0, 25, 50, 75, 100)
 
 def identity_template(currency):
     return {'inputCurrency': currency, 'outputCurrency': currency,
-            'minimumOutput': '0', 'routes': []}
+            'routes': []}
 
 
 def paths(pools, source, target, weth=WETH, max_hops=3):
@@ -215,8 +213,12 @@ class Quoter:
         return used, current
 
     async def conversion(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0):
+                         first=False, branch=0, stage=0, capture=None):
         if not amount or source.lower() == target.lower():
+            if capture is not None:
+                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
+                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
+                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
             return identity_template(source), amount, []
         registry = self.engine.registry
         selected = paths(list(registry.inventory.values()), source, target)
@@ -250,12 +252,13 @@ class Quoter:
             for row, funded in zip(normalized, split_runtime(amount, routes), strict=True):
                 row['amountIn'] = str(funded)
             trial = deepcopy(bank)
-            output, retained = 0, []
+            output, consumed, retained = 0, 0, []
             try:
                 for row in normalized:
                     funded = int(row['amountIn'])
                     used, received = await self.price_path(row['hops'], funded, block, trial, canonical)
                     output += received
+                    consumed += used
                     if used < funded:
                         retained.append({'branch': branch, 'stage': stage + (physical_source.lower() != source.lower()), 'currency': physical_source,
                                          'amount': str(funded - used)})
@@ -269,207 +272,55 @@ class Quoter:
                 retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
             if best is None or output > best[0]:
                 template = {'inputCurrency': physical_source, 'outputCurrency': target,
-                            'minimumOutput': '0', 'routes': routes}
-                best = output, template, retained, trial
+                            'routes': routes}
+                best = output, template, retained, trial, deepcopy(normalized), consumed
                 if first and output > 0:
                     break
             await asyncio.sleep(0)
         if best is None:
             raise rpc_error or QuoteFailure('quote-no-route')
+        if capture is not None:
+            capture.update(inputCurrency=source, outputCurrency=target, branches=[{'hops': row['hops']} for row in best[4]], template=deepcopy(best[1]),
+                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(amount),
+                                         'consumedInput': str(best[5]), 'outputCurrency': target, 'output': str(best[0])})
         bank.clear()
         bank.update(best[3])
         return best[1], best[0], best[2]
 
-    async def candidate(self, request, share, order, block, assets, weights, *, first=False, core_sale_bounds=None,
-                        observations=None):
-        bank, canonical, retained, branches = {}, observations if observations is not None else {}, [], []
-        fees = {'coreProtocolFeeCygld': 0, 'coreHelpersFeeCygld': 0, 'marketFeeCygld': 0}
-        intent = request['intent']
-        amount = int(request['inputs'][0]['amount'])
-        core_amount = amount * share // 100
-        market_amount = amount - core_amount
-        output, recovery, recipient_outputs, cursor = 0, [], [], 0
-        has_continuation = False
-        budget = current_budget()
-        async def convert(source, target, lot, **kwargs):
-            nonlocal cursor
-            kwargs['stage'] = cursor
-            operation = self.conversion(source, target, lot, block, bank, canonical, first=first, **kwargs)
-            result = await budget.discovery(operation) if budget else await operation
-            route = result[0]
-            if lot and source.lower() != target.lower():
-                cursor += (source.lower() != route['inputCurrency'].lower()) + (
-                    route['inputCurrency'].lower() != route['outputCurrency'].lower()) + (
-                    route['outputCurrency'].lower() != target.lower())
-            return result
-        async def continuation(lots, branch):
-            nonlocal output, cursor, has_continuation
-            result = []
-            for index, (asset, lot) in enumerate(zip(assets, lots, strict=True)):
-                cursor += 1  # Core issuance appends each actual/residual basket lot.
-                if not lot:
-                    result.append({'route': identity_template(asset), 'feeCygld': '0'})
-                    continue
-                has_continuation = True
-                route, gross, left = await convert(asset, self.core, lot, market=True,
-                                                   branch=branch, stage=index + len(assets))
-                fee = quoted_fee(gross, get_market_fee_rate(self.engine.registry.chain, asset, self.core, 'exact-in'))
-                output += gross - fee
-                fees['marketFeeCygld'] += fee
-                retained.extend(left)
-                result.append({'route': route, 'feeCygld': str(fee)})
-            return result
-        async def core_buy(lot, branch):
-            nonlocal output
-            payment = request['inputs'][0]['currency']
-            allocated, acquired, acquisitions = 0, [], []
-            positive = [i for i, weight in enumerate(weights) if weight]
-            for index, asset in enumerate(assets):
-                value = lot - allocated if index == positive[-1] else lot * weights[index] // sum(weights)
-                allocated += value
-                route, received, left = await convert(payment, asset, value, branch=branch, stage=index)
-                acquired.append(received)
-                acquisitions.append({'amountIn': str(value), 'route': route})
-                retained.extend(left)
-            result = await self.core_preview('issue-exact-in', {'maximumAmountsIn': list(map(str, acquired))}, block)
-            fees['coreProtocolFeeCygld'] += int(result['fees']['protocolFeeCygld'])
-            fees['coreHelpersFeeCygld'] += int(result['fees']['helperFeeCygld'])
-            output += int(result['netCygldOut'])
-            residual = [a - int(b) for a, b in zip(acquired, result['amountsInExact'], strict=True)]
-            tails = await continuation(residual, branch)
-            return {'basketAssets': result['orderedCoreAssets'], 'acquisitions': acquisitions, 'continuations': tails}
-        async def core_sell(lot, branch, basket=False):
-            nonlocal output, recovery, recipient_outputs
-            result = await self.core_preview('redeem-exact-in', {'grossCygldIn': str(lot)}, block)
-            fees['coreProtocolFeeCygld'] += int(result['fees']['protocolFeeCygld'])
-            fees['coreHelpersFeeCygld'] += int(result['fees']['helperFeeCygld'])
-            expected, conversions = [], []
-            for index, row in enumerate(result['projectedCoreOutputs']):
-                expected.append({key: row[key] for key in ('kind', 'token', 'id')} |
-                                {'minimumAmount': str(floor(int(row['amount']), request['slippageBps']))})
-                if basket:
-                    recipient_outputs.append(row)
-                if row['kind'] != 0:
-                    if int(row['amount']): recovery.append(row)
-                    conversions.append(identity_template(row['token']))
-                    continue
-                if basket:
-                    continue
-                route, received, left = await convert(row['token'], request['outputCurrency'], int(row['amount']),
-                                                      branch=branch, stage=index)
-                output += received
-                retained.extend(left)
-                conversions.append(route)
-            if core_sale_bounds:
-                for row, bound in zip(result['projectedCoreOutputs'], core_sale_bounds['expectedOutputs'], strict=True):
-                    if any(str(row[key]).lower() != str(bound[key]).lower() for key in ('kind', 'token', 'id')):
-                        raise InvalidPreview('Accepted Core output identity changed.')
-                    if int(row['amount']) < int(bound['minimumAmount']):
-                        raise InvalidPreview('Accepted Core output minimum cannot be met.')
-                expected = deepcopy(core_sale_bounds['expectedOutputs'])
-            return {'expectedOutputs': expected, 'conversions': conversions}
-        async def market(lot, branch):
-            nonlocal output
-            source = request['inputs'][0]['currency']
-            target = request['outputCurrency']
-            rate = get_market_fee_rate(self.engine.registry.chain, source, target, 'exact-in')
-            _routed, fee, _dust = routed_sell_budget(lot, rate) if intent == 1 else (lot, 0, 0)
-            routed = lot - fee if intent == 1 else lot
-            route, gross, left = await convert(source, target, routed, market=True, branch=branch)
-            if intent == 0:
-                fee = quoted_fee(gross, rate)
-            output += gross - (fee if intent == 0 else 0)
-            fees['marketFeeCygld'] += fee
-            retained.extend(left)
-            return {'route': route, 'feeCygld': str(fee)}
-        if intent in (0, 1):
-            stages = [('core', core_amount), ('market', market_amount)]
-            if order == 'market-first': stages.reverse()
-            for kind, lot in stages:
-                if not lot:
-                    continue
-                index = len(branches)
-                data = await (core_buy(lot, index) if intent == 0 else core_sell(lot, index)) if kind == 'core' else await market(lot, index)
-                branches.append({'kind': 0 if kind == 'core' else 1, 'amountIn': str(lot), 'data': data})
-            body = {'branches': branches}
-        elif intent == 2:
-            acquired = [int(row['amount']) for row in request['inputs']]
-            result = await self.core_preview('issue-exact-in', {'maximumAmountsIn': list(map(str, acquired))}, block)
-            fees['coreProtocolFeeCygld'] = int(result['fees']['protocolFeeCygld'])
-            fees['coreHelpersFeeCygld'] = int(result['fees']['helperFeeCygld'])
-            output += int(result['netCygldOut'])
-            body = {'continuations': await continuation([a - int(b) for a, b in
-                zip(acquired, result['amountsInExact'], strict=True)], 0)}
-        else:
-            body = await core_sell(amount, 0, basket=True)
-        minimum = floor(output, request['slippageBps'])
-        if core_sale_bounds:
-            minimum = int(core_sale_bounds['minimumOutput'])
-            if output < minimum:
-                raise InvalidPreview('Accepted scalar output minimum cannot be met.')
-        if intent != 3 and not minimum and not recovery:
-            raise InvalidPreview('This scalar trade has no final output or recovery shares.')
-        plan = compile_plan(request, body, minimum)
-        family = 'core' if share == 100 else 'market' if share == 0 else 'mixed'
-        if intent in (0, 2) and has_continuation:
-            family = 'mixed'
-        return {'strategy': 'universal', 'routeFamily': family, 'operation': 'executeExactInput',
-            'settlementPolicy': 'protocol-retained-input', 'plan': plan, 'planDescription': body,
-            'inputs': deepcopy(request['inputs']), 'quotedOutput': str(output),
-            **({'quotedInput': str(amount), 'inputMaximum': str(amount)} if intent != 2 else {}),
-            'outputMinimum': str(minimum),
-            'estimatedRetainedInputCharges': retained, 'fees': {key: str(value) for key, value in fees.items()},
-            'estimatedRecipientOutputs': recipient_outputs if intent == 3 else [
-                {'kind': 0, 'token': request['outputCurrency'], 'id': '0', 'amount': str(output)}],
-            'retentionDisclosure': {'custodian': self.helpers, 'beneficiary': 'helpers-owner-at-settlement'},
-            'recoveryShares': recovery, 'deployment': {'helpers': self.helpers, 'adapter': self.adapter,
-                'encoding': ROUTING_ENCODING}, 'context': {'chainId': self.engine.registry.chain,
-                'blockNumber': str(block['number']), 'blockHash': block['hash'], 'observedAt': self.now()},
-            'searchCoverage': {'coreSharesPercent': [100] if core_sale_bounds else list(CORE_SHARES), 'orders': ['core-first', 'market-first'],
-                               'maxCoreInvocations': 1, 'maxAmmHops': 3, 'scope': 'selected-inventory'}}
-
-    async def scalar_request(self, request, on_update=None):
-        buy = request['side'] == 'buy'
-        counter = ZERO if request.get('native') else request['counterToken']
-        return await self.get({'intent': 0 if buy else 1,
-            'inputs': [{'currency': counter if buy else self.core, 'amount': request['amount']}],
-            'outputCurrency': self.core if buy else counter, 'recipient': request['recipient'],
-            'deadline': request['deadline'], 'slippageBps': request.get('slippageBps', 100)}, on_update)
-
-    async def core_sale_from_legacy(self, request, legacy, on_update=None):
-        """A fresh Core-only quote at solved gross Q, with accepted minima frozen."""
-        provider = legacy['providerQuote']
-        value = {'intent': 1, 'inputs': [{'currency': self.core, 'amount': provider['executionAmount']}],
-            'outputCurrency': ZERO if request.get('native') else request['counterToken'],
-            'recipient': request['recipient'], 'deadline': request['deadline'],
-            'slippageBps': request.get('slippageBps', 100)}
-        bounds = {'minimumOutput': legacy['outputMinimum'],
-                  'expectedOutputs': deepcopy(provider['expectedCoreOutputs'])}
-        # The numeric output-target solver has finished its own selection window.
-        # This newly disclosed execution quote owns the ordinary fresh window.
-        with budget_context(QuoteBudget()):
-            return await self.get(value, on_update, core_sale_bounds=bounds)
+    async def candidate(self, request, share, order, block, assets, weights, *, first=False,
+                        observations=None, selected=None):
+        from .evaluate import evaluate_candidate
+        return await evaluate_candidate(self, request, share, order, block, assets, weights,
+                                        first=first, observations=observations, selected=selected)
 
     @budget_entry
-    async def get(self, request, on_update=None, *, core_sale_bounds=None):
+    async def get(self, request, on_update=None, *, core_only=False, seed=None):
         budget = current_budget()
-        result = await budget.produce(self._get(request, on_update, core_sale_bounds=core_sale_bounds))
-        times = budget.timings()
-        # Natural completion records selection after the final canonical read.
-        # The earlier of clock-stop and work completion is the search boundary;
-        # keep canonical verification/drain in total/finalization, not search.
-        search_ms = min((value for value in (times['selectionMs'], times['drainedMs'])
-                         if value is not None), default=None)
-        result['metrics'] = {**budget.metrics(), 'totalMs': times['terminalMs'],
-            'timeToFirstWholePlanMs': times['firstQualifiedMs'],
-            'searchMs': search_ms, 'selectionReason': times['selectionReason']}
-        if search_ms is not None:
-            result['metrics']['finalizationMs'] = round(times['terminalMs'] - search_ms, 3)
+        try:
+            result = await budget.produce(self._get(request, on_update, core_only=core_only, seed=seed))
+        except Exception as error:
+            # Private diagnostic evidence preserves the public error contract.
+            # In particular, exhaustion can still return quote-no-route while
+            # its actual stopping reason is recorded as timeout.
+            error.quoter_metrics = self.producer_metrics(budget)
+            raise
+        result['metrics'] = self.producer_metrics(budget)
         return result
 
-    async def _get(self, request, on_update=None, *, core_sale_bounds=None):
-        request = UniversalExactInputRequest.model_validate(request).model_dump()
-        request['recipient'] = Web3.to_checksum_address(request['recipient'])
+    @staticmethod
+    def producer_metrics(budget):
+        times = budget.timings()
+        search_ms = min((value for value in (times['selectionMs'], times['drainedMs'])
+                         if value is not None), default=None)
+        values = {**budget.metrics(), 'totalMs': times['terminalMs'],
+                  'timeToFirstWholePlanMs': times['firstQualifiedMs'],
+                  'searchMs': search_ms, 'selectionReason': times['selectionReason']}
+        if search_ms is not None and times['terminalMs'] is not None:
+            values['finalizationMs'] = round(times['terminalMs'] - search_ms, 3)
+        return values
+
+    def normalise_request(self, request):
+        request = EconomicRequest.model_validate(request).model_dump()
         request['outputCurrency'] = Web3.to_checksum_address(request['outputCurrency'])
         for row in request['inputs']:
             row['currency'] = Web3.to_checksum_address(row['currency'])
@@ -481,9 +332,12 @@ class Quoter:
                 raise InvalidPreview('This intent requires CYGLD as its exact input currency.')
         if request['intent'] in (0, 2) and request['outputCurrency'].lower() != self.core.lower():
             raise InvalidPreview('This intent requires CYGLD as its output currency.')
-        Web3().codec.encode(['uint256'], [int(request['deadline'])])
         if not self.adapter:
             raise QuoteFailure('quote-unavailable')
+        return request
+
+    async def _get(self, request, on_update=None, *, core_only=False, seed=None):
+        request = self.normalise_request(request)
         budget = current_budget()
         registry = self.engine.registry
         rpc = registry.get_rpc()
@@ -494,14 +348,15 @@ class Quoter:
         if request['intent'] != 3:
             self.seed_routes(request, assets)
         best, failures, observations = None, [], {}
-        async def evaluate(share, order, first):
+        async def evaluate(share, order, first, selected=None):
             nonlocal best
             try:
                 value = await budget.discovery(self.candidate(request, share, order, block, assets, weights, first=first,
-                    core_sale_bounds=core_sale_bounds, observations=observations))
+                    observations=observations, selected=selected))
                 if prefer_completed(value, best, scalar=request['intent'] in (0, 1)):
                     if not budget.qualified():
                         return
+                    value['searchCoverage']['selectedPhase'] = 'saved-plan' if selected is not None else 'first-result' if first else 'detailed'
                     best = value
                     if on_update: await on_update({'type': 'qualified', 'value': value})
             except SnapshotChanged:
@@ -510,7 +365,7 @@ class Quoter:
                 failures.append(error)
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
-        if request['intent'] >= 2 or core_sale_bounds: grid = [(100, 'core-first')]
+        if request['intent'] >= 2 or core_only: grid = [(100, 'core-first')]
         async def discovered():
             try:
                 if request['intent'] != 3:
@@ -521,7 +376,10 @@ class Quoter:
             except Exception as error:
                 failures.append(error)
         try:
-            await owned_reads(owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+            async def seeded():
+                if seed is not None:
+                    await evaluate(100, 'core-first', False, selected=seed['plan'])
+            await owned_reads(seeded(), owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
         except SearchStopped:
             pass
         budget.cleanup_done()
@@ -532,3 +390,26 @@ class Quoter:
                 not (isinstance(error, QuoteFailure) and error.code == 'quote-no-route')), None)
             raise informative or QuoteFailure('quote-no-route')
         return best
+
+    quote = get
+
+    @budget_entry
+    async def evaluate_selected(self, request, selected):
+        """Replay selected routes at current state without route discovery."""
+        request = self.normalise_request(request)
+        from .types import EconomicPlan
+        selected = EconomicPlan.model_validate(selected).model_dump()
+        budget = current_budget()
+        async def replay():
+            rpc = self.engine.registry.get_rpc()
+            block = await budget.prepare(rpc.block(None))
+            assets, weights = await budget.prepare(self.basis(block)) if request['intent'] != 3 else ([], [])
+            if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
+                raise InvalidPreview('Basket input currencies must follow Core basket order.')
+            value = await budget.prepare(self.candidate(request, 100, 'core-first', block, assets, weights,
+                                                       selected=selected))
+            budget.cleanup_done()
+            await rpc.assert_canonical(block)
+            budget.canonical_done()
+            return value
+        return await budget.produce(replay())

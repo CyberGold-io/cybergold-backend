@@ -253,7 +253,48 @@ class MarketQuotes(RouteQuoteEngine):
         token_in, token_out = (request['counterToken'], self.registry.core) if request['side'] == 'buy' else (
             self.registry.core, request['counterToken'])
         packet['feeRatePpm'] = get_market_fee_rate(self.registry.chain, token_in, token_out, request['mode'])
+        self.refresh_model_observations(packet)
+        if previous:
+            self.models[family] = deepcopy(packet)
         return packet
+
+    def refresh_model_observations(self, packet):
+        """Refresh advisory arithmetic from facts the Pool State Store already owns.
+
+        This does not acquire a head, discover routes or issue RPC. Each route
+        retains its actual source contexts; a mixed-hash route is advisory and
+        cannot borrow the packet context to match an exact measurement.
+        """
+        known = {pool_identity(state): state for state in getattr(self.registry, 'observed', {}).values()}
+        observation = getattr(self.registry, 'observation', lambda pool: known.get(pool_identity(pool)))
+        for row in packet['routes']:
+            try:
+                hops = [hop for branch in row['route']['branches'] for hop in branch['hops']]
+                states = {pool_identity(hop['pool']): observation(hop['pool']) for hop in hops}
+                sources = [{'poolId': state['id'], 'context': deepcopy(state['context'])}
+                    for state in states.values()]
+                if not sources:
+                    continue
+                def identity(values):
+                    return [(source['poolId'], source['context']['chainId'],
+                             source['context']['blockHash'].lower()) for source in values]
+                if identity(sources) == identity(row.get('sourceObservations', [])):
+                    continue
+                baseline = self.baseline_from_states(row['route'], states)
+                def fraction(value):
+                    return {'numerator': str(value.numerator), 'denominator': str(value.denominator)}
+                row.update(exchangeRate=fraction(baseline.exchange), feeRetention=fraction(baseline.fee_retention),
+                    sourceObservations=sources,
+                    sourceContext=deepcopy(sources[0]['context']) if len({
+                        (source['context']['chainId'], source['context']['blockHash'].lower())
+                        for source in sources}) == 1 else None)
+                row.pop('localImpact', None)
+                if baseline.local_impact is not None:
+                    row['localImpact'] = fraction(baseline.local_impact)
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                # Unknown/incomplete shared facts keep the last advisory model.
+                # They are neither an admission condition nor a full search.
+                continue
 
     async def observe_generation(self, generation):
         if generation is not None and generation != self.generation:
@@ -334,7 +375,7 @@ class MarketQuotes(RouteQuoteEngine):
             # its recorded points stay advisory until full pre-state identity
             # is available; the existing baseline still handles that request.
             if registry is not None and registry.chain == 1 and row.get('points'):
-                identity = market_sample_identity({'context': packet.get('context'),
+                identity = market_sample_identity({'context': row.get('sourceContext', packet.get('context')),
                     'family': market_family(request, registry.chain, registry.core),
                     'feeRatePpm': rate, 'routeIdentity': market_route_observation_identity(row['route']),
                     'requestedAmount': str(raw)})
@@ -380,7 +421,8 @@ class MarketQuotes(RouteQuoteEngine):
             'requestedAmount': result['amountIn'] if request['mode'] == 'exact-in' else str(quote_amount)}
         sample_identity = market_sample_identity(point)
         points = [row for row in points if market_sample_identity(row) != sample_identity][-31:]+[point]
-        metadata = {name: same_route[name] for name in ('exchangeRate', 'feeRetention', 'localImpact')
+        metadata = {name: same_route[name] for name in (
+            'exchangeRate', 'feeRetention', 'localImpact', 'sourceObservations')
             if same_route and name in same_route}
         self.models[family] = {**self.packet(request), 'context': deepcopy(result['context']), 'routes': [
             {'route': deepcopy(result['plan']['route']), 'amountIn': result['amountIn'],
@@ -450,7 +492,7 @@ class MarketQuotes(RouteQuoteEngine):
             'amountIn': str(amount_in), 'amountOut': str(amount_out), 'totalInput': str(total), 'netOutput': str(net),
             'grossOutput': str(notional if side == 'buy' and not exact_in else amount_out), 'routedAmountIn': str(amount_in), 'fee': fee_facts, 'inputMaximum': str(input_maximum),
             'outputMinimum': str(output_minimum), 'refundDust': str(dust), 'params': params, 'adapterData': data, 'plan': plan,
-            'qualification': raw.get('qualification', 'sdk'), 'context': {'chainId': self.registry.chain, 'blockNumber': str(block['number']),
+            'qualification': 'sdk', 'context': {'chainId': self.registry.chain, 'blockNumber': str(block['number']),
                 'blockHash': block['hash'], 'observedAt': self.now()}}
         if not exact_in:
             quote['outputRefundEstimate'] = str(max(0, amount_out-(notional if side == 'buy' else net)))

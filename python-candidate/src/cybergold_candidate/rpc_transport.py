@@ -8,6 +8,7 @@ import json
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
 from .rpc_diagnostics import rpc_call
+from .telemetry import rpc_exchange
 
 
 class _CancellationSafeSessionManager(HTTPSessionManager):
@@ -49,7 +50,7 @@ class SharedHttpProvider(AsyncHTTPProvider):
     async def make_request(self, method, params):
         async def read(method, params):
             stage = 'chain-head' if method == 'eth_getBlockByNumber' and params and params[0] == 'latest' else None
-            with rpc_call(method, stage=stage, secrets=self.diagnostic_secrets) as call:
+            with rpc_exchange(), rpc_call(method, stage=stage, secrets=self.diagnostic_secrets) as call:
                 try:
                     response = await super(SharedHttpProvider, self).make_request(method, params)
                 except TimeoutError:

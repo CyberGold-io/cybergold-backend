@@ -15,7 +15,7 @@ from test_universal_quote import BLOCK, OTHER, PAXG, Engine, Quotes, pool, reque
 
 class QuoterFoundationTests(unittest.IsolatedAsyncioTestCase):
     def test_legacy_import_names_the_same_quoter(self):
-        self.assertIs(UniversalQuotes, Quoter)
+        self.assertTrue(issubclass(UniversalQuotes, Quoter))
         self.assertEqual(Quoter.__module__, 'cybergold_candidate.quoter.search')
 
     async def test_zero_return_does_not_hide_productive_existing_alternative(self):

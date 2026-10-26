@@ -31,14 +31,21 @@ async def run():
             assert a_pid != b_pid
             version = (await (await a.execute('SHOW server_version')).fetchone())['server_version']
         rows = [_reuse_snapshot(index, index * 2560) for index in range(8)]
+        physical_id = rows[0]['address'].lower()
+        for index, row in enumerate(rows):
+            if index % 2 == 0:
+                row['id'] = 'seed-alias:'+str(index)
         await asyncio.gather(*(store.save('observation', row['id'], row)
             for index, row in enumerate(rows) for store in ([first] if index % 2 == 0 else [second])))
-        observed = (await first.load('observation'))[rows[0]['id']]
+        saved = await first.load('observation')
+        assert set(saved) == {physical_id}
+        observed = saved[physical_id]
         assert {row['wordPosition'] for row in observed['bitmapWords']} == set(range(8))
         assert {row['index'] for row in observed['ticks']} == {index * 2560 for index in range(8)}
         registry.observed[rows[0]['id']] = deepcopy(rows[0])
         await registry._load()
-        assert len(registry.observed[rows[0]['id']]['bitmapWords']) == 8
+        assert set(registry.observed) == {physical_id}
+        assert len(registry.observed[physical_id]['bitmapWords']) == 8
         replacement = _reuse_snapshot(20, 20 * 2560, block_hash='0x' + 'fe' * 32,
             block_number=int(rows[0]['context']['blockNumber']) - 1)
         await second.save('observation', replacement['id'], replacement)
@@ -47,9 +54,10 @@ async def run():
         fork.scope = 'generation:observation-reuse-control:'
         await fork.save('observation', rows[0]['id'], rows[0])
         await fork.save('observation', rows[1]['id'], rows[1])
-        assert (await fork.load('observation'))[rows[0]['id']] == rows[1]
+        assert (await fork.load('observation'))[physical_id] == rows[1]
         print(json.dumps({'postgresVersion': version, 'distinctDatabaseConnections': True,
             'concurrentSameHashWrites': len(rows), 'preservedBitmapWords': 8, 'preservedTicks': 8,
+            'seedAndAddressAliasesShareStoredRecord': True,
             'sameHashReloadUnion': True, 'differentHashReplacementUnchanged': True,
             'sandboxSameHeaderReplacementUnchanged': True, 'rpc': 'none'}))
     finally:
