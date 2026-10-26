@@ -4,7 +4,7 @@ doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
-last_reviewed: 2026-10-26
+last_reviewed: 2026-10-27
 canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
@@ -148,7 +148,9 @@ two independent local Uvicorn API processes and HTTP clients: a process whose
 fixture provider cannot acquire a head still retrieves the other process's
 original SQL-saved quote, including after a failed explicit Refresh. Its
 deterministic pricing fixture proves cross-process reuse, not AMM latency.
-The App's paired measurement loop and tiny USDT cases
-are implemented, but real owned-fork adapter/configuration and baseline/candidate
-measurements remain pending. Fixture timings are not cold/warm performance
-results, and local checks do not complete WS7's profile qualification.
+The App's paired measurement loop, tiny USDT cases and owned-fork resource
+adapter are implemented. The adapter controls database/process cold starts,
+forced warm searches, second-process lookups and a header-only advance. Actual
+baseline/candidate measurements and wallet/receipt comparisons remain pending.
+Fixture timings are not cold/warm performance results, and local checks do not
+complete WS7's profile qualification.
