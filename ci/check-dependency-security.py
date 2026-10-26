@@ -129,6 +129,7 @@ def assess(
                 )
                 finding = {
                     "advisory": advisory,
+                    "aliases": sorted(ids),
                     "ecosystem": ecosystem,
                     "package": name,
                     "version": package.get("version", package.get("commit", "")),
@@ -177,13 +178,15 @@ def assess(
 
 
 def inventory_files(
-    root: Path, temporary: Path
+    root: Path, temporary: Path, inherited_lockfiles: list[str] | None = None
 ) -> tuple[list[Path], dict[str, str], list[dict]]:
     files, source_map = [], {}
     tracked = tracked_files(root)
-    inherited = json.loads((root / "ci/dependency-security-sources.json").read_text())[
-        "inherited_lockfiles"
-    ]
+    inherited = inherited_lockfiles
+    if inherited is None:
+        inherited = json.loads(
+            (root / "ci/dependency-security-sources.json").read_text()
+        )["inherited_lockfiles"]
     tracked += inherited
     unresolved_build_requirements = []
     for name in tracked:

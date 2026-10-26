@@ -1,5 +1,5 @@
 ---
-title: Dependency security policy
+title: No new dependency vulnerabilities
 doc_type: security-decision
 status: active
 owner: security-maintainer
@@ -8,129 +8,106 @@ last_reviewed: 2026-10-26
 canonical_for: repository dependency vulnerability admission
 ---
 
-# Dependency security policy
+# No new dependency vulnerabilities
 
-Approved by the owner on 26 October 2026 for all maintained CyberGold repositories.
-The purpose is to prevent a known, unaccepted dependency vulnerability from being
-merged. Builds and functional tests do not establish that security decision.
+Approved by the owner on 26 October 2026 for the four public repositories:
+App, Backend, Protocol and Helpers. The private repositories retain their own
+agreed policies. This replaces the public repositories' zero-unaccepted-findings
+rule with a comparison against the PR target.
 
-## Merge rule
+## Merge decision
 
-Every pull request must pass the `dependency-security` check on its proposed
-commit. Scan the complete committed resolved dependency graph, including
-production, development and transitive packages. Every reported severity blocks
-merging unless the owner explicitly accepted that particular finding. Scanner
-failures also fail the check; an unavailable scan is not a clean result.
+A PR must not introduce an unaccepted dependency vulnerability absent from its
+target branch. Existing findings may remain or be resolved. Every reported
+severity, including unknown severity, is included across production, development
+and transitive package inventories. Scan/configuration errors fail the check.
 
-Feature-branch pushes remain available. Maintained `dev`, `main`, and Website's
-`master` require PRs and checks, including administrators, wherever GitHub's plan
-supports those protections. Ops has only `main` as a maintained branch; use a
-feature branch and PR into `main`. Existing product, fork, branch and release
-checks remain applicable.
+The required check is still named `dependency-security`. Maintained `dev` and
+`main` retain PR requirements, administrator enforcement and their existing
+product, branch, secret and release controls. Feature pushes remain available.
 
-The current GitHub Free plan cannot enforce protection for several private
-repositories. CI and this policy still apply there, but they do not physically
-prevent an authorized writer from merging or pushing. Full private-repository
-protection needs an appropriate paid organization plan and configured branch
-rules. A checked-in workflow alone does not create that enforcement.
+The check scans the target commit and proposed merge in one OSV-Scanner
+invocation, using the same current observations rather than an old stored alert
+report. Identical package versions share their advisory observations across both
+trees. A newly disclosed advisory affecting an unchanged package is therefore
+retained, not attributed to an unrelated PR.
 
-## What the check scans
+The comparison matches advisory identities and aliases, package/ecosystem and
+the affected manifest/component. A version change alone does not reopen the same
+advisory if both versions are affected. Adding the finding to another component
+does introduce it. A previously resolved advisory that returns is new again.
+Totals alone never decide: closing one finding and introducing another still
+fails even if the total is unchanged or lower.
 
-Run it from a checkout with its submodules initialized:
+Reports list introduced, retained and resolved finding instances, all
+current findings, explicit acceptances and unresolved coverage. Retained
+findings are not declared safe or risk-accepted. They remain an open remediation
+backlog without requiring exception records merely to preserve existing state.
+
+## Events and local use
+
+On PRs, CI checks out the target commit separately from GitHub's proposed merge.
+On maintained-branch pushes it compares the pre-push revision with the new
+revision, retaining the same publication check. Daily/manual runs report the
+full current backlog without requiring it to be empty. Scanner errors remain
+visible failures; an unavailable scan is not a clean result.
 
 ```sh
-python3 ci/check-dependency-security.py --report /tmp/dependency-security.json
+# Both checkouts must include their selected submodules.
+python3 ci/check-dependency-regressions.py --base-root /path/to/target-checkout --report /tmp/dependency-security.json
+
+# Full inventory for manual backlog review; no comparison/merge decision.
+python3 ci/check-dependency-regressions.py --report /tmp/dependency-inventory.json
 ```
 
-Python 3.11 or newer is required. The wrapper downloads OSV-Scanner 2.7.0 from its
-official release and verifies the committed SHA-256. It reads tracked lockfiles,
-fully pinned requirements files, exact Python build-system pins, and committed
-Git submodule identities. `ci/dependency-security-sources.json` names any lockfile
-inherited from a parent component and actually used by this project (Helpers
-uses Protocol’s security-tool lock). Upstream libraries’ own authoring/test
-lockfiles are not CyberGold’s installed dependency graph and are not imported.
-CI checks out submodules recursively to make the selected inherited inputs
-available. Unversioned build declarations are listed as unresolved coverage,
-not silently pinned or represented as audited. No package dependency is upgraded, application dependency
-installed, or upstream manifest rewritten by this check.
+Comparison exit codes are 0 for no new unaccepted findings, 1 for introduced
+unaccepted findings, and 2 for scan/configuration failure. A full advisory
+inventory returns 0 with its findings retained, or 2 on failure. The underlying
+`check-dependency-security.py` remains available as an absolute diagnostic scan;
+its exit code is not the public-repository merge policy.
 
-All severities and scopes are retained. Uncalled or otherwise classified
-unimportant vulnerabilities are included. Repository OSV ignore configurations
-are not used: policy exceptions are evaluated separately and remain visible.
-The JSON report lists scanned sources, package records, blocking findings and
-accepted findings. It is retained as a CI artifact even when the check fails.
+Both trees use the same scanner. Historical inherited-inventory selections are
+respected; a newly used inherited component is not grandfathered merely because
+its files were already vendored. Audited rollout targets that predate scanner
+configuration use the current selection for components present in the old tree.
+A component absent from the target contributes no target findings. No fixed baseline of
+advisory IDs, blanket ignores, severity exemptions or periodic renewal gates
+are introduced.
 
-The scan covers the committed package inventories, not every operating-system
-package in a deployed image or an unrecorded environment. Existing Dependabot,
-image, Action, source and contract security checks retain their own coverage.
+## Inventory and explicit owner decisions
 
-## Exceptions require an owner decision
+The Python 3.11+ wrapper checksum-verifies official OSV-Scanner 2.7.0. It scans
+committed resolved lockfiles, fully pinned requirements, exact Python build pins
+and supplemental Git submodule identities. Selected inherited lockfiles must be
+used by the project; unrelated upstream authoring/test locks are excluded.
+Unversioned build declarations remain explicitly unresolved. Scans do not install
+application dependencies or replace image, Action, source, contract or OS checks.
 
-`ci/dependency-security-exceptions.json` starts empty. Existing alerts are not
-automatically accepted. Each accepted entry must name an exact advisory ID,
-ecosystem, package and manifest path, with a reason, owner-approval reference and
-review trigger. Selectors are compared literally; wildcard expansion and blanket transitive
-exemptions are unsupported.
-The approval reference records a real owner decision; writing a reference into
-JSON does not itself constitute approval. Maintainers must verify that decision
-when reviewing a PR that changes this file.
+`ci/dependency-security-exceptions.json` records actual owner decisions for exact
+advisory/alias, ecosystem, package and manifest, with a reason, approval reference
+and review trigger. Selectors match literally. Such findings stay visible and
+are not described as resolved. Filling JSON is not owner approval. No exception
+is created automatically for a retained or introduced finding.
 
-For example, after actual owner acceptance only:
+The existing Dependabot monitors remain discovery controls. Their raw alert
+counts are not the candidate merge decision. Additional npm/GitHub dependency
+reviews are advisory inventory reports; the common comparison is the dependency
+admission check.
 
-```json
-{
-  "schemaVersion": 1,
-  "exceptions": [
-    {
-      "advisory": "GHSA-xxxx-yyyy-zzzz",
-      "ecosystem": "PyPI",
-      "package": "affected-package",
-      "manifest": "uv.lock",
-      "reason": "Document the reviewed exposure and why the risk is accepted.",
-      "owner_approval": "Link to the actual owner decision.",
-      "review_trigger": "Review when the maintained parent adopts the upstream fix."
-    }
-  ]
-}
-```
-
-An exception matches that advisory's aliases, exact package and manifest only.
-Another advisory or another affected manifest still blocks. Accepted findings
-remain in the report and in Dependabot; do not dismiss alerts merely to make a
-status green. Remove an exception when remediation makes it unnecessary and
-revisit it when its recorded trigger occurs.
-
-## Remediate through the maintained parent
+## Remediation follows the maintained parent
 
 A direct dependency is a component CyberGold selects and maintains. A transitive
-dependency is maintained inside that component. GitHub's nearest-manifest label
-does not override this maintenance boundary.
+dependency is maintained inside it; GitHub's nearest-manifest label does not
+override this boundary.
 
-- CyberGold → Safe Transaction Service → DRF/Pillow: adopt a reviewed official
-  Safe release as a unit, retaining its manifest and lock unchanged.
+- CyberGold → Safe Transaction Service → DRF/Pillow: qualify an official Safe
+  release as a unit, preserving its upstream manifest and lock.
 - Protocol → Halmos/Slither → Python libraries: update Halmos/Slither.
 - Ops → Semgrep → MCP: update Semgrep.
-- CyberGold-owned Next.js, sharp, Fastify or SDK declarations: update those
-  parents; their ordinary resolved dependency changes may follow.
+- CyberGold-owned application declarations: update those parents and qualify
+  their ordinary resolved dependency changes.
 
-Do not independently pin, override or patch a transitive dependency under this
-policy. If the latest suitable parent still contains an affected child, keep
-tracing it upstream. Transitive status, lack of a fix, or an unavailable parent
-release does not automatically grant risk acceptance or make a check pass.
-Existing Safe release qualification and paired OpenZeppelin release rules remain
-in force; the security workflow is a CyberGold-owned wrapper change.
-
-## Continuous discovery and rollout
-
-The same check runs on PRs, maintained-branch pushes, daily and manually. New
-advisories can therefore make unchanged code fail later. Existing default-branch
-Dependabot monitors remain inventory and notification controls; their raw open
-alert count is not the candidate-commit merge decision.
-
-Rollout consists of landing the workflow and requiring its exact check name on
-each maintained branch. An implementation PR with blocking findings is not a
-security pass: remediate or obtain specific owner decisions before merging it.
-A green implementation test suite does not accept its live findings.
-
-Canonical cross-repository policy and rollout notes are maintained in the
-[Ops security documentation](https://github.com/CyberGold-io/cybergold-ops/blob/main/docs/security/dependency-security-policy.md).
+Do not independently pin, override or patch a child. If the latest suitable
+parent still contains the child, retain the report and track a fixing parent
+release. Parent currency alone is not remediation. Existing Safe and paired
+OpenZeppelin qualification rules remain in force.

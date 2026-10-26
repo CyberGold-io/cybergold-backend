@@ -432,8 +432,8 @@ notices and explains corresponding-source obligations.
 
 ## Dependency security
 
-The owner-approved [dependency security policy](DEPENDENCY_SECURITY.md) requires
-PRs to pass `dependency-security` for every unaccepted finding, including
-development and transitive dependencies. Remediate through CyberGold-maintained
-parents; any risk exception needs a specific owner decision. See the policy for
-current GitHub plan limits and local validation.
+The [dependency security policy](DEPENDENCY_SECURITY.md) blocks new unaccepted
+vulnerabilities relative to the PR target. Existing findings may remain or be
+resolved and stay visible for manual review. Production, development and
+transitive inventories are compared; remediation follows CyberGold-maintained
+parents. Daily full scans report the backlog without requiring it to be empty.
