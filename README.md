@@ -429,3 +429,11 @@ and the feature-to-`dev` contribution path. The project license is
 **AGPL-3.0-only**; [LICENSE](LICENSE) contains the full text.
 [Licensing scope](LICENSING.md) preserves existing MIT and other third-party
 notices and explains corresponding-source obligations.
+
+## Dependency security
+
+The owner-approved [dependency security policy](DEPENDENCY_SECURITY.md) requires
+PRs to pass `dependency-security` for every unaccepted finding, including
+development and transitive dependencies. Remediate through CyberGold-maintained
+parents; any risk exception needs a specific owner decision. See the policy for
+current GitHub plan limits and local validation.

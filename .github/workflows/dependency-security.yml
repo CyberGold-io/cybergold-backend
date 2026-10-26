@@ -1,0 +1,33 @@
+name: Dependency security monitor
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-security-monitor:
+    name: dependency-security-monitor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the proposed dependency graph
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Test policy decisions
+        run: python3 ci/test_dependency_security.py
+      - name: Scan all resolved dependency scopes and apply explicit exceptions
+        run: python3 ci/check-dependency-security.py --report "$RUNNER_TEMP/dependency-security.json"
+      - name: Retain accepted and blocking findings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-security-${{ github.sha }}
+          path: ${{ runner.temp }}/dependency-security.json
+          if-no-files-found: warn
