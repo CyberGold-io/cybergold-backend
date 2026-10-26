@@ -16,6 +16,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependency-security:
+    name: dependency-security
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the proposed merge or maintained-branch revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Checkout the target or pre-push dependency graph
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          path: .dependency-base
+          persist-credentials: false
+          submodules: recursive
+      - name: Test assessment and no-new-vulnerability decisions
+        run: |
+          python3 ci/test_dependency_security.py
+          python3 ci/test_dependency_regressions.py
+      - name: Compare dependencies or report the scheduled backlog
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          case "$EVENT_NAME" in
+            pull_request|push)
+              python3 ci/check-dependency-regressions.py --base-root .dependency-base --report "$RUNNER_TEMP/dependency-security.json"
+              ;;
+            *)
+              python3 ci/check-dependency-regressions.py --report "$RUNNER_TEMP/dependency-security.json"
+              ;;
+          esac
+      - name: Retain introduced, retained and resolved findings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-security-${{ github.sha }}
+          path: ${{ runner.temp }}/dependency-security.json
+          if-no-files-found: warn
+
   branch_policy:
     name: branch-policy
     runs-on: ubuntu-latest
@@ -81,7 +124,7 @@ jobs:
           done
 
   quality:
-    needs: branch_policy
+    needs: [branch_policy, dependency-security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,7 +136,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run ci-check
-      - run: npm audit --audit-level=high
+      - name: Report npm advisory inventory for manual review
+        continue-on-error: true
+        run: npm audit --audit-level=high
       - name: Publish versioned HTTP contract artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
