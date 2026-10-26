@@ -69,7 +69,8 @@ image, Action, source and contract security checks retain their own coverage.
 `ci/dependency-security-exceptions.json` starts empty. Existing alerts are not
 automatically accepted. Each accepted entry must name an exact advisory ID,
 ecosystem, package and manifest path, with a reason, owner-approval reference and
-review trigger. Wildcards and blanket transitive exemptions are unsupported.
+review trigger. Selectors are compared literally; wildcard expansion and blanket transitive
+exemptions are unsupported.
 The approval reference records a real owner decision; writing a reference into
 JSON does not itself constitute approval. Maintainers must verify that decision
 when reviewing a PR that changes this file.

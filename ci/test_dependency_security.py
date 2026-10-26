@@ -137,11 +137,10 @@ class DecisionTests(unittest.TestCase):
             with self.assertRaises((ValueError, TypeError)):
                 POLICY.assess(data, [], ROOT)
 
-    def test_wildcard_or_undocumented_exception_is_rejected(self):
+    def test_undocumented_exception_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "exceptions.json"
             for change in (
-                {"package": "*"},
                 {"owner_approval": ""},
                 {"reason": ""},
                 {"review_trigger": ""},
@@ -150,6 +149,21 @@ class DecisionTests(unittest.TestCase):
                 path.write_text(json.dumps({"schemaVersion": 1, "exceptions": [item]}))
                 with self.assertRaises(ValueError):
                     POLICY.load_exceptions(path)
+
+    def test_selectors_are_literal_without_restricting_real_manifest_names(self):
+        item = exception()
+        item["package"] = "*"
+        self.assertEqual(POLICY.assess(report(), [item], ROOT)["status"], "blocked")
+        item = exception()
+        item["manifest"] = "project[dev]/package-lock.json"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "exceptions.json"
+            path.write_text(json.dumps({"schemaVersion": 1, "exceptions": [item]}))
+            accepted = POLICY.load_exceptions(path)
+        self.assertEqual(
+            POLICY.assess(report(manifest=item["manifest"]), accepted, ROOT)["status"],
+            "passed",
+        )
 
     def test_build_dependency_is_included_without_installation(self):
         with tempfile.TemporaryDirectory() as directory:

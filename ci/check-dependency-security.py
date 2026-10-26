@@ -89,11 +89,6 @@ def load_exceptions(path: Path) -> list[dict]:
         ):
             if not isinstance(item.get(key), str) or not item[key].strip():
                 raise ValueError(f"Exception requires a nonempty {key}")
-        for key in ("advisory", "ecosystem", "package", "manifest"):
-            if any(char in item[key] for char in "*?["):
-                raise ValueError(
-                    f"Exception {key} must be an exact value, not a wildcard"
-                )
     return data["exceptions"]
 
 
