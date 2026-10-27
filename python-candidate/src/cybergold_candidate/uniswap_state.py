@@ -17,7 +17,7 @@ from .uniswap_v4 import (POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_v
     read_tick_bitmap_words, begin_tick_prefetch)
 from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
-from .uniswap_routes import pool_key, v4_pool_id
+from .uniswap_routes import pool_key, v4_pool_id, pool_identity as execution_pool_identity
 from .wallet_balances import TOKENS
 from .quote_errors import QuoteFailure, rpc_failure
 from .recovery_rpc import RecoveryApiError, SnapshotChanged
@@ -70,6 +70,53 @@ def copy_pool_snapshot(snapshot):
     return {key: result[key] for key in snapshot}
 
 
+def observation_storage_id(pool):
+    """Resolved V2/V3 addresses share one record; V4 keeps its PoolId."""
+    return (pool.get('address') or pool['id']).lower() if pool['protocol'] != 'v4' else pool['id']
+
+
+def same_observed_pool(left, right):
+    if execution_pool_identity(left) != execution_pool_identity(right):
+        return False
+    field = 'poolManager' if left['protocol'] == 'v4' else 'address'
+    a, b = left.get(field), right.get(field)
+    return not (a and b) or a.lower() == b.lower()
+
+
+def canonical_observation(state):
+    state = copy_pool_snapshot(state)
+    state['id'] = observation_storage_id(state)
+    return state
+
+
+def merge_pool_coverage(previous, current):
+    """Own the current observation, retaining same-pool/hash scalar coverage.
+
+    Different hashes keep the existing replacement semantics, including explicit
+    rewind/reorg recovery. Only canonical observations call this function;
+    hypothetical candidate post-state is not published by the registry.
+    """
+    if current is None:
+        return None
+    result = copy_pool_snapshot(current)
+    def identity(observation):
+        address = (observation.get('poolManager') if observation['protocol'] == 'v4'
+            else observation.get('address', observation['id']))
+        # The configured registry/store scope supplies an omitted default
+        # PoolManager; existing observations need not repeat that metadata.
+        return observation['protocol'], (address or '').lower(), observation_storage_id(observation).lower()
+    if (previous is None or identity(previous) != identity(current)
+            or previous['context']['blockHash'].lower() != current['context']['blockHash'].lower()):
+        return result
+    for field, index in (('bitmapWords', 'wordPosition'), ('ticks', 'index')):
+        if field not in previous and field not in current:
+            continue
+        rows = {int(row[index]): dict(row) for row in previous.get(field, [])}
+        rows.update({int(row[index]): dict(row) for row in current.get(field, [])})
+        result[field] = [rows[key] for key in sorted(rows)]
+    return result
+
+
 async def owned_reads(*operations):
     """Drain this acquisition's subscriptions; preserve canonical disproof."""
     tasks = [asyncio.create_task(operation) for operation in operations]
@@ -112,7 +159,12 @@ class UniswapRpc(PoolRpc):
                     {'blockHash': block['hash'], 'requireCanonical': True}])
             decode(response)  # A failed typed observation is never retained.
             return [response]
-        rows, _ = await self.reads.many([key], produce, retain=self.chain_id == 1)
+        counts = {}
+        try:
+            rows, _ = await self.reads.many([key], produce, retain=self.chain_id == 1, counts=counts)
+        finally:
+            from .telemetry import getter_reads
+            getter_reads(counts)
         try:
             return decode(rows[0])
         except Exception:
@@ -157,12 +209,34 @@ class UniswapStore:
                 self.ready = True
 
     async def save(self, namespace, identity, value):
-        namespace = self.scope+namespace
+        if namespace == 'observation':
+            value = canonical_observation(value)
+            identity = value['id']
+        stored_namespace = self.scope+namespace
         await self.prepare()
         async with self.database.connection() as connection:
+            if namespace == 'observation' and self.chain == 1:
+                # The row lock also covers two API/worker processes. Inserting
+                # first supplies that lock target when this is a cold pool.
+                # Sandbox retains same-header replacement: its fork state may
+                # change without a different block hash between acquisitions.
+                async with connection.transaction():
+                    key = (self.chain, self.core, stored_namespace, identity)
+                    await connection.execute('''INSERT INTO cybergold_uniswap_state
+                        VALUES (%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING''',
+                        (*key, json.dumps(value)))
+                    cursor = await connection.execute('''SELECT payload FROM cybergold_uniswap_state
+                        WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s
+                        FOR UPDATE''', key)
+                    previous = (await cursor.fetchone())['payload']
+                    merged = merge_pool_coverage(previous, value)
+                    await connection.execute('''UPDATE cybergold_uniswap_state SET payload=%s::jsonb
+                        WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s''',
+                        (json.dumps(merged), *key))
+                return
             await connection.execute('''INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)
                 ON CONFLICT(chain_id,core_address,namespace,identity) DO UPDATE SET payload=EXCLUDED.payload''',
-                (self.chain, self.core, namespace, identity, json.dumps(value)))
+                (self.chain, self.core, stored_namespace, identity, json.dumps(value)))
 
     async def save_protocol_configuration(self, identity, value):
         """Order this advisory snapshot across API/worker writers only.
@@ -309,9 +383,11 @@ class PoolRegistry:
                     self.cursors.update(cursors)
                     if self.chain == 1:
                         for identity, row in observations.items():
-                            old = self.observed.get(identity)
+                            old = self.observation(row)
                             if old is None or int(row['context']['blockNumber']) > int(old['context']['blockNumber']):
-                                self.observed[identity] = row
+                                self.remember_observation(row)
+                            elif row['context']['blockHash'].lower() == old['context']['blockHash'].lower():
+                                self.remember_observation(row)
                     self.discovery_month = self.cursors.get('catalog', {}).get('month')
                 except Exception:
                     pass  # Persistence is optional to exact provider quoting.
@@ -351,11 +427,37 @@ class PoolRegistry:
                     task.exception()  # Ordinary persistence outage, no quote gate.
             task.add_done_callback(done)
 
+    def observation(self, pool):
+        """Read one physical observation through seed or discovered aliases.
+
+        The caller still owns its SDK route ID. The stored observation uses a
+        resolved address once acquired, independently of catalog enrichment.
+        """
+        for key in dict.fromkeys((observation_storage_id(pool), pool['id'])):
+            state = self.observed.get(key)
+            if state is not None and same_observed_pool(state, pool):
+                return state
+        return next((state for state in self.observed.values() if same_observed_pool(state, pool)), None)
+
+    def forget_observation(self, pool):
+        for identity, state in list(self.observed.items()):
+            if same_observed_pool(state, pool):
+                self.observed.pop(identity)
+
+    def remember_observation(self, state):
+        state = canonical_observation(state)
+        state = merge_pool_coverage(self.observation(state), state)
+        self.forget_observation(state)
+        self.observed[state['id']] = state
+        return state
+
     def publish_observation(self, state):
+        state = canonical_observation(state)
         if self.chain == 1:
+            state = merge_pool_coverage(self.observation(state), state)
             if self.observed.get(state['id']) == state:
                 return
-            self.observed[state['id']] = deepcopy(state)
+            self.remember_observation(state)
         self.persist('observation', state['id'], state)
 
     def acquire_pool(self, pool, block):
@@ -370,9 +472,12 @@ class PoolRegistry:
         rpc = self.get_rpc()
         generation = self.generation
         context = {'chainId': self.chain, 'blockNumber': str(block['number']), 'blockHash': block['hash']}
-        key = (pool['protocol'], pool['id'], block['hash'])
+        identity = observation_storage_id(pool)
+        if pool['protocol'] == 'v3' and not pool.get('address'):
+            identity = ':'.join(map(str, execution_pool_identity(pool)))
+        key = (pool['protocol'], identity, block['hash'])
         async def produce():
-            old = self.observed.get(pool['id']) if self.chain == 1 else None
+            old = self.observation(pool) if self.chain == 1 else None
             if old and int(old['context']['blockNumber']) < block['number']:
                 try:
                     state = await self.advance(pool, old, block)
@@ -421,11 +526,12 @@ class PoolRegistry:
                 state.update(await read_pool_state(rpc.read_function, rpc.state_view, pool['id'], block))
             state.update(context=context, ticks=[], bitmapWords=[])
             return state
-        old = self.observed.get(pool['id'])
+        old = self.observation(pool)
         if self.chain == 1 and old and old['context']['blockHash'] == block['hash']:
             state = deepcopy(old)
         else:
             state = deepcopy(await self.pending.one(key, produce))
+        state['id'] = pool['id']
         # A shared acquisition stays pure. Each caller owns publication after
         # its accepted boundary, without duplicating event advancement/getters.
         if publish and generation == self.generation:
@@ -447,17 +553,22 @@ class PoolRegistry:
         # Share only an identical fill that is still acquiring its coverage.
         # Completed Sandbox observations remain fresh on the next call, even
         # at the same header; each caller owns the returned mutable snapshot.
+        identity = observation_storage_id(snapshot)
+        normalized_requests = [{**row, **{name: identity for name in ('poolId', 'id') if name in row}}
+                               for row in requests]
         key = ('tick-fill', generation, block['hash'],
-               json.dumps(snapshot, sort_keys=True), json.dumps(requests, sort_keys=True))
+               json.dumps(canonical_observation(snapshot), sort_keys=True),
+               json.dumps(normalized_requests, sort_keys=True))
         async def produce():
             return await self._extend_ticks(snapshot, requests, block, generation)
         result = copy_pool_snapshot(await self.pending.one(key, produce))
+        result['id'] = snapshot['id']
         return result
 
     async def _extend_ticks(self, snapshot, requests, block, generation):
         rpc = self.get_rpc()
         pool = snapshot
-        current = self.observed.get(pool['id'])
+        current = self.observation(pool)
         covered = current if current and current['context']['blockHash'] == block['hash'] else snapshot
         words = {int(row['wordPosition']): row for row in covered.get('bitmapWords', [])}
         ticks = {int(row['index']): row for row in covered.get('ticks', [])}
@@ -520,7 +631,7 @@ class PoolRegistry:
             ticks[row['index']] = row
         # Concurrent candidates can have requested different coverage from the
         # same observation. Merge their immutable tick observations at this hash.
-        current = self.observed.get(pool['id'])
+        current = self.observation(pool)
         if current and current['context']['blockHash'] == block['hash']:
             words.update({int(row['wordPosition']): row for row in current.get('bitmapWords', [])})
             ticks.update({int(row['index']): row for row in current.get('ticks', [])})
@@ -528,9 +639,7 @@ class PoolRegistry:
         # Subscriber, observed-state and persistence copies remain independent.
         result = {**snapshot, 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
         if generation == self.generation:
-            if self.chain == 1:
-                self.observed[pool['id']] = deepcopy(result)
-            self.persist('observation', pool['id'], result)
+            self.publish_observation(result)
         return result
 
     async def event_logs(self, pool, first, block):
@@ -728,7 +837,7 @@ class PoolRegistry:
         await self.ensure_loaded(wait=True)
         rpc = self.get_rpc()
         for pool in list(self.inventory.values()):
-            old = self.observed.get(pool['id'])
+            old = self.observation(pool)
             acquired = None
             try:
                 if old is None:
@@ -736,12 +845,14 @@ class PoolRegistry:
                 elif int(old['context']['blockNumber']) < block['number']:
                     state, rows = await self.advance(pool, old, block, with_logs=True)
                     acquired = (old['context'], rows)
-                    self.observed[pool['id']] = state
-                    self.persist('observation', pool['id'], state)
+                    self.publish_observation(state)
+                elif (int(old['context']['blockNumber']) == block['number']
+                        and old['context']['blockHash'].lower() != block['hash'].lower()):
+                    await self.snapshot(pool, block)
             except Exception:
                 # Reorg/gap/unknown baseline: invalidate coverage, then an ordinary
                 # canonical resnapshot; do not admit incomplete logs as exact state.
-                self.observed.pop(pool['id'], None)
+                self.forget_observation(pool)
                 try:
                     await self.snapshot(pool, block)
                 except Exception:
@@ -765,7 +876,7 @@ class PoolRegistry:
         identity = pool_identity(pool)
         bundle = deepcopy(self.activity.get(identity))
         known = {(block['number'], block['hash'].lower())} if acquired else set()
-        observed = self.observed.get(pool['id'])
+        observed = self.observation(pool)
         if observed and observed['context']['blockHash'].lower() == block['hash'].lower() and int(
                 observed['context']['blockNumber']) == block['number']:
             # The accepted block-bound getter/state publication already proves

@@ -5,10 +5,14 @@ import os
 import re
 import time
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from prometheus_client import CollectorRegistry, Counter, Histogram, Gauge, generate_latest
 
 PATHS={
+    '/api/economic-quotes', '/api/tx-preparations', '/api/economic-estimates',
+    '/api/quotes/universal-exact-input',
     '/api/transaction/revert',
     '/api/account/ens-name', '/api/account/ens-avatar-record',
     '/api/account/native-balance',
@@ -54,6 +58,67 @@ def observe(action):
     except Exception:pass  # Existing telemetry isolation boundary.
 
 
+_operation_work = ContextVar('api_operation_work', default=None)
+
+
+class OperationWork:
+    """One logical operation's owned getter demand and physical exchanges.
+
+    These counters are never process-total deltas or shared quote payloads.
+    Coalesced subscribers count their own logical demand. The request that
+    starts a shared producer owns its physical exchange, even if another
+    subscriber also benefits. Exchange duration is a sum, not wall duration.
+    """
+    def __init__(self):
+        self.getters = dict.fromkeys(('requested', 'issued', 'coalesced', 'reused'), 0)
+        self.exchanges = dict.fromkeys(('started', 'completed', 'rpcCallsStarted'), 0)
+        self.summed_ms = 0
+
+    def snapshot(self):
+        return {'getterReads': {'scope': 'hash-pinned-getter-bank', **self.getters},
+                'transport': {'scope': 'owned-provider-exchanges', **self.exchanges,
+                              'summedExchangeMs': round(self.summed_ms, 3)}}
+
+
+@contextmanager
+def operation_work():
+    work = OperationWork()
+    token = _operation_work.set(work)
+    try:
+        yield work
+    finally:
+        _operation_work.reset(token)
+
+
+def getter_reads(counts):
+    def record():
+        work = _operation_work.get()
+        if work is not None:
+            for key in work.getters:
+                work.getters[key] += counts.get(key, 0)
+    observe(record)
+
+
+@contextmanager
+def rpc_exchange(rpc_calls=1):
+    work, started = _operation_work.get(), None
+    def start():
+        nonlocal started
+        if work is not None:
+            started = time.perf_counter()
+            work.exchanges['started'] += 1
+            work.exchanges['rpcCallsStarted'] += rpc_calls
+    observe(start)
+    try:
+        yield
+    finally:
+        def finish():
+            if work is not None and started is not None:
+                work.exchanges['completed'] += 1
+                work.summed_ms += (time.perf_counter()-started)*1000
+        observe(finish)
+
+
 class JsonFormatter(logging.Formatter):
     def format(self,record):
         message=record.getMessage()
@@ -91,6 +156,12 @@ class Metrics:
             'Subscriber qualified/invalidation/provider/terminal quote observations.',('operation','strategy','stage'))
         self.quote_provider_outcomes=counter('quote_provider_outcomes_total',
             'Provider outcomes per HTTP subscription, including losing-provider failures.',('operation','strategy','outcome'))
+        self.economic_results=counter('economic_operation_results_total',
+            'Economic operations by result source; stored observations are distinct from new searches.',
+            ('operation','source','outcome'))
+        self.quoter_first_plan=histogram('quoter_first_whole_plan_seconds',
+            'Producer time to first complete economic plan for new searches; stored lookups excluded.',
+            ('operation',),[.01,.05,.1,.25,.5,1,2.5,5,10,30,120])
         self.cache_requests=counter('market_cache_requests_total','Market cache requests: hit, miss (including expiry), or coalesced in-flight refresh.',('feed','result'))
         self.shared_market_requests=counter('market_shared_cache_requests_total',
             'Optional Valkey market reads/writes; hits preserve acquisition expiry.',('feed','operation','result'))
