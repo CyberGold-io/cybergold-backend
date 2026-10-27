@@ -1,8 +1,12 @@
 """Completion, fairness and ownership of the common route scheduler."""
 import asyncio
 import unittest
+from unittest.mock import patch
+
+from cybergold_candidate import route_scheduler
 
 from cybergold_candidate.route_scheduler import schedule_routes
+from cybergold_candidate.route_work_slots import engine_work, required_state_wait
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 
@@ -162,6 +166,101 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             raise SnapshotChanged('completed canonical disproof')
         with self.assertRaisesRegex(SnapshotChanged, 'completed canonical disproof'):
             await schedule_routes(lambda _: [feed('ordinary'), feed('disproof')], price)
+
+
+    async def test_pending_feed_admits_work_while_another_candidate_is_parked(self):
+        parked, offer_next, next_started, finish = (asyncio.Event() for _ in range(4))
+        async def feed():
+            yield 'parked'
+            await offer_next.wait()
+            yield 'next'
+        async def price(_index, row):
+            if row == 'parked':
+                async with required_state_wait():
+                    parked.set()
+                    await finish.wait()
+            else:
+                next_started.set()
+        task = asyncio.create_task(schedule_routes(lambda _: [feed()], price, limit=1))
+        try:
+            await asyncio.wait_for(parked.wait(), 1)
+            offer_next.set()
+            await asyncio.wait_for(next_started.wait(), 1)
+            self.assertFalse(task.done())
+            finish.set()
+            await asyncio.wait_for(task, 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_ready_work_is_admitted_when_active_candidate_releases_capacity(self):
+        started, offered, blocked, begin_read, next_started, finish = (asyncio.Event() for _ in range(6))
+        original_wait = asyncio.wait
+        async def observe_wait(waiters, **options):
+            # The first wait after this offered feed result has been consumed
+            # has one active job and ready work blocked on its pricing permit.
+            if offered.is_set():
+                blocked.set()
+            return await original_wait(waiters, **options)
+        async def feed():
+            yield 'first'
+            offered.set()
+            yield 'next'
+        async def price(_index, row):
+            if row == 'first':
+                started.set()
+                await begin_read.wait()
+                async with required_state_wait():
+                    await finish.wait()
+            else:
+                next_started.set()
+        with patch.object(route_scheduler.asyncio, 'wait', observe_wait):
+            task = asyncio.create_task(schedule_routes(lambda _: [feed()], price, limit=1))
+            try:
+                await asyncio.wait_for(started.wait(), 1)
+                await asyncio.wait_for(blocked.wait(), 1)
+                self.assertFalse(next_started.is_set())
+                begin_read.set()
+                await asyncio.wait_for(next_started.wait(), 1)
+                self.assertFalse(task.done())
+                finish.set()
+                await asyncio.wait_for(task, 1)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_cancel_drains_parked_work_and_pending_feed(self):
+        parked, feed_waiting, work_drained, feed_drained = (asyncio.Event() for _ in range(4))
+        engine = asyncio.Semaphore(1)
+        async def feed():
+            try:
+                yield 'read'
+                feed_waiting.set()
+                await asyncio.Event().wait()
+            finally:
+                feed_drained.set()
+        async def price(_index, _row):
+            try:
+                async with engine_work(engine):
+                    async with required_state_wait():
+                        parked.set()
+                        await asyncio.Event().wait()
+            finally:
+                work_drained.set()
+        task = asyncio.create_task(schedule_routes(lambda _: [feed()], price, limit=1))
+        try:
+            await asyncio.wait_for(parked.wait(), 1)
+            await asyncio.wait_for(feed_waiting.wait(), 1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertTrue(work_drained.is_set())
+            self.assertTrue(feed_drained.is_set())
+            self.assertEqual(engine._value, 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
 
 
 if __name__ == '__main__':
