@@ -69,6 +69,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_market_canonical_a
 python-candidate/.venv/bin/python python-candidate/tests/test_snapshot_copy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cached_discovery_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_trade_quote.py
+python-candidate/.venv/bin/python python-candidate/tests/test_model_catalog.py
 python-candidate/.venv/bin/python python-candidate/tests/test_fast_trade_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_budget.py
 python-candidate/.venv/bin/python python-candidate/tests/test_budget_providers.py

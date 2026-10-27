@@ -269,7 +269,7 @@ class TradeQuotes:
         request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
         registry = getattr(self.market, 'registry', None)
         if registry is not None:
-            await registry.ensure_loaded()
+            await registry.ensure_loaded(wait=True)
         packet = self.packet(request)
         if packet.get('budgetRange') and packet.get('estimate'):
             return packet

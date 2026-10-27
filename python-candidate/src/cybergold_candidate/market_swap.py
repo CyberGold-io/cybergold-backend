@@ -322,7 +322,7 @@ class MarketQuotes(RouteQuoteEngine):
         request = MarketModelRequest.model_validate(request).model_dump()
         for name in ('counterToken', 'adapter'):
             request[name] = Web3.to_checksum_address(request[name])
-        await self.registry.ensure_loaded()
+        await self.registry.ensure_loaded(wait=True)
         rpc = self.registry.get_rpc()
         block = block or await self.head()
         packet = self.packet(request)
