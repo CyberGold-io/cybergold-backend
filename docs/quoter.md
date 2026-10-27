@@ -170,8 +170,8 @@ preparation kept the selected plan and original accepted bounds. These tests
 used freshly deployed Helpers on disposable local forks; the primary quote-only
 cohort used the recorded published addresses instead. Their scopes are separate.
 
-The [local implementation report](../../investigations/mainnet-quotes-2026-10-22/implementation-migration-2026-10-26.md)
-records exact source identities, model/reference coverage, ordinary failures,
+The separately retained local implementation report records exact source
+identities, model/reference coverage, ordinary failures,
 cleanup and the separate evaluation backlog. Cold model availability, estimator
 error, selected-plan receipt correctness and route quality are distinct results.
 No Mainnet transaction or release follows from this local qualification.
