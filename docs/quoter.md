@@ -113,6 +113,13 @@ the baseline formula. Changed shared pool facts refresh derived model
 parameters; they do not start a whole-plan search. A mixed whole quote is not
 assigned to an unrelated productive Market route as training data.
 
+The first model request waits for the existing optional pool catalog load before
+enumerating its routes. Otherwise a fresh API process could return an empty
+estimate while its known pools were still loading. A failed store load leaves
+ordinary estimation available. Model acquisition can still be slow on a cold
+process; this correction improves first-request availability, not the baseline
+formula or the speed of that acquisition.
+
 Resolved V2/V3 addresses share canonical pool observations and persistence
 across seed/catalog aliases. SDK payloads retain coherent caller IDs, while
 candidate-private post-state follows the same physical pool even when catalog
@@ -148,9 +155,23 @@ two independent local Uvicorn API processes and HTTP clients: a process whose
 fixture provider cannot acquire a head still retrieves the other process's
 original SQL-saved quote, including after a failed explicit Refresh. Its
 deterministic pricing fixture proves cross-process reuse, not AMM latency.
-The App's paired measurement loop, tiny USDT cases and owned-fork resource
-adapter are implemented. The adapter controls database/process cold starts,
-forced warm searches, second-process lookups and a header-only advance. Actual
-baseline/candidate measurements and wallet/receipt comparisons remain pending.
-Fixture timings are not cold/warm performance results, and local checks do not
-complete WS7's profile qualification.
+The App's paired measurement loop controls database/process cold starts, forced
+warm searches, second-process lookups and a header-only advance. The completed
+local native-arm64 cohort recorded 180 primary requests, including three failed
+requests. Shared candidate lookup took a median 11.2 ms; the baseline searched
+again for about five seconds. Cold full searches remained about 6.8–6.9 seconds,
+and warm final responses retained the existing five-second comparison window.
+These owned-fork results are not production latency guarantees.
+
+Actual receipt checks passed five direct API integration cases, six tiny-USDT
+trades and the full 24-journey native MetaMask matrix. The integrated two-browser
+case used two real API processes and two actual Swap receipts. Changed-state
+preparation kept the selected plan and original accepted bounds. These tests
+used freshly deployed Helpers on disposable local forks; the primary quote-only
+cohort used the recorded published addresses instead. Their scopes are separate.
+
+The [local implementation report](../../investigations/mainnet-quotes-2026-10-22/implementation-migration-2026-10-26.md)
+records exact source identities, model/reference coverage, ordinary failures,
+cleanup and the separate evaluation backlog. Cold model availability, estimator
+error, selected-plan receipt correctness and route quality are distinct results.
+No Mainnet transaction or release follows from this local qualification.
