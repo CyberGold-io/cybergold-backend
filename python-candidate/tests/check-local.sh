@@ -55,6 +55,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refre
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_sample_observations.py

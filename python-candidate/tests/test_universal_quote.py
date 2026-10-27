@@ -46,8 +46,13 @@ class Engine:
         self.calls=[]
         self.semaphore=asyncio.Semaphore(8)
         self.cap=None
+        self.supply=10**24
     async def block(self,_): return deepcopy(BLOCK)
     async def assert_canonical(self,block): self.calls.append(('canonical',block))
+    async def read_function(self,target,signature,types,arguments,outputs,block):
+        if signature != 'totalSupply()':
+            raise AssertionError('Unexpected Core read.')
+        return [self.supply]
     async def quote_sdk_branches(self,branches,mode,amount,block,*,candidate,canonical):
         # Independent forward constant-product formula, mutating only this
         # candidate. Shared bank proves branch/order interaction, not a mock

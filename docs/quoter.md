@@ -37,9 +37,18 @@ their responsibilities.
 ## Budgets, funding and consumption
 
 `EconomicRequest.inputs` expresses the input budget. `EconomicQuote.inputs`
-expresses the plan's declared funding: the amount Helpers acquires. The current
-search normally declares the full input budget. It does not yet reconstruct a
-new lower-funded plan by subtracting retained amounts.
+expresses the plan's declared funding: the amount Helpers acquires. Direct
+basket issuance also evaluates the exact input vector required by Core's
+capacity-limited preview. Direct basket redemption computes its funding ceiling
+from the requested budget and total CYGLD supply at the observed block, before
+applying Helpers/Core fees. Available reserves and recovery shares determine
+the returned redemption basket through the existing authoritative previews.
+The original request remains the budget; unused funding is never acquired.
+
+These amounts come from protocol state and integer preview calculations, not
+blind smaller-amount probes. Scalar acquisition and Market whole-plan funding
+reconstruction remain separate work: subtracting retained amounts is not that
+algorithm.
 
 `conversionObservations` records each evaluated conversion's input/output
 currencies, funded input, simulated consumed input and output. Consumption is
@@ -50,9 +59,12 @@ spending. Settlement receipts remain the evidence for actual mined debits and
 credits. Returned input follows the existing Helpers retained-charge policy.
 
 Complete scalar results compare net requested output first, then lower declared
-funding on an equal-output tie in the same input currency. Basket vectors keep
-their existing comparison behavior. This comparison does not discover smaller
-funding by itself.
+funding on an equal-output tie in the same input currency. For basket results,
+matching output descriptors compare componentwise; no output may decrease.
+Equal outputs prefer componentwise smaller funding in matching currencies.
+Incomparable vectors keep their incumbent rather than summing unrelated raw
+units. Productive full-budget continuations can still win by returning more.
+This comparison does not discover smaller funding by itself.
 
 ## Shared historical quotes and explicit Refresh
 
@@ -72,7 +84,9 @@ Concurrent saves do not mix plan/output/context fields. Cache read/write errors
 leave ordinary search and preparation available.
 
 `refresh: true` bypasses using the stored quote as the answer. The Quoter may
-replay its semantic plan as a seed, but must evaluate at the current state.
+replay its semantic plan with its saved funding as a seed, but must evaluate at
+the current state. Saved funding must fit the requested budgets and, for direct
+basket redemption, the current supply-derived funding ceiling.
 Search success replaces the complete saved record. Search failure leaves the
 previous record intact and is returned as a failed Refresh. Browser display
 copies can retain that previous observation while showing the error.
@@ -85,7 +99,8 @@ is five seconds. Only if no usable whole plan exists can search continue for
 up to ten more seconds; its first usable result then ends selection. A
 zero-output conversion tries its existing alternatives, while an all-zero
 conversion retains its ordinary outcome. No progressive scheduler, V3 bitmap
-batching policy or reduced-funding construction is enabled by this migration.
+batching policy is enabled by this migration. The direct basket funding
+construction above does not reconstruct scalar Market acquisition paths.
 
 Transaction Preparation replays the selected routes and allocations through
 `quoter.evaluate`; it does not discover a replacement route. It binds scalar
@@ -95,6 +110,14 @@ A changed-state result that cannot meet them returns the ordinary preparation
 error. It cannot lower the accepted minimum or enlarge the debit to succeed.
 Helpers/adapter deployment binding is preserved so a captured wallet batch
 cannot be silently retargeted.
+
+Preparation replays the selected funding, not the original larger budget. Its
+returned nested `economicQuote.request.inputs` therefore describes that replay's
+funding; the selected original Economic Quote retains the user's budget. If
+supply or wallet balances change after quoting, preparation does not enlarge or
+silently resize the selected funding. The App's existing fresh balance check
+still establishes whether the payer can fund it; preparation alone is not a
+separate guarantee of wallet fundability.
 
 After replay, preparation assigns the existing execution deadline as current
 time plus 600 seconds and compiles the Helpers body. Browsing consumes none of
