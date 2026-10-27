@@ -336,6 +336,30 @@ class Quoter:
             raise QuoteFailure('quote-unavailable')
         return request
 
+    async def direct_basket_funding(self, request, block):
+        """Construct a smaller direct Core candidate, leaving unused budgets unfunded.
+
+        Core's issuance preview already solves its supply cap and returns the
+        canonical basket costs, as used by basket MAX. Redemption funding cannot
+        exceed the existing CYGLD supply; Helpers/Core still preview that actual
+        funding and apply both fee layers before it becomes a completed quote.
+        """
+        if request['intent'] == 2:
+            result = await self.core_preview('issue-exact-in', {
+                'maximumAmountsIn': [row['amount'] for row in request['inputs']]}, block)
+            amounts = list(map(int, result['amountsInExact']))
+        elif request['intent'] == 3:
+            supply, = await self.engine.registry.get_rpc().read_function(
+                self.core, 'totalSupply()', [], [], ['uint256'], block)
+            return [{'currency': request['inputs'][0]['currency'],
+                     'amount': str(min(int(request['inputs'][0]['amount']), int(supply)))}]
+        else:
+            return None
+        if not any(amounts) or amounts == [int(row['amount']) for row in request['inputs']]:
+            return None
+        return [{'currency': row['currency'], 'amount': str(amount)}
+                for row, amount in zip(request['inputs'], amounts, strict=True)]
+
     async def _get(self, request, on_update=None, *, core_only=False, seed=None):
         request = self.normalise_request(request)
         budget = current_budget()
@@ -347,16 +371,26 @@ class Quoter:
             raise InvalidPreview('Basket input currencies must follow Core basket order.')
         if request['intent'] != 3:
             self.seed_routes(request, assets)
+        direct_funding = (await budget.prepare(self.direct_basket_funding(request, block))
+                          if request['intent'] == 3 else None)
+        # At zero supply the original request still receives Core's ordinary
+        # identified rejection; zero funding must not become a successful quote.
+        default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
         best, failures, observations = None, [], {}
-        async def evaluate(share, order, first, selected=None):
+        async def evaluate(share, order, first, selected=None, funding=None, phase=None):
             nonlocal best
             try:
-                value = await budget.discovery(self.candidate(request, share, order, block, assets, weights, first=first,
+                funding = default_funding if funding is None else funding
+                funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
+                value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
                     observations=observations, selected=selected))
-                if prefer_completed(value, best, scalar=request['intent'] in (0, 1)):
+                value['request'] = deepcopy(request)
+                if prefer_completed(value, best, scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2):
                     if not budget.qualified():
                         return
-                    value['searchCoverage']['selectedPhase'] = 'saved-plan' if selected is not None else 'first-result' if first else 'detailed'
+                    value['searchCoverage']['selectedPhase'] = phase or ('saved-plan' if selected is not None
+                        else 'capacity-limited' if funding is not None and funding != request['inputs']
+                        else 'first-result' if first else 'detailed')
                     best = value
                     if on_update: await on_update({'type': 'qualified', 'value': value})
             except SnapshotChanged:
@@ -378,8 +412,27 @@ class Quoter:
         try:
             async def seeded():
                 if seed is not None:
-                    await evaluate(100, 'core-first', False, selected=seed['plan'])
-            await owned_reads(seeded(), owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+                    funding = seed['inputs']
+                    maxima = direct_funding if direct_funding is not None else request['inputs']
+                    # A saved plan remains an optional candidate under the
+                    # requested budget, including for direct diagnostic callers.
+                    if len(funding) == len(maxima) and all(
+                            row['currency'].lower() == maximum['currency'].lower()
+                            and int(row['amount']) <= int(maximum['amount'])
+                            for row, maximum in zip(funding, maxima, strict=True)):
+                        await evaluate(100, 'core-first', False, selected=seed['plan'], funding=funding)
+            async def limited():
+                if request['intent'] != 2:
+                    return
+                try:
+                    funding = await budget.discovery(self.direct_basket_funding(request, block))
+                    if funding is not None:
+                        await evaluate(100, 'core-first', True, funding=funding, phase='capacity-limited')
+                except SnapshotChanged:
+                    raise
+                except Exception as error:
+                    failures.append(error)
+            await owned_reads(seeded(), limited(), owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
         except SearchStopped:
             pass
         budget.cleanup_done()
