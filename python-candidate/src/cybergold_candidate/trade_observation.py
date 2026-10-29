@@ -3,11 +3,73 @@ import json
 import logging
 import time
 import uuid
+import math
+import re
 
 from .diagnostics import project
 from .quote_errors import public_quote_error
 from .rpc_diagnostics import quote_failure_context
 from .telemetry import observe
+
+
+_ECONOMIC_KINDS = {'quoter', 'transaction-preparation', 'fast-estimator'}
+_ECONOMIC_SOURCES = {'stored-quote', 'search', 'refresh', 'prepared-transaction', 'fast-estimate'}
+_ECONOMIC_PHASES = {'lookup', 'current-state-search', 'selected-plan-replay', 'advisory-estimate'}
+
+
+def economic_evidence(value, evidence):
+    """Bounded public economic facts, never plans, calldata or wallet material."""
+    result = {}
+    for key, allowed in (('operationKind', _ECONOMIC_KINDS), ('resultSource', _ECONOMIC_SOURCES),
+                         ('operationPhase', _ECONOMIC_PHASES)):
+        if evidence.get(key) in allowed:
+            result[key] = evidence[key]
+    def raw(number):
+        return isinstance(number, str) and re.fullmatch(r'[0-9]{1,78}', number) and int(number) < 2**256
+    def assets(rows):
+        return [{'currency': row['currency'], 'amount': row['amount']} for row in rows[:32]
+            if isinstance(row, dict) and raw(row.get('amount')) and isinstance(row.get('currency'), str)
+            and re.fullmatch(r'0x[0-9a-fA-F]{40}', row['currency'])]
+    budget = assets(evidence.get('requestInputs', []))
+    if budget:
+        result['inputBudget'] = budget
+    if isinstance(value, dict):
+        result.update(project(value.get('context', {})))
+        for name in ('quotedInput', 'quotedOutput', 'inputMaximum', 'outputMinimum'):
+            if raw(value.get(name)):
+                result[name] = value[name]
+        funding = assets(value.get('inputs', []))
+        if funding:
+            result['funding'] = funding
+        estimate = value.get('estimate', {})
+        if isinstance(estimate, dict) and raw(estimate.get('amount')):
+            result['estimatedAmount'] = estimate['amount']
+        phase = value.get('searchCoverage', {}).get('selectedPhase')
+        if phase in ('saved-plan', 'first-result', 'detailed'):
+            result['routePhase'] = phase
+        metrics = value.get('metrics') or evidence.get('producerMetrics') or {}
+        safe = {}
+        for key in ('timeToFirstWholePlanMs', 'searchMs', 'totalMs', 'finalizationMs'):
+            number = metrics.get(key)
+            if type(number) in (int, float) and math.isfinite(number) and 0 <= number <= 1e12:
+                safe[key] = number
+        if metrics.get('selectionReason') in ('complete', 'best-initial', 'first-extension', 'timeout'):
+            safe['selectionReason'] = metrics['selectionReason']
+        if safe:
+            result['observedQuoteMetrics' if result.get('resultSource') == 'stored-quote' else 'producerMetrics'] = safe
+    rpc = evidence.get('rpc', {})
+    projected = {}
+    for section, scope, keys in (
+        ('getterReads', 'hash-pinned-getter-bank', ('requested', 'issued', 'coalesced', 'reused')),
+        ('transport', 'owned-provider-exchanges', ('started', 'completed', 'rpcCallsStarted', 'summedExchangeMs'))):
+        source = rpc.get(section, {})
+        row = {key: source[key] for key in keys if type(source.get(key)) in (int, float)
+               and math.isfinite(source[key]) and 0 <= source[key] <= 1e12}
+        if row:
+            projected[section] = {'scope': scope, **row}
+    if projected:
+        result['rpc'] = projected
+    return result
 
 
 def request_references(request):
@@ -108,6 +170,17 @@ class QuoteObservation:
                     record[key] = frame[key]
             value = frame.get('value', {})
             record.update(project({**value, **value.get('context', {})}))
+            if isinstance(frame.get('economicEvidence'), dict):
+                def economic():
+                    facts = economic_evidence(value, frame['economicEvidence'])
+                    record.update(facts)
+                    source = facts.get('resultSource')
+                    if source:
+                        self.metrics.economic_results.labels(self.operation, source, outcome).inc()
+                    first = facts.get('producerMetrics', {}).get('timeToFirstWholePlanMs')
+                    if source in ('search', 'refresh') and first is not None:
+                        self.metrics.quoter_first_plan.labels(self.operation).observe(first/1000)
+                observe(economic)
             for provider, status in value.get('evaluation', {}).items():
                 if provider in ('core', 'market') and status == 'complete':
                     observe(lambda p=provider: self.metrics.quote_provider_outcomes.labels(self.operation, p, 'succeeded').inc())

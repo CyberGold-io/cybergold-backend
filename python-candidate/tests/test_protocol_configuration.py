@@ -472,7 +472,7 @@ class ProtocolConfigurationTests(unittest.IsolatedAsyncioTestCase):
             async def close(self): pass
         rpc = Head()
         registry = PoolRegistry(settings(), rpc=rpc)
-        registry.ensure_loaded = lambda: asyncio.sleep(0)
+        registry.ensure_loaded = lambda **_: asyncio.sleep(0)
         market = MarketQuotes(settings(), registry, request_resolver=configuration.resolve_request)
         request = {'side': 'buy', 'mode': 'exact-in', 'counterToken': CUSTOM}
         model = await market.get_model(request)

@@ -49,6 +49,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/economic-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast. */
+        post: operations["post__api_economic_quotes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tx-preparations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Replay only the selected semantic plan at current state. Bind accepted input/output guards before repricing and start the ten-minute execution lifetime during unsigned preparation. No replacement-route discovery, signing or broadcast. */
+        post: operations["post__api_tx_preparations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/economic-estimates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description One Backend Fast Estimator; advisory Core/Market estimate and model evidence, independent of transaction preparation. Existing model callers retain their compatibility endpoints during migration. */
+        post: operations["post__api_economic_estimates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/universal-exact-input": {
         parameters: {
             query?: never;
@@ -1141,6 +1192,218 @@ export interface components {
     schemas: {
         /** @enum {string} */
         QuoteErrorCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        /** @description Economic calculation has no recipient, execution guards, expiry or wire bytes. */
+        EconomicRequest: {
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            /** @enum {number} */
+            intent: 0 | 1 | 2 | 3;
+            outputCurrency: string;
+        };
+        "Record<string,Record<string,unknown>>": {
+            [key: string]: components["schemas"]["Record<string,unknown>"];
+        };
+        "Record<string,unknown>": {
+            [key: string]: unknown;
+        };
+        EconomicQuoteRequest: components["schemas"]["EconomicRequest"] & {
+            refresh?: boolean;
+        };
+        EconomicQuote: components["schemas"]["Omit<UniversalExactInputQuote,\"plan\"|\"planDescription\"|\"outputMinimum\"|\"economicQuote\">"] & {
+            request: components["schemas"]["EconomicRequest"];
+            plan: {
+                allocations: {
+                    /** @enum {number} */
+                    kind: 0 | 1;
+                    amountIn: string;
+                }[];
+                conversions: components["schemas"]["Record<string,Record<string,unknown>>"];
+                body: components["schemas"]["Record<string,unknown>"];
+            };
+            /** @description Measured conversion quantities; these never reduce declared funding by inference. */
+            conversionObservations?: {
+                operation: string;
+                inputCurrency: string;
+                fundedInput: string;
+                consumedInput: string;
+                outputCurrency: string;
+                output: string;
+            }[];
+            observation?: {
+                /** @enum {string} */
+                source: "search" | "stored";
+                refresh: boolean;
+            };
+        };
+        "Omit<UniversalExactInputQuote,\"plan\"|\"planDescription\"|\"outputMinimum\"|\"economicQuote\">": {
+            /** @constant */
+            operation: "executeExactInput";
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+                /** @enum {string} */
+                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+            };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+            };
+        };
+        PreparedTransaction: {
+            /** @constant */
+            strategy: "universal";
+            /** @enum {string} */
+            routeFamily: "core" | "market" | "mixed";
+            /** @constant */
+            operation: "executeExactInput";
+            /** @constant */
+            settlementPolicy: "protocol-retained-input";
+            plan: components["schemas"]["UniversalExactInputPlan"];
+            planDescription: components["schemas"]["Record<string,unknown>"];
+            economicQuote?: components["schemas"]["EconomicQuote"];
+            inputs: {
+                currency: string;
+                amount: string;
+            }[];
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput: string;
+            outputMinimum: string;
+            estimatedRetainedInputCharges: {
+                branch: number;
+                stage: number;
+                currency: string;
+                amount: string;
+            }[];
+            estimatedRecipientOutputs: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            fees: {
+                coreProtocolFeeCygld: string;
+                coreHelpersFeeCygld: string;
+                marketFeeCygld: string;
+            };
+            recoveryShares: {
+                kind: number;
+                token: string;
+                id: string;
+                amount: string;
+            }[];
+            deployment: {
+                helpers: string;
+                adapter: string;
+                /** @constant */
+                encoding: "uniswap-routing-v1";
+            };
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+            retentionDisclosure: {
+                custodian: string;
+                /** @constant */
+                beneficiary: "helpers-owner-at-settlement";
+            };
+            searchCoverage: {
+                coreSharesPercent: number[];
+                orders: string[];
+                maxCoreInvocations: number;
+                maxAmmHops: number;
+                /** @constant */
+                scope: "selected-inventory";
+                /** @enum {string} */
+                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+            };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+            };
+        } & {
+            economicQuote: components["schemas"]["EconomicQuote"];
+            sender: string;
+        };
         UniversalExactInputPlan: components["schemas"]["Omit<UniversalExactInputRequest,\"slippageBps\">"] & {
             minimumOutput: string;
             body: string;
@@ -1156,7 +1419,6 @@ export interface components {
             intent: 0 | 1 | 2 | 3;
             outputCurrency: string;
         };
-        "Record<string,unknown>": Record<string, never>;
         TradeQuoteRequest: {
             /** @enum {string} */
             side: "buy" | "sell";
@@ -1806,8 +2068,8 @@ export interface components {
                     };
                     /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
                     priceImpactPpm?: string;
-                    /** @enum {string} */
-                    qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                    /** @constant */
+                    qualification: "sdk";
                     executionSimulationRequired?: boolean;
                     quoteVerificationUnavailable?: string;
                     searchCoverage?: {
@@ -2703,8 +2965,8 @@ export interface components {
                 };
                 /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
                 priceImpactPpm?: string;
-                /** @enum {string} */
-                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                /** @constant */
+                qualification: "sdk";
                 executionSimulationRequired?: boolean;
                 quoteVerificationUnavailable?: string;
                 searchCoverage?: {
@@ -3942,8 +4204,8 @@ export interface components {
                 };
                 /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
                 priceImpactPpm?: string;
-                /** @enum {string} */
-                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                /** @constant */
+                qualification: "sdk";
                 executionSimulationRequired?: boolean;
                 quoteVerificationUnavailable?: string;
                 searchCoverage?: {
@@ -4289,9 +4551,34 @@ export interface components {
                             };
                             amountIn: string;
                             amountOut: string;
+                            sourceObservations?: {
+                                poolId: string;
+                                context: {
+                                    chainId: number;
+                                    blockNumber: string;
+                                    blockHash: string;
+                                    observedAt: string;
+                                };
+                            }[];
+                            sourceContext?: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            } | null;
                             points: {
                                 amountIn: string;
                                 amountOut: string;
+                                context?: {
+                                    chainId: number;
+                                    blockNumber: string;
+                                    blockHash: string;
+                                    observedAt: string;
+                                };
+                                requestedAmount?: string;
+                                family?: string;
+                                feeRatePpm?: number;
+                                routeIdentity?: string;
                             }[];
                             exchangeRate?: {
                                 numerator: string;
@@ -4351,6 +4638,7 @@ export interface components {
                 settlementPolicy: "protocol-retained-input";
                 plan: components["schemas"]["UniversalExactInputPlan"];
                 planDescription: components["schemas"]["Record<string,unknown>"];
+                economicQuote?: components["schemas"]["EconomicQuote"];
                 inputs: {
                     currency: string;
                     amount: string;
@@ -4406,6 +4694,21 @@ export interface components {
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
+                    /** @enum {string} */
+                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                };
+                /** @description Producer clocks, distinct from client request or browser journey duration. */
+                metrics?: {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                } & {
+                    totalMs: number;
+                    timeToFirstWholePlanMs: null | number;
+                    searchMs: null | number;
+                    selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
                 };
             } | ({
                 /** @enum {string} */
@@ -5107,8 +5410,8 @@ export interface components {
                     };
                     /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
                     priceImpactPpm?: string;
-                    /** @enum {string} */
-                    qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                    /** @constant */
+                    qualification: "sdk";
                     executionSimulationRequired?: boolean;
                     quoteVerificationUnavailable?: string;
                     searchCoverage?: {
@@ -5936,6 +6239,7 @@ export interface components {
             settlementPolicy: "protocol-retained-input";
             plan: components["schemas"]["UniversalExactInputPlan"];
             planDescription: components["schemas"]["Record<string,unknown>"];
+            economicQuote?: components["schemas"]["EconomicQuote"];
             inputs: {
                 currency: string;
                 amount: string;
@@ -5991,6 +6295,21 @@ export interface components {
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
+                /** @enum {string} */
+                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+            };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
             };
         } | {
             /** @constant */
@@ -6095,8 +6414,8 @@ export interface components {
             };
             /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
             priceImpactPpm?: string;
-            /** @enum {string} */
-            qualification: "quoter" | "sdk" | "sdk-and-quoter";
+            /** @constant */
+            qualification: "sdk";
             executionSimulationRequired?: boolean;
             quoteVerificationUnavailable?: string;
             searchCoverage?: {
@@ -6315,9 +6634,34 @@ export interface components {
                     };
                     amountIn: string;
                     amountOut: string;
+                    sourceObservations?: {
+                        poolId: string;
+                        context: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                    }[];
+                    sourceContext?: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    } | null;
                     points: {
                         amountIn: string;
                         amountOut: string;
+                        context?: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        };
+                        requestedAmount?: string;
+                        family?: string;
+                        feeRatePpm?: number;
+                        routeIdentity?: string;
                     }[];
                     exchangeRate?: {
                         numerator: string;
@@ -6361,6 +6705,7 @@ export interface components {
                 settlementPolicy: "protocol-retained-input";
                 plan: components["schemas"]["UniversalExactInputPlan"];
                 planDescription: components["schemas"]["Record<string,unknown>"];
+                economicQuote?: components["schemas"]["EconomicQuote"];
                 inputs: {
                     currency: string;
                     amount: string;
@@ -6416,6 +6761,21 @@ export interface components {
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
+                    /** @enum {string} */
+                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                };
+                /** @description Producer clocks, distinct from client request or browser journey duration. */
+                metrics?: {
+                    firstQualifiedMs?: number;
+                    selectionMs?: number;
+                    canonicalCompletedMs?: number;
+                    cleanupCompletedMs?: number;
+                    finalizationMs?: number;
+                } & {
+                    totalMs: number;
+                    timeToFirstWholePlanMs: null | number;
+                    searchMs: null | number;
+                    selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
                 };
             } | {
                 /** @constant */
@@ -6520,8 +6880,8 @@ export interface components {
                 };
                 /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
                 priceImpactPpm?: string;
-                /** @enum {string} */
-                qualification: "quoter" | "sdk" | "sdk-and-quoter";
+                /** @constant */
+                qualification: "sdk";
                 executionSimulationRequired?: boolean;
                 quoteVerificationUnavailable?: string;
                 searchCoverage?: {
@@ -8435,7 +8795,8 @@ export interface components {
             value: {
                 /** @enum {string} */
                 mode: "exact-in" | "exact-out";
-                quoter: string;
+                /** @constant */
+                qualification: "sdk";
                 context: {
                     chainId: number;
                     blockNumber: string;
@@ -9929,7 +10290,7 @@ export interface components {
             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
             /** @enum {string} */
             code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
-        } & components["schemas"]["Partial<Record<\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\"|\"quotedInput\"|\"quotedOutput\"|\"inputMaximum\"|\"outputMinimum\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
+        } & components["schemas"]["Partial<Record<\"outputMinimum\"|\"quotedInput\"|\"inputMaximum\"|\"quotedOutput\"|\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
             pools?: {
                 /** @enum {string} */
                 protocol: "v2" | "v3" | "v4";
@@ -9938,7 +10299,11 @@ export interface components {
             }[];
             omittedPools?: number;
         };
-        "Partial<Record<\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\"|\"quotedInput\"|\"quotedOutput\"|\"inputMaximum\"|\"outputMinimum\",string>>": {
+        "Partial<Record<\"outputMinimum\"|\"quotedInput\"|\"inputMaximum\"|\"quotedOutput\"|\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\",string>>": {
+            outputMinimum?: string;
+            quotedInput?: string;
+            inputMaximum?: string;
+            quotedOutput?: string;
             targetAmount?: string;
             minimumAmountOut?: string;
             maximumAmountOut?: string;
@@ -9946,10 +10311,6 @@ export interface components {
             maximumAmountIn?: string;
             observedAmountIn?: string;
             executionAmount?: string;
-            quotedInput?: string;
-            quotedOutput?: string;
-            inputMaximum?: string;
-            outputMinimum?: string;
         };
         "Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>": {
             elapsedMs?: number;
@@ -10494,6 +10855,34 @@ export interface components {
             amount: string;
             slippageBps?: number;
         };
+        EconomicPlan: {
+            allocations: {
+                /** @enum {number} */
+                kind: 0 | 1;
+                amountIn: string;
+            }[];
+            conversions: components["schemas"]["Record<string,Record<string,unknown>>"];
+            body: components["schemas"]["Record<string,unknown>"];
+        };
+        TransactionPreparationRequest: {
+            quote: components["schemas"]["EconomicQuote"];
+            sender: string;
+            recipient: string;
+            slippageBps?: number;
+            acceptedBounds?: {
+                inputs?: {
+                    currency: string;
+                    amount: string;
+                }[];
+                minimumOutput?: string;
+                expectedCoreOutputs?: {
+                    kind: number;
+                    token: string;
+                    id: string;
+                    minimumAmount: string;
+                }[];
+            };
+        };
         /** @description Market swaps transfer existing CYGLD; never use Core basket economics. */
         UniversalExactInputRequest: {
             /** @enum {number} */
@@ -10518,6 +10907,7 @@ export interface components {
             settlementPolicy: "protocol-retained-input";
             plan: components["schemas"]["UniversalExactInputPlan"];
             planDescription: components["schemas"]["Record<string,unknown>"];
+            economicQuote?: components["schemas"]["EconomicQuote"];
             inputs: {
                 currency: string;
                 amount: string;
@@ -10573,6 +10963,21 @@ export interface components {
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
+                /** @enum {string} */
+                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+            };
+            /** @description Producer clocks, distinct from client request or browser journey duration. */
+            metrics?: {
+                firstQualifiedMs?: number;
+                selectionMs?: number;
+                canonicalCompletedMs?: number;
+                cleanupCompletedMs?: number;
+                finalizationMs?: number;
+            } & {
+                totalMs: number;
+                timeToFirstWholePlanMs: null | number;
+                searchMs: null | number;
+                selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
             };
         };
         TradeProviderAssessment: {
@@ -10929,9 +11334,34 @@ export interface components {
                         };
                         amountIn: string;
                         amountOut: string;
+                        sourceObservations?: {
+                            poolId: string;
+                            context: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                        }[];
+                        sourceContext?: {
+                            chainId: number;
+                            blockNumber: string;
+                            blockHash: string;
+                            observedAt: string;
+                        } | null;
                         points: {
                             amountIn: string;
                             amountOut: string;
+                            context?: {
+                                chainId: number;
+                                blockNumber: string;
+                                blockHash: string;
+                                observedAt: string;
+                            };
+                            requestedAmount?: string;
+                            family?: string;
+                            feeRatePpm?: number;
+                            routeIdentity?: string;
                         }[];
                         exchangeRate?: {
                             numerator: string;
@@ -11155,8 +11585,8 @@ export interface components {
             };
             /** @description AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
             priceImpactPpm?: string;
-            /** @enum {string} */
-            qualification: "quoter" | "sdk" | "sdk-and-quoter";
+            /** @constant */
+            qualification: "sdk";
             executionSimulationRequired?: boolean;
             quoteVerificationUnavailable?: string;
             searchCoverage?: {
@@ -11367,9 +11797,34 @@ export interface components {
                 };
                 amountIn: string;
                 amountOut: string;
+                sourceObservations?: {
+                    poolId: string;
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                }[];
+                sourceContext?: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                } | null;
                 points: {
                     amountIn: string;
                     amountOut: string;
+                    context?: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    requestedAmount?: string;
+                    family?: string;
+                    feeRatePpm?: number;
+                    routeIdentity?: string;
                 }[];
                 exchangeRate?: {
                     numerator: string;
@@ -12063,7 +12518,8 @@ export interface components {
                 blockHash: string;
                 observedAt: string;
             };
-            quoter: string;
+            /** @constant */
+            qualification: "sdk";
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
             result: {
@@ -12083,7 +12539,8 @@ export interface components {
         RouteSearch: {
             /** @enum {string} */
             mode: "exact-in" | "exact-out";
-            quoter: string;
+            /** @constant */
+            qualification: "sdk";
             context: {
                 chainId: number;
                 blockNumber: string;
@@ -13731,6 +14188,177 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Gold"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_economic_quotes: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EconomicQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EconomicQuote"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_tx_preparations: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionPreparationRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreparedTransaction"];
+                };
+            };
+            /** @description Remote API entry requires its environment's backend bearer */
+            401: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+            /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_economic_estimates: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TradeModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing response envelope */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradeQuoteModelPacket"];
                 };
             };
             /** @description Remote API entry requires its environment's backend bearer */

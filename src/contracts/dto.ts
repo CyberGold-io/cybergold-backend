@@ -44,6 +44,7 @@ export type UniversalExactInputQuote = {
   strategy: "universal"; routeFamily: "core" | "market" | "mixed";
   operation: "executeExactInput"; settlementPolicy: "protocol-retained-input";
   plan: UniversalExactInputPlan; planDescription: Record<string, unknown>;
+  economicQuote?: EconomicQuote;
   inputs: { currency: string; amount: string }[];
   quotedInput?: string; inputMaximum?: string; quotedOutput: string; outputMinimum: string;
   estimatedRetainedInputCharges: { branch: number; stage: number; currency: string; amount: string }[];
@@ -54,8 +55,35 @@ export type UniversalExactInputQuote = {
   context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
   retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
   searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
-    maxAmmHops: number; scope: "selected-inventory" };
+    maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed" };
+  /** Producer clocks, distinct from client request or browser journey duration. */
+  metrics?: QuoteSelectionMetrics & { totalMs: number; timeToFirstWholePlanMs: number | null;
+    searchMs: number | null; selectionReason: "complete" | "best-initial" | "first-extension" | "timeout" | null };
 };
+/** Economic calculation has no recipient, execution guards, expiry or wire bytes. */
+export type EconomicRequest = Pick<UniversalExactInputRequest, "intent" | "inputs" | "outputCurrency">;
+export type EconomicPlan = {
+  allocations: { kind: 0 | 1; amountIn: string }[];
+  conversions: Record<string, Record<string, unknown>>;
+  body: Record<string, unknown>;
+};
+export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescription" | "outputMinimum" | "economicQuote"> & {
+  request: EconomicRequest; plan: EconomicPlan;
+  /** Measured conversion quantities; these never reduce declared funding by inference. */
+  conversionObservations?: { operation: string; inputCurrency: string; fundedInput: string;
+    consumedInput: string; outputCurrency: string; output: string }[];
+  observation?: { source: "search" | "stored"; refresh: boolean };
+};
+export type EconomicQuoteRequest = EconomicRequest & { refresh?: boolean };
+export type ExecutionBounds = {
+  inputs?: EconomicRequest["inputs"]; minimumOutput?: string;
+  expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
+};
+export type TransactionPreparationRequest = {
+  quote: EconomicQuote; sender: string; recipient: string; slippageBps?: number;
+  acceptedBounds?: ExecutionBounds;
+};
+export type PreparedTransaction = UniversalExactInputQuote & { economicQuote: EconomicQuote; sender: string };
 export type MarketQuoteRequest = {
   side: "buy" | "sell"; mode: "exact-in" | "exact-out";
   counterToken: string; amount: string; adapter?: string; recipient: string;
@@ -142,7 +170,7 @@ export type MarketQuote = {
   feeBeneficiaryDisplay?: { address: string; observedAt: string };
   /** AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
   priceImpactPpm?: string;
-  qualification: "sdk" | "quoter" | "sdk-and-quoter";
+  qualification: "sdk";
   executionSimulationRequired?: boolean; quoteVerificationUnavailable?: string;
   searchCoverage?: { scope: "selected-inventory"; maxHops: number; splitPercentages: number[];
     inventoryPools: number; catalogMonth: string | null };
@@ -154,7 +182,10 @@ export type MarketQuoteModelPacket = {
   intent: { side: "buy" | "sell"; mode: "exact-in" | "exact-out"; counterToken: string; adapter: string };
   cygld: string; feeRatePpm: number;
   routes: { route: MarketRoutePlan; amountIn: string; amountOut: string;
-    points: { amountIn: string; amountOut: string }[];
+    sourceObservations?: { poolId: string; context: MarketQuote["context"] }[];
+    sourceContext?: MarketQuote["context"] | null;
+    points: { amountIn: string; amountOut: string; context?: MarketQuote["context"];
+      requestedAmount?: string; family?: string; feeRatePpm?: number; routeIdentity?: string }[];
     exchangeRate?: { numerator: string; denominator: string };
     feeRetention?: { numerator: string; denominator: string };
     localImpact?: { numerator: string; denominator: string } }[];
@@ -375,11 +406,11 @@ export type TokenPreview = { context: BasketPreview["context"]; helpers: string 
   | { mode: "redeem-token-exact-in" | "redeem-native-exact-in"; result: { minimumAmountOut: string; projectedCoreOutputs: PreviewOutput[]; fees: PreviewFees } }
 );
 export type UniswapQuoteRequest = { mode: "exact-in" | "exact-out"; path: string; amount: string };
-export type UniswapQuote = { context: BasketPreview["context"]; quoter: string;
+export type UniswapQuote = { context: BasketPreview["context"]; qualification: "sdk";
   mode: UniswapQuoteRequest["mode"]; result: { amount: string } };
 export type RouteSearchTarget = { inputAsset: string; outputAsset: string; amount: string };
 export type RouteSearchRequest = { mode: UniswapQuoteRequest["mode"]; targets: RouteSearchTarget[]; adapter?: string };
-export type RouteSearch = { mode: RouteSearchRequest["mode"]; quoter: string; context: BasketPreview["context"];
+export type RouteSearch = { mode: RouteSearchRequest["mode"]; qualification: "sdk"; context: BasketPreview["context"];
   results: { target: RouteSearchTarget; best: { path: string; quote: string; route: "direct" | "viaWeth" | "mixed" | "identity";
     feeInfo: string; routePlan?: MarketRoutePlan } | null; attempted: number; succeeded: number; failures: { path: string; rpcCode: number; code?: QuoteErrorCode; constraint?: QuoteConstraint; diagnostics?: RpcErrorDiagnostics }[] }[];
   metrics: { candidateCalls: number; rpcReads: number; rpcReadsRequested: number; rpcReadsScope?: "coordinator";
@@ -665,6 +696,12 @@ export interface ContractSchemas {
   DiagnosticReferences: DiagnosticReferences;
   QuoteWorkDiagnostics: QuoteWorkDiagnostics;
   TradeModelRequest: TradeModelRequest;
+  EconomicRequest: EconomicRequest;
+  EconomicPlan: EconomicPlan;
+  EconomicQuoteRequest: EconomicQuoteRequest;
+  EconomicQuote: EconomicQuote;
+  TransactionPreparationRequest: TransactionPreparationRequest;
+  PreparedTransaction: PreparedTransaction;
   UniversalExactInputRequest: UniversalExactInputRequest;
   UniversalExactInputQuote: UniversalExactInputQuote;
   TradeQuoteRequest: TradeQuoteRequest;

@@ -30,11 +30,6 @@
     "required": false
   },
   {
-    "name": "NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS",
-    "kind": "address",
-    "required": false
-  },
-  {
     "name": "NEXT_PUBLIC_GOVERNANCE_SAFE_ADDRESS",
     "kind": "address",
     "required": false

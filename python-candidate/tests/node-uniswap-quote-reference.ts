@@ -15,5 +15,5 @@ const rows = (["exact-in", "exact-out"] as const).flatMap(mode => [direct, direc
     data: encodeFunctionData({ abi, functionName: name, args: [path, 2n ** 200n] } as never),
     result: encodeFunctionResult({ abi, functionName: name, result: [2n ** 210n, [2n ** 150n], [17], 200_000n] } as never) };
 }));
-if (process.argv.includes("--write-abi")) writeFileSync("python-candidate/src/cybergold_candidate/uniswap-quote-abi.json", JSON.stringify(abi, null, 2) + "\n");
+if (process.argv.includes("--write-abi")) writeFileSync("python-candidate/tests/legacy-uniswap-quoter-abi.json", JSON.stringify(abi, null, 2) + "\n");
 console.log(JSON.stringify({ helpers, rows }));

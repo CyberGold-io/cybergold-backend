@@ -4,10 +4,12 @@ These adapters retain the pinned Viem/Quoter wire controls and generic shared-re
 cancellation comparisons. Product swap pricing exclusively uses the SDK engine.
 """
 from collections import OrderedDict
+import json
+from pathlib import Path
 from copy import deepcopy
 import time
 from web3 import Web3
-from cybergold_candidate.uniswap_quote import ABI, METHODS, UniswapQuoteRpc
+from cybergold_candidate.uniswap_quote import QuoteContextRpc
 from cybergold_candidate.route_search import RouteSearchRpc
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.quote_errors import rpc_failure
@@ -15,9 +17,14 @@ from cybergold_candidate.rpc_diagnostics import error_diagnostics
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_state import ZERO
 
-class ReferenceUniswapQuoteRpc(UniswapQuoteRpc):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+ABI = json.loads(Path(__file__).with_name('legacy-uniswap-quoter-abi.json').read_text())
+METHODS = {'exact-in': 'quoteExactInput', 'exact-out': 'quoteExactOutput'}
+
+
+class ReferenceUniswapQuoteRpc(QuoteContextRpc):
+    def __init__(self, settings, *args, **kwargs):
+        super().__init__(settings, *args, **kwargs)
+        self.quoter = Web3.to_checksum_address(settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS)
         self.contract = self.w3.eth.contract(abi=ABI)
 
     def encode(self, request):
@@ -40,8 +47,9 @@ class ReferenceUniswapQuoteRpc(UniswapQuoteRpc):
 
 
 class ReferenceRouteSearchRpc(RouteSearchRpc):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, settings, *args, **kwargs):
+        super().__init__(settings, *args, **kwargs)
+        self.quoter = Web3.to_checksum_address(settings.NEXT_PUBLIC_UNISWAP_QUOTER_ADDRESS)
         self.contract = self.w3.eth.contract(abi=ABI)
 
     encode = ReferenceUniswapQuoteRpc.encode
