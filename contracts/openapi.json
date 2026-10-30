@@ -7922,6 +7922,51 @@
                   "refresh",
                   "source"
                 ]
+              },
+              "reuseSample": {
+                "description": "Cached arithmetic only; never executable amounts or accepted bounds.",
+                "type": "object",
+                "properties": {
+                  "referenceInput": {
+                    "type": "string"
+                  },
+                  "netOutput": {
+                    "type": "string"
+                  },
+                  "fees": {
+                    "type": "object",
+                    "properties": {
+                      "coreProtocolFeeCygld": {
+                        "type": "string"
+                      },
+                      "coreHelpersFeeCygld": {
+                        "type": "string"
+                      },
+                      "marketFeeCygld": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "coreHelpersFeeCygld",
+                      "coreProtocolFeeCygld",
+                      "marketFeeCygld"
+                    ]
+                  },
+                  "basis": {
+                    "enum": [
+                      "funded-input-approximation",
+                      "market-sale-consumed",
+                      "observed-nonretained"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "basis",
+                  "fees",
+                  "netOutput",
+                  "referenceInput"
+                ]
               }
             },
             "required": [
@@ -8164,8 +8209,14 @@
               },
               "selectedPhase": {
                 "enum": [
+                  "backward-prefix",
+                  "capacity-limited",
                   "detailed",
                   "first-result",
+                  "nearby-lower",
+                  "nearby-upper",
+                  "route-family",
+                  "route-family-exploration",
                   "saved-plan"
                 ],
                 "type": "string"
@@ -8235,6 +8286,116 @@
                       {
                         "type": "null"
                       }
+                    ]
+                  },
+                  "nearbySearch": {
+                    "type": "object",
+                    "properties": {
+                      "starts": {
+                        "type": "number"
+                      },
+                      "completed": {
+                        "type": "number"
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "side": {
+                              "enum": [
+                                "lower",
+                                "upper"
+                              ],
+                              "type": "string"
+                            },
+                            "identity": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "referenceBasis": {
+                              "enum": [
+                                "funded-input-approximation",
+                                "market-sale-consumed",
+                                "observed-nonretained"
+                              ],
+                              "type": "string"
+                            },
+                            "attempts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "funding": {
+                                    "type": "string"
+                                  },
+                                  "completed": {
+                                    "type": "boolean"
+                                  },
+                                  "elapsedMs": {
+                                    "type": "number"
+                                  },
+                                  "failureCode": {
+                                    "enum": [
+                                      "insufficient-protocol-supply",
+                                      "insufficient-recovery-shares",
+                                      "insufficient-reserve-balance",
+                                      "issuance-cap-exceeded",
+                                      "quote-contract-reverted",
+                                      "quote-insufficient-liquidity",
+                                      "quote-no-route",
+                                      "quote-timeout",
+                                      "quote-unavailable",
+                                      "redemption-capacity-exceeded",
+                                      "redemption-supply-exceeded",
+                                      "rpc-access-denied",
+                                      "rpc-rate-limit",
+                                      "rpc-timeout",
+                                      "rpc-unavailable"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "elapsedMs",
+                                  "funding"
+                                ]
+                              }
+                            },
+                            "failureCode": {
+                              "enum": [
+                                "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
+                                "issuance-cap-exceeded",
+                                "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
+                                "quote-no-route",
+                                "quote-timeout",
+                                "quote-unavailable",
+                                "redemption-capacity-exceeded",
+                                "redemption-supply-exceeded",
+                                "rpc-access-denied",
+                                "rpc-rate-limit",
+                                "rpc-timeout",
+                                "rpc-unavailable"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "attempts",
+                            "side"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "completed",
+                      "sources",
+                      "starts"
                     ]
                   }
                 },
@@ -8512,8 +8673,14 @@
                   },
                   "selectedPhase": {
                     "enum": [
+                      "backward-prefix",
+                      "capacity-limited",
                       "detailed",
                       "first-result",
+                      "nearby-lower",
+                      "nearby-upper",
+                      "route-family",
+                      "route-family-exploration",
                       "saved-plan"
                     ],
                     "type": "string"
@@ -8583,6 +8750,116 @@
                           {
                             "type": "null"
                           }
+                        ]
+                      },
+                      "nearbySearch": {
+                        "type": "object",
+                        "properties": {
+                          "starts": {
+                            "type": "number"
+                          },
+                          "completed": {
+                            "type": "number"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "enum": [
+                                    "lower",
+                                    "upper"
+                                  ],
+                                  "type": "string"
+                                },
+                                "identity": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "referenceBasis": {
+                                  "enum": [
+                                    "funded-input-approximation",
+                                    "market-sale-consumed",
+                                    "observed-nonretained"
+                                  ],
+                                  "type": "string"
+                                },
+                                "attempts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "funding": {
+                                        "type": "string"
+                                      },
+                                      "completed": {
+                                        "type": "boolean"
+                                      },
+                                      "elapsedMs": {
+                                        "type": "number"
+                                      },
+                                      "failureCode": {
+                                        "enum": [
+                                          "insufficient-protocol-supply",
+                                          "insufficient-recovery-shares",
+                                          "insufficient-reserve-balance",
+                                          "issuance-cap-exceeded",
+                                          "quote-contract-reverted",
+                                          "quote-insufficient-liquidity",
+                                          "quote-no-route",
+                                          "quote-timeout",
+                                          "quote-unavailable",
+                                          "redemption-capacity-exceeded",
+                                          "redemption-supply-exceeded",
+                                          "rpc-access-denied",
+                                          "rpc-rate-limit",
+                                          "rpc-timeout",
+                                          "rpc-unavailable"
+                                        ],
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "elapsedMs",
+                                      "funding"
+                                    ]
+                                  }
+                                },
+                                "failureCode": {
+                                  "enum": [
+                                    "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
+                                    "issuance-cap-exceeded",
+                                    "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
+                                    "quote-no-route",
+                                    "quote-timeout",
+                                    "quote-unavailable",
+                                    "redemption-capacity-exceeded",
+                                    "redemption-supply-exceeded",
+                                    "rpc-access-denied",
+                                    "rpc-rate-limit",
+                                    "rpc-timeout",
+                                    "rpc-unavailable"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "attempts",
+                                "side"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "completed",
+                          "sources",
+                          "starts"
                         ]
                       }
                     },
@@ -21528,22 +21805,110 @@
                         }
                       },
                       "estimate": {
-                        "type": "object",
-                        "properties": {
-                          "strategy": {
-                            "enum": [
-                              "core",
-                              "market"
-                            ],
-                            "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "strategy": {
+                                "enum": [
+                                  "core",
+                                  "market"
+                                ],
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount",
+                              "strategy"
+                            ]
                           },
-                          "amount": {
-                            "type": "string"
+                          {
+                            "type": "object",
+                            "properties": {
+                              "strategy": {
+                                "type": "string",
+                                "const": "universal"
+                              },
+                              "amount": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "const": "cached-upper"
+                              },
+                              "referenceInput": {
+                                "type": "string"
+                              },
+                              "basis": {
+                                "enum": [
+                                  "funded-input-approximation",
+                                  "market-sale-consumed",
+                                  "observed-nonretained"
+                                ],
+                                "type": "string"
+                              },
+                              "fees": {
+                                "type": "object",
+                                "properties": {
+                                  "coreProtocolFeeCygld": {
+                                    "type": "string"
+                                  },
+                                  "coreHelpersFeeCygld": {
+                                    "type": "string"
+                                  },
+                                  "marketFeeCygld": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "coreHelpersFeeCygld",
+                                  "coreProtocolFeeCygld",
+                                  "marketFeeCygld"
+                                ]
+                              },
+                              "context": {
+                                "type": "object",
+                                "properties": {
+                                  "chainId": {
+                                    "type": "number"
+                                  },
+                                  "blockNumber": {
+                                    "type": "string"
+                                  },
+                                  "blockHash": {
+                                    "type": "string"
+                                  },
+                                  "observedAt": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "blockHash",
+                                  "blockNumber",
+                                  "chainId",
+                                  "observedAt"
+                                ]
+                              },
+                              "sourceIdentity": {
+                                "type": "string"
+                              },
+                              "sourceRequestedInput": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount",
+                              "basis",
+                              "context",
+                              "fees",
+                              "referenceInput",
+                              "source",
+                              "strategy"
+                            ]
                           }
-                        },
-                        "required": [
-                          "amount",
-                          "strategy"
                         ]
                       },
                       "budgetRange": {
@@ -21907,8 +22272,14 @@
                               },
                               "selectedPhase": {
                                 "enum": [
+                                  "backward-prefix",
+                                  "capacity-limited",
                                   "detailed",
                                   "first-result",
+                                  "nearby-lower",
+                                  "nearby-upper",
+                                  "route-family",
+                                  "route-family-exploration",
                                   "saved-plan"
                                 ],
                                 "type": "string"
@@ -21978,6 +22349,116 @@
                                       {
                                         "type": "null"
                                       }
+                                    ]
+                                  },
+                                  "nearbySearch": {
+                                    "type": "object",
+                                    "properties": {
+                                      "starts": {
+                                        "type": "number"
+                                      },
+                                      "completed": {
+                                        "type": "number"
+                                      },
+                                      "sources": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "side": {
+                                              "enum": [
+                                                "lower",
+                                                "upper"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            "identity": {
+                                              "type": [
+                                                "null",
+                                                "string"
+                                              ]
+                                            },
+                                            "referenceBasis": {
+                                              "enum": [
+                                                "funded-input-approximation",
+                                                "market-sale-consumed",
+                                                "observed-nonretained"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            "attempts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "funding": {
+                                                    "type": "string"
+                                                  },
+                                                  "completed": {
+                                                    "type": "boolean"
+                                                  },
+                                                  "elapsedMs": {
+                                                    "type": "number"
+                                                  },
+                                                  "failureCode": {
+                                                    "enum": [
+                                                      "insufficient-protocol-supply",
+                                                      "insufficient-recovery-shares",
+                                                      "insufficient-reserve-balance",
+                                                      "issuance-cap-exceeded",
+                                                      "quote-contract-reverted",
+                                                      "quote-insufficient-liquidity",
+                                                      "quote-no-route",
+                                                      "quote-timeout",
+                                                      "quote-unavailable",
+                                                      "redemption-capacity-exceeded",
+                                                      "redemption-supply-exceeded",
+                                                      "rpc-access-denied",
+                                                      "rpc-rate-limit",
+                                                      "rpc-timeout",
+                                                      "rpc-unavailable"
+                                                    ],
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "elapsedMs",
+                                                  "funding"
+                                                ]
+                                              }
+                                            },
+                                            "failureCode": {
+                                              "enum": [
+                                                "insufficient-protocol-supply",
+                                                "insufficient-recovery-shares",
+                                                "insufficient-reserve-balance",
+                                                "issuance-cap-exceeded",
+                                                "quote-contract-reverted",
+                                                "quote-insufficient-liquidity",
+                                                "quote-no-route",
+                                                "quote-timeout",
+                                                "quote-unavailable",
+                                                "redemption-capacity-exceeded",
+                                                "redemption-supply-exceeded",
+                                                "rpc-access-denied",
+                                                "rpc-rate-limit",
+                                                "rpc-timeout",
+                                                "rpc-unavailable"
+                                              ],
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "attempts",
+                                            "side"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "completed",
+                                      "sources",
+                                      "starts"
                                     ]
                                   }
                                 },
@@ -28248,8 +28729,14 @@
                   },
                   "selectedPhase": {
                     "enum": [
+                      "backward-prefix",
+                      "capacity-limited",
                       "detailed",
                       "first-result",
+                      "nearby-lower",
+                      "nearby-upper",
+                      "route-family",
+                      "route-family-exploration",
                       "saved-plan"
                     ],
                     "type": "string"
@@ -28319,6 +28806,116 @@
                           {
                             "type": "null"
                           }
+                        ]
+                      },
+                      "nearbySearch": {
+                        "type": "object",
+                        "properties": {
+                          "starts": {
+                            "type": "number"
+                          },
+                          "completed": {
+                            "type": "number"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "enum": [
+                                    "lower",
+                                    "upper"
+                                  ],
+                                  "type": "string"
+                                },
+                                "identity": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "referenceBasis": {
+                                  "enum": [
+                                    "funded-input-approximation",
+                                    "market-sale-consumed",
+                                    "observed-nonretained"
+                                  ],
+                                  "type": "string"
+                                },
+                                "attempts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "funding": {
+                                        "type": "string"
+                                      },
+                                      "completed": {
+                                        "type": "boolean"
+                                      },
+                                      "elapsedMs": {
+                                        "type": "number"
+                                      },
+                                      "failureCode": {
+                                        "enum": [
+                                          "insufficient-protocol-supply",
+                                          "insufficient-recovery-shares",
+                                          "insufficient-reserve-balance",
+                                          "issuance-cap-exceeded",
+                                          "quote-contract-reverted",
+                                          "quote-insufficient-liquidity",
+                                          "quote-no-route",
+                                          "quote-timeout",
+                                          "quote-unavailable",
+                                          "redemption-capacity-exceeded",
+                                          "redemption-supply-exceeded",
+                                          "rpc-access-denied",
+                                          "rpc-rate-limit",
+                                          "rpc-timeout",
+                                          "rpc-unavailable"
+                                        ],
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "elapsedMs",
+                                      "funding"
+                                    ]
+                                  }
+                                },
+                                "failureCode": {
+                                  "enum": [
+                                    "insufficient-protocol-supply",
+                                    "insufficient-recovery-shares",
+                                    "insufficient-reserve-balance",
+                                    "issuance-cap-exceeded",
+                                    "quote-contract-reverted",
+                                    "quote-insufficient-liquidity",
+                                    "quote-no-route",
+                                    "quote-timeout",
+                                    "quote-unavailable",
+                                    "redemption-capacity-exceeded",
+                                    "redemption-supply-exceeded",
+                                    "rpc-access-denied",
+                                    "rpc-rate-limit",
+                                    "rpc-timeout",
+                                    "rpc-unavailable"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "attempts",
+                                "side"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "completed",
+                          "sources",
+                          "starts"
                         ]
                       }
                     },
@@ -30090,8 +30687,14 @@
                               },
                               "selectedPhase": {
                                 "enum": [
+                                  "backward-prefix",
+                                  "capacity-limited",
                                   "detailed",
                                   "first-result",
+                                  "nearby-lower",
+                                  "nearby-upper",
+                                  "route-family",
+                                  "route-family-exploration",
                                   "saved-plan"
                                 ],
                                 "type": "string"
@@ -30161,6 +30764,116 @@
                                       {
                                         "type": "null"
                                       }
+                                    ]
+                                  },
+                                  "nearbySearch": {
+                                    "type": "object",
+                                    "properties": {
+                                      "starts": {
+                                        "type": "number"
+                                      },
+                                      "completed": {
+                                        "type": "number"
+                                      },
+                                      "sources": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "side": {
+                                              "enum": [
+                                                "lower",
+                                                "upper"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            "identity": {
+                                              "type": [
+                                                "null",
+                                                "string"
+                                              ]
+                                            },
+                                            "referenceBasis": {
+                                              "enum": [
+                                                "funded-input-approximation",
+                                                "market-sale-consumed",
+                                                "observed-nonretained"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            "attempts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "funding": {
+                                                    "type": "string"
+                                                  },
+                                                  "completed": {
+                                                    "type": "boolean"
+                                                  },
+                                                  "elapsedMs": {
+                                                    "type": "number"
+                                                  },
+                                                  "failureCode": {
+                                                    "enum": [
+                                                      "insufficient-protocol-supply",
+                                                      "insufficient-recovery-shares",
+                                                      "insufficient-reserve-balance",
+                                                      "issuance-cap-exceeded",
+                                                      "quote-contract-reverted",
+                                                      "quote-insufficient-liquidity",
+                                                      "quote-no-route",
+                                                      "quote-timeout",
+                                                      "quote-unavailable",
+                                                      "redemption-capacity-exceeded",
+                                                      "redemption-supply-exceeded",
+                                                      "rpc-access-denied",
+                                                      "rpc-rate-limit",
+                                                      "rpc-timeout",
+                                                      "rpc-unavailable"
+                                                    ],
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "elapsedMs",
+                                                  "funding"
+                                                ]
+                                              }
+                                            },
+                                            "failureCode": {
+                                              "enum": [
+                                                "insufficient-protocol-supply",
+                                                "insufficient-recovery-shares",
+                                                "insufficient-reserve-balance",
+                                                "issuance-cap-exceeded",
+                                                "quote-contract-reverted",
+                                                "quote-insufficient-liquidity",
+                                                "quote-no-route",
+                                                "quote-timeout",
+                                                "quote-unavailable",
+                                                "redemption-capacity-exceeded",
+                                                "redemption-supply-exceeded",
+                                                "rpc-access-denied",
+                                                "rpc-rate-limit",
+                                                "rpc-timeout",
+                                                "rpc-unavailable"
+                                              ],
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "attempts",
+                                            "side"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "completed",
+                                      "sources",
+                                      "starts"
                                     ]
                                   }
                                 },
@@ -47036,8 +47749,14 @@
               },
               "selectedPhase": {
                 "enum": [
+                  "backward-prefix",
+                  "capacity-limited",
                   "detailed",
                   "first-result",
+                  "nearby-lower",
+                  "nearby-upper",
+                  "route-family",
+                  "route-family-exploration",
                   "saved-plan"
                 ],
                 "type": "string"
@@ -47107,6 +47826,116 @@
                       {
                         "type": "null"
                       }
+                    ]
+                  },
+                  "nearbySearch": {
+                    "type": "object",
+                    "properties": {
+                      "starts": {
+                        "type": "number"
+                      },
+                      "completed": {
+                        "type": "number"
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "side": {
+                              "enum": [
+                                "lower",
+                                "upper"
+                              ],
+                              "type": "string"
+                            },
+                            "identity": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "referenceBasis": {
+                              "enum": [
+                                "funded-input-approximation",
+                                "market-sale-consumed",
+                                "observed-nonretained"
+                              ],
+                              "type": "string"
+                            },
+                            "attempts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "funding": {
+                                    "type": "string"
+                                  },
+                                  "completed": {
+                                    "type": "boolean"
+                                  },
+                                  "elapsedMs": {
+                                    "type": "number"
+                                  },
+                                  "failureCode": {
+                                    "enum": [
+                                      "insufficient-protocol-supply",
+                                      "insufficient-recovery-shares",
+                                      "insufficient-reserve-balance",
+                                      "issuance-cap-exceeded",
+                                      "quote-contract-reverted",
+                                      "quote-insufficient-liquidity",
+                                      "quote-no-route",
+                                      "quote-timeout",
+                                      "quote-unavailable",
+                                      "redemption-capacity-exceeded",
+                                      "redemption-supply-exceeded",
+                                      "rpc-access-denied",
+                                      "rpc-rate-limit",
+                                      "rpc-timeout",
+                                      "rpc-unavailable"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "elapsedMs",
+                                  "funding"
+                                ]
+                              }
+                            },
+                            "failureCode": {
+                              "enum": [
+                                "insufficient-protocol-supply",
+                                "insufficient-recovery-shares",
+                                "insufficient-reserve-balance",
+                                "issuance-cap-exceeded",
+                                "quote-contract-reverted",
+                                "quote-insufficient-liquidity",
+                                "quote-no-route",
+                                "quote-timeout",
+                                "quote-unavailable",
+                                "redemption-capacity-exceeded",
+                                "redemption-supply-exceeded",
+                                "rpc-access-denied",
+                                "rpc-rate-limit",
+                                "rpc-timeout",
+                                "rpc-unavailable"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "attempts",
+                            "side"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "completed",
+                      "sources",
+                      "starts"
                     ]
                   }
                 },
@@ -48726,22 +49555,110 @@
             }
           },
           "estimate": {
-            "type": "object",
-            "properties": {
-              "strategy": {
-                "enum": [
-                  "core",
-                  "market"
-                ],
-                "type": "string"
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "enum": [
+                      "core",
+                      "market"
+                    ],
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "strategy"
+                ]
               },
-              "amount": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "type": "string",
+                    "const": "universal"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "const": "cached-upper"
+                  },
+                  "referenceInput": {
+                    "type": "string"
+                  },
+                  "basis": {
+                    "enum": [
+                      "funded-input-approximation",
+                      "market-sale-consumed",
+                      "observed-nonretained"
+                    ],
+                    "type": "string"
+                  },
+                  "fees": {
+                    "type": "object",
+                    "properties": {
+                      "coreProtocolFeeCygld": {
+                        "type": "string"
+                      },
+                      "coreHelpersFeeCygld": {
+                        "type": "string"
+                      },
+                      "marketFeeCygld": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "coreHelpersFeeCygld",
+                      "coreProtocolFeeCygld",
+                      "marketFeeCygld"
+                    ]
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "chainId": {
+                        "type": "number"
+                      },
+                      "blockNumber": {
+                        "type": "string"
+                      },
+                      "blockHash": {
+                        "type": "string"
+                      },
+                      "observedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "blockHash",
+                      "blockNumber",
+                      "chainId",
+                      "observedAt"
+                    ]
+                  },
+                  "sourceIdentity": {
+                    "type": "string"
+                  },
+                  "sourceRequestedInput": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "basis",
+                  "context",
+                  "fees",
+                  "referenceInput",
+                  "source",
+                  "strategy"
+                ]
               }
-            },
-            "required": [
-              "amount",
-              "strategy"
             ]
           },
           "budgetRange": {

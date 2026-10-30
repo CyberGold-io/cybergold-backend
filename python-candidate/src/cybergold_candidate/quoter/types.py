@@ -32,6 +32,7 @@ class EconomicQuote(BaseModel):
     quotedOutput: UInt
     routeFamily: Literal['core', 'market', 'mixed']
     conversionObservations: list[dict] = Field(default_factory=list)
+    reuseSample: dict | None = None
     estimatedRecipientOutputs: list[dict]
     fees: dict
     estimatedRetainedInputCharges: list[dict]
