@@ -72,12 +72,14 @@ class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
         service = EconomicQuoteStore(settings)
         self.assertIsNone(await service.lookup(request))
         self.assertFalse(await service.save(request, quote))
+        self.assertEqual(await service.neighbors(request), {'lower': None, 'upper': None})
         async def fail():
             raise RuntimeError('private provider text must not escape')
         registry.store.prepare = fail
         service = EconomicQuoteStore(settings, registry)
         self.assertIsNone(await service.lookup(request))
         self.assertFalse(await service.save(request, quote))
+        self.assertEqual(await service.neighbors(request), {'lower': None, 'upper': None})
 
     async def test_cancellation_propagates_instead_of_becoming_a_cache_miss(self):
         settings, registry, request, quote = fixture()
@@ -89,6 +91,8 @@ class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
             await service.lookup(request)
         with self.assertRaises(asyncio.CancelledError):
             await service.save(request, quote)
+        with self.assertRaises(asyncio.CancelledError):
+            await service.neighbors(request)
 
     async def test_point_lookup_returns_an_owned_original_tuple_without_relabeling(self):
         settings, registry, request, quote = fixture()

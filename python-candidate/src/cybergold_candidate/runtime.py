@@ -133,6 +133,9 @@ def create_configured_app(settings=None, database=None, client=None):
                                      observe_scope=observe_quote_scope)
     market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
+    from .quoter.reuse_estimate import CachedEconomicEstimates
+    trade_quotes.cached_estimates = CachedEconomicEstimates(economic_quotes.store, universal_quotes.core,
+                                                           observe_scope=observe_quote_scope)
     trade_quotes.universal_quotes = universal_quotes
     shared_core_quotes = IntentSharing(core_quotes, rpc_factory=route_rpc,
                                       request_resolver=configuration.resolve_request)

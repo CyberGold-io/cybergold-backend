@@ -1236,6 +1236,18 @@ export interface components {
                 source: "search" | "stored";
                 refresh: boolean;
             };
+            /** @description Cached arithmetic only; never executable amounts or accepted bounds. */
+            reuseSample?: {
+                referenceInput: string;
+                netOutput: string;
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                /** @enum {string} */
+                basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+            };
         };
         "Omit<UniversalExactInputQuote,\"plan\"|\"planDescription\"|\"outputMinimum\"|\"economicQuote\">": {
             /** @constant */
@@ -1301,7 +1313,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -1315,6 +1327,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    }[];
+                };
             };
         };
         PreparedTransaction: {
@@ -1385,7 +1417,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -1399,6 +1431,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    }[];
+                };
             };
         } & {
             economicQuote: components["schemas"]["EconomicQuote"];
@@ -4599,6 +4651,28 @@ export interface components {
                     /** @enum {string} */
                     strategy: "core" | "market";
                     amount: string;
+                } | {
+                    /** @constant */
+                    strategy: "universal";
+                    amount: string;
+                    /** @constant */
+                    source: "cached-upper";
+                    referenceInput: string;
+                    /** @enum {string} */
+                    basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                    fees: {
+                        coreProtocolFeeCygld: string;
+                        coreHelpersFeeCygld: string;
+                        marketFeeCygld: string;
+                    };
+                    context: {
+                        chainId: number;
+                        blockNumber: string;
+                        blockHash: string;
+                        observedAt: string;
+                    };
+                    sourceIdentity?: string;
+                    sourceRequestedInput?: string;
                 };
                 /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
                 budgetRange?: {
@@ -4695,7 +4769,7 @@ export interface components {
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -4709,6 +4783,26 @@ export interface components {
                     timeToFirstWholePlanMs: null | number;
                     searchMs: null | number;
                     selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                    nearbySearch?: {
+                        starts: number;
+                        completed: number;
+                        sources: {
+                            /** @enum {string} */
+                            side: "lower" | "upper";
+                            identity?: null | string;
+                            /** @enum {string} */
+                            referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                            attempts: {
+                                funding: string;
+                                completed?: boolean;
+                                elapsedMs: number;
+                                /** @enum {string} */
+                                failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            }[];
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                    };
                 };
             } | ({
                 /** @enum {string} */
@@ -6296,7 +6390,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -6310,6 +6404,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    }[];
+                };
             };
         } | {
             /** @constant */
@@ -6762,7 +6876,7 @@ export interface components {
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -6776,6 +6890,26 @@ export interface components {
                     timeToFirstWholePlanMs: null | number;
                     searchMs: null | number;
                     selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                    nearbySearch?: {
+                        starts: number;
+                        completed: number;
+                        sources: {
+                            /** @enum {string} */
+                            side: "lower" | "upper";
+                            identity?: null | string;
+                            /** @enum {string} */
+                            referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                            attempts: {
+                                funding: string;
+                                completed?: boolean;
+                                elapsedMs: number;
+                                /** @enum {string} */
+                                failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            }[];
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                    };
                 };
             } | {
                 /** @constant */
@@ -10964,7 +11098,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -10978,6 +11112,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    }[];
+                };
             };
         };
         TradeProviderAssessment: {
@@ -11382,6 +11536,28 @@ export interface components {
                 /** @enum {string} */
                 strategy: "core" | "market";
                 amount: string;
+            } | {
+                /** @constant */
+                strategy: "universal";
+                amount: string;
+                /** @constant */
+                source: "cached-upper";
+                referenceInput: string;
+                /** @enum {string} */
+                basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                context: {
+                    chainId: number;
+                    blockNumber: string;
+                    blockHash: string;
+                    observedAt: string;
+                };
+                sourceIdentity?: string;
+                sourceRequestedInput?: string;
             };
             /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
             budgetRange?: {

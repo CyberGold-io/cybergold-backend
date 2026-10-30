@@ -7,6 +7,7 @@ Every candidate owns its pool-state bank. Quotes model disclosed treasury
 retention; they never subtract retained principal from the user's gross spend.
 """
 import asyncio
+import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import combinations
@@ -23,6 +24,7 @@ from ..recovery_rpc import SnapshotChanged
 from ..preview_errors import preview_error
 from ..routing_encoding import ZERO, ROUTING_ENCODING, weighted_routes, split_runtime
 from ..route_search import WETH
+from ..route_work_slots import bootstrap_priority
 from ..uniswap_routes import pool_identity, V4_CONNECTOR_KEYS, initial_v3_branches
 from ..uniswap_v4 import v4_pool_id, POOL_MANAGER
 from ..wallet_balances import TOKENS
@@ -33,9 +35,35 @@ from .ranking import prefer_completed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import reconstruct
+from .reuse_routes import neighbor_proposals
 
 PAXG = dict(TOKENS)['paxg']
 CORE_SHARES = (0, 25, 50, 75, 100)
+
+
+async def alongside_bootstrap(ordinary, bootstrap):
+    """Optional cached work cannot prolong otherwise-completed discovery.
+
+    Both tasks are owned here. Snapshot changes and caller cancellation still
+    cancel the complete search; a pending cache read is never a completion
+    barrier for ordinary candidates.
+    """
+    tasks = [asyncio.create_task(ordinary), asyncio.create_task(bootstrap)]
+    try:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        if tasks[1] in done:
+            await tasks[1]
+        await tasks[0]
+        if tasks[1].done():
+            await tasks[1]
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
+        if disproof is not None:
+            raise disproof
 
 
 def identity_template(currency):
@@ -242,16 +270,35 @@ class Quoter:
                                         first=first, observations=observations, selected=selected, selection=selection)
 
     @budget_entry
-    async def get(self, request, on_update=None, *, core_only=False, seed=None):
+    async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None):
         budget = current_budget()
+        # The SQL feed starts alongside head/basis acquisition. Its caller
+        # captures the existing scope; this task never owns a second search.
+        async def lookup_neighbors():
+            try:
+                return await neighbors()
+            except SnapshotChanged:
+                raise
+            except Exception:
+                return {}
+        neighbor_task = (asyncio.create_task(lookup_neighbors())
+                         if neighbors is not None and not core_only else None)
         try:
-            result = await budget.produce(self._get(request, on_update, core_only=core_only, seed=seed))
+            result = await budget.produce(self._get(request, on_update, core_only=core_only,
+                                                   seed=seed, neighbor_task=neighbor_task))
         except Exception as error:
             # Private diagnostic evidence preserves the public error contract.
             # In particular, exhaustion can still return quote-no-route while
             # its actual stopping reason is recorded as timeout.
             error.quoter_metrics = self.producer_metrics(budget)
             raise
+        finally:
+            if neighbor_task is not None:
+                if not neighbor_task.done():
+                    neighbor_task.cancel()
+                outcomes = await asyncio.gather(neighbor_task, return_exceptions=True)
+                if isinstance(outcomes[0], SnapshotChanged):
+                    raise outcomes[0]
         result['metrics'] = {**(result.get('metrics') or {}), **self.producer_metrics(budget)}
         return result
 
@@ -308,7 +355,7 @@ class Quoter:
         return [{'currency': row['currency'], 'amount': str(amount)}
                 for row, amount in zip(request['inputs'], amounts, strict=True)]
 
-    async def _get(self, request, on_update=None, *, core_only=False, seed=None):
+    async def _get(self, request, on_update=None, *, core_only=False, seed=None, neighbor_task=None):
         request = self.normalise_request(request)
         budget = current_budget()
         registry = self.engine.registry
@@ -327,8 +374,11 @@ class Quoter:
         best, failures, observations = None, [], {}
         session = SearchSession(self.optional_limit,
             self.exploration_seed if self.exploration_seed is not None else randbits(64))
-        async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False):
+        neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
+        async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
+                           failure_sink=None):
             nonlocal best
+            errors = failures if failure_sink is None else failure_sink
             try:
                 funding = default_funding if funding is None else funding
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
@@ -343,14 +393,15 @@ class Quoter:
                         else 'first-result' if first else 'detailed')
                     best = value
                     if on_update: await on_update({'type': 'qualified', 'value': value})
+                return value
             except SnapshotChanged:
                 raise
             except PartialPath as error:
                 if partial:
                     raise
-                failures.append(error)
+                errors.append(error)
             except Exception as error:
-                failures.append(error)
+                errors.append(error)
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
         if request['intent'] >= 2 or core_only: grid = [(100, 'core-first')]
@@ -398,9 +449,61 @@ class Quoter:
                     raise
                 except Exception as error:
                     failures.append(error)
-            await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+            async def nearby():
+                if neighbor_task is None or request['intent'] not in (0, 1):
+                    return
+                selected_neighbors = await neighbor_task
+                seen = set()
+                async def replay_neighbor(side):
+                    source = None
+                    try:
+                        row = selected_neighbors.get(side)
+                        if not row:
+                            return
+                        source = {'side': side, 'identity': row.get('identity'), 'attempts': []}
+                        basis = row['quote'].get('reuseSample', {}).get('basis')
+                        if basis is not None:
+                            source['referenceBasis'] = basis
+                        neighbor_metrics['sources'].append(source)
+                        proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
+                        for proposal in proposals:
+                            key = json.dumps(proposal, sort_keys=True, separators=(',', ':'))
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            attempt = {'funding': proposal['inputs'][0]['amount']}
+                            source['attempts'].append(attempt)
+                            neighbor_metrics['starts'] += 1
+                            started = asyncio.get_running_loop().time()
+                            try:
+                                errors = []
+                                with bootstrap_priority():
+                                    value = await evaluate(100, 'core-first', False,
+                                        selected=proposal['plan'], funding=proposal['inputs'], phase='nearby-'+side,
+                                        failure_sink=errors)
+                                attempt['completed'] = value is not None
+                                neighbor_metrics['completed'] += value is not None
+                                if errors:
+                                    attempt['failureCode'] = public_quote_error(errors[-1])['code']
+                            finally:
+                                attempt['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
+                    except SnapshotChanged:
+                        raise
+                    except Exception as error:
+                        # Optional legacy/cache shape failures must not replace
+                        # the ordinary terminal quote-no-route/error taxonomy.
+                        if source is not None:
+                            source['failureCode'] = public_quote_error(error)['code']
+                # Each neighbor proceeds independently. Neither awaits the
+                # other's acquisition, nor changes E17's exact-seed event.
+                await owned_reads(replay_neighbor('upper'), replay_neighbor('lower'))
+            ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
                 observations=observations, seeded=seed is not None, core_only=core_only), seeded(), limited(),
                 owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+            if neighbor_task is None:
+                await ordinary
+            else:
+                await alongside_bootstrap(ordinary, nearby())
         except SearchStopped:
             pass
         budget.cleanup_done()
@@ -417,6 +520,8 @@ class Quoter:
             best['metrics'] = {**(best.get('metrics') or {}), 'optionalSearch': {
                 'randomSeed': str(session.random_seed) if seed is not None else None,
                 'starts': session.starts, 'pruned': session.pruned, 'repairs': session.repairs}}
+            if neighbor_task is not None:
+                best['metrics']['nearbySearch'] = neighbor_metrics
         await rpc.assert_canonical(block)
         budget.canonical_done()
         if best is None:

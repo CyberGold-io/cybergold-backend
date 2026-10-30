@@ -1,10 +1,64 @@
 """Task-owned pricing permits, released only at required-state suspension."""
 import asyncio
-from contextlib import asynccontextmanager
+from collections import deque
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 
 
 _current = ContextVar('candidate_route_work_lease', default=None)
+_bootstrap = ContextVar('cached_route_bootstrap', default=False)
+
+
+@contextmanager
+def bootstrap_priority():
+    """Ready finite saved-route work gets the next free engine permit."""
+    token = _bootstrap.set(True)
+    try:
+        yield
+    finally:
+        _bootstrap.reset(token)
+
+
+class PricingSlots:
+    """The same engine capacity, with FIFO queues inside two admission lanes.
+
+    Existing running work is never preempted. Only ready cached bootstrap work
+    precedes waiting ordinary work; neither lane reserves idle capacity or
+    waits for a cache supplier. Cancelled grants return their permit.
+    """
+    def __init__(self, value):
+        self._value = value
+        self._ordinary, self._priority = deque(), deque()
+
+    def locked(self):
+        return self._value == 0
+
+    async def acquire(self):
+        if self._value:
+            self._value -= 1
+            return True
+        future = asyncio.get_running_loop().create_future()
+        queue = self._priority if _bootstrap.get() else self._ordinary
+        queue.append(future)
+        try:
+            await future
+            return True
+        except asyncio.CancelledError:
+            if future.done() and not future.cancelled():
+                self.release()
+            raise
+        finally:
+            if future in queue:
+                queue.remove(future)
+
+    def release(self):
+        for queue in (self._priority, self._ordinary):
+            while queue:
+                future = queue.popleft()
+                if not future.done():
+                    future.set_result(True)
+                    return
+        self._value += 1
 
 
 class _EnginePermit:

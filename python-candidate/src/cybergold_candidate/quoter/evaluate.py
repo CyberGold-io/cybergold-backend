@@ -7,6 +7,7 @@ from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
 from ..routing_encoding import ROUTING_ENCODING, split_runtime
 from .contracts import path_operation
+from .reuse_routes import selected_conversion
 
 CORE_SHARES = (0, 25, 50, 75, 100)
 
@@ -63,7 +64,7 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
             pending = self.conversion(source, target, lot, block, bank, canonical, first=first,
                                       capture=chosen, **kwargs)
         else:
-            chosen = deepcopy(selected_routes.get(operation))
+            chosen = deepcopy(selected_conversion(selected, operation, source))
             if chosen is None:
                 if lot and source.lower() != target.lower():
                     raise QuoteFailure('quote-no-route')

@@ -891,6 +891,27 @@ accepted bounds, private pool states and ordinary failure fallback remain.
 See [component contracts and limits](../docs/quoter.md). These source changes
 do not by themselves establish installed adoption.
 
+Scalar exact-input amount edits reuse completed economic observations in two
+separate ways. The Fast Estimator selects the nearest larger requested budget
+and scales its cached net output and fee breakdown against its consumed-input
+reference, clamping at that reference. This is approximate integer arithmetic:
+no RPC, SDK pricing, Core preview or current-state validation runs, including
+on a miss or optional cache failure. A miss returns no hint rather than
+hydrating a cold model. The App can calculate the same advisory amount and
+fees immediately from its existing economic query cache. These hints never
+qualify Swap or set execution funding/minima.
+
+Exact search independently rebuilds full-budget candidates from both nearest
+lower and upper cached route blueprints, plus their distinct fitting saved
+funding. It reprices complete ordered Core/Market/mixed/split plans at current
+state, including native ETH and V2/V3/V4. A ready bootstrap receives the next
+free slot within the unchanged eight-permit pricing capacity; ordinary work
+never waits for a cache lookup, and optional cached work cannot prolong
+otherwise-completed discovery. The exact-request seed event, sixteen optional
+exploratory starts, five-plus-ten clock, ranking, canonical check and accepted
+preparation bounds remain unchanged. The optional sample is historical,
+non-executable metadata; only completed exact observations become anchors.
+
 The optional `CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS` is deliberately absent
 from the local defaults. After the successor has a real deployment address,
 configure it for that environment. The existing cached Helpers approval

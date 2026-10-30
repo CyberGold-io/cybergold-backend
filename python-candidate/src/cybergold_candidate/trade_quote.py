@@ -266,7 +266,11 @@ class TradeQuotes:
         return self.packet(request, models)
 
     async def get_model(self, request):
-        request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
+        request = validate(TradeModelRequest.model_validate(request).model_dump(), model=True)
+        cached_estimates = getattr(self, 'cached_estimates', None)
+        if request['mode'] == 'exact-in' and cached_estimates is not None:
+            return await cached_estimates.get_model(request)
+        request = await self.resolve(request)
         registry = getattr(self.market, 'registry', None)
         if registry is not None:
             await registry.ensure_loaded(wait=True)

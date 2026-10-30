@@ -4,7 +4,7 @@ Core, Market and direct Uniswap consumers share one runtime instance. Protocol
 pricing methods are implementation details of a canonical forward route.
 """
 import asyncio
-from .route_work_slots import engine_work
+from .route_work_slots import engine_work, PricingSlots
 from copy import deepcopy
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -45,7 +45,7 @@ class RouteQuoteEngine:
         self.settings, self.registry = settings, registry
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
-        self.semaphore = asyncio.Semaphore(8)
+        self.semaphore = PricingSlots(8)
 
     async def close(self):
         await self.shared.close()

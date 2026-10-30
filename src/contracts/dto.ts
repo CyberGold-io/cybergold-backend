@@ -55,10 +55,17 @@ export type UniversalExactInputQuote = {
   context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
   retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
   searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
-    maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed" };
+    maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed"
+      | "capacity-limited" | "route-family" | "route-family-exploration" | "backward-prefix" | "nearby-upper" | "nearby-lower" };
   /** Producer clocks, distinct from client request or browser journey duration. */
   metrics?: QuoteSelectionMetrics & { totalMs: number; timeToFirstWholePlanMs: number | null;
-    searchMs: number | null; selectionReason: "complete" | "best-initial" | "first-extension" | "timeout" | null };
+    searchMs: number | null; selectionReason: "complete" | "best-initial" | "first-extension" | "timeout" | null;
+    nearbySearch?: { starts: number; completed: number; sources: {
+      side: "lower" | "upper"; identity?: string | null; referenceBasis?: EconomicReuseSample["basis"];
+      attempts: { funding: string; completed?: boolean; elapsedMs: number; failureCode?: QuoteErrorCode }[];
+      failureCode?: QuoteErrorCode;
+    }[] };
+  };
 };
 /** Economic calculation has no recipient, execution guards, expiry or wire bytes. */
 export type EconomicRequest = Pick<UniversalExactInputRequest, "intent" | "inputs" | "outputCurrency">;
@@ -67,12 +74,18 @@ export type EconomicPlan = {
   conversions: Record<string, Record<string, unknown>>;
   body: Record<string, unknown>;
 };
+/** Cached arithmetic only; never executable amounts or accepted bounds. */
+export type EconomicReuseSample = {
+  referenceInput: string; netOutput: string; fees: UniversalExactInputQuote["fees"];
+  basis: "observed-nonretained" | "market-sale-consumed" | "funded-input-approximation";
+};
 export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescription" | "outputMinimum" | "economicQuote"> & {
   request: EconomicRequest; plan: EconomicPlan;
   /** Measured conversion quantities; these never reduce declared funding by inference. */
   conversionObservations?: { operation: string; inputCurrency: string; fundedInput: string;
     consumedInput: string; outputCurrency: string; output: string }[];
   observation?: { source: "search" | "stored"; refresh: boolean };
+  reuseSample?: EconomicReuseSample;
 };
 export type EconomicQuoteRequest = EconomicRequest & { refresh?: boolean };
 export type ExecutionBounds = {
@@ -675,7 +688,12 @@ export type TradeQuote = TradeProviderCandidate & {
 export type TradeQuoteModelPacket = {
   namespace: "trade"; intent: TradeModelRequest;
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
-  estimate?: { strategy: "core" | "market"; amount: string };
+  estimate?: { strategy: "core" | "market"; amount: string } | {
+    strategy: "universal"; amount: string; source: "cached-upper";
+    referenceInput: string; basis: EconomicReuseSample["basis"];
+    fees: EconomicReuseSample["fees"]; context: EconomicQuote["context"];
+    sourceIdentity?: string; sourceRequestedInput?: string;
+  };
   /** Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
   budgetRange?: { minimumBudget: string; maximumBudget?: string; quotedInput: string; quotedOutput: string };
 };

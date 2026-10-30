@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from .basket_preview import InvalidPreview
 from .quoter.types import EconomicRequest
+from .quoter.reuse_estimate import attach_reuse_sample
 from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
 
@@ -70,8 +71,12 @@ class EconomicQuotes:
         scope = self.store.capture_scope(request)
         previous = await self.store.lookup(request, scope=scope)
         if previous is not None and not refresh:
-            return {**previous, 'observation': {'source': 'stored', 'refresh': False}}
-        value = await self.quoter.quote(request, seed=previous)
+            return {**attach_reuse_sample(previous), 'observation': {'source': 'stored', 'refresh': False}}
+        # The Quoter owns this optional feed alongside ordinary acquisition;
+        # a slow/missing cache cannot delay starting or completing search.
+        neighbors = ((lambda: self.store.neighbors(request, scope=scope))
+                     if request['intent'] in (0, 1) else None)
+        value = attach_reuse_sample(await self.quoter.quote(request, seed=previous, neighbors=neighbors))
         await self.store.save(request, value, scope=scope)
         return {**value, 'observation': {'source': 'search', 'refresh': refresh}}
 

@@ -56,10 +56,13 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_famil
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_reuse_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_nearby_search.py
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identity.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py
+python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
