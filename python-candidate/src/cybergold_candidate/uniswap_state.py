@@ -14,7 +14,7 @@ from web3 import Web3
 from web3.exceptions import BlockNotFound
 
 from .uniswap_v4 import (POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view,
-    read_tick_bitmap_words, begin_tick_prefetch)
+    read_tick_bitmap_words, begin_tick_prefetch, fail_tick_prefetch)
 from .uniswap_v3 import empty_traversal_words, read_bitmap_words
 from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
@@ -573,7 +573,6 @@ class PoolRegistry:
         covered = current if current and current['context']['blockHash'] == block['hash'] else snapshot
         words = {int(row['wordPosition']): row for row in covered.get('bitmapWords', [])}
         ticks = {int(row['index']): row for row in covered.get('ticks', [])}
-        spacing = int(pool['tickSpacing'])
         requested_words = {int(word) for request in requests for word in request.get('wordPositions', [])}
         missing_words = sorted(requested_words-words.keys())
         async def read_word(word):
@@ -585,51 +584,27 @@ class PoolRegistry:
             return word, value
         for word, bitmap in await owned_reads(*(read_word(word) for word in missing_words)):
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
-        if pool['protocol'] == 'v3':
+        if pool['protocol'] in ('v3', 'v4'):
             positions = empty_traversal_words(snapshot, requests, words)
             if positions and begin_tick_prefetch(pool, block, window=tuple(positions)):
                 try:
-                    coverage = await read_bitmap_words(rpc.read_function, pool['address'], positions, block)
-                    words.update({row['wordPosition']: row for row in coverage})
+                    if pool['protocol'] == 'v4':
+                        coverage = await read_tick_bitmap_words(rpc.read_function,
+                            pool.get('poolManager', rpc.pool_manager), pool['id'], positions, block)
+                        words.update({word: {'wordPosition': word, 'bitmap': str(bitmap)}
+                                      for word, bitmap in coverage})
+                    else:
+                        coverage = await read_bitmap_words(rpc.read_function, pool['address'], positions, block)
+                        words.update({row['wordPosition']: row for row in coverage})
                 except SnapshotChanged:
                     raise
                 except Exception:
-                    pass  # Demanded coverage survives optional transport failure.
-        if pool['protocol'] == 'v4':
-            # A large swap can exhaust its funded range and then traverse
-            # thousands of empty words. Acquire the remaining direction at
-            # once, instead of one RPC and SDK continuation per empty word.
-            # Empty gaps are never treated as global liquidity exhaustion.
-            current_word = (int(snapshot['tick'])//spacing) >> 8
-            positions = set()
-            for request in requests:
-                direction = request.get('zeroForOne')
-                if type(direction) is not bool or request.get('activeLiquidity') != '0':
-                    continue
-                for word in request.get('wordPositions', []):
-                    if word == current_word or int(words[word]['bitmap']):
-                        continue
-                    lower, upper = ((-887272//spacing) >> 8, word) if direction else (
-                        word, (887272//spacing) >> 8)
-                    positions.update(range(lower, upper+1))
-            missing = sorted(positions-words.keys())
-            if missing and begin_tick_prefetch(pool, block):
-                try:
-                    coverage = await read_tick_bitmap_words(rpc.read_function,
-                        pool.get('poolManager', rpc.pool_manager), pool['id'], missing, block)
-                    words.update({word: {'wordPosition': word, 'bitmap': str(bitmap)} for word, bitmap in coverage})
-                except SnapshotChanged:
-                    raise
-                except Exception:
-                    pass  # Optional prefetch failure retains ordinary demanded reads.
+                    # Retain the existing failed-supplier suppression across
+                    # windows; all ordinary demanded coverage remains usable.
+                    fail_tick_prefetch(pool, block)
         needed = {int(tick) for request in requests for tick in request.get('ticks', [])}
-        # V3 bitmap traversal needs indexes only. The SDK requests liquidity
-        # rows separately when its swap actually reaches an initialized tick.
-        if pool['protocol'] == 'v4':
-            for word in requested_words:
-                bits = int(words[word]['bitmap'])
-                if bits:
-                    needed.update(((word << 8)+bit)*spacing for bit in range(256) if bits & (1 << bit))
+        # Both concentrated-liquidity SDK paths traverse bitmap indexes first,
+        # then demand liquidity rows only for boundaries their swap reaches.
         async def read_tick(index):
             if pool['protocol'] == 'v4':
                 value = await read_state_view(rpc.read_function, rpc.state_view, 'getTickLiquidity', block,

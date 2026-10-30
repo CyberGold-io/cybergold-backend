@@ -98,7 +98,15 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         # Full provider search rebuilds a usable purchase within the budget.
         async with asyncio.timeout(3):
             result = await quotes._get(request, block=BLOCK)
-        self.assertLessEqual(sum(name == 'getTickBitmap(bytes32,int16)' for name, _ in rpc.calls), 3)
+        bitmap_reads = sum(name == 'getTickBitmap(bytes32,int16)' for name, _ in rpc.calls)
+        bulk = [args[0] for name, args in rpc.calls if name == 'extsload(bytes32[])']
+        # Each successive bounded window has one demanded boundary read. The
+        # old all-direction fetch needed fewer boundary reads but could block
+        # useful state behind unrelated distant coverage.
+        self.assertTrue(bulk)
+        self.assertLessEqual(bitmap_reads, len(bulk) + 3)
+        self.assertTrue(all(len(batch) <= 127 for batch in bulk))
+        self.assertGreater(min(rpc.bulk_words[:len(bulk[0])]), -100)
         actual = int(result['totalInput'])
         self.assertGreater(actual, 0)
         self.assertLess(actual, int(request['amount']))

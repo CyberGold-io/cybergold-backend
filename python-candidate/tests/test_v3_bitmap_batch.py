@@ -53,7 +53,7 @@ class BitmapBatchTests(unittest.IsolatedAsyncioTestCase):
         source = _bitmap_snapshot('v3')
         for direction, word in [(False, 1), (True, -1)]:
             words = {word: {'bitmap': '0'}}
-            expected = list(range(2, 33)) if not direction else list(range(-32, -1))
+            expected = list(range(2, 33)) if not direction else list(range(-2, -33, -1))
             self.assertEqual(empty_traversal_words(source, self.request(word, direction), words), expected)
             words[word]['bitmap'] = '1'
             self.assertEqual(empty_traversal_words(source, self.request(word, direction), words), [])

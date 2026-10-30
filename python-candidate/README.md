@@ -876,8 +876,17 @@ exploration; ordinary work remains concurrent. Scoped conservative output
 bounds can skip strictly dominated optional paths. After selection, an ordered
 replay can remove unneeded scalar payer funding while preserving output;
 linear partial-intermediate paths can use backward SDK planning followed by
-ordinary exact-input evaluation. V3 empty traversal can acquire 31 additional
-bitmap words per directional batch. The existing clock, exact ranking,
+ordinary exact-input evaluation. V3 and V4 share directional empty-region
+acquisition: start with 31 additional bitmap words, then grow to 63 or 127
+only after contiguous already-observed empty coverage supports the wider
+window. Initial traversal still uses the small window. V3 uses Multicall and
+V4 uses the singleton's storage reader; both load tick-liquidity rows only
+when the SDK requests them. An ordinary optional batch failure suppresses
+further optional attempts for that pool within its owning request; required
+reads continue and a fresh request can retry. Empty coverage never proves
+global liquidity exhaustion. V4 native currencies, directional fees and hook
+restrictions retain their existing protocol-specific handling.
+The existing clock, exact ranking,
 accepted bounds, private pool states and ordinary failure fallback remain.
 See [component contracts and limits](../docs/quoter.md). These source changes
 do not by themselves establish installed adoption.
