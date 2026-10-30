@@ -29,9 +29,17 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
     expanded = discovery is None
     cursor = 0
 
+    async def advance(feed):
+        # Iterator exhaustion is a normal feed result, including when discovery
+        # replaces a feed in the same turn that its final anext completes.
+        try:
+            return True, await anext(feed)
+        except StopAsyncIteration:
+            return False, None
+
     def next_candidate(index):
         if feeds[index] is not None and index not in pending_next and index not in ready:
-            pending_next[index] = asyncio.create_task(anext(feeds[index]))
+            pending_next[index] = asyncio.create_task(advance(feeds[index]))
 
     async def close_feeds():
         for task in pending_next.values():
@@ -100,9 +108,10 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
                 if task not in done:
                     continue
                 del pending_next[index]
-                try:
-                    ready[index] = task.result()
-                except StopAsyncIteration:
+                available, candidate = task.result()
+                if available:
+                    ready[index] = candidate
+                else:
                     feeds[index] = None
     except BaseException as error:
         freeze_quote_work(error)

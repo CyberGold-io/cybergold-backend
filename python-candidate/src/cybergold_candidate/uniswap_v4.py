@@ -26,11 +26,11 @@ async def tick_prefetch_scope():
         _tick_prefetch_attempts.reset(token)
 
 
-def begin_tick_prefetch(pool, block):
+def begin_tick_prefetch(pool, block, *, window=None):
     attempts = _tick_prefetch_attempts.get()
     if attempts is None:
         return True
-    identity = (pool.get('poolManager', '').lower(), pool['id'].lower(), block['hash'].lower())
+    identity = (pool.get('poolManager', '').lower(), pool['id'].lower(), block['hash'].lower(), window)
     if identity in attempts:
         return False
     attempts.add(identity)

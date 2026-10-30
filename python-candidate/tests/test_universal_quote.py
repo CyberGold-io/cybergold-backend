@@ -68,7 +68,7 @@ class Engine:
 
 class Quotes(UniversalQuotes):
     def __init__(self,engine,configured=True):
-        self.previews=[]; self.evaluated=[]
+        self.previews=[]; self.evaluated=[]; self.selected_evaluated=[]
         super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call)
     async def basis_call(self,block): return [PAXG,OTHER],[500000,500000]
     def seed_routes(self,*_): pass
@@ -87,6 +87,7 @@ class Quotes(UniversalQuotes):
             'fees':{'protocolFeeCygld':'0','helperFeeCygld':'0'}}
     async def candidate(self,request,share,order,*args,**kwargs):
         self.evaluated.append((share,order))
+        self.selected_evaluated.append(kwargs.get('selected') is not None)
         return await super().candidate(request,share,order,*args,**kwargs)
 
 
@@ -183,7 +184,10 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['strategy'],'universal');self.assertEqual(value['quotedInput'],'10001')
         expected={(0,'core-first'),(100,'core-first'),*( (share,order) for share in (25,50,75) for order in ('core-first','market-first'))}
         self.assertEqual(set(service.evaluated),expected)
-        self.assertEqual(len(service.evaluated),16)
+        ordinary = [config for config, selected in zip(service.evaluated, service.selected_evaluated, strict=True) if not selected]
+        self.assertEqual(len(ordinary), 16)
+        self.assertEqual(set(ordinary), expected)
+        self.assertTrue(any(service.selected_evaluated))
         self.assertEqual(value['plan']['inputs'],request()['inputs'])
         self.assertGreater(int(value['quotedOutput']),int(value['outputMinimum']))
         self.assertEqual(compile_plan(value['plan'],value['planDescription'],int(value['outputMinimum'])),value['plan'])

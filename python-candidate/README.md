@@ -870,6 +870,18 @@ observations while keeping independent execution state banks. Initial known V3
 coverage can qualify before cold V4 connector observations; refinement explores
 all selected protocols and allocations.
 
+The Quoter also interleaves up to 16 optional full-budget Market route starts
+by structural family. Saved-plan replay precedes optional randomized Refresh
+exploration; ordinary work remains concurrent. Scoped conservative output
+bounds can skip strictly dominated optional paths. After selection, an ordered
+replay can remove unneeded scalar payer funding while preserving output;
+linear partial-intermediate paths can use backward SDK planning followed by
+ordinary exact-input evaluation. V3 empty traversal can acquire 31 additional
+bitmap words per directional batch. The existing clock, exact ranking,
+accepted bounds, private pool states and ordinary failure fallback remain.
+See [component contracts and limits](../docs/quoter.md). These source changes
+do not by themselves establish installed adoption.
+
 The optional `CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS` is deliberately absent
 from the local defaults. After the successor has a real deployment address,
 configure it for that environment. The existing cached Helpers approval
