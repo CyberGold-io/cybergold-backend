@@ -226,9 +226,6 @@ _BITMAP_ADDRESS = '0x' + '3' * 40
 _BITMAP_CORE = '0x' + '1' * 40
 _BITMAP_TOKEN = '0x' + '2' * 40
 
-def _bitmap_expected_indices(word, bitmap, spacing=10):
-    return {((word << 8) + bit) * spacing for bit in range(256) if bitmap & 1 << bit}
-
 def _bitmap_snapshot(protocol, words=(), ticks=()):
     return {'id': _BITMAP_ADDRESS if protocol == 'v3' else '0x' + '4' * 64, 'protocol': protocol, 'address': _BITMAP_ADDRESS, 'tickSpacing': 10, 'token0': {'address': _BITMAP_CORE, 'decimals': 18}, 'token1': {'address': _BITMAP_TOKEN, 'decimals': 18}, 'feePips': 500, 'sqrtRatioX96': str(1 << 96), 'liquidity': '1000', 'tick': 1, 'context': {'chainId': 31338, 'blockNumber': '101', 'blockHash': _BITMAP_BLOCK['hash']}, 'unknown': {'nested': ['preserve']}, 'bitmapWords': [{'wordPosition': word, 'bitmap': str(bits)} for (word, bits) in words], 'ticks': [{'index': tick, 'liquidityGross': '999', 'liquidityNet': '-7'} for tick in ticks]}
 
@@ -289,7 +286,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(registry.observed, {})
         self.assertEqual(rpc.active, 0)
 
-    async def test_v3_demand_v4_eager_empty_sparse_dense_and_bounded_integer_semantics(self):
+    async def test_both_protocols_preserve_empty_sparse_dense_bitmaps_without_unrequested_tick_rows(self):
         patterns = [0, 1, 1 << 255, (1 << 256) - 1, sum((1 << bit for bit in range(0, 256, 2))), -1, (1 << 300) + (1 << 255) + 1, -(1 << 300)]
         for protocol in ('v3', 'v4'):
             for bitmap in patterns:
@@ -298,38 +295,39 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
                     registry = self.registry(rpc)
                     source = _bitmap_snapshot(protocol)
                     original = deepcopy(source)
-                    expected = sorted(_bitmap_expected_indices(-1, bitmap)) if protocol == 'v4' else []
                     result = await registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [-1], 'ticks': []}], _BITMAP_BLOCK)
                     self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [-1])
-                    self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
+                    self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
                     self.assertEqual(result['bitmapWords'], [{'wordPosition': -1, 'bitmap': str(bitmap)}])
-                    self.assertEqual(result['ticks'], [{'index': tick, 'liquidityGross': str(1000 + abs(tick)), 'liquidityNet': str(-tick - 1)} for tick in expected])
+                    self.assertEqual(result['ticks'], [])
                     self.assertEqual(source, original)
                     self.assert_drained(registry, rpc)
 
-    async def test_v3_dense_bitmap_returns_without_unrequested_ticks_then_fills_demanded_row(self):
-        rpc = _BitmapExpansionRpc({0: (1 << 256) - 1},
-            error=AssertionError('V3 bitmap must not prefetch tick rows'))
-        registry = self.registry(rpc)
-        source = _bitmap_snapshot('v3')
-        original = deepcopy(source)
-        covered = await registry.extend_ticks(source,
-            [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
-        self.assertEqual(covered['bitmapWords'], [{'wordPosition': 0, 'bitmap': str((1 << 256) - 1)}])
-        self.assertEqual(covered['ticks'], [])
-        self.assertEqual(source, original)
-        rpc.error = None
-        filled = await registry.extend_ticks(covered,
-            [{'poolId': source['id'], 'wordPositions': [], 'ticks': [10, 10]}], _BITMAP_BLOCK)
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [10])
-        self.assertEqual(filled['bitmapWords'], covered['bitmapWords'])
-        self.assertEqual(filled['ticks'], [{'index': 10, 'liquidityGross': '1010', 'liquidityNet': '-11'}])
-        self.assertEqual(covered['ticks'], [])
-        self.assertEqual(source, original)
-        self.assert_drained(registry, rpc)
+    async def test_dense_bitmap_returns_without_unrequested_ticks_then_fills_demanded_row_in_both_protocols(self):
+        for protocol in ('v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                rpc = _BitmapExpansionRpc({0: (1 << 256) - 1},
+                    error=AssertionError('Bitmap acquisition must not prefetch tick rows'))
+                registry = self.registry(rpc)
+                source = _bitmap_snapshot(protocol)
+                original = deepcopy(source)
+                covered = await registry.extend_ticks(source,
+                    [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
+                self.assertEqual(covered['bitmapWords'], [{'wordPosition': 0, 'bitmap': str((1 << 256) - 1)}])
+                self.assertEqual(covered['ticks'], [])
+                self.assertEqual(source, original)
+                rpc.error = None
+                filled = await registry.extend_ticks(covered,
+                    [{'poolId': source['id'], 'wordPositions': [], 'ticks': [10, 10]}], _BITMAP_BLOCK)
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [10])
+                self.assertEqual(filled['bitmapWords'], covered['bitmapWords'])
+                self.assertEqual(filled['ticks'], [{'index': 10, 'liquidityGross': '1010', 'liquidityNet': '-11'}])
+                self.assertEqual(covered['ticks'], [])
+                self.assertEqual(source, original)
+                self.assert_drained(registry, rpc)
 
     async def test_known_coverage_explicit_ticks_duplicate_words_and_mutable_copies(self):
         for protocol in ('v3', 'v4'):
@@ -341,7 +339,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
             requested = deepcopy(requests)
             result = await registry.extend_ticks(source, requests, _BITMAP_BLOCK)
             self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [1])
-            expected = [13, 20, 2580] if protocol == 'v4' else [13]
+            expected = [13]
             self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
             self.assertEqual([row['index'] for row in result['ticks']], [0, *expected])
             self.assertEqual(result['ticks'][0], original['ticks'][0])

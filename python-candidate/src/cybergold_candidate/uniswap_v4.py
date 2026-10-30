@@ -31,10 +31,21 @@ def begin_tick_prefetch(pool, block, *, window=None):
     if attempts is None:
         return True
     identity = (pool.get('poolManager', '').lower(), pool['id'].lower(), block['hash'].lower(), window)
-    if identity in attempts:
+    if identity in attempts or (*identity[:-1], None) in attempts:
         return False
     attempts.add(identity)
     return True
+
+
+def fail_tick_prefetch(pool, block):
+    """A failed optional supplier is not retried by adjacent windows this request.
+
+    Required getters remain independent. A new owning scope retries normally.
+    """
+    attempts = _tick_prefetch_attempts.get()
+    if attempts is not None:
+        attempts.add((pool.get('poolManager', '').lower(), pool['id'].lower(), block['hash'].lower(), None))
+
 
 POOL_ID = '0x33fd4629a4e190b9a98a8a3758afb7a2639eb740088a04bd4d3016e3ac9d55a4'
 POOL_MANAGER = '0x000000000004444c5dc75cB358380D2e3dE08A90'
