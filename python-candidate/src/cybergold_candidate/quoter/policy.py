@@ -4,9 +4,10 @@ from fractions import Fraction
 from ..market_fee import M, get_market_fee_rate, routed_sell_budget
 from ..routing_encoding import ZERO
 from ..uniswap_routes import pool_identity
+from .amm import pool_state
 
 
-def output_upper_bound(registry, request, route, block):
+def output_upper_bound(registry, request, route, block, *, observations=None):
     """Independent acyclic base-state paths only; unknown means price normally.
 
     Constant-product and fixed-fee concentrated-liquidity swaps cannot improve
@@ -16,7 +17,7 @@ def output_upper_bound(registry, request, route, block):
     """
     try:
         observe = getattr(registry, 'observation', None)
-        if observe is None or request['intent'] not in (0, 1):
+        if (observe is None and observations is None) or request['intent'] not in (0, 1):
             return None
         source, target = request['inputs'][0]['currency'], request['outputCurrency']
         amount = int(request['inputs'][0]['amount'])
@@ -34,7 +35,10 @@ def output_upper_bound(registry, request, route, block):
             if identity in seen or (pool.get('hooks') or ZERO).lower() != ZERO:
                 return None
             seen.add(identity)
-            state = observe(pool)
+            # Runtime callers supply the same base bank as exact evaluation.
+            # A mutable Sandbox can publish a newer state at the same hash;
+            # matching that hash alone does not make it this candidate's base.
+            state = pool_state(observations, pool) if observations is not None else observe(pool)
             if state is None or state.get('context', {}).get('blockHash', '').lower() != block['hash'].lower():
                 return None
             direction = hop['zeroForOne']

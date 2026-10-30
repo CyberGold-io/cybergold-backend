@@ -399,7 +399,7 @@ class Quoter:
                 except Exception as error:
                     failures.append(error)
             await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
-                seeded=seed is not None, core_only=core_only), seeded(), limited(),
+                observations=observations, seeded=seed is not None, core_only=core_only), seeded(), limited(),
                 owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
         except SearchStopped:
             pass

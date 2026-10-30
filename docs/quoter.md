@@ -122,6 +122,9 @@ acyclic, zero-hook Market paths whose upper output is strictly below an exact
 incumbent. Unknown bounds and output ties continue pricing. Bounds do not stop
 Core, mixed, split or undiscovered work, and do not change the selection clock.
 Pruning follows the active fair family order rather than sorting by the bound.
+Runtime bounds use the same request-local base observations as exact replay;
+a newer same-hash Sandbox registry publication cannot replace that base. A
+path whose base is not acquired yet has an unknown bound and prices normally.
 
 An intermediate partial fill can provide an optional linear-prefix proposal:
 invert the preceding distinct-pool hops with exact-output SDK arithmetic at

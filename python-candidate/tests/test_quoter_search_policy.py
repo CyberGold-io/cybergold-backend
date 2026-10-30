@@ -14,6 +14,22 @@ from test_universal_quote import Engine, Quotes, request
 
 
 class PolicyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bound_uses_the_exact_replay_base_despite_same_hash_registry_change(self):
+        from quoter_fixture import service, synthetic_pool
+        from test_universal_quote import WETH, CORE, BLOCK
+        pool = synthetic_pool(WETH, CORE, 42, 'v2'); q = service(self, [pool])
+        route = [{'pool': pool, 'zeroForOne': False}]
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
+        base = {pool['id']: deepcopy(pool)}
+        q.engine.registry.observed[pool['id']]['reserve0'] = '1'
+        fresh_registry_bound = output_upper_bound(q.engine.registry, request, route, BLOCK)
+        replay_base_bound = output_upper_bound(q.engine.registry, request, route, BLOCK, observations=base)
+        self.assertGreater(replay_base_bound, fresh_registry_bound)
+        self.assertIsNone(output_upper_bound(q.engine.registry, request, route, BLOCK, observations={}))
+        _, output = await q.price_path(route, 10000, BLOCK, {}, base)
+        from cybergold_candidate.market_fee import quoted_fee
+        self.assertGreaterEqual(replay_base_bound, output - quoted_fee(output, 1000))
+
     async def test_exhaustive_sdk_catalog_bound_proofs_and_pruning(self):
         # Exhaustive proof allowance deliberately differs from the runtime 16.
         for name, count in [('buy500', 39), ('buy100', 39), ('sale1', 34)]:

@@ -11,7 +11,8 @@ from .policy import dominated, output_upper_bound
 from .prefix import repair_prefix
 
 
-async def explore(quoter, request, block, session, evaluate, incumbent, *, seeded=False, core_only=False):
+async def explore(quoter, request, block, session, evaluate, incumbent, *, observations,
+                  seeded=False, core_only=False):
     if core_only or request['intent'] not in (0, 1):
         return
     source, target = request['inputs'][0]['currency'], request['outputCurrency']
@@ -40,7 +41,7 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, seede
         if identity in session.resolved:
             return
         session.resolved.add(identity)
-        bound = output_upper_bound(quoter.engine.registry, request, route, block)
+        bound = output_upper_bound(quoter.engine.registry, request, route, block, observations=observations)
         if dominated(bound, incumbent()):
             session.pruned += 1
             return
