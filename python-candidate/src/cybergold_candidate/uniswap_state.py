@@ -15,6 +15,7 @@ from web3.exceptions import BlockNotFound
 
 from .uniswap_v4 import (POOL_MANAGER, STATE_VIEW, read_pool_state, read_state_view,
     read_tick_bitmap_words, begin_tick_prefetch)
+from .uniswap_v3 import empty_traversal_words, read_bitmap_words
 from .pool_producer import DEFAULT_FACTORY, PoolRpc
 from .shared_reads import SharedReads
 from .uniswap_routes import pool_key, v4_pool_id, pool_identity as execution_pool_identity
@@ -584,6 +585,16 @@ class PoolRegistry:
             return word, value
         for word, bitmap in await owned_reads(*(read_word(word) for word in missing_words)):
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
+        if pool['protocol'] == 'v3':
+            positions = empty_traversal_words(snapshot, requests, words)
+            if positions and begin_tick_prefetch(pool, block, window=tuple(positions)):
+                try:
+                    coverage = await read_bitmap_words(rpc.read_function, pool['address'], positions, block)
+                    words.update({row['wordPosition']: row for row in coverage})
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    pass  # Demanded coverage survives optional transport failure.
         if pool['protocol'] == 'v4':
             # A large swap can exhaust its funded range and then traverse
             # thousands of empty words. Acquire the remaining direction at

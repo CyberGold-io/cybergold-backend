@@ -10,6 +10,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import combinations
+from secrets import randbits
 
 from web3 import Web3
 
@@ -22,12 +23,16 @@ from ..recovery_rpc import SnapshotChanged
 from ..preview_errors import preview_error
 from ..routing_encoding import ZERO, ROUTING_ENCODING, weighted_routes, split_runtime
 from ..route_search import WETH
-from ..uniswap_routes import pool_identity, opposite, V4_CONNECTOR_KEYS, initial_v3_branches
+from ..uniswap_routes import pool_identity, V4_CONNECTOR_KEYS, initial_v3_branches
 from ..uniswap_v4 import v4_pool_id, POOL_MANAGER
 from ..wallet_balances import TOKENS
 from ..uniswap_state import owned_reads
-from ..route_work_slots import engine_work
+from .amm import price_path, PartialPath
+from .discovery import paths, route_candidates
 from .ranking import prefer_completed
+from .contracts import SearchSession
+from .exploration import explore
+from .funding import reconstruct
 
 PAXG = dict(TOKENS)['paxg']
 CORE_SHARES = (0, 25, 50, 75, 100)
@@ -38,53 +43,11 @@ def identity_template(currency):
             'routes': []}
 
 
-def paths(pools, source, target, weth=WETH, max_hops=3):
-    """Selected pool graph plus explicit lossless native/WETH transitions."""
-    graph = {}
-    unique = {}
-    for pool in pools:
-        identity = pool_identity(pool)
-        if identity not in unique or pool.get('address'):
-            unique[identity] = pool
-    for pool in unique.values():
-        if pool.get('hooks', ZERO).lower() != ZERO:
-            continue
-        for token in (pool['token0'], pool['token1']):
-            graph.setdefault(token['address'].lower(), []).append(pool)
-    found = []
-    def walk(current, route, visited, hops):
-        if current == target.lower():
-            if route:
-                found.append(route)
-            return
-        if hops < max_hops:
-            for pool in sorted(graph.get(current, []), key=lambda row: (row['protocol'], row['id'])):
-                following = opposite(pool, current)
-                if following not in visited:
-                    walk(following, route + [{'pool': pool, 'zeroForOne': current == pool['token0']['address'].lower()}],
-                         visited | {following}, hops + 1)
-        if current in (ZERO, weth.lower()):
-            following = weth.lower() if current == ZERO else ZERO
-            if following not in visited:
-                walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
-                    'currencyOut': following}], visited | {following}, hops)
-    walk(source.lower(), [], {source.lower()}, 0)
-    return sorted(found, key=lambda route: (len(route), repr(route)))
-
-
-def route_candidates(routes, amount):
-    for route in routes:
-        yield [{'amountIn': str(amount), 'hops': route}]
-    for left, right in combinations(routes, 2):
-        for share in (25, 50, 75):
-            first = amount * share // 100
-            if first and amount - first:
-                yield [{'amountIn': str(first), 'hops': left}, {'amountIn': str(amount - first), 'hops': right}]
-
-
 class Quoter:
-    def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None):
+    def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
+                 exploration_seed=None, optional_limit=16):
         self.settings, self.engine = settings, engine
+        self.exploration_seed, self.optional_limit = exploration_seed, optional_limit
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
         self.helpers = configured_address(settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS')
         self.core = configured_address(settings, 'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS')
@@ -195,22 +158,7 @@ class Quoter:
                         pool[f'token{index}'] = deepcopy(tokens[currency])
 
     async def price_path(self, route, amount, block, bank, canonical):
-        current, used = amount, amount
-        for index, hop in enumerate(route):
-            if not current:
-                break
-            if 'kind' in hop:
-                continue
-            async with engine_work(self.engine.semaphore):
-                value = await self.engine.quote_sdk_branches([{'amountIn': str(current), 'hops': [hop]}],
-                    'exactIn', current, block, candidate=bank, canonical=canonical)
-            debit, output = int(value['amountIn']), int(value['amountOut'])
-            if index == 0:
-                used = debit
-            elif debit < current:
-                raise InvalidPreview('Unsettled current-operation intermediate currency.')
-            current = output
-        return used, current
+        return await price_path(self.engine, route, amount, block, bank, canonical)
 
     async def conversion(self, source, target, amount, block, bank, canonical, *, market=False,
                          first=False, branch=0, stage=0, capture=None):
@@ -288,10 +236,10 @@ class Quoter:
         return best[1], best[0], best[2]
 
     async def candidate(self, request, share, order, block, assets, weights, *, first=False,
-                        observations=None, selected=None):
+                        observations=None, selected=None, selection=True):
         from .evaluate import evaluate_candidate
         return await evaluate_candidate(self, request, share, order, block, assets, weights,
-                                        first=first, observations=observations, selected=selected)
+                                        first=first, observations=observations, selected=selected, selection=selection)
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None):
@@ -304,7 +252,7 @@ class Quoter:
             # its actual stopping reason is recorded as timeout.
             error.quoter_metrics = self.producer_metrics(budget)
             raise
-        result['metrics'] = self.producer_metrics(budget)
+        result['metrics'] = {**(result.get('metrics') or {}), **self.producer_metrics(budget)}
         return result
 
     @staticmethod
@@ -377,7 +325,9 @@ class Quoter:
         # identified rejection; zero funding must not become a successful quote.
         default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
         best, failures, observations = None, [], {}
-        async def evaluate(share, order, first, selected=None, funding=None, phase=None):
+        session = SearchSession(self.optional_limit,
+            self.exploration_seed if self.exploration_seed is not None else randbits(64))
+        async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False):
             nonlocal best
             try:
                 funding = default_funding if funding is None else funding
@@ -395,6 +345,10 @@ class Quoter:
                     if on_update: await on_update({'type': 'qualified', 'value': value})
             except SnapshotChanged:
                 raise
+            except PartialPath as error:
+                if partial:
+                    raise
+                failures.append(error)
             except Exception as error:
                 failures.append(error)
         grid = [(share, order) for share in CORE_SHARES for order in
@@ -404,13 +358,16 @@ class Quoter:
             try:
                 if request['intent'] != 3:
                     await budget.discovery(self.discover(request, assets, block))
+                session.discovery_done.set()
                 await owned_reads(*(evaluate(share, order, False) for share, order in grid))
             except SnapshotChanged:
                 raise
             except Exception as error:
                 failures.append(error)
+            finally:
+                session.discovery_done.set()
         try:
-            async def seeded():
+            async def seeded_body():
                 if seed is not None:
                     funding = seed['inputs']
                     maxima = direct_funding if direct_funding is not None else request['inputs']
@@ -421,6 +378,15 @@ class Quoter:
                             and int(row['amount']) <= int(maximum['amount'])
                             for row, maximum in zip(funding, maxima, strict=True)):
                         await evaluate(100, 'core-first', False, selected=seed['plan'], funding=funding)
+            async def seeded():
+                try:
+                    await seeded_body()
+                except SnapshotChanged:
+                    raise
+                except Exception as error:
+                    failures.append(error)
+                finally:
+                    session.seed_done.set()
             async def limited():
                 if request['intent'] != 2:
                     return
@@ -432,10 +398,25 @@ class Quoter:
                     raise
                 except Exception as error:
                     failures.append(error)
-            await owned_reads(seeded(), limited(), owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+            await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                seeded=seed is not None, core_only=core_only), seeded(), limited(),
+                owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
         except SearchStopped:
             pass
         budget.cleanup_done()
+        if best is not None and not budget.stop.is_set():
+            budget.finish_selection('complete')
+        if best is not None and not core_only:
+            try:
+                best = await reconstruct(self, best, block, assets, weights, observations)
+            except SnapshotChanged:
+                raise
+            except Exception:
+                pass  # Keep the ordinary winner if optional reconstruction fails.
+        if best is not None:
+            best['metrics'] = {**(best.get('metrics') or {}), 'optionalSearch': {
+                'randomSeed': str(session.random_seed) if seed is not None else None,
+                'starts': session.starts, 'pruned': session.pruned, 'repairs': session.repairs}}
         await rpc.assert_canonical(block)
         budget.canonical_done()
         if best is None:

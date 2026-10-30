@@ -6,6 +6,7 @@ from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
 from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
 from ..routing_encoding import ROUTING_ENCODING, split_runtime
+from .contracts import path_operation
 
 CORE_SHARES = (0, 25, 50, 75, 100)
 
@@ -37,7 +38,7 @@ async def replay_conversion(self, chosen, source, target, amount, block, bank, c
 
 
 async def evaluate_candidate(self, request, share, order, block, assets, weights, *, first=False,
-                         observations=None, selected=None):
+                         observations=None, selected=None, selection=True):
     bank, canonical, retained, branches = {}, observations if observations is not None else {}, [], []
     recorded, conversion_observations = {}, []
     selected_routes = selected['conversions'] if selected is not None else None
@@ -68,7 +69,8 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
                     raise QuoteFailure('quote-no-route')
                 chosen = {'inputCurrency': source, 'outputCurrency': target, 'branches': []}
             pending = replay_conversion(self, chosen, source, target, lot, block, bank, canonical, **kwargs)
-        result = await budget.discovery(pending) if budget else await pending
+        with path_operation(operation, kwargs.get('branch', 0), cursor):
+            result = await budget.discovery(pending) if budget and selection else await pending
         observation = chosen.pop('_observation', None)
         if observation is not None:
             conversion_observations.append({'operation': operation, **observation})

@@ -50,6 +50,11 @@ node --import tsx python-candidate/tests/node-worker-engine-reference.ts > "$can
 export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_universal_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_families.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identity.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
