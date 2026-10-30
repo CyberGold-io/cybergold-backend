@@ -13,6 +13,18 @@ from test_universal_quote import BLOCK, USER
 
 
 class FundingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_small_productive_core_branch_stays_mixed_after_selected_funding_changes(self):
+        from test_universal_quote import Quotes, Engine, request as fixture_request
+        q = Quotes(Engine())
+        request = {key: value for key, value in fixture_request().items() if key in ('intent', 'inputs', 'outputCurrency')}
+        initial = {**request, 'inputs': [{**request['inputs'][0], 'amount': '400'}]}
+        value = await q.candidate(initial, 1, 'core-first', BLOCK, *await basis(BLOCK), first=True)
+        selected = deepcopy(value['plan'])
+        selected['allocations'][1]['amountIn'] = selected['body']['branches'][1]['amountIn'] = '9997'
+        replayed = await q.candidate(request, 100, 'core-first', BLOCK, *await basis(BLOCK), selected=selected)
+        self.assertEqual(replayed['routeFamily'], 'mixed')
+        self.assertEqual([row['kind'] for row in replayed['plan']['body']['branches']], [0, 1])
+
     async def test_stopped_selection_still_allows_exact_finalization_replay(self):
         from cybergold_candidate.quote_budget import QuoteBudget, budget_context
         q, case = historical_service(self); block = historical_data()['anchor']

@@ -181,7 +181,10 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
         body = await core_sell(amount, 0, basket=True)
     if intent != 3 and not output and not recovery:
         raise InvalidPreview('This scalar trade has no final output or recovery shares.')
-    family = 'core' if share == 100 else 'market' if share == 0 else 'mixed'
+    # Reduced funding can make a productive Core branch less than one percent.
+    # Integer search-grid percentages must not relabel its actual execution.
+    kinds = {row['kind'] for row in branches}
+    family = ('mixed' if len(kinds) > 1 else 'market' if kinds == {1} else 'core')
     if intent in (0, 2) and has_continuation:
         family = 'mixed'
     return {'strategy': 'universal', 'routeFamily': family, 'operation': 'executeExactInput',
