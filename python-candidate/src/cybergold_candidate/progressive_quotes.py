@@ -33,17 +33,27 @@ class CanonicalPublication:
     async def enqueue(self, frame):
         # This callback executes in candidate work. Do not put canonical RPC,
         # transport backpressure or SQL awaits on that producer critical path.
-        if not self.closed and frame['type'] == 'qualified':
+        if self.closed:
+            return
+        if frame['type'] == 'qualified':
             value = deepcopy(frame['value'])
             self.context = deepcopy(value['context'])
-            self.queue.put_nowait((False, value))
+            self.queue.put_nowait(('candidate', value))
+        elif frame['type'] == 'upper-replay-settled':
+            # Ordered behind the upper candidate's canonical publication. The
+            # display hint is not a quote and needs no additional chain read.
+            self.queue.put_nowait(('upper-replay-settled', None))
 
     async def run(self):
         while (item := await self.queue.get()) is not None:
-            canonical, value = item
+            kind, value = item
+            if kind == 'upper-replay-settled':
+                if not self.closed:
+                    await self.publish({'type': kind})
+                continue
             if self.closed or not self.preferred(value):
                 continue
-            if not canonical:
+            if kind == 'candidate':
                 context = value['context']
                 try:
                     await self.quoter.engine.registry.get_rpc().assert_canonical({
@@ -94,7 +104,7 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             await consumer
         terminal = await producer
         # The returned producer winner has already passed its canonical check.
-        publication.queue.put_nowait((True, deepcopy(terminal)))
+        publication.queue.put_nowait(('terminal', deepcopy(terminal)))
         publication.queue.put_nowait(None)
         await consumer
     finally:

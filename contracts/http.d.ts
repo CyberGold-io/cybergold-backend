@@ -1383,6 +1383,14 @@ export interface components {
             workId?: string;
         } & {
             /** @constant */
+            type: "upper-replay-settled";
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
             type: "complete";
             value: components["schemas"]["EconomicQuote"];
         }) | ({

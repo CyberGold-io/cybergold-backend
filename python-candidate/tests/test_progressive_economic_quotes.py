@@ -53,6 +53,108 @@ class ProgressiveFixture(unittest.IsolatedAsyncioTestCase):
 
 
 class ProgressiveTests(ProgressiveFixture):
+    async def test_producer_disproof_cannot_release_a_held_quote_through_upper_cancellation(self):
+        from cybergold_candidate.quoter import search
+        from unittest.mock import patch
+        # Exercise the real Quoter neighbor ownership, publication queue and
+        # sibling cancellation. The candidate stand-in changes no chain state.
+        for fatal_side in ['upper', 'lower']:
+            with self.subTest(fatal_side=fatal_side):
+                q = Quotes(Engine())
+                q.engine.registry.ensure_loaded = AsyncMock()
+                candidate = q.candidate
+                ordinary_ready, upper_started = asyncio.Event(), asyncio.Event()
+                frames = []
+                async def measured(*args, **kwargs):
+                    side = (kwargs.get('selected') or {}).get('_side')
+                    if side == 'upper':
+                        upper_started.set()
+                        await ordinary_ready.wait()
+                        if fatal_side == 'upper':
+                            raise SnapshotChanged('upper context changed')
+                        await asyncio.Event().wait()
+                    if side == 'lower':
+                        await upper_started.wait()
+                        await ordinary_ready.wait()
+                        if fatal_side == 'lower':
+                            raise SnapshotChanged('lower context changed')
+                        await asyncio.Event().wait()
+                    return await candidate(*args, **kwargs)
+                q.candidate = measured
+                async def proposals_neighbors():
+                    return {side: {'identity': side, 'quote': {'side': side}} for side in ['upper', 'lower']}
+                def proposals(quote, *_):
+                    return [{'plan': {'_side': quote['side']}, 'inputs': economic_request()['inputs']}]
+                async def publish(frame):
+                    frames.append(deepcopy(frame))
+                    if frame['type'] == 'qualified':
+                        ordinary_ready.set()
+                # Keep ordinary discovery alive until the fatal neighbor is
+                # observed, rather than letting normal completion cancel it.
+                async def discovery(*_):
+                    await asyncio.Event().wait()
+                q.discover = discovery
+                service = EconomicQuotes(q, SharedStore())
+                service.store.neighbors = lambda *_args, **_kwargs: proposals_neighbors()
+                with patch.object(search, 'neighbor_proposals', proposals):
+                    async with asyncio.timeout(2):
+                        with self.assertRaises(SnapshotChanged):
+                            await service.progressive(economic_request(), publish)
+                self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
+                self.assertFalse(any(frame['type'] == 'upper-replay-settled' for frame in frames))
+
+    async def test_upper_settlement_follows_canonical_candidate_without_an_extra_read(self):
+        started, release = asyncio.Event(), asyncio.Event()
+        async def canonical(_):
+            started.set()
+            await release.wait()
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': self.value(100)})
+            await callback({'type': 'upper-replay-settled'})
+            return self.value(100)
+        frames = []
+        async def publish(frame):
+            frames.append(deepcopy(frame))
+        service = self.service(script, canonical)
+        task = asyncio.create_task(service.progressive(economic_request(), publish))
+        await asyncio.wait_for(started.wait(), 1)
+        self.assertEqual(frames, [])
+        release.set()
+        result = await asyncio.wait_for(task, 1)
+        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'upper-replay-settled'])
+        self.assertEqual(result['quotedOutput'], '100')
+        self.assertEqual(len(service.quoter.canonical_calls), 1)
+
+    async def test_upper_settlement_does_not_hide_canonical_disproof(self):
+        async def canonical(_):
+            raise SnapshotChanged('captured context changed')
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': self.value(100)})
+            await callback({'type': 'upper-replay-settled'})
+            return self.value(100)
+        frames = []
+        async def publish(frame):
+            frames.append(deepcopy(frame))
+        service = self.service(script, canonical)
+        with self.assertRaises(SnapshotChanged):
+            await service.progressive(economic_request(), publish)
+        self.assertEqual(frames, [])
+
+    async def test_upper_settlement_survives_ordinary_candidate_confirmation_failure(self):
+        async def canonical(_):
+            raise OSError('temporary provider failure')
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': self.value(100)})
+            await callback({'type': 'upper-replay-settled'})
+            return self.value(200)
+        frames = []
+        async def publish(frame):
+            frames.append(deepcopy(frame))
+        service = self.service(script, canonical)
+        result = await service.progressive(economic_request(), publish)
+        self.assertEqual([frame['type'] for frame in frames], ['upper-replay-settled', 'qualified'])
+        self.assertEqual(result['quotedOutput'], '200')
+
     async def test_first_ready_does_not_wait_for_search_and_tuples_improve_atomically(self):
         release, ready, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
         first, better = self.value(100), self.value(200)
