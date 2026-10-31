@@ -106,6 +106,22 @@ class NativeNearbyQuotes(unittest.IsolatedAsyncioTestCase):
         selected['upper']['quote']['quotedOutput'] = 'mutated'
         self.assertEqual((await self.store.lookup(self.request(1000)))['quotedOutput'], '1000')
 
+    async def test_best_fitting_lower_output_keeps_nearest_upper_and_bounded_reads(self):
+        await self.save(10000, output=78948539895713944454)
+        await self.save(95000, output=3643)
+        await self.save(110000, output=5)
+        await self.save(120000, output=999999999999999999999)
+        await self.save(90000, output=9999999999999999999999, intent=1)
+        self.two.queries.clear()
+        selected = await self.peer.neighbors(self.request(100000))
+        self.assertEqual(selected['lower']['quote']['quotedOutput'], '78948539895713944454')
+        self.assertEqual(selected['lower']['quote']['request']['inputs'][0]['amount'], '10000')
+        self.assertEqual(selected['upper']['quote']['request']['inputs'][0]['amount'], '110000')
+        reads = [(query, args) for query, args in self.two.queries if query.lstrip().startswith('SELECT')]
+        self.assertEqual(len(reads), 2)
+        self.assertNotIn('SELECT payload ', reads[0][0])
+        self.assertEqual(len(reads[1][1][-1]), 2)
+
     async def test_captured_configuration_and_generation_identity(self):
         await self.save(1000)
         old = self.peer.capture_scope(self.request(900))

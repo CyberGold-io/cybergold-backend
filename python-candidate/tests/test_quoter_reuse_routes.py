@@ -166,8 +166,8 @@ class ReuseRouteTests(unittest.IsolatedAsyncioTestCase):
             {'hops': hops[0], 'amountIn': '2500000'}, {'hops': hops[1], 'amountIn': '7500000'}])
         old = await evaluate(q, scalar(10000000), original_plan)
         proposals = neighbor_proposals(old, 20000000, (await q.basis(BLOCK))[0])
-        self.assertEqual([int(row['inputs'][0]['amount']) for row in proposals], [20000000, 10000000])
-        resized = proposals[0]['plan']
+        self.assertEqual([int(row['inputs'][0]['amount']) for row in proposals], [10000000, 20000000])
+        resized = proposals[1]['plan']
         self.assertEqual(resized['conversions']['0:market']['template']['routes'], chosen['template']['routes'])
         pools[0]['reserve0'] = '2000000000'
         q.engine.registry.observed[pools[0]['id']] = deepcopy(pools[0])

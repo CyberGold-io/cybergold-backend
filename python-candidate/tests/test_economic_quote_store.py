@@ -25,6 +25,41 @@ def fixture():
 
 
 class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
+    async def test_better_lower_output_is_not_hidden_by_a_nearer_bad_quote(self):
+        settings, registry, request, _ = fixture()
+        service = EconomicQuoteStore(settings, registry)
+        quotes = {}
+        headers = []
+        # A recent, nearby poor result must not crowd out the smaller useful
+        # plan. Integer outputs also exceed floating-point exact precision.
+        for amount, output in [(95000, 3643), (10000, 78948539895713944454),
+                               (110000, 5), (120000, 999999999999999999999)]:
+            req = {**request, 'inputs': [{'currency': USDT, 'amount': str(amount)}]}
+            key = service.capture_scope(req).identity
+            quotes[key] = {'request': req, 'quotedOutput': str(output)}
+            headers.append({'identity': key, 'request': req, 'quoted_output': str(output)})
+        executed = []
+        async def prepare():
+            pass
+        class Connection:
+            async def execute(self, query, values):
+                executed.append((query, values))
+                return self
+            async def fetchall(self):
+                if len(executed) == 1:
+                    return headers
+                return [{'identity': key, 'quote': quotes[key]} for key in executed[-1][1][-1]]
+        @asynccontextmanager
+        async def connection():
+            yield Connection()
+        registry.store.prepare = prepare
+        registry.store.database = SimpleNamespace(connection=connection)
+        selected = await service.neighbors(request)
+        self.assertEqual(selected['lower']['quote']['request']['inputs'][0]['amount'], '10000')
+        self.assertEqual(selected['upper']['quote']['request']['inputs'][0]['amount'], '110000')
+        self.assertEqual(len(executed), 2)
+        self.assertEqual(len(executed[-1][1][-1]), 2)
+
     def test_lookup_identity_excludes_execution_head_and_transport_fields(self):
         settings, registry, request, _ = fixture()
         service = EconomicQuoteStore(settings, registry)

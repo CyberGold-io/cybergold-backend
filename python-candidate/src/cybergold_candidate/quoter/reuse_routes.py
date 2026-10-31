@@ -122,11 +122,17 @@ def selected_conversion(selected, operation, source):
 
 
 def neighbor_proposals(quote, budget, assets):
-    """Full edited budget, followed by distinct fitting original funding."""
+    """Reprice fitting original funding before trying the larger budget.
+
+    Upscaling can become unproductive or consume the selection window. Keep
+    the already-fitting plan in contention first, without copying its old
+    price or extending that window. Both proposals still use current state.
+    """
     blueprint = extract_blueprint(quote)
-    amounts = [int(budget)]
+    amounts = []
     if 0 < blueprint['funding'] < int(budget):
         amounts.append(blueprint['funding'])
+    amounts.append(int(budget))
     return [{'plan': resize_blueprint(blueprint, amount, assets),
              'inputs': [{'currency': blueprint['inputCurrency'], 'amount': str(amount)}]}
             for amount in amounts]

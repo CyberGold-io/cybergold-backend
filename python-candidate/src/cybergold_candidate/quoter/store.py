@@ -66,9 +66,11 @@ class EconomicQuoteStore:
     async def neighbors(self, request, *, scope=None):
         """Project bounded headers, then retrieve only the selected neighbors.
 
-        Original requested budgets order neighbors. The captured existing exact
-        identity proves their deployment/configuration family without a head or
-        new freshness rule. Old rows need no new metadata or migration.
+        The lower candidate is the best observed output fitting the budget;
+        a nearer but poor quote must not hide it. The upper remains nearest
+        for the existing arithmetic hint and downscaled replay. The captured
+        identity preserves deployment/configuration family without a head or
+        new freshness rule. Historical outputs only order fresh replay work.
         """
         empty = {'lower': None, 'upper': None}
         if self.store is None:
@@ -85,6 +87,7 @@ class EconomicQuoteStore:
             async with self.store.database.connection() as connection:
                 cursor = await connection.execute('''SELECT identity,
                     payload->'quote'->'request' AS request,
+                    payload->'quote'->>'quotedOutput' AS quoted_output,
                     (payload->>'savedSequence')::bigint AS sequence
                     FROM cybergold_uniswap_state
                     WHERE chain_id=%s AND core_address=%s AND namespace=%s
@@ -105,10 +108,14 @@ class EconomicQuoteStore:
                         if side is None:
                             continue
                         previous = chosen.get(side)
-                        # Headers already prefer the last successful save; only
-                        # a strictly nearer budget replaces a same-amount row.
-                        if previous is None or (amount > previous[0] if side == 'lower' else amount < previous[0]):
-                            chosen[side] = (amount, row['identity'])
+                        # Rank scalar outputs with exact integers. Equal lower
+                        # outputs preserve the prior nearest-budget tie break;
+                        # equal headers retain the last successful save.
+                        output = int(row['quoted_output']) if side == 'lower' else 0
+                        if previous is None or (
+                                (output, amount) > (previous[2], previous[0]) if side == 'lower'
+                                else amount < previous[0]):
+                            chosen[side] = (amount, row['identity'], output)
                     except (KeyError, TypeError, ValueError, AttributeError):
                         continue
                 if not chosen:
