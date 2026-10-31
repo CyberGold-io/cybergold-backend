@@ -65,6 +65,24 @@ class EconomicQuotes:
         self.quoter, self.store = quoter, store
         self.observe_scope = observe_scope
 
+    async def cached_offer(self, request, previous, scope):
+        """Offer the better complete stored tuple, preserving its observation.
+
+        An old poor exact-budget row must not mask a better fitting quote.
+        This remains a DB-only historical lookup; explicit Refresh owns fresh
+        pricing, and transaction preparation replays the selected plan.
+        """
+        offered = previous
+        if request['intent'] in (0, 1):
+            try:
+                lower = (await self.store.neighbors(request, scope=scope)).get('lower')
+                if lower and int(lower['quote']['quotedOutput']) > int(previous['quotedOutput']):
+                    offered = {**deepcopy(lower['quote']), 'request': deepcopy(request)}
+            except Exception:
+                pass  # Optional neighbor failure leaves the exact cache hit.
+        offered = with_dormant_routes(offered, getattr(self.quoter.engine.registry, 'seed', None))
+        return {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
+
     async def get(self, request, *, refresh=False):
         request = EconomicRequest.model_validate(request).model_dump()
         # This captures existing deployment/generation/fee scope, not the head.
@@ -74,8 +92,7 @@ class EconomicQuotes:
         scope = self.store.capture_scope(request)
         previous = await self.store.lookup(request, scope=scope)
         if previous is not None and not refresh:
-            offered = with_dormant_routes(previous, getattr(self.quoter.engine.registry, 'seed', None))
-            return {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
+            return await self.cached_offer(request, previous, scope)
         # The Quoter owns this optional feed alongside ordinary acquisition;
         # a slow/missing cache cannot delay starting or completing search.
         neighbors = ((lambda: self.store.neighbors(request, scope=scope))

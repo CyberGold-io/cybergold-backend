@@ -38,6 +38,56 @@ def service(store):
 
 
 class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_better_fitting_cached_tuple_beats_poor_exact_hit_without_rpc_or_mutation(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        small_request = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        small = await quoter.quote(small_request)
+        large_request = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '100010'}]}
+        poor = await quoter.quote(large_request)
+        poor['quotedOutput'] = '1'
+        poor['estimatedRecipientOutputs'][0]['amount'] = '1'
+        await store.save(large_request, poor, scope=store.capture_scope(large_request))
+        store.neighbors = AsyncMock(return_value={'lower': {'quote': small}})
+        retained = deepcopy(store.rows)
+        quoter.quote = AsyncMock(side_effect=AssertionError('Stored offer must not search'))
+        block = quoter.engine.block
+        quoter.engine.block = AsyncMock(side_effect=AssertionError('Stored offer must not read a head'))
+        app = create_app(economic_quotes=quotes)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+            ordinary = await client.post('/api/economic-quotes', json=large_request)
+            streamed = await client.post('/api/economic-quotes/stream', json=large_request)
+        self.assertEqual(ordinary.status_code, 200, ordinary.text)
+        self.assertEqual(streamed.status_code, 200, streamed.text)
+        frames = [json.loads(line) for line in streamed.text.splitlines()]
+        visible = [frame['value'] for frame in frames if frame['type'] in ('qualified', 'complete')]
+        self.assertTrue(visible)
+        for result in [ordinary.json(), *visible]:
+            self.assertEqual(result['request'], large_request)
+            for field in ('inputs', 'plan', 'context', 'quotedOutput', 'fees', 'conversionObservations'):
+                self.assertEqual(result[field], small[field])
+            self.assertEqual(result['observation']['source'], 'stored')
+        self.assertEqual(store.rows, retained)
+        quoter.quote.assert_not_called()
+        quoter.engine.block.assert_not_called()
+        quoter.engine.block = block
+        prepared = await TransactionPreparation(quoter).prepare({
+            'quote': ordinary.json(), 'sender': USER, 'recipient': USER})
+        self.assertEqual(prepared['plan']['inputs'], small['inputs'])
+        self.assertEqual(prepared['plan']['minimumOutput'], str(int(small['quotedOutput']) * 99 // 100))
+
+    async def test_cached_floor_failure_is_optional_but_cancellation_propagates(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        saved = await quoter.quote(value)
+        await store.save(value, saved, scope=store.capture_scope(value))
+        store.neighbors = AsyncMock(side_effect=OSError('Optional SQL unavailable'))
+        self.assertEqual((await quotes.get(value))['quotedOutput'], saved['quotedOutput'])
+        store.neighbors.side_effect = asyncio.CancelledError()
+        with self.assertRaises(asyncio.CancelledError):
+            await quotes.get(value)
+
     async def test_missing_accepted_residual_is_ordinary_400_with_exact_private_failure_evidence(self):
         quoter, _ = service(SharedStore())
         value = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},

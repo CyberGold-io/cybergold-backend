@@ -13,6 +13,63 @@ from test_universal_quote import Engine, Quotes, request
 
 
 class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fitting_plan_is_repriced_before_upscaling_can_consume_selection(self):
+        from cybergold_candidate.quote_budget import current_budget
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        for unavailable in (False, True):
+            with self.subTest(fitting_replay_unavailable=unavailable):
+                q = Quotes(Engine())
+                sdk = q.engine.quote_sdk_branches
+                async def acquire(branches, *args, **kwargs):
+                    resolved = deepcopy(branches)
+                    for branch in resolved:
+                        for hop in branch['hops']:
+                            hop['pool'] = deepcopy(q.engine.registry.inventory[hop['pool']['id']])
+                    return await sdk(resolved, *args, **kwargs)
+                q.engine.quote_sdk_branches = acquire
+                saved = await q.quote(request())
+                expected = saved['quotedOutput']
+                saved['quotedOutput'] = '999999999999999999999999'
+                edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}
+                original = q.candidate
+                qualified = asyncio.Event()
+                async def update(frame):
+                    if frame['type'] == 'qualified':
+                        qualified.set()
+                async def candidate(value, *args, **options):
+                    if (options.get('selected') or {}).get('_fitting_fixture'):
+                        if value['inputs'][0]['amount'] == '100010':
+                            # Deterministic clock boundary: the expanded replay
+                            # consumes the remaining selection window, leaving
+                            # no time for a later fitting replay. No sleep race.
+                            await qualified.wait()
+                            current_budget().finish_selection('best-initial')
+                            return await current_budget().discovery(asyncio.sleep(0))
+                        if unavailable:
+                            raise QuoteFailure('quote-no-route')
+                        return await original(value, *args, **options)
+                    result = await original(value, *args, **options)
+                    # Model an ordinary low-output candidate at the producer
+                    # boundary; this control tests scheduling, not AMM pricing.
+                    result['quotedOutput'] = '1'
+                    result['estimatedRecipientOutputs'][0]['amount'] = '1'
+                    return result
+                q.candidate = candidate
+                async def neighbors():
+                    return {'lower': {'identity': 'best-fitting', 'quote': saved}}
+                def marked(*args):
+                    rows = neighbor_proposals(*args)
+                    for row in rows:
+                        row['plan']['_fitting_fixture'] = True
+                    return rows
+                with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
+                    result = await Quoter.get(q, edited, update, neighbors=neighbors)
+                self.assertEqual(result['request']['inputs'], edited['inputs'])
+                self.assertEqual(result['quotedOutput'], '1' if unavailable else expected)
+                self.assertEqual(result['inputs'][0]['amount'], '100010' if unavailable else '10001')
+                self.assertNotEqual(result['quotedOutput'], saved['quotedOutput'])
+                self.assertEqual(q.engine.semaphore._value, 8)
+
     async def test_upper_settles_once_for_absent_unusable_or_failed_cache(self):
         for source in ['absent', 'unusable', 'failed']:
             with self.subTest(source=source):
