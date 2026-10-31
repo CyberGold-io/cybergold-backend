@@ -94,6 +94,8 @@ def failure(request, error, context, *, strategy=None, work_id=None, payload=Non
         details = quote_failure_context(error) or {}
         if 'pendingSdk' in details:
             record['pendingSdk'] = details['pendingSdk']
+        if getattr(error, 'selected_replay', None) is not None:
+            record['selectedReplay'] = error.selected_replay
     if strategy:
         record['strategy'] = strategy
     observe(lambda: logging.getLogger('cybergold.candidate').error(json.dumps(record)))

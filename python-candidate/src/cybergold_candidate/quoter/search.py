@@ -266,8 +266,12 @@ class Quoter:
     async def candidate(self, request, share, order, block, assets, weights, *, first=False,
                         observations=None, selected=None, selection=True):
         from .evaluate import evaluate_candidate
-        return await evaluate_candidate(self, request, share, order, block, assets, weights,
-                                        first=first, observations=observations, selected=selected, selection=selection)
+        from .dormant_routes import with_dormant_routes
+        value = await evaluate_candidate(self, request, share, order, block, assets, weights,
+                                         first=first, observations=observations, selected=selected, selection=selection)
+        # Preparation replays exactly the topology accepted by the caller.
+        return (with_dormant_routes(value, getattr(self.engine.registry, 'seed', None))
+                if selected is None else value)
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None):
@@ -384,6 +388,11 @@ class Quoter:
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
                 value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
                     observations=observations, selected=selected))
+                if selected is not None:
+                    # A legacy seed/neighbor is a newly offered quote here,
+                    # unlike TransactionPreparation's already-accepted plan.
+                    from .dormant_routes import with_dormant_routes
+                    value = with_dormant_routes(value, getattr(registry, 'seed', None))
                 value['request'] = deepcopy(request)
                 if prefer_completed(value, best, scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2):
                     if not budget.qualified():

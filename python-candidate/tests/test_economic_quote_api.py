@@ -1,5 +1,7 @@
 """Two API clients share observations; Refresh is distinct from lookup."""
 from copy import deepcopy
+import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 import unittest
@@ -11,7 +13,7 @@ from cybergold_candidate.economic_quotes import EconomicQuotes
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quoter.store import EconomicQuoteStore
 from cybergold_candidate.tx_preparation import TransactionPreparation
-from test_universal_quote import Engine, Quotes, request
+from test_universal_quote import Engine, Quotes, request, BLOCK, CORE, PAXG, OTHER, USER
 
 
 class SharedStore:
@@ -36,6 +38,101 @@ def service(store):
 
 
 class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_missing_accepted_residual_is_ordinary_400_with_exact_private_failure_evidence(self):
+        quoter, _ = service(SharedStore())
+        value = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},
+            {'currency': OTHER, 'amount': '1000'}], 'outputCurrency': CORE}
+        historical = await quoter.candidate(value, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        del historical['plan']['conversions']['0:residual:0']
+        historical['plan']['body']['continuations'][0]['route'] = {
+            'inputCurrency': PAXG, 'outputCurrency': PAXG, 'routes': []}
+        preview = quoter.preview
+        async def changed(mode, payload, block):
+            result = await preview(mode, payload, block)
+            result['amountsInExact'][0] = '999'
+            return result
+        quoter.preview = changed
+        app = create_app(transaction_preparation=TransactionPreparation(quoter))
+        with self.assertLogs('cybergold.candidate', level='ERROR') as captured:
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+                response = await client.post('/api/tx-preparations', json={
+                    'quote': historical, 'sender': USER, 'recipient': USER})
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn('Refresh the quote', response.json()['error'])
+        self.assertNotIn('selectedReplay', response.json())
+        rows = [json.loads(row.getMessage()) for row in captured.records]
+        failure = next(row for row in rows if row['event'] == 'quote_failure')
+        self.assertEqual(failure['exceptionType'], 'InvalidPreview')
+        self.assertEqual(failure['selectedReplay'], {'operation': '0:residual:0',
+            'inputCurrency': PAXG, 'outputCurrency': CORE, 'amount': '1', 'reason': 'missing-selected-route'})
+
+    async def test_legacy_seed_is_completed_before_first_progressive_qualification(self):
+        from cybergold_candidate.quoter.evaluate import identity_template
+        store = SharedStore()
+        quoter, quotes = service(store)
+        value = {'intent': 0, 'inputs': [{'currency': PAXG, 'amount': '1000'}], 'outputCurrency': CORE}
+        async def preview(mode, payload, block):
+            self.assertEqual(mode, 'issue-exact-in')
+            return {'netCygldOut': '1000', 'amountsInExact': payload['maximumAmountsIn'],
+                    'orderedCoreAssets': [PAXG, OTHER],
+                    'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        quoter.preview = preview
+        historical = await quoter.candidate(value, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        historical['plan']['conversions'] = {key: row for key, row in historical['plan']['conversions'].items()
+                                           if ':residual:' not in key}
+        for row, asset in zip(historical['plan']['body']['branches'][0]['data']['continuations'], (PAXG, OTHER)):
+            row['route'] = identity_template(asset)
+        await store.save(value, historical, scope=store.capture_scope(value))
+        frames = []
+        seed_offered = asyncio.Event()
+        candidate = quoter.candidate
+        async def hold_ordinary(*args, **kwargs):
+            if kwargs.get('selected') is None:
+                await seed_offered.wait()
+            return await candidate(*args, **kwargs)
+        quoter.candidate = hold_ordinary
+        async def publish(frame):
+            frames.append(deepcopy(frame))
+            if frame['type'] == 'qualified':
+                seed_offered.set()
+        await quotes.progressive(value, publish, refresh=True)
+        qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
+        self.assertTrue(qualified)
+        self.assertEqual(qualified[0]['searchCoverage']['selectedPhase'], 'saved-plan')
+        self.assertIn('0:residual:0', qualified[0]['plan']['conversions'])
+        self.assertIn('0:residual:1', qualified[0]['plan']['conversions'])
+
+    async def test_old_cached_quote_has_dormant_topology_before_json_or_stream_selection(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        value = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},
+            {'currency': OTHER, 'amount': '1000'}], 'outputCurrency': CORE}
+        historical = await quoter.candidate(value, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        del historical['plan']['conversions']['0:residual:0']
+        historical['plan']['body']['continuations'][0]['route'] = {
+            'inputCurrency': PAXG, 'outputCurrency': PAXG, 'routes': []}
+        await store.save(value, historical, scope=store.capture_scope(value))
+        retained = deepcopy(store.rows)
+        quoter.engine.block = AsyncMock(side_effect=AssertionError('No head for stored quote'))
+        quoter.quote = AsyncMock(side_effect=AssertionError('No search for stored quote'))
+        app = create_app(economic_quotes=quotes)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+            ordinary = await client.post('/api/economic-quotes', json=value)
+            streamed = await client.post('/api/economic-quotes/stream', json=value)
+        self.assertEqual(ordinary.status_code, 200, ordinary.text)
+        self.assertEqual(streamed.status_code, 200, streamed.text)
+        frames = [json.loads(line) for line in streamed.text.splitlines()]
+        visible = [frame['value'] for frame in frames if frame['type'] in ('ready', 'qualified', 'complete')]
+        self.assertTrue(visible)
+        for offered in [ordinary.json(), *visible]:
+            self.assertIn('0:residual:0', offered['plan']['conversions'])
+            self.assertEqual(offered['plan']['body']['continuations'][0]['route']['outputCurrency'], CORE)
+            for field in ('context', 'quotedOutput', 'fees', 'inputs', 'conversionObservations'):
+                self.assertEqual(offered[field], historical[field])
+        self.assertEqual(store.rows, retained)
+        quoter.quote.assert_not_called()
+        quoter.engine.block.assert_not_called()
+
     async def test_existing_fork_generation_observer_runs_before_cache_lookup(self):
         quoter, _ = service(SharedStore())
         registry = quoter.engine.registry

@@ -10,6 +10,7 @@ import logging
 
 from .quoter.ranking import prefer_completed
 from .quoter.reuse_estimate import attach_reuse_sample
+from .quoter.dormant_routes import with_dormant_routes
 from .quoter.types import EconomicRequest
 from .quote_errors import public_quote_error
 from .recovery_rpc import SnapshotChanged
@@ -84,7 +85,8 @@ async def progressive_quote(service, request, publish, *, refresh=False):
     scope = service.store.capture_scope(request)
     previous = await service.store.lookup(request, scope=scope)
     if previous is not None and not refresh:
-        value = {**attach_reuse_sample(previous), 'observation': {'source': 'stored', 'refresh': False}}
+        offered = with_dormant_routes(previous, getattr(service.quoter.engine.registry, 'seed', None))
+        value = {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
         await publish({'type': 'qualified', 'value': deepcopy(value)})
         return value
 
