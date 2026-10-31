@@ -11,7 +11,7 @@ from contextvars import ContextVar
 from prometheus_client import CollectorRegistry, Counter, Histogram, Gauge, generate_latest
 
 PATHS={
-    '/api/economic-quotes', '/api/tx-preparations', '/api/economic-estimates',
+    '/api/economic-quotes', '/api/economic-quotes/stream', '/api/tx-preparations', '/api/economic-estimates',
     '/api/quotes/universal-exact-input',
     '/api/transaction/revert',
     '/api/account/ens-name', '/api/account/ens-avatar-record',

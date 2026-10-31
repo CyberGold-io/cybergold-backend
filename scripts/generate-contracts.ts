@@ -47,6 +47,11 @@ operation("/api/gold", "get", "Gold");
 operation("/api/economic-quotes", "post", "EconomicQuote", "EconomicQuoteRequest", {
   description: "Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast.",
 });
+operation("/api/economic-quotes/stream", "post", "EconomicQuoteEvent", "EconomicQuoteRequest", {
+  description: "Subscription-owned complete economic incumbents, canonically confirmed before ready publication while bounded search continues. Stored hits retain their historical observation contract. Caller disconnect cancels/drains only its owned work and preserves its last confirmed incumbent without signing or submission.",
+  responses: { "200": { description: "Canonical-ready qualified improvements, then exactly one complete or error. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
+    content: { "application/x-ndjson": { schema: ref("EconomicQuoteEvent") } } }, default: response(ref("PublicError")) },
+});
 operation("/api/tx-preparations", "post", "PreparedTransaction", "TransactionPreparationRequest", {
   description: "Replay only the selected semantic plan at current state. Bind accepted input/output guards before repricing and start the ten-minute execution lifetime during unsigned preparation. No replacement-route discovery, signing or broadcast.",
 });

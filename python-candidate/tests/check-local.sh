@@ -66,6 +66,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_es
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
+python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_sample_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
