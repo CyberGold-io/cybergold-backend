@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.execution_tolerance import floor
 from cybergold_candidate.quoter import Quoter
+from cybergold_candidate.quoter.dormant_routes import with_dormant_routes
+from cybergold_candidate.quoter.reuse_routes import extract_blueprint, resize_blueprint
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from cybergold_candidate.uniswap_routes import pool_identity
 from test_universal_quote import (Engine, Quotes, settings, request as legacy_request,
@@ -57,6 +59,147 @@ def assert_no_execution_terms(test, value):
 
 
 class EconomicPreparationTests(unittest.IsolatedAsyncioTestCase):
+    async def zero_residual_quote(self):
+        service = quoter()
+        request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},
+            {'currency': OTHER, 'amount': '1000'}], 'outputCurrency': CORE}
+        value = await service.candidate(request, 100, 'core-first', BLOCK,
+                                        [PAXG, OTHER], [500000, 500000])
+        return service, value
+
+    async def test_zero_residual_selects_dormant_topology_without_pricing_or_new_economics(self):
+        service = quoter()
+        service.conversion = AsyncMock(side_effect=AssertionError('No zero-lot route search'))
+        service.price_path = AsyncMock(side_effect=AssertionError('No zero-lot pricing'))
+        request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},
+            {'currency': OTHER, 'amount': '1000'}], 'outputCurrency': CORE}
+        value = await service.candidate(request, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        chosen = value['plan']['conversions']['0:residual:0']
+        self.assertEqual(chosen['outputCurrency'], CORE)
+        self.assertEqual(value['plan']['body']['continuations'][0]['route'], chosen['template'])
+        self.assertEqual(value['plan']['body']['continuations'][0]['feeCygld'], '0')
+        self.assertEqual(value['quotedOutput'], '2000')
+        self.assertEqual(value['conversionObservations'], [])
+        self.assertEqual(value['estimatedRetainedInputCharges'], [])
+        service.conversion.assert_not_called()
+        service.price_path.assert_not_called()
+
+    async def test_zero_replay_keeps_dormant_route_until_positive_residual_uses_it(self):
+        service, value = await self.zero_residual_quote()
+        service.conversion = AsyncMock(side_effect=AssertionError('No discovery during replay'))
+        same = await service.evaluate_selected(value['request'], value['plan'])
+        self.assertEqual(same['plan'], value['plan'])
+        preview = service.preview
+        async def changed(mode, payload, block):
+            result = await preview(mode, payload, block)
+            result['amountsInExact'][0] = '999'
+            return result
+        service.preview = changed
+        service.price_path = AsyncMock(return_value=(1, 10))
+        prepared = await TransactionPreparation(service).prepare(preparation(same))
+        service.price_path.assert_awaited_once()
+        self.assertEqual(service.price_path.call_args.args[1], 1)
+        self.assertEqual(prepared['economicQuote']['quotedOutput'], '2009')
+        self.assertEqual(prepared['outputMinimum'], '1980')
+        service.conversion.assert_not_called()
+
+    async def test_dormant_positive_residual_uses_actual_v3_and_v4_sdk(self):
+        from quoter_fixture import service as sdk_service, synthetic_pool
+        for protocol in ('v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                changed = False
+                async def preview(*_):
+                    return {'netCygldOut': '2000', 'amountsInExact': ['900' if changed else '1000', '1000'],
+                        'orderedCoreAssets': [PAXG, OTHER],
+                        'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+                service = sdk_service(self, [synthetic_pool(PAXG, CORE, 123, protocol)], preview=preview)
+                request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '1000'},
+                    {'currency': OTHER, 'amount': '1000'}], 'outputCurrency': CORE}
+                value = await service.candidate(request, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+                service.conversion = AsyncMock(side_effect=AssertionError('No route discovery'))
+                changed = True
+                result = await TransactionPreparation(service).prepare(preparation(value))
+                self.assertGreater(int(result['economicQuote']['quotedOutput']), 2000)
+                row, = result['economicQuote']['conversionObservations']
+                self.assertEqual(row['operation'], '0:residual:0')
+                self.assertEqual(row['fundedInput'], '100')
+                self.assertEqual(result['outputMinimum'], '1980')
+                service.conversion.assert_not_called()
+
+    async def test_new_positive_residual_does_not_relax_accepted_minimum(self):
+        service, value = await self.zero_residual_quote()
+        async def changed(*_):
+            return {'netCygldOut': '1', 'amountsInExact': ['999', '1000'],
+                    'orderedCoreAssets': [PAXG, OTHER],
+                    'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        service.preview = changed
+        service.price_path = AsyncMock(return_value=(1, 10))
+        with self.assertRaisesRegex(InvalidPreview, 'Accepted scalar output minimum cannot be met'):
+            await TransactionPreparation(service).prepare(preparation(value))
+
+    async def test_old_captured_plan_requires_refresh_without_retrofitting_preparation(self):
+        service, value = await self.zero_residual_quote()
+        del value['plan']['conversions']['0:residual:0']
+        value['plan']['body']['continuations'][0]['route'] = {
+            'inputCurrency': PAXG, 'outputCurrency': PAXG, 'routes': []}
+        captured = deepcopy(value)
+        preview = service.preview
+        async def changed(mode, payload, block):
+            result = await preview(mode, payload, block)
+            result['amountsInExact'][0] = '999'
+            return result
+        service.preview = changed
+        service.price_path = AsyncMock(side_effect=AssertionError('No replacement path'))
+        with self.assertRaisesRegex(InvalidPreview, 'current Core residual. Refresh the quote'):
+            await TransactionPreparation(service).prepare(preparation(value))
+        self.assertEqual(value, captured)
+        service.price_path.assert_not_called()
+
+    async def test_dormant_completion_is_copied_idempotent_optional_and_protocol_neutral(self):
+        from cybergold_candidate.quoter.discovery import market_plan
+        from quoter_fixture import synthetic_pool
+        for protocol in ('v2', 'v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                # Reversed B->payment acquisition plus payment->A->Core forms
+                # a three-hop dormant path. No inventory enumeration is needed.
+                a = synthetic_pool(OTHER, PAXG, 100, protocol)
+                b = synthetic_pool(OTHER, WETH, 101, protocol)
+                seed = synthetic_pool(PAXG, CORE, 102, protocol)
+                def chosen(pool, source, target):
+                    hop = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == source.lower()}
+                    return market_plan(source, target, [hop], 1)['conversions']['0:market']
+                value = {'request': {'intent': 0, 'outputCurrency': CORE}, 'plan': {
+                    'allocations': [{'kind': 0, 'amountIn': '2'}],
+                    'conversions': {'0:acquire:0': chosen(a, OTHER, PAXG),
+                                    '0:acquire:1': chosen(b, OTHER, WETH)},
+                    'body': {'branches': [{'kind': 0, 'amountIn': '2', 'data': {
+                        'basketAssets': [PAXG, WETH],
+                        'acquisitions': [{'amountIn': '1'}, {'amountIn': '1'}],
+                        'continuations': [{'route': {'inputCurrency': token, 'outputCurrency': token, 'routes': []},
+                                           'feeCygld': '0'} for token in (PAXG, WETH)]}}]}}}
+                original = deepcopy(value)
+                offered = with_dormant_routes(value, seed)
+                self.assertEqual(value, original)
+                self.assertEqual(with_dormant_routes(offered, seed), offered)
+                hops = offered['plan']['conversions']['0:residual:1']['branches'][0]['hops']
+                self.assertEqual(len(hops), 3)
+                self.assertEqual([pool_identity(h['pool']) for h in hops],
+                                 [pool_identity(pool) for pool in (b, a, seed)])
+                self.assertTrue(all('sqrtRatioX96' not in h['pool'] for h in hops))
+                self.assertEqual(with_dormant_routes(value, None), original)
+                blueprint = extract_blueprint({**offered, 'request': {**offered['request'],
+                    'inputs': [{'currency': OTHER, 'amount': '2'}]},
+                    'inputs': [{'currency': OTHER, 'amount': '2'}]})
+                resized = resize_blueprint(blueprint, 4, [WETH, PAXG])
+                self.assertEqual(resized['conversions']['0:residual:0'],
+                                 offered['plan']['conversions']['0:residual:1'])
+                disconnected = deepcopy(value)
+                del disconnected['plan']['conversions']['0:acquire:1']
+                result = with_dormant_routes(disconnected, seed)
+                self.assertNotIn('0:residual:1', result['plan']['conversions'])
+                self.assertEqual(result['plan']['body']['branches'][0]['data']['continuations'][1],
+                                 value['plan']['body']['branches'][0]['data']['continuations'][1])
+
     async def test_all_four_economic_intents_are_wallet_and_execution_guard_free(self):
         for intent in range(4):
             with self.subTest(intent=intent):

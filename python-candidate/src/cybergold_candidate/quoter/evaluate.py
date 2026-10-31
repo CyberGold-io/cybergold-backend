@@ -67,6 +67,11 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
             chosen = deepcopy(selected_conversion(selected, operation, source))
             if chosen is None:
                 if lot and source.lower() != target.lower():
+                    if ':residual:' in operation:
+                        error = InvalidPreview('The selected quote has no route for the current Core residual. Refresh the quote.')
+                        error.selected_replay = {'operation': operation, 'inputCurrency': source,
+                            'outputCurrency': target, 'amount': str(lot), 'reason': 'missing-selected-route'}
+                        raise error
                     raise QuoteFailure('quote-no-route')
                 chosen = {'inputCurrency': source, 'outputCurrency': target, 'branches': []}
             pending = replay_conversion(self, chosen, source, target, lot, block, bank, canonical, **kwargs)
@@ -88,7 +93,13 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
         for index, (asset, lot) in enumerate(zip(assets, lots, strict=True)):
             cursor += 1  # Core issuance appends each actual/residual basket lot.
             if not lot:
-                result.append({'route': identity_template(asset), 'feeCygld': '0'})
+                operation = f'{branch}:residual:{index}'
+                chosen = selected_conversion(selected, operation, asset) if selected is not None else None
+                route = identity_template(asset)
+                if chosen is not None:
+                    recorded[operation] = deepcopy(chosen)
+                    route = deepcopy(chosen.get('template', route))
+                result.append({'route': route, 'feeCygld': '0'})
                 continue
             has_continuation = True
             route, gross, left = await convert(asset, self.core, lot, market=True,
