@@ -407,6 +407,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
         from .economic_quotes import handle_economic_quote
         return await handle_economic_quote(request, economic_quotes)
 
+    @app.post('/api/economic-quotes/stream')
+    async def economic_quote_stream_route(request: Request):
+        from .economic_quotes import handle_economic_quote_stream
+        return await handle_economic_quote_stream(request, economic_quotes)
+
     @app.post('/api/tx-preparations')
     async def tx_preparation_route(request: Request):
         from .economic_quotes import handle_tx_preparation

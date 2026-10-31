@@ -88,6 +88,13 @@ export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescrip
   reuseSample?: EconomicReuseSample;
 };
 export type EconomicQuoteRequest = EconomicRequest & { refresh?: boolean };
+/** Qualified frames contain canonical-ready full tuples; arithmetic stays separate. */
+export type EconomicQuoteEvent = DiagnosticReferences & (
+  | { type: "qualified"; value: EconomicQuote }
+  | { type: "complete"; value: EconomicQuote }
+  | { type: "invalidated"; context: EconomicQuote["context"] }
+  | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint;
+      diagnostics?: RpcErrorDiagnostics; quoteDiagnostics?: QuoteWorkDiagnostics });
 export type ExecutionBounds = {
   inputs?: EconomicRequest["inputs"]; minimumOutput?: string;
   expectedCoreOutputs?: { kind: number; token: string; id: string; minimumAmount: string }[];
@@ -718,6 +725,7 @@ export interface ContractSchemas {
   EconomicPlan: EconomicPlan;
   EconomicQuoteRequest: EconomicQuoteRequest;
   EconomicQuote: EconomicQuote;
+  EconomicQuoteEvent: EconomicQuoteEvent;
   TransactionPreparationRequest: TransactionPreparationRequest;
   PreparedTransaction: PreparedTransaction;
   UniversalExactInputRequest: UniversalExactInputRequest;

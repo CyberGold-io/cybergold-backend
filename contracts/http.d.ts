@@ -66,6 +66,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/economic-quotes/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Subscription-owned complete economic incumbents, canonically confirmed before ready publication while bounded search continues. Stored hits retain their historical observation contract. Caller disconnect cancels/drains only its owned work and preserves its last confirmed incumbent without signing or submission. */
+        post: operations["post__api_economic_quotes_stream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tx-preparations": {
         parameters: {
             query?: never;
@@ -1349,6 +1366,222 @@ export interface components {
                 };
             };
         };
+        /** @description Qualified frames contain canonical-ready full tuples; arithmetic stays separate. */
+        EconomicQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "qualified";
+            value: components["schemas"]["EconomicQuote"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "complete";
+            value: components["schemas"]["EconomicQuote"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "invalidated";
+            context: {
+                chainId: number;
+                blockNumber: string;
+                blockHash: string;
+                observedAt: string;
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "error";
+            error: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        });
         PreparedTransaction: {
             /** @constant */
             strategy: "universal";
@@ -14437,6 +14670,50 @@ export interface operations {
                 };
             };
             /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_economic_quotes_stream: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EconomicQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Canonical-ready qualified improvements, then exactly one complete or error. Snapshot disproof emits invalidated before error. Integers are decimal strings. */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["EconomicQuoteEvent"];
+                };
+            };
+            /** @description Existing response envelope */
             default: {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */

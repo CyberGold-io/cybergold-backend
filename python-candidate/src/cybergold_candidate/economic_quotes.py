@@ -1,5 +1,7 @@
 """Shared economic observations and explicit current-state quote refresh."""
 import asyncio
+from copy import deepcopy
+import json
 from fastapi.responses import JSONResponse
 
 from .basket_preview import InvalidPreview
@@ -80,6 +82,10 @@ class EconomicQuotes:
         await self.store.save(request, value, scope=scope)
         return {**value, 'observation': {'source': 'search', 'refresh': refresh}}
 
+    async def progressive(self, request, publish, *, refresh=False):
+        from .progressive_quotes import progressive_quote
+        return await progressive_quote(self, request, publish, refresh=refresh)
+
 
 async def handle_economic_quote(request, service):
     try:
@@ -93,6 +99,71 @@ async def handle_economic_quote(request, service):
                             headers={'Cache-Control': 'no-store'})
     return await observed_json(request, economic_intent(value), lambda: service.get(value, refresh=refresh),
         kind='quoter', source='refresh' if refresh else 'search', phase='current-state-search')
+
+
+async def handle_economic_quote_stream(request, service):
+    from .progressive_quotes import OwnedStreamingResponse
+    from .recovery_rpc import SnapshotChanged
+    try:
+        payload = await request.json()
+        refresh = payload.get('refresh', False)
+        if not isinstance(refresh, bool):
+            raise ValueError('refresh must be boolean')
+        value = EconomicRequest.model_validate(payload).model_dump()
+    except (ValueError, TypeError, AttributeError):
+        return JSONResponse({'error': 'Invalid economic quote request.'}, status_code=400,
+                            headers={'Cache-Control': 'no-store'})
+    intent = economic_intent(value)
+    observation = QuoteObservation(request, intent, strategy='universal')
+    async def events():
+        queue = asyncio.Queue()
+        incumbent = None
+        async def publish(frame):
+            nonlocal incumbent
+            if frame['type'] == 'qualified':
+                incumbent = deepcopy(frame['value'])
+            queue.put_nowait(observation.event(frame))
+        async def produce():
+            nonlocal incumbent
+            with operation_work() as work:
+                def finish(outcome, frame=None, producer_metrics=None):
+                    facts = {'value': incumbent or {}, **(frame or {})}
+                    if not isinstance(facts.get('value'), dict):
+                        facts['value'] = {}
+                    stored = incumbent and incumbent.get('observation', {}).get('source') == 'stored'
+                    facts['economicEvidence'] = work_evidence(work, requestInputs=intent['inputs'],
+                        operationKind='quoter', resultSource='stored-quote' if stored else 'refresh' if refresh else 'search',
+                        operationPhase='lookup' if stored else 'current-state-search',
+                        producerMetrics=producer_metrics)
+                    observe(lambda: observation.finish(outcome, strategy='universal', frame=facts))
+                try:
+                    result = await service.progressive(value, publish, refresh=refresh)
+                    finish('succeeded', {'value': result})
+                    await publish({'type': 'complete', 'value': result})
+                except asyncio.CancelledError:
+                    finish('cancelled')
+                    raise
+                except Exception as error:
+                    if isinstance(error, SnapshotChanged):
+                        context = getattr(error, 'economic_context', None)
+                        if context is not None:
+                            await publish({'type': 'invalidated', 'context': deepcopy(context)})
+                        incumbent = None
+                    payload = observation.error(error)
+                    finish('failed', payload, getattr(error, 'quoter_metrics', None))
+                    await publish(payload)
+                finally:
+                    queue.put_nowait(None)
+        task = asyncio.create_task(produce())
+        try:
+            while (frame := await queue.get()) is not None:
+                yield json.dumps(frame, separators=(',', ':'))+'\n'
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            observe(lambda: observation.finish('cancelled'))
+    return OwnedStreamingResponse.create(events())
 
 
 async def handle_tx_preparation(request, service):
