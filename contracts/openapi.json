@@ -8574,6 +8574,40 @@
                 "properties": {
                   "type": {
                     "type": "string",
+                    "const": "upper-replay-settled"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "description": "Optional subscriber references; workId belongs to shared producer work.",
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "attemptId": {
+                    "type": "string"
+                  },
+                  "correlationId": {
+                    "type": "string"
+                  },
+                  "workId": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "const": "complete"
                   },
                   "value": {

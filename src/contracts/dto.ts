@@ -91,6 +91,8 @@ export type EconomicQuoteRequest = EconomicRequest & { refresh?: boolean };
 /** Qualified frames contain canonical-ready full tuples; arithmetic stays separate. */
 export type EconomicQuoteEvent = DiagnosticReferences & (
   | { type: "qualified"; value: EconomicQuote }
+  /** Upper-route bootstrap ended; reveal the best validated candidate available. */
+  | { type: "upper-replay-settled" }
   | { type: "complete"; value: EconomicQuote }
   | { type: "invalidated"; context: EconomicQuote["context"] }
   | { type: "error"; error: string; code?: QuoteErrorCode; constraint?: QuoteConstraint;

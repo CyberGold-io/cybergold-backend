@@ -2,6 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.search import alongside_bootstrap
@@ -12,6 +13,62 @@ from test_universal_quote import Engine, Quotes, request
 
 
 class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_upper_settles_once_for_absent_unusable_or_failed_cache(self):
+        for source in ['absent', 'unusable', 'failed']:
+            with self.subTest(source=source):
+                q = Quotes(Engine()); frames = []
+                async def neighbors():
+                    if source == 'failed':
+                        raise OSError('optional database unavailable')
+                    return {} if source == 'absent' else {'upper': {'quote': {}}}
+                async def update(frame):
+                    frames.append(deepcopy(frame))
+                value = await q.quote(request(), update, neighbors=neighbors)
+                self.assertGreater(int(value['quotedOutput']), 0)
+                self.assertEqual(sum(frame['type'] == 'upper-replay-settled' for frame in frames), 1)
+
+    async def test_cancelled_upper_uses_terminal_completion_instead_of_an_early_marker(self):
+        q = Quotes(Engine()); saved = await q.quote(request())
+        entered, drained = asyncio.Event(), asyncio.Event()
+        candidate = q.candidate
+        async def measured(*args, **kwargs):
+            if (kwargs.get('selected') or {}).get('_upper_replay'):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    drained.set()
+            await entered.wait()
+            return await candidate(*args, **kwargs)
+        q.candidate = measured
+        async def neighbors():
+            return {'upper': {'identity': 'upper', 'quote': saved}}
+        frames = []
+        async def update(frame):
+            frames.append(deepcopy(frame))
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        def marked(*args):
+            rows = neighbor_proposals(*args)
+            for row in rows:
+                row['plan']['_upper_replay'] = True
+            return rows
+        with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
+            async with asyncio.timeout(2):
+                value = await q.quote(request(), update, neighbors=neighbors)
+        self.assertTrue(drained.is_set())
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertFalse(any(frame['type'] == 'upper-replay-settled' for frame in frames))
+
+    async def test_legacy_universal_callback_still_contains_only_executable_values(self):
+        q = Quotes(Engine()); frames = []
+        async def update(frame):
+            frames.append(deepcopy(frame))
+        value = await q.get(request(), update)
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertTrue(frames)
+        self.assertTrue(all(frame['type'] == 'qualified' and 'minimumOutput' in frame['value']['plan']
+                            and 'economicQuote' in frame['value'] for frame in frames))
+
     async def test_pending_cache_never_delays_ordinary_completion_and_is_drained(self):
         q = Quotes(Engine())
         entered, drained = asyncio.Event(), asyncio.Event()

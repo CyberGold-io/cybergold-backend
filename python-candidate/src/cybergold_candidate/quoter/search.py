@@ -456,6 +456,7 @@ class Quoter:
                 seen = set()
                 async def replay_neighbor(side):
                     source = None
+                    settled = True
                     try:
                         row = selected_neighbors.get(side)
                         if not row:
@@ -487,13 +488,25 @@ class Quoter:
                                     attempt['failureCode'] = public_quote_error(errors[-1])['code']
                             finally:
                                 attempt['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
-                    except SnapshotChanged:
+                    except (SnapshotChanged, asyncio.CancelledError):
+                        # A sibling's disproof may cancel this replay before
+                        # propagating to the stream. Do not release held quotes
+                        # in that interval. Ordinary completion releases them
+                        # through the terminal frame after owned cancellation.
+                        settled = False
                         raise
                     except Exception as error:
                         # Optional legacy/cache shape failures must not replace
                         # the ordinary terminal quote-no-route/error taxonomy.
                         if source is not None:
                             source['failureCode'] = public_quote_error(error)['code']
+                    finally:
+                        # The App may retain a validated candidate behind its
+                        # displayed upper arithmetic hint. Release that wait on
+                        # success, absence or ordinary replay failure.
+                        # Only economic streams supply this neighbor work.
+                        if settled and side == 'upper' and on_update:
+                            await on_update({'type': 'upper-replay-settled'})
                 # Each neighbor proceeds independently. Neither awaits the
                 # other's acquisition, nor changes E17's exact-seed event.
                 await owned_reads(replay_neighbor('upper'), replay_neighbor('lower'))
