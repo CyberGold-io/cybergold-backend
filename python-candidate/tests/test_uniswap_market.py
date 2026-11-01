@@ -29,6 +29,7 @@ from cybergold_candidate.recovery_rpc import RecoveryApiError
 from cybergold_candidate.quote_history import QuoteHistory
 from cybergold_candidate.quote_errors import public_quote_error
 from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope, quote_phase, freeze_quote_work
+from cybergold_candidate.route_work_slots import required_state_wait
 
 A, B, C = ('0x'+str(index).rjust(40, '0') for index in (1, 2, 3))
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -1248,7 +1249,11 @@ for line in sys.stdin:
                 events, replays = [], []
                 async def delayed(branches, mode, amount, block):
                     if any(len(branch['hops']) > 2 for branch in branches):
-                        await release.wait()
+                        # This fixture holds unavailable route state, rather
+                        # than eight active SDK computations. Preserve those
+                        # pending candidates while returning owned capacity.
+                        async with required_state_wait():
+                            await release.wait()
                     return await quote(branches, mode, amount, block)
                 async def ordered(rows, mode, block, **kwargs):
                     result = await compose(rows, mode, block, **kwargs)
