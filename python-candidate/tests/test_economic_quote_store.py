@@ -131,6 +131,10 @@ class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_point_lookup_returns_an_owned_original_tuple_without_relabeling(self):
         settings, registry, request, quote = fixture()
+        quote['routeOrigins'] = {'economicEvaluator': 'cybergold-quoter',
+            'discoveryProviders': ['cybergold-custom', 'uniswap-alpharouter'],
+            'conversions': {'0:market': ['cybergold-custom', 'uniswap-alpharouter']}}
+        quote['metrics'] = {'routeDiscovery': {'physicalRpc': {'requests': 7}, 'elapsedMs': 321.5}}
         executed = []
         async def prepare():
             pass
@@ -148,6 +152,8 @@ class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
         service = EconomicQuoteStore(settings, registry)
         observed = await service.lookup(request)
         self.assertEqual(observed, quote)
+        self.assertEqual(observed['routeOrigins'], quote['routeOrigins'])
+        self.assertEqual(observed['metrics'], quote['metrics'])
         observed['context']['blockHash'] = 'mutated-client-copy'
         self.assertNotEqual(observed, quote)
         self.assertEqual(len(executed), 1)

@@ -2,13 +2,14 @@
 import asyncio
 from aiohttp import ClientTimeout
 from web3 import AsyncHTTPProvider
-from web3._utils.http_session_manager import HTTPSessionManager
+from web3._utils.http_session_manager import DEFAULT_HTTP_TIMEOUT, HTTPSessionManager
 import json
 
 from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
 from .rpc_diagnostics import rpc_call
 from .telemetry import rpc_exchange
+from .route_observations import physical_rpc_exchange
 
 
 class _CancellationSafeSessionManager(HTTPSessionManager):
@@ -33,6 +34,18 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
             # An abandoned caller cannot receive a later cache failure. Consume
             # it without logging provider/session details; active awaits raise.
             task.exception()
+
+    async def async_make_post_request(self, endpoint_uri, data, **kwargs):
+        # Web3's batch path bypasses AsyncHTTPProvider._make_request. Count at
+        # the actual HTTP post instead, below shared-read coalescing. Session
+        # cache cancellation before the post is not an HTTP attempt.
+        kwargs.setdefault('timeout', ClientTimeout(DEFAULT_HTTP_TIMEOUT))
+        session = await self.async_cache_and_return_session(
+            endpoint_uri, request_timeout=kwargs['timeout'])
+        with physical_rpc_exchange(data):
+            response = await session.post(endpoint_uri, data=data, **kwargs)
+            response.raise_for_status()
+            return await response.read()
 
     async def finish_pending(self):
         await asyncio.gather(*(asyncio.shield(task) for task in tuple(self.pending)),

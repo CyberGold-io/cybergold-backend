@@ -47,9 +47,21 @@ class SdkWorker:
                             raise SdkWorkerError('SDK continuation worker exited')
                         if process is None:
                             if self.process is None or self.process.returncode is not None:
-                                self.process = await asyncio.create_subprocess_exec(*self.command,
+                                starting = asyncio.create_task(asyncio.create_subprocess_exec(*self.command,
                                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                                    stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024)
+                                    stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024))
+                                try:
+                                    self.process = await asyncio.shield(starting)
+                                except asyncio.CancelledError:
+                                    # Cancellation can arrive after the OS child
+                                    # exists but before its handle is returned.
+                                    # Acquire and reap that exact owned child.
+                                    try:
+                                        self.process = await starting
+                                        await self._stop()
+                                    except BaseException:
+                                        pass
+                                    raise
                             process = self.process
                             self.sequence += 1
                             request_id = str(self.sequence)

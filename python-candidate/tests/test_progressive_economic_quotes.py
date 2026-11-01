@@ -53,6 +53,32 @@ class ProgressiveFixture(unittest.IsolatedAsyncioTestCase):
 
 
 class ProgressiveTests(ProgressiveFixture):
+    async def test_terminal_equal_plan_origins_survive_publication_and_cache(self):
+        from cybergold_candidate.quoter.provenance import attach_origins
+        first = self.value(100)
+        for chosen in first['plan']['conversions'].values():
+            chosen['discoveryOrigins'] = ['cybergold-custom']
+        attach_origins(first)
+        terminal = deepcopy(first)
+        for chosen in terminal['plan']['conversions'].values():
+            chosen['discoveryOrigins'] = ['cybergold-custom', 'uniswap-alpharouter']
+        attach_origins(terminal)
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': first})
+            return terminal
+        frames = []
+        async def publish(frame):
+            frames.append(deepcopy(frame))
+        service = self.service(script)
+        result = await service.progressive(economic_request(), publish)
+        self.assertEqual(result['routeOrigins']['discoveryProviders'],
+                         ['cybergold-custom', 'uniswap-alpharouter'])
+        self.assertEqual(result['quotedOutput'], first['quotedOutput'])
+        self.assertEqual(result['plan']['body'], first['plan']['body'])
+        self.assertEqual(frames[0]['value']['routeOrigins']['discoveryProviders'], ['cybergold-custom'])
+        stored = service.store.rows[service.store.capture_scope(economic_request())]
+        self.assertEqual(stored['routeOrigins'], result['routeOrigins'])
+
     async def test_producer_disproof_cannot_release_a_held_quote_through_upper_cancellation(self):
         from cybergold_candidate.quoter import search
         from unittest.mock import patch

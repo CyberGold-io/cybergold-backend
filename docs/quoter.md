@@ -98,6 +98,48 @@ copies can retain that previous observation while showing the error.
 
 ## Search and selected-plan preparation
 
+Production fresh searches run custom discovery alongside the configured Uniswap
+route suppliers. A request-local session starts real AlphaRouter nomination and
+optional standard Trading API/Guidestar topology requests when a conversion's
+pair and amount are known. Conversion reads only already available hints and
+returns independently. New hints wake a separate detailed whole-plan pass;
+neither first-result nor detailed custom improvements wait for a provider tail.
+The original search clock and pricing slots still bound this work.
+
+Hints are reconstructed through the existing connected-path producer, including
+native/WETH transitions, and replayed against each candidate's private pool bank.
+Remote amounts, prices, recipient, minimum and calldata never become execution
+terms. AlphaRouter's percentage/split selection uses canonical Python SDK quote
+callbacks with zero gas for nomination; whole-plan fees and ranking remain here.
+Selected-plan preparation starts no supplier discovery. All supplier tasks,
+HTTP clients and calculation children are owned and drained by their search.
+
+The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
+`CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
+ordinary API/AlphaRouter failures leave local discovery available. Actual chain
+IDs are retained: the upstream AlphaRouter configuration and Guidestar beta
+do not support Sandbox 31338 as Mainnet. A standard API result is independently
+named; the published UniRoute engine remains unavailable rather than simulated.
+Internal `metrics.routeDiscovery` records provider outcomes, nomination and
+completion/cancellation timing, reevaluation, physical RPC HTTP attempts and
+hosted API requests separately. Physical counts sit below coalescing: one
+shared POST is charged once to its first issuing owner; a JSON-RPC batch records
+one envelope and its members. A Multicall `eth_call` remains one member, without
+claiming a count of its inner functions. Elapsed transport times can overlap;
+their sum is not the producer's wall time. No credential, URL, parameters or
+supplier error text is recorded.
+
+Selected conversions retain `discoveryOrigins`; `routeOrigins` summarizes the
+whole quote's nominators separately from its canonical CyberGold evaluator.
+Equivalent later nominations can enrich origin metadata without replacing an
+economic tie. The existing whole-JSON cache retains those origins and the
+original measured performance. Stored responses/logs label those measurements
+historical, rather than fresh work. Progressive publication preserves later
+equivalent origins through its final returned/cached quote. Missing or malformed
+origin metadata never prevents selected-plan replay, changes a cache key or
+affects ranking. These sources nominate routes; they do not change which
+economic plan wins.
+
 The first-result and detailed passes, eight scalar allocation/order choices,
 Core previews and private ordered pool replay remain. The comparison window
 is five seconds. Only if no usable whole plan exists can search continue for
