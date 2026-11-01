@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from quoter_scheduling_trace import ROOT, bindings, run_fixture
+from quoter_scheduling_trace import ROOT, STRATEGIES, bindings, run_fixture
 
 
 def aggregate(rows):
@@ -55,12 +55,17 @@ async def run(args):
             'Warm custom-only primers, selected replay and independent reference work are outside search counters.',
             'Warm primers use identical procedures but runtime coverage can differ; cache digests do not imply matched warm-cache A/B.',
             'Child CPU includes primer, replay and cleanup and may not be interpreted as search-only CPU.'],
+        'strategies':list(STRATEGIES),
+        'strategyDefinitions':{'custom-only':'Quoter default CustomRoutes only',
+            'all-local':'Normal five-tool factory; hosted key absent, ordinary unavailable outcomes, no hosted HTTP',
+            'hosted-failure':'Normal factory; dummy key and HTTPX503 fixture for both hosted request modes',
+            'parallel':'Normal factory; dummy key and response-shaped successful hosted HTTPX fixtures'},
         'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], cwd=ROOT, text=True).strip(),
         'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()),
         'sourceSha256Before': before, 'sourceBindingCount': len(before), 'trials': []}
     for repeat in range(args.repeats):
-        order = ('custom-only', 'parallel') if repeat % 2 == 0 else ('parallel', 'custom-only')
+        order = STRATEGIES if repeat % 2 == 0 else tuple(reversed(STRATEGIES))
         for core in (False, True):
             for cache in ('cold', 'warm'):
                 for strategy in order:
