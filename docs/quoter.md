@@ -105,8 +105,9 @@ the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
 available nominations fairly and returns independently. New hints wake a
 separate detailed whole-plan pass and optional family/prefix work using the
 same search session; neither first-result nor detailed custom
-improvements wait for a provider tail. The original search clock and pricing
-slots still bound this work.
+improvements wait for a provider tail. Feeds can publish incremental batches;
+each batch uses those same arrival and ownership rules. The original search
+clock and pricing slots still bound this work.
 
 Local graph-dependent tools also invalidate their nomination cache when the
 canonical physical catalog changes. The session observes existing connector
@@ -138,15 +139,23 @@ The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
 `CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
 ordinary API/AlphaRouter failures leave local discovery available. Actual chain
 IDs are retained: the upstream AlphaRouter configuration and Guidestar beta
-do not support Sandbox 31338 as Mainnet. The wired local UniRoute finder retains
+do not support Sandbox 31338 as Mainnet. The wired local UniRoute components retain
 actual chain 31338 and the existing three-physical-hop/native transition rules.
-It executes the unchanged published RouteFinder component with explicit model
-wiring, not the private full quote/split optimizer. `uniroute-api` uses the
+The unchanged published RouteFinder emits raw hints before DeepQuoteStrategy,
+BaseQuoteStrategy, QuoteBestSplitFinder, RouteQuoteAllocator and
+SimpleQuoteSelector produce deeper split batches through canonical callbacks.
+Local model/service wiring, zero-gas nomination and source pins are documented
+in `vendor/uniroute-public`. The default 5% grid searches two-branch splits;
+all stitched nominations reach whole-plan evaluation under the original clock.
+Upstream shared-pool restrictions do not exclude raw/custom alternatives.
+These are published components with local wiring, not the private full UniRoute
+service. `uniroute-api` uses the
 standard Trading API path; no documented engine selector exists. Response
 evidence records UniRoute/Guidestar/unverified backend attribution separately
 from that integration-source name, without requiring it to use a candidate.
 Internal `metrics.routeDiscovery` records provider outcomes, nomination and
-completion/cancellation timing, reevaluation, physical RPC HTTP attempts and
+completion/cancellation timing, incremental batches, worker queries, canonical
+callback counts/failures/elapsed time, reevaluation, physical RPC HTTP attempts and
 hosted API requests separately. Physical counts sit below coalescing: one
 shared POST is charged once to its first issuing owner; a JSON-RPC batch records
 one envelope and its members. A Multicall `eth_call` remains one member, without
