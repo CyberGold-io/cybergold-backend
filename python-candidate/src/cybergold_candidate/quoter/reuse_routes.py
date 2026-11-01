@@ -7,12 +7,20 @@ from copy import deepcopy
 
 from ..basket_preview import InvalidPreview
 from ..uniswap_routes import PoolRef
+from .provenance import origin_names
 
 
 def _conversion(value):
     """Keep execution topology, discarding observations and simulated state."""
     template = value.get('template')
     result = {key: value[key] for key in ('inputCurrency', 'outputCurrency')}
+    # Repricing a cached route does not nominate its topology again. Preserve
+    # its optional diagnostic origin without carrying historical quote/state.
+    origins = origin_names(value.get('discoveryOrigins'))
+    if origins:
+        result['discoveryOrigins'] = origins
+    if value.get('topologyOrigin') == 'cybergold-adapter':
+        result['topologyOrigin'] = 'cybergold-adapter'
     result['branches'] = []
     for branch in value['branches']:
         hops = []

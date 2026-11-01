@@ -9,9 +9,14 @@ def origin_names(value):
 
 
 def attach_origins(quote):
-    conversions = {}
+    conversions, adapter_conversions = {}, []
     for operation, chosen in quote.get('plan', {}).get('conversions', {}).items():
         if isinstance(chosen, dict) and chosen.get('branches'):
+            if chosen.get('topologyOrigin') == 'cybergold-adapter':
+                # This zero-residual binding composes already selected pool
+                # references. It is not a fresh AMM-tool nomination.
+                adapter_conversions.append(operation)
+                continue
             # Old selected plans remain usable without origin metadata. Do not
             # invent a supplier when replaying such a historical observation.
             conversions[operation] = origin_names(chosen.get('discoveryOrigins')) or ['unspecified']
@@ -19,7 +24,8 @@ def attach_origins(quote):
         'pricing': 'canonical-sdk-and-core-previews',
         'discoveryProviders': sorted({name for names in conversions.values() for name in names})
                               if conversions else [],
-        'conversions': conversions}
+        'conversions': conversions,
+        **({'adapterConversions': sorted(adapter_conversions)} if adapter_conversions else {})}
     return quote
 
 

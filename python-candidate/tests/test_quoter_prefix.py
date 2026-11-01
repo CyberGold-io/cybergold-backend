@@ -32,12 +32,13 @@ class PrefixTests(unittest.IsolatedAsyncioTestCase):
                             await q.candidate(request, 0, 'core-first', BLOCK, *await basis(BLOCK), selected=original)
                         trace = caught.exception.trace
                         self.assertTrue(all(row.pre_state is not None for row in trace.hops))
-                        proposal = await repair_prefix(q, request, trace, BLOCK)
+                        proposal = await repair_prefix(q, request, trace, BLOCK, origins=['uniroute-local'])
                         funding, plan = proposal
                         self.assertIn(int(funding[0]['amount']), [3025, 3035])
                         value = await q.candidate({**request, 'inputs': funding}, 0, 'core-first',
                             BLOCK, *await basis(BLOCK), selected=plan)
                         value['request'] = deepcopy(request)
+                        self.assertEqual(value['plan']['conversions']['0:market']['discoveryOrigins'], ['uniroute-local'])
                         self.assertEqual(value['estimatedRetainedInputCharges'], [])
                         prepared = await TransactionPreparation(q).prepare({'quote': value, 'sender': USER, 'recipient': USER})
                         self.assertEqual(prepared['plan']['inputs'], funding)

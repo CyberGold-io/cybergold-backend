@@ -6,6 +6,7 @@ adapter for anchor/native/split semantics and candidate-private replay.
 """
 import asyncio
 from copy import deepcopy
+from collections import defaultdict
 from itertools import chain
 
 from ..quote_errors import QuoteFailure, public_quote_error
@@ -65,18 +66,21 @@ def adapt_candidates(candidates, source, core, *, market=False, anchor=None):
             continue
 
 
+def linear_prefix(feed):
+    # The existing optional family/prefix-repair jobs consume single paths.
+    # Built-in tools emit those before split alternatives; ordinary conversion
+    # still consumes every split nomination through the same API.
+    for candidate, origins in feed:
+        if len(candidate) != 1:
+            break
+        yield candidate, origins
+
+
 class CyberGoldAmmAdapter:
     def __init__(self, engine, core):
         self.engine, self.core = engine, core
 
-    async def convert(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0, capture=None, price_path=None):
-        if not amount or source.lower() == target.lower():
-            if capture is not None:
-                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
-                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
-                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
-            return identity_template(source), amount, []
+    def nominations(self, source, target, amount, block, *, market=False, first=False, linear_only=False):
         registry = self.engine.registry
         bootstrap = current_bootstrap()
         query = RouteQuery(source, target, int(amount), block)
@@ -98,7 +102,40 @@ class CyberGoldAmmAdapter:
         feeds = [normalize_hints(offers, source, target) for offers in feeds]
         if first:
             feeds = [prioritize_candidates(feed, registry) for feed in feeds]
-        candidates = adapt_candidates(round_robin(feeds), source, self.core, market=market, anchor=anchor)
+        if linear_only:
+            feeds = [linear_prefix(feed) for feed in feeds]
+        return adapt_candidates(round_robin(feeds), source, self.core, market=market, anchor=anchor)
+
+    def family_offers(self, source, target, amount, block):
+        groups = defaultdict(list)
+        for branches, origins in self.nominations(source, target, amount, block, market=True, linear_only=True):
+            route = branches[0]['hops']
+            currencies, protocols = [source.lower()], []
+            for hop in route:
+                if 'pool' in hop:
+                    pool = hop['pool']
+                    protocols.append(pool['protocol'])
+                    currencies.append(pool['token1' if hop['zeroForOne'] else 'token0']['address'].lower())
+                else:
+                    protocols.append(hop['kind'])
+                    currencies.append(hop['currencyOut'].lower())
+            groups[(tuple(currencies), tuple(protocols))].append((route, origins))
+        result = []
+        for key, rows in sorted(groups.items(), key=lambda row: (len(row[0][1]), repr(row[0]))):
+            rows.sort(key=lambda row: tuple((hop['pool']['feePips'], repr(pool_identity(hop['pool'])))
+                if 'pool' in hop else (-1, hop['kind']) for hop in row[0]))
+            result.append((key, rows))
+        return result
+
+    async def convert(self, source, target, amount, block, bank, canonical, *, market=False,
+                         first=False, branch=0, stage=0, capture=None, price_path=None):
+        if not amount or source.lower() == target.lower():
+            if capture is not None:
+                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
+                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
+                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
+            return identity_template(source), amount, []
+        candidates = self.nominations(source, target, amount, block, market=market, first=first)
         best, rpc_error = None, None
         for branches, origins in candidates:
             # A common leading wrap belongs to Helpers funding, not to the

@@ -4,7 +4,7 @@ doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-01
 canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
@@ -103,7 +103,8 @@ Production fresh searches use one `RouteQuery` / `CandidateFeed` API for
 Immediate custom candidates remain lazy; pending sources start together when
 the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
 available nominations fairly and returns independently. New hints wake a
-separate detailed whole-plan pass; neither first-result nor detailed custom
+separate detailed whole-plan pass and optional family/prefix work using the
+same search session; neither first-result nor detailed custom
 improvements wait for a provider tail. The original search clock and pricing
 slots still bound this work.
 
@@ -152,7 +153,10 @@ Equivalent later nominations can enrich origin metadata without replacing an
 economic tie. The existing whole-JSON cache retains those origins and the
 original measured performance. Stored responses/logs label those measurements
 historical, rather than fresh work. Progressive publication preserves later
-equivalent origins through its final returned/cached quote. Missing or malformed
+equivalent origins through its final returned/cached quote. Prefix repair and
+neighboring-amount topology reuse preserve their input route's optional source
+metadata. Dormant zero-residual Core bindings record adapter composition
+separately, without inventing an AMM nominator. Missing or malformed
 origin metadata never prevents selected-plan replay, changes a cache key or
 affects ranking. These sources nominate routes; they do not change which
 economic plan wins.
@@ -163,7 +167,7 @@ is five seconds. Only if no usable whole plan exists can search continue for
 up to ten more seconds; its first usable result then ends selection. A
 zero-output conversion tries its existing alternatives, while an all-zero
 conversion retains its ordinary outcome. Optional full-budget scalar Market
-routes are interleaved by currency/protocol family through the existing route
+routes from the same tool feeds are interleaved by currency/protocol family through the existing route
 scheduler. Ordinary quick/detailed/Core/mixed/split jobs remain concurrent.
 Added work has 16 route starts per search and the scheduler's eight pricing
 slots; failed optional work leaves ordinary candidates available. There is no
@@ -257,7 +261,10 @@ and shared-read subscriber cancellation remain in force.
 
 ## Internal component ownership
 
-`quoter.discovery` owns physical graph/family enumeration; `quoter.amm` owns
+`quoter.route_tools` owns the shared query/feed API; `quoter.custom_routes`
+packages generic custom graph/split enumeration from `quoter.discovery`.
+`quoter.amm_adapter` owns CyberGold path policy and candidate selection;
+`quoter.amm` owns
 exact path replay; `quoter.evaluate` owns ordered whole-plan/Core/fee economics;
 `quoter.ranking` compares only completed plans. `quoter.funding` and
 `quoter.prefix` propose smaller funding, `quoter.policy` supplies optional

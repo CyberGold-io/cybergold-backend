@@ -489,8 +489,14 @@ class Quoter:
                     await alongside_bootstrap(ordinary, nearby())
 
             async def provider_arrival():
-                await owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
-                                    for share, order in grid))
+                # Late AMM nominations receive the same optional family and
+                # partial-prefix work as the initial/catalog snapshots. Reuse
+                # the existing starts/resolved allowance and selection clock;
+                # ordinary whole-plan improvements publish independently.
+                await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                    observations=observations, seeded=seed is not None, core_only=core_only),
+                    owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
+                                  for share, order in grid)))
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])

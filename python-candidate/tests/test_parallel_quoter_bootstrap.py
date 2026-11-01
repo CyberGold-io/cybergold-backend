@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from cybergold_candidate.quoter import Quoter
+from cybergold_candidate.quoter import search as quoter_search
 from cybergold_candidate.quoter.bootstrap import current_bootstrap
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
@@ -13,8 +14,11 @@ from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.sdk_worker import SdkWorker
+from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
+from cybergold_candidate.quote_errors import QuoteFailure
+from cybergold_candidate.tx_preparation import TransactionPreparation
 from quoter_fixture import service, synthetic_pool
-from test_universal_quote import WETH, PAXG, CORE, OTHER, BLOCK, Quotes, Engine, request as fixture_request
+from test_universal_quote import WETH, PAXG, CORE, OTHER, BLOCK, Quotes, Engine, USER, request as fixture_request
 
 
 class Provider:
@@ -53,6 +57,74 @@ def hops(pools, source):
 
 
 class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_late_only_provider_gets_shared_partial_prefix_repair_and_keeps_its_origin(self):
+        connector = synthetic_pool(WETH, PAXG, 401, 'v2', liquidity=10**12)
+        anchor = synthetic_pool(PAXG, CORE, 402, 'v3', liquidity=10**6)
+        q = service(self, [anchor])
+        q.engine.registry.observed[connector['id']] = deepcopy(connector)
+        q.seed_routes = lambda *_: None
+        async def no_catalog_change(*_):
+            pass
+        q.discover = no_catalog_change
+        provider = Provider(hops([connector, anchor], WETH))
+        provider.name = 'uniroute-local'
+        q.route_provider_factory = lambda: [PendingRouteTool(provider)]
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
+        first_exploration_done = asyncio.Event()
+        original_explore = quoter_search.explore
+        rounds = []
+        async def observed_explore(*args, **kwargs):
+            index = len(rounds)
+            rounds.append(index)
+            try:
+                return await original_explore(*args, **kwargs)
+            finally:
+                if index == 0:
+                    first_exploration_done.set()
+        with patch.object(quoter_search, 'explore', observed_explore):
+            task = asyncio.create_task(q.get(request))
+            await provider.started.wait()
+            await first_exploration_done.wait()
+            self.assertFalse(task.done())
+            # Both initial/catalog optional snapshots have exhausted before
+            # this sole supplier offers a path. Its intermediate concentrated
+            # pool cannot settle the original full-budget forward execution.
+            provider.release.set()
+            value = await task
+        self.assertGreater(len(rounds), 1)
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertIn(int(value['inputs'][0]['amount']), (3025, 3035))
+        self.assertEqual(value['searchCoverage']['selectedPhase'], 'backward-prefix')
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
+        optional = value['metrics']['optionalSearch']
+        self.assertGreaterEqual(optional['repairs'], 1)
+        self.assertLessEqual(optional['starts'], 16)
+        self.assertEqual(set(value['metrics']['routeDiscovery']['providers']), {'uniroute-local'})
+        self.assertEqual(set(q.engine.registry.inventory), {anchor['id']})
+        self.assertTrue(provider.closed)
+        queries = len(provider.queries)
+        prepared = await TransactionPreparation(q).prepare({'quote': value, 'sender': USER, 'recipient': USER})
+        self.assertEqual(prepared['plan']['inputs'], value['inputs'])
+        self.assertEqual(prepared['economicQuote']['quotedOutput'], value['quotedOutput'])
+        self.assertEqual(len(provider.queries), queries)
+
+    async def test_sole_local_tool_has_no_hidden_custom_exploration_lane(self):
+        q, request, _ = self.fixture()
+        local = UnirouteLocal(q.engine)
+        q.route_provider_factory = lambda: [PendingRouteTool(local)]
+        value = await q.get(request)
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
+        self.assertEqual(set(value['metrics']['routeDiscovery']['providers']), {'uniroute-local'})
+        self.assertIsNone(local.process)
+        class Empty:
+            name = 'uniroute-local'
+            async def discover(self, *_):
+                return []
+        q.route_provider_factory = lambda: [PendingRouteTool(Empty())]
+        with self.assertRaises(QuoteFailure):
+            await q.get(request)
+
     async def test_direct_core_basket_has_no_amm_nominator(self):
         q = Quotes(Engine())
         request = fixture_request(3)
@@ -125,7 +197,7 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         provider.release.set()
         value = await task
         self.assertGreater(int(value['quotedOutput']), first)
-        self.assertEqual(value['searchCoverage']['selectedPhase'], 'provider-arrival')
+        self.assertIn(value['searchCoverage']['selectedPhase'], ('provider-arrival', 'route-family'))
         self.assertGreater(value['metrics']['routeDiscovery']['reevaluations'], 0)
         self.assertTrue(provider.closed)
         self.assertEqual(q.engine.semaphore._value, 8)

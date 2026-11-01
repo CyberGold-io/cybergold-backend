@@ -170,8 +170,14 @@ def project_route_origins(source):
         return sorted({name for name in value if isinstance(name, str)
                        and name in DISCOVERY_PROVIDERS | {'unspecified'}})
     names = providers(source.get('discoveryProviders'))
-    if names:
+    if names or source.get('discoveryProviders') == []:
         result['discoveryProviders'] = names
+    adapter = source.get('adapterConversions')
+    if isinstance(adapter, list):
+        operations = [operation for operation in adapter if isinstance(operation, str)
+            and re.fullmatch(r'[0-9]{1,3}:(?:market|(?:acquire|residual|redeem):[0-9]{1,3})', operation)]
+        if operations:
+            result['adapterConversions'] = sorted(set(operations))
     conversions = source.get('conversions')
     if isinstance(conversions, dict):
         observed = {}
