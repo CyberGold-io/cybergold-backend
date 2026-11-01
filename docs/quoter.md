@@ -104,10 +104,17 @@ Immediate custom candidates remain lazy; pending sources start together when
 the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
 available nominations fairly and returns independently. New hints wake a
 separate detailed whole-plan pass and optional family/prefix work using the
-same search session; neither first-result nor detailed custom
-improvements wait for a provider tail. Feeds can publish incremental batches;
-each batch uses those same arrival and ownership rules. The original search
-clock and pricing slots still bound this work.
+same search session. Each observed publication revision also starts an owned
+quick whole-plan pass, trying already available nominations in latest-publication
+order before the regular lazy feeds. An older detailed pass can continue while
+new hints qualify. Every regular feed remains available; quick passes do not
+prove exhaustive selection within a batch. Neither first-result nor detailed
+custom improvements wait for a provider tail. Feeds can publish incremental
+batches; each batch uses those same arrival and ownership rules. The original
+5/15-second search clock, eight pricing slots and whole-plan comparator still
+bound this work. Initial canonical pool observations release owned pricing
+permits while waiting, just like later SDK state requests, and reacquire them
+before SDK arithmetic. Shared read subscriptions retain their existing owners.
 
 Local graph-dependent tools also invalidate their nomination cache when the
 canonical physical catalog changes. The session observes existing connector

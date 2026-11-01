@@ -46,7 +46,7 @@ def economic_evidence(value, evidence):
         if isinstance(estimate, dict) and raw(estimate.get('amount')):
             result['estimatedAmount'] = estimate['amount']
         phase = value.get('searchCoverage', {}).get('selectedPhase')
-        if phase in ('saved-plan', 'first-result', 'detailed', 'provider-arrival'):
+        if phase in ('saved-plan', 'first-result', 'detailed', 'provider-arrival', 'provider-arrival-quick'):
             result['routePhase'] = phase
         origins = project_route_origins(value.get('routeOrigins'))
         if origins:

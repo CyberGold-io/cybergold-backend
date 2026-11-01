@@ -206,7 +206,7 @@ class ObservationProjectionTests(unittest.IsolatedAsyncioTestCase):
             with recorder.record_http({'method': 'eth_call', 'params': ['private']}):
                 pass
         discovery = {'clock': 'producer', 'startedMs': 2.1, 'elapsedMs': 100.5, 'completedMs': 102.6,
-            'queries': 1, 'reevaluations': 1, 'private': 'secret', 'physicalRpc': recorder.metrics,
+            'queries': 1, 'reevaluations': 1, 'quickReevaluations': 2, 'private': 'secret', 'physicalRpc': recorder.metrics,
             'apiRequests': recorder.api_metrics, 'providers': {'uniswap-alpharouter': {
                 'started': 1, 'completed': 1, 'startedMs': 5.0, 'firstCandidateMs': 15.0,
                 'completedMs': 20.0, 'durationMs': 15.0, 'url': 'private'}, 'private label': {'started': 1}}}
@@ -215,13 +215,14 @@ class ObservationProjectionTests(unittest.IsolatedAsyncioTestCase):
             'conversions': {'0:market': ['uniswap-alpharouter'], 'private address': ['cybergold-custom']},
             'private': 'wallet signature'}
         value = {'routeOrigins': origins, 'metrics': {'totalMs': 110, 'routeDiscovery': discovery},
-                 'searchCoverage': {'selectedPhase': 'provider-arrival'}}
+                 'searchCoverage': {'selectedPhase': 'provider-arrival-quick'}}
         projected = economic_evidence(value, {'operationKind': 'quoter', 'resultSource': 'search'})
         self.assertEqual(projected['routeOrigins']['discoveryProviders'], ['cybergold-custom', 'uniswap-alpharouter'])
         self.assertEqual(projected['routeOrigins']['pricing'], 'canonical-sdk-and-core-previews')
         self.assertEqual(projected['routeOrigins']['conversions'], {'0:market': ['uniswap-alpharouter']})
-        self.assertEqual(projected['routePhase'], 'provider-arrival')
+        self.assertEqual(projected['routePhase'], 'provider-arrival-quick')
         performance = projected['producerMetrics']['routeDiscovery']
+        self.assertEqual(performance['quickReevaluations'], 2)
         self.assertEqual(performance['physicalRpc']['requests'], 1)
         self.assertEqual(performance['providers']['uniswap-alpharouter']['firstCandidateMs'], 15)
         self.assertEqual(performance['clock'], 'producer')

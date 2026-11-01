@@ -11,6 +11,7 @@ from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_
 from cybergold_candidate.quoter.bootstrap import (
     ProviderUnavailable, RouteBootstrap, bootstrap_scope, current_bootstrap)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.route_observations import origin_scope, _origin
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
 from cybergold_candidate.quoter.route_tools import CandidateFeed, PendingRouteTool, RouteTool, async_batches
 
@@ -23,6 +24,153 @@ def candidate(amount):
 
 
 class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_late_quick_pass_does_not_wait_for_older_quick_or_detailed_work(self):
+        first_quick, late_quick = asyncio.Event(), asyncio.Event()
+        next_batch, release = asyncio.Event(), asyncio.Event()
+        drained, rounds, observed = [], [], []
+        class Immediate(RouteTool):
+            name = 'ordinary-local'
+            def discover(_self, query):
+                return CandidateFeed(available=[candidate(5)])
+        class Stream:
+            name = 'arbitrary-tool'
+            async def discover_batches(_self, *_):
+                yield [candidate(101)]
+                await next_batch.wait()
+                yield [candidate(202)]
+        session = RouteBootstrap([Immediate(), PendingRouteTool(Stream())])
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(5)])
+        async def detailed():
+            rounds.append(True)
+            try:
+                await release.wait()
+            finally:
+                drained.append('detailed')
+        async def quick():
+            self.assertEqual(_origin.get(), 'cybergold-quoter')
+            offers = list(session.offers('source', 'target', 100, BLOCK))
+            observed.append(offers)
+            amount = offers[0]['branches'][0]['amountIn']
+            if amount == '101':
+                first_quick.set()
+                try:
+                    await release.wait()
+                finally:
+                    drained.append('first-quick')
+            else:
+                self.assertEqual(amount, '202')
+                # All ordinary feeds remain present after the ready prefix.
+                self.assertTrue(any(row['branches'] == candidate(5) for row in offers))
+                self.assertTrue(any(row['branches'] == candidate(101) for row in offers))
+                late_quick.set()
+        with origin_scope('cybergold-quoter'):
+            task = asyncio.create_task(session.run(ordinary(), detailed, quick=quick))
+        try:
+            await asyncio.wait_for(first_quick.wait(), 1)
+            next_batch.set()
+            await asyncio.wait_for(late_quick.wait(), 1)
+            self.assertEqual(drained, [])
+            self.assertEqual(rounds, [True])
+            self.assertEqual(observed[-1][0]['origins'], ['arbitrary-tool'])
+            # The driver's normal context never inherits a quick prefix.
+            self.assertEqual(next(iter(session.offers('source', 'target', 100, BLOCK)))['branches'], candidate(5))
+        finally:
+            release.set()
+            next_batch.set()
+            await asyncio.wait_for(task, 1)
+        self.assertCountEqual(drained, ['first-quick', 'detailed', 'detailed'])
+        self.assertEqual(session.metrics['quickReevaluations'], 2)
+
+    async def test_later_query_quick_snapshot_retains_ready_choices_for_other_queries(self):
+        first_ready, second_ready, next_query, release = (asyncio.Event() for _ in range(4))
+        class Immediate(RouteTool):
+            name = 'ordinary-local'
+            def discover(_self, query):
+                return CandidateFeed(available=[candidate(5)])
+        class Source:
+            name = 'generic-tool'
+            async def discover(_self, source, *_):
+                if source == 'source':
+                    return [candidate(101)]
+                await next_query.wait()
+                return [candidate(202)]
+        session = RouteBootstrap([Immediate(), PendingRouteTool(Source())])
+        async def ordinary():
+            session.candidates('source', 'target', 100, BLOCK)
+            session.candidates('other', 'target', 100, BLOCK)
+        async def detailed():
+            await release.wait()
+        async def quick():
+            source = next(iter(session.offers('source', 'target', 100, BLOCK)))
+            other = next(iter(session.offers('other', 'target', 100, BLOCK)))
+            self.assertEqual(source['branches'], candidate(101))
+            if other['branches'] == candidate(5):
+                first_ready.set()
+            else:
+                self.assertEqual(other['branches'], candidate(202))
+                second_ready.set()
+        task = asyncio.create_task(session.run(ordinary(), detailed, quick=quick))
+        try:
+            await asyncio.wait_for(first_ready.wait(), 1)
+            next_query.set()
+            await asyncio.wait_for(second_ready.wait(), 1)
+        finally:
+            next_query.set()
+            release.set()
+            await asyncio.wait_for(task, 1)
+
+    async def test_quick_pass_cleanup_obeys_cancellation_budget_and_disproof_priority(self):
+        for stop in ('caller', 'budget', 'ordinary-error'):
+            for disproof in (False, True):
+                with self.subTest(stop=stop, disproof=disproof):
+                    entered, drained = asyncio.Event(), []
+                    class Source:
+                        name = 'generic-tool'
+                        async def discover_batches(_self, *_):
+                            try:
+                                yield [candidate(101)]
+                                await asyncio.Event().wait()
+                            finally:
+                                drained.append('provider')
+                    budget = QuoteBudget()
+                    with budget_context(budget):
+                        session = RouteBootstrap([PendingRouteTool(Source())])
+                        async def ordinary():
+                            session.candidates('source', 'target', 100, BLOCK)
+                            try:
+                                await entered.wait()
+                                if stop == 'ordinary-error':
+                                    raise ValueError('ordinary failure')
+                                await asyncio.Event().wait()
+                            finally:
+                                drained.append('ordinary')
+                        async def detailed():
+                            try:
+                                await asyncio.Event().wait()
+                            finally:
+                                drained.append('detailed')
+                        async def quick():
+                            try:
+                                entered.set()
+                                await asyncio.Event().wait()
+                            finally:
+                                drained.append('quick')
+                                if disproof:
+                                    raise SnapshotChanged('quick context disproved during drain')
+                        task = asyncio.create_task(session.run(ordinary(), detailed, quick=quick))
+                        await asyncio.wait_for(entered.wait(), 1)
+                        if stop == 'caller':
+                            task.cancel()
+                        elif stop == 'budget':
+                            budget.finish_selection('best-initial')
+                        expected = (SnapshotChanged if disproof else ValueError if stop == 'ordinary-error'
+                                    else SearchStopped if stop == 'budget' else asyncio.CancelledError)
+                        with self.assertRaises(expected):
+                            await asyncio.wait_for(task, 1)
+                    self.assertCountEqual(drained, ['ordinary', 'provider', 'quick', 'detailed'])
+                    self.assertEqual(session.metrics['providers']['generic-tool']['pending'], 0)
+
     async def test_incremental_batch_wakes_before_completion_and_survives_ordinary_failure(self):
         release, ready, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
         class Stream:

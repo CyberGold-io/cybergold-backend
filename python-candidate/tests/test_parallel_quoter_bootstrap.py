@@ -385,7 +385,8 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         provider.release.set()
         value = await task
         self.assertGreater(int(value['quotedOutput']), first)
-        self.assertIn(value['searchCoverage']['selectedPhase'], ('provider-arrival', 'route-family'))
+        self.assertIn(value['searchCoverage']['selectedPhase'],
+                      ('provider-arrival', 'provider-arrival-quick', 'route-family'))
         self.assertGreater(value['metrics']['routeDiscovery']['reevaluations'], 0)
         self.assertTrue(provider.closed)
         self.assertEqual(q.engine.semaphore._value, 8)

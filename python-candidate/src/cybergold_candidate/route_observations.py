@@ -218,7 +218,7 @@ def project_route_discovery(source):
     """Origin and transport facts without request keys or supplier error text."""
     if not isinstance(source, dict):
         return {}
-    result = _numbers(source, ('queries', 'revision', 'reevaluations', 'closeErrors',
+    result = _numbers(source, ('queries', 'revision', 'reevaluations', 'quickReevaluations', 'closeErrors',
                               'startedMs', 'completedMs', 'elapsedMs'))
     if source.get('clock') in ('producer', 'session'):
         result['clock'] = source['clock']

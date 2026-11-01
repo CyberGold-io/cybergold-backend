@@ -53,6 +53,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_scheduling_trace.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
 python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
@@ -83,6 +84,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_scheduler.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.py
+python-candidate/.venv/bin/python python-candidate/tests/test_initial_snapshot_scheduling.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py

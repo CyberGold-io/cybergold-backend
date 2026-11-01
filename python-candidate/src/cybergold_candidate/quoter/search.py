@@ -502,11 +502,18 @@ class Quoter:
                     owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
                                   for share, order in grid)))
 
+            async def provider_quick():
+                # Ready nominations can qualify while an older detailed pass
+                # still owns slow state reads. These remain complete economic
+                # candidates under the same comparator and selection budget.
+                await owned_reads(*(evaluate(share, order, True, phase='provider-arrival-quick')
+                                    for share, order in grid))
+
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
             route_bootstrap = RouteBootstrap(tools, catalog=registry)
             with bootstrap_scope(route_bootstrap):
-                await route_bootstrap.run(ordinary_search(), provider_arrival)
+                await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
         except SearchStopped:
             pass
         finally:

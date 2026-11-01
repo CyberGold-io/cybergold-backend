@@ -19,6 +19,7 @@ from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches,
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
+_quick_offers = ContextVar('route_discovery_quick_offers', default=None)
 
 
 def current_bootstrap():
@@ -55,6 +56,7 @@ class RouteBootstrap:
         self._changed = asyncio.Event()
         self._closed, self._close_task = False, None
         self.revision, self.reevaluations = 0, 0
+        self.quick_reevaluations = 0
         self._catalog = catalog
         self._catalog_input = self._catalog_identity()
         self._catalog_load = None
@@ -184,7 +186,8 @@ class RouteBootstrap:
                     if type(diagnostics.get(key)) in (int, float)})
         finished = self._finished_ms if self._finished_ms is not None else self._elapsed_ms()
         return {'queries': len(self._queries), 'revision': self.revision,
-                'reevaluations': self.reevaluations, 'providers': result,
+                'reevaluations': self.reevaluations, 'quickReevaluations': self.quick_reevaluations,
+                'providers': result,
                 'closeErrors': len(self._close_errors),
                 'clock': 'producer' if self._budget is not None else 'session',
                 'startedMs': self._started_ms, 'completedMs': self._finished_ms,
@@ -230,13 +233,35 @@ class RouteBootstrap:
             self._queries[key] = []
             query = RouteQuery(*key, block)
             for name, provider in self.providers:
-                entry = {'provider': provider, 'name': name, 'query': query, 'offers': [],
+                entry = {'provider': provider, 'name': name, 'query': query, 'offers': [], 'offer_revisions': [],
                          'catalog_dependent': getattr(provider, 'catalog_dependent', False),
                          'wanted_catalog': self._catalog_input, 'task': None}
                 self._queries[key].append(entry)
                 self._start_entry(entry)
-        return [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
-                for entry in self._queries[key] if entry.get('feed') is not None]
+        regular = [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
+                   for entry in self._queries[key] if entry.get('feed') is not None]
+        quick = _quick_offers.get()
+        # A quick whole-plan pass tries ready nominations before re-entering
+        # lazy custom tails. Every ordinary feed remains available afterward.
+        # Publication order belongs to this session, never to supplier metadata.
+        prefix = ([iter((deepcopy(offer),)) for offer in quick[1].get(key, ())]
+                  if quick is not None and quick[0] is self else [])
+        return prefix + regular
+
+    def _ready_offers(self):
+        result = {}
+        for key, entries in self._queries.items():
+            rows = [(revision, offer) for entry in entries
+                    for revision, offer in zip(entry['offer_revisions'], entry['offers'], strict=True)]
+            result[key] = [deepcopy(offer) for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
+        return result
+
+    async def _quick_pass(self, callback, offers):
+        token = _quick_offers.set((self, offers))
+        try:
+            return await callback()
+        finally:
+            _quick_offers.reset(token)
 
     def _start_entry(self, entry):
         attempt = {'provider': entry['name'], 'status': 'pending', 'candidates': 0, 'batches': 0,
@@ -310,8 +335,9 @@ class RouteBootstrap:
         if rows:
             if attempt['firstCandidateMs'] is None:
                 attempt['firstCandidateMs'] = self._elapsed_ms()
-            entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
             self.revision += 1
+            entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
+            entry['offer_revisions'].extend([self.revision] * len(rows))
             self._changed.set()
 
     async def _discover(self, feed, entry, attempt):
@@ -354,11 +380,12 @@ class RouteBootstrap:
                 self._start_entry(entry)
         self._changed.set()
 
-    async def run(self, ordinary, reevaluate):
+    async def run(self, ordinary, reevaluate, *, quick=None):
         """Keep ordinary completion independent and consume late arrivals."""
         ordinary_task = asyncio.create_task(ordinary)
         round_task, changed_task = None, None
         completed_revision, round_revision = 0, 0
+        quick_tasks, quick_revision = set(), 0
         budget = current_budget()
         stopped = asyncio.create_task(budget.stop.wait()) if budget is not None else None
         result = None
@@ -377,19 +404,27 @@ class RouteBootstrap:
                     await round_task
                     completed_revision = round_revision
                     round_task = None
+                for task in tuple(quick_tasks):
+                    if task.done():
+                        await task
+                        quick_tasks.remove(task)
                 if stopped is not None and stopped.done():
                     raise SearchStopped()
+                if quick is not None and self.revision > quick_revision:
+                    quick_revision = self.revision
+                    self.quick_reevaluations += 1
+                    quick_tasks.add(asyncio.create_task(self._quick_pass(quick, self._ready_offers())))
                 if round_task is None and self.revision > completed_revision:
                     round_revision = self.revision
                     self.reevaluations += 1
                     round_task = asyncio.create_task(reevaluate())
                 providers_pending = any(not task.done() for task in self._tasks)
-                if ordinary_task.done() and round_task is None and not providers_pending:
+                if ordinary_task.done() and round_task is None and not quick_tasks and not providers_pending:
                     self._raise_failure()
                     return result
                 self._changed.clear()
                 changed_task = asyncio.create_task(self._changed.wait())
-                waiters = {changed_task}
+                waiters = {changed_task, *quick_tasks}
                 if not ordinary_task.done():
                     waiters.add(ordinary_task)
                 if round_task is not None:
@@ -402,6 +437,7 @@ class RouteBootstrap:
                 changed_task = None
         finally:
             owned = [task for task in (ordinary_task, round_task, changed_task, stopped) if task is not None]
+            owned.extend(quick_tasks)
             for task in owned:
                 if not task.done():
                     task.cancel()
