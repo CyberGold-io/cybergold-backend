@@ -415,8 +415,8 @@ async def main():
                     block = await rpc.block(args.block_hash or 'finalized')
                     await rpc.assert_canonical(block)
             finally:
+                report['contextAcquisitionPhysicalRpc'] = context.metrics
                 await rpc.close()
-            report['contextAcquisitionPhysicalRpc'] = context.metrics
             report['block'] = {'chainId': 1, 'blockNumber': str(block['number']), 'blockHash': block['hash'],
                 'selection': 'specified-hash' if args.block_hash else 'finalized'}
             report['pair'] = {'input': 'WETH', 'output': 'USDC', 'tokenIn': WETH, 'tokenOut': USDC}

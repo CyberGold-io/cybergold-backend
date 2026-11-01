@@ -1,6 +1,8 @@
 """Probe integrity: real SDK replay, native semantics and existing budget drain."""
 import asyncio
 from copy import deepcopy
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
@@ -11,6 +13,7 @@ from unittest.mock import patch
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.quoter.route_tools import CandidateFeed, RouteTool
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
+from cybergold_candidate.route_observations import physical_rpc_exchange
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.sdk_worker import SdkWorker
 from cybergold_candidate.shared_reads import SharedReads
@@ -154,6 +157,37 @@ class ProbeReplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(late.cancelled)
         self.assertTrue(row['canonicalityVerified'])
         self.assertTrue(row['allResourcesClosed'])
+
+    async def test_failed_context_retains_attempt_counts_without_exception_text(self):
+        private = 'test-only-private-failure-value'
+        class FailingRpc:
+            closed = False
+            def __init__(self, *_):
+                pass
+            async def block(self, *_):
+                with physical_rpc_exchange({'method': 'eth_getBlockByNumber'}):
+                    raise RuntimeError(private)
+            async def close(self):
+                FailingRpc.closed = True
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'failed-context.json'
+            arguments = ['probe', '--mode', 'paired-rpc', '--node', NODE, '--output', str(path)]
+            output = io.StringIO()
+            with patch.object(probe, 'UniswapRpc', FailingRpc), \
+                 patch('sys.argv', arguments), \
+                 patch.dict(os.environ, {'MAINNET_RPC_URL': 'http://127.0.0.1:1'}), \
+                 redirect_stdout(output):
+                await probe.main()
+            document = path.read_text()
+            report = json.loads(document)
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['failureType'], 'RuntimeError')
+            self.assertEqual(report['contextAcquisitionPhysicalRpc']['requests'], 1)
+            self.assertEqual(report['contextAcquisitionPhysicalRpc']['errors'], 1)
+            self.assertEqual(report['contextAcquisitionPhysicalRpc']['methods'],
+                {'eth_getBlockByNumber': 1})
+            self.assertTrue(FailingRpc.closed)
+            self.assertNotIn(private, document + output.getvalue())
 
 
 class ProbeConfigurationTests(unittest.TestCase):
