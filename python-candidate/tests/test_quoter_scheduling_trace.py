@@ -11,8 +11,8 @@ PROVIDERS = {'cybergold-custom', 'uniswap-alpharouter', 'uniroute-local',
 
 
 class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
-    async def verify_case(self, *, core_preview):
-        row = await run_fixture(node=NODE, core_preview=core_preview)
+    async def verify_case(self, *, core_preview, strategy='parallel'):
+        row = await run_fixture(node=NODE, core_preview=core_preview, strategy=strategy)
         self.assertEqual(row['status'], 'completed', row.get('failureType'))
         self.assertEqual(row['output'], row['independentReference']['output'],
                          'Ready same-funding canonical plan was not evaluated before ordinary selection stopped.')
@@ -21,15 +21,39 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(row['replaySameOutput'])
         self.assertEqual(row['configuration']['optionalLimit'], 16)
         self.assertEqual(row['configuration']['engineSlots'], 8)
+        self.assertEqual(row['budgetConfiguration'], {'initialMs':5000.0,'deadlineMs':15000.0})
         suppliers = row['metrics']['routeDiscovery']['providers']
-        self.assertEqual(set(suppliers), PROVIDERS)
-        self.assertTrue(all(suppliers[name]['started'] for name in PROVIDERS))
+        expected = {'cybergold-custom'} if strategy=='custom-only' else PROVIDERS
+        self.assertEqual(set(suppliers), expected)
+        self.assertTrue(all(suppliers[name]['started'] for name in expected))
+        api = row['metrics']['routeDiscovery'].get('apiRequests', {})
+        if strategy in ('custom-only','all-local'):
+            self.assertEqual(api.get('requests',0), 0)
+            self.assertEqual(row['hostedFixtureReceivedRequests'], {})
+        if strategy=='all-local':
+            for name in ('uniroute-api','uniswap-guidestar'):
+                self.assertGreater(suppliers[name]['unavailable'], 0)
+        if strategy=='hosted-failure':
+            self.assertGreater(api['requests'], 0)
+            self.assertEqual(api['errors'], api['requests'])
+            self.assertEqual(api['requests'],sum(row['hostedFixtureReceivedRequests'].values()))
+            for name in ('uniroute-api','uniswap-guidestar'):
+                self.assertGreater(suppliers[name]['error'], 0)
+        if strategy!='custom-only':
+            for name in ('uniroute-local','uniswap-alpharouter'):
+                self.assertGreater(suppliers[name]['workerQueries'], 0)
         self.assertGreater(row['searchServerRpc']['httpEnvelopes'], 0)
         # Ordinary seeded fee tiers include absent pools. Their real RPC
         # failures are counted; no unsupported ABI getter is substituted.
         self.assertLessEqual(set(row['searchServerRpc']['unsupported']), {'unknown-pool'})
-        self.assertEqual(row['rpcReconciliation']['clientAttemptsMinusServerEnvelopes'], 0)
-        self.assertEqual(row['rpcReconciliation']['clientMembersMinusServerMembers'], 0)
+        physical = row['metrics']['routeDiscovery']['physicalRpc']
+        for reported, issued, received in (
+            ('clientAttemptsMinusServerEnvelopes','requests','httpEnvelopes'),
+            ('clientMembersMinusServerMembers','jsonRpcMembers','jsonRpcMembers')):
+            difference=physical[issued]-row['searchServerRpc'][received]
+            self.assertEqual(row['rpcReconciliation'][reported], difference)
+            self.assertGreaterEqual(difference,0)
+            self.assertLessEqual(difference,physical['cancelled']+physical['errors'])
         self.assertTrue(row['allSuppliersClosed'])
         self.assertTrue(all(row['supplierChildrenRetired'].values()))
         self.assertTrue(row['sdkChildRetired'])
@@ -37,6 +61,8 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(row['sourceContentChangedDuringRun'])
         self.assertTrue(any(e['event'] == 'fixture-rpc-delay-start' for e in row['events']))
         self.assertTrue(any(e['event'] == 'sdk-exchange-enter' for e in row['events']))
+        self.assertTrue(any(e['event'] == 'whole-plan-start' for e in row['events']))
+        self.assertTrue(any(e['event'] == 'whole-plan-priced' for e in row['events']))
         return row
 
     async def test_cold_market_ready_canonical_state_is_not_blocked_by_other_initial_reads(self):
@@ -45,6 +71,15 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
     async def test_later_better_acquisition_is_priced_as_a_complete_core_plan(self):
         row = await self.verify_case(core_preview=True)
         self.assertIn('0:acquire:0', row['origins']['conversions'])
+
+    async def test_custom_only_completed_market_prefix_can_improve_core_acquisition(self):
+        await self.verify_case(core_preview=True, strategy='custom-only')
+
+    async def test_actual_local_factory_needs_no_hosted_credentials_for_core_improvement(self):
+        await self.verify_case(core_preview=True, strategy='all-local')
+
+    async def test_ordinary_hosted_failures_do_not_remove_local_core_coverage(self):
+        await self.verify_case(core_preview=True, strategy='hosted-failure')
 
 
 if __name__ == '__main__':

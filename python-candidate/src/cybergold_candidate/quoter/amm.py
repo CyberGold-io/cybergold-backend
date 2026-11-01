@@ -4,7 +4,10 @@ from copy import deepcopy
 from ..basket_preview import InvalidPreview
 from ..route_work_slots import engine_work
 from ..uniswap_routes import pool_identity
-from .contracts import HopTrace, new_path_trace
+from .contracts import HopTrace, new_path_trace, current_nomination
+from .bootstrap import current_bootstrap
+from .route_tools import RouteQuery
+from .discovery import paths
 
 
 class PartialPath(InvalidPreview):
@@ -21,6 +24,19 @@ def pool_state(bank, pool):
 
 async def price_path(engine, route, amount, block, bank, canonical):
     trace = new_path_trace(route, amount)
+    session = current_bootstrap()
+    source, origins = None, ()
+    leading = []
+    if session is not None:
+        source, origins = current_nomination()
+        physical = next((hop for hop in route if 'pool' in hop), None)
+        if physical is not None:
+            physical_source = physical['pool']['token0' if physical['zeroForOne'] else 'token1']['address']
+            source = source or physical_source
+            # Helpers may own a leading native transition stripped before
+            # physical replay. Retain it through the same path producer.
+            native = paths([], source, physical_source)
+            leading = native[0] if native and 'pool' in route[0] else []
     current, used = amount, amount
     for index, hop in enumerate(route):
         if not current:
@@ -52,6 +68,10 @@ async def price_path(engine, route, amount, block, bank, canonical):
                 trace.consumed, trace.output = used, output
                 raise PartialPath(trace)
             raise InvalidPreview('Unsettled current-operation intermediate currency.')
+        if session is not None:
+            target = hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
+            session.publish_completed(RouteQuery(source, target, amount, block),
+                                      leading + route[:index+1], origins)
         current = output
     if trace is not None:
         trace.consumed, trace.output = used, current

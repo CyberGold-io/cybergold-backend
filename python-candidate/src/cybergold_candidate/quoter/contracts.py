@@ -50,6 +50,21 @@ class SearchSession:
 
 _traces = ContextVar('quoter_path_traces', default=None)
 _operation = ContextVar('quoter_path_operation', default=('', 0, 0))
+_nomination = ContextVar('quoter_path_nomination', default=(None, ()))
+
+
+@contextmanager
+def path_nomination(source, origins=()):
+    """Carry optional topology origins and original funding through replay."""
+    token = _nomination.set((source, origins))
+    try:
+        yield
+    finally:
+        _nomination.reset(token)
+
+
+def current_nomination():
+    return _nomination.get()
 
 
 @contextmanager

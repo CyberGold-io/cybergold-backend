@@ -101,7 +101,7 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(prepared['economicQuote']['quotedOutput'], value['quotedOutput'])
         self.assertEqual(local.sequence, queries)
 
-    async def test_actual_later_five_percent_split_beats_early_finder_candidates(self):
+    def fine_split_fixture(self):
         narrow = synthetic_pool(WETH, PAXG, 1603, 'v3', liquidity=6*10**6)
         broad = synthetic_pool(WETH, PAXG, 1604, 'v2')
         broad.update(reserve0='80000', reserve1='80000')
@@ -128,6 +128,10 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         local = Local(q.engine)
         q.route_provider_factory = lambda: [PendingRouteTool(local)]
         request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '25000'}], 'outputCurrency': CORE}
+        return q, local, request, entered, release, linear_ready
+
+    async def test_actual_later_five_percent_split_beats_early_finder_candidates(self):
+        q, local, request, entered, release, linear_ready = self.fine_split_fixture()
         budget, updates = QuoteBudget(), []
         async def publish(frame):
             value = frame['value']
@@ -139,20 +143,54 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
                 linear_ready.set()
         with budget_context(budget):
             async with asyncio.timeout(10):
-                task = asyncio.create_task(q.get(request, publish))
+                # Isolate actual percentage-split optimization on the existing
+                # Core-only grid. Full-grid serving availability is exercised
+                # independently; other allocations share this same budget.
+                task = asyncio.create_task(q.get(request, publish, core_only=True))
                 await entered.wait()
                 await linear_ready.wait()
                 release.set()
                 value = await task
-        early = max(int(item['quotedOutput']) for item in updates if not any(
+        linear_best = max(int(item['quotedOutput']) for item in updates if not any(
             len(row.get('branches', [])) > 1 for row in item['plan']['conversions'].values()))
-        self.assertGreater(int(value['quotedOutput']), early)
+        self.assertGreater(int(value['quotedOutput']), linear_best)
         self.assertTrue(any(len(row.get('branches', [])) > 1 for row in value['plan']['conversions'].values()))
         self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
         self.assertGreater(local.diagnostics['quoteCallbacks'], 0)
         for name, count in local.diagnostics.items():
             self.assertEqual(value['metrics']['routeDiscovery']['providers']['uniroute-local'][name], count)
         self.assertIsNone(local.process)
+        replay = await q.evaluate_selected({**request, 'inputs': value['inputs']}, value['plan'])
+        self.assertEqual(replay['quotedOutput'], value['quotedOutput'])
+
+    async def test_full_grid_fine_split_retains_normal_clock_economic_floor(self):
+        q, local, request, entered, release, linear_ready = self.fine_split_fixture()
+        async def publish(frame):
+            if not any(len(row.get('branches', [])) > 1
+                       for row in frame['value']['plan']['conversions'].values()):
+                linear_ready.set()
+        # Unlike the isolated capability proof, no update stops this normal
+        # producer clock. The matched pre-change full grid yields 48,468 at
+        # funding 25,000; completed hints must preserve that economic floor.
+        with budget_context(QuoteBudget()):
+            async with asyncio.timeout(10):
+                task = asyncio.create_task(q.get(request, publish))
+                try:
+                    await entered.wait()
+                    await linear_ready.wait()
+                    release.set()
+                    value = await task
+                finally:
+                    release.set()
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+        self.assertGreaterEqual(int(value['quotedOutput']), 48468)
+        self.assertEqual(value['inputs'][0]['currency'].lower(), WETH.lower())
+        self.assertLessEqual(int(value['inputs'][0]['amount']), 25000)
+        self.assertGreater(local.diagnostics['quoteCallbacks'], 0)
+        self.assertIsNone(local.process)
+        self.assertTrue(local.closed)
         replay = await q.evaluate_selected({**request, 'inputs': value['inputs']}, value['plan'])
         self.assertEqual(replay['quotedOutput'], value['quotedOutput'])
 

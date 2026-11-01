@@ -39,6 +39,9 @@ from cybergold_candidate.routing_encoding import weighted_routes
 from quoter_fixture import synthetic_pool
 
 
+STRATEGIES = ('custom-only', 'all-local', 'hosted-failure', 'parallel')
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
@@ -71,6 +74,7 @@ class SchedulingTrace:
         self.round_context = ContextVar('scheduling_trace_round', default=None)
         self.slots = None
         self.phase = 'search'
+        self.budget_windows = None
 
     def emit(self, kind, **fields):
         task = asyncio.current_task()
@@ -78,6 +82,9 @@ class SchedulingTrace:
             self.task_sequence += 1
             self.tasks[task] = self.task_sequence
         budget = current_budget()
+        if budget is not None and self.budget_windows is None:
+            self.budget_windows = {'initialMs':round((budget.initial-budget.started)*1000,3),
+                'deadlineMs':round((budget.deadline-budget.started)*1000,3)}
         self.events.append({'event': kind, 'phase': self.phase, 'atMs': round((time.perf_counter()-self.started)*1000, 3),
             'producerMs': round(budget.elapsed(), 3) if budget is not None else None,
             'task': self.tasks.get(task), 'round': self.round_context.get(),
@@ -88,6 +95,7 @@ class SchedulingTrace:
         trace = self
         self.slots = quoter.engine.semaphore
         old_publish, old_run = RouteBootstrap._publish_batch, RouteBootstrap.run
+        old_completed = getattr(RouteBootstrap, 'publish_completed', None)
         old_nominations, old_candidate = CyberGoldAmmAdapter.nominations, Quoter.candidate
         old_acquire, old_release = PricingSlots.acquire, PricingSlots.release
         old_quote = quoter.engine.quote_sdk_branches
@@ -104,6 +112,16 @@ class SchedulingTrace:
                 amount=str(entry['query'].amount), nominations=[candidate_tag(o['branches'], o['origins']) for o in offers])
             if entry['name'] == 'uniroute-local' and offers:
                 trace.early_finder.set()
+            return result
+
+        def completed(session, query, route, origins=()):
+            previous_revision = session.revision
+            result = old_completed(session, query, route, origins)
+            if result:
+                trace.emit('completed-topology-publication', revision=session.revision,
+                    notified=session.revision != previous_revision,
+                    sourceAsset=asset(query.source), targetAsset=asset(query.target), amount=str(query.amount),
+                    **candidate_tag([{'amountIn':str(query.amount),'hops':route}], origins))
             return result
 
         async def running(session, ordinary, reevaluate, **kwargs):
@@ -230,9 +248,11 @@ class SchedulingTrace:
                 self.release()
 
         with ExitStack() as stack:
+            if old_completed is not None:
+                stack.enter_context(patch.object(RouteBootstrap, 'publish_completed', completed))
             for target, name, operation in ((RouteBootstrap, '_publish_batch', published),
                 (RouteBootstrap, 'run', running), (CyberGoldAmmAdapter, 'nominations', nominations),
-                (Quoter, 'candidate', candidate), (PricingSlots, 'acquire', acquire),
+                (quoter, 'candidate', candidate.__get__(quoter, Quoter)), (PricingSlots, 'acquire', acquire),
                 (PricingSlots, 'release', release), (QuoteBudget, 'qualified', qualified),
                 (QuoteBudget, 'finish_selection', stop),
                 (quoter.engine.sdk, 'lock', SdkLock()),
@@ -389,7 +409,8 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         return {'netCygldOut':str(matched*3),'amountsInExact':[str(matched)],
             'orderedCoreAssets':[PAXG],'fees':{'protocolFeeCygld':'0','helperFeeCygld':'0'}}
     q.preview = preview
-    settings = SimpleNamespace(**{**vars(service.settings), 'CYBERGOLD_UNISWAP_API_KEY':'offline-fixture',
+    settings = SimpleNamespace(**{**vars(service.settings),
+        'CYBERGOLD_UNISWAP_API_KEY':None if strategy=='all-local' else 'offline-fixture',
         'CYBERGOLD_UNISWAP_API_SWAPPER':None})
     better = [pool for pool in case.pools if pool['protocol']=='v4' or pool['feePips']==100]
     hosted_receipts=Counter()
@@ -398,6 +419,8 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         hosted_receipts['uniswap-guidestar' if guidestar else 'uniroute-api']+=1
         await trace.early_finder.wait()
         await asyncio.sleep(.2)
+        if strategy=='hosted-failure':
+            return httpx.Response(503,json={'error':'offline-fixture-service-unavailable'})
         payload=json.loads(request.content)
         return httpx.Response(200,json=hosted_document(better,payload['tokenIn'],payload['tokenOut'],
             guidestar=guidestar))
@@ -427,7 +450,7 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
                     'metrics':getattr(error,'quoter_metrics',{})}
         primer.update(wallMs=round((time.perf_counter()-start)*1000,3),
                       serverRpc=difference(transport.counts(),server_before))
-    if strategy=='parallel':q.route_provider_factory=providers
+    if strategy!='custom-only':q.route_provider_factory=providers
     trace.phase='search';trace.started=time.perf_counter()
     cache_before=canonical_cache(registry)
     server_before=transport.counts()
@@ -436,6 +459,9 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         'request':{'inputAsset':'WETH','inputRaw':'10000','outputAsset':'synthetic-CYGLD'},'updates':[],
         'strategy':strategy,'cacheMode':cache_mode,'primer':primer,
         'configuration':{'optionalLimit':q.optional_limit,'engineSlots':q.engine.semaphore._value},
+        'hostedFixtureMode':{'custom-only':'not-used','all-local':'unconfigured',
+            'hosted-failure':'http-503-fixture','parallel':'success-fixture'}[strategy],
+        'candidateInstrumentation':'owned-instance-method; whole-plan start/priced/exit spans recorded',
         'canonicalCacheBefore':cache_before,'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
         'sourceSha256Before':before,'fixtureSha256':case.digest,
         'fixtureDelaysMs':{'oldScalar':slow_scalar_ms,'unrelatedCatalog':slow_catalog_ms}}
@@ -481,6 +507,7 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         await service.close()
         await transport.close()
         result['events']=trace.events
+        result['budgetConfiguration']=trace.budget_windows
         result['hostedFixtureReceivedRequests']=dict(hosted_receipts)
         result['serverRpc']=transport.counts()
         result['allSuppliersClosed']=all(getattr(getattr(t,'provider',t),'closed',True) is not False

@@ -16,6 +16,7 @@ from ..uniswap_routes import pool_identity
 from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_hints
 from .custom_routes import CustomRoutes
+from .contracts import path_nomination
 from .route_tools import RouteQuery, round_robin
 
 
@@ -155,7 +156,8 @@ class CyberGoldAmmAdapter:
                     row['amountIn'] = str(funded)
                 for row in normalized:
                     funded = int(row['amountIn'])
-                    used, received = await price_path(row['hops'], funded, block, trial, canonical)
+                    with path_nomination(source, origins):
+                        used, received = await price_path(row['hops'], funded, block, trial, canonical)
                     output += received
                     consumed += used
                     if used < funded:

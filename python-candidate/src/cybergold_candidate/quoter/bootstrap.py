@@ -16,6 +16,8 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
+from .discovery import route_identity
+from .provenance import origin_names
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
@@ -52,6 +54,8 @@ class RouteBootstrap:
                          for provider in providers])
         self.providers = [(provider.name, provider) for provider in self._owners]
         self._queries, self._attempts, self._tasks = {}, [], set()
+        self._completed_offers = {}
+        self._publication_sequence = 0
         self._close_errors = []
         self._changed = asyncio.Event()
         self._closed, self._close_task = False, None
@@ -187,6 +191,7 @@ class RouteBootstrap:
         finished = self._finished_ms if self._finished_ms is not None else self._elapsed_ms()
         return {'queries': len(self._queries), 'revision': self.revision,
                 'reevaluations': self.reevaluations, 'quickReevaluations': self.quick_reevaluations,
+                'completedOffers': sum(len(rows) for rows in self._completed_offers.values()),
                 'providers': result,
                 'closeErrors': len(self._close_errors),
                 'clock': 'producer' if self._budget is not None else 'session',
@@ -223,6 +228,43 @@ class RouteBootstrap:
         """
         return round_robin(self.offer_feeds(source, target, amount, block, path_projection=path_projection))
 
+    def publish_completed(self, query, route, origins=()):
+        """Share completed path topology, never its simulated price or bank.
+
+        Recording a prefix does not start a tool query. Replaying the same
+        shape only merges diagnostic origins, preventing arrival feedback.
+        """
+        if self._closed or (self._budget is not None and self._budget.stop.is_set()):
+            return False
+        topology = []
+        for hop in route:
+            if 'pool' not in hop:
+                topology.append({'kind': hop['kind'], 'currencyOut': hop['currencyOut']})
+                continue
+            pool = {key: deepcopy(hop['pool'][key]) for key in (
+                'id', 'protocol', 'address', 'poolManager', 'feePips', 'tickSpacing', 'hooks')
+                if key in hop['pool']}
+            for token in ('token0', 'token1'):
+                pool[token] = {key: deepcopy(hop['pool'][token][key]) for key in (
+                    'address', 'chainId', 'decimals') if key in hop['pool'][token]}
+            topology.append({'pool': pool, 'zeroForOne': hop['zeroForOne']})
+        key = query.source.lower(), query.target.lower(), int(query.amount)
+        rows = self._completed_offers.setdefault(key, {})
+        identity, names = route_identity(topology), origin_names(origins)
+        if identity in rows:
+            offer = rows[identity][1]
+            offer['origins'].extend(name for name in names if name not in offer['origins'])
+            return False
+        offer = {'branches': [{'amountIn': str(query.amount), 'hops': topology}], 'origins': names}
+        self._publication_sequence += 1
+        rows[identity] = self._publication_sequence, offer
+        # Future consumers read this ready hint when they first ask. Only a
+        # query already consumed by this search has an older choice to revisit.
+        if key in self._queries:
+            self.revision += 1
+            self._changed.set()
+        return True
+
     def offer_feeds(self, source, target, amount, block, *, path_projection=None):
         """Start all pending tools now; return their separate lazy offer feeds."""
         self._raise_failure()
@@ -240,6 +282,8 @@ class RouteBootstrap:
                 self._start_entry(entry)
         regular = [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
                    for entry in self._queries[key] if entry.get('feed') is not None]
+        if key in self._completed_offers:
+            regular.insert(0, iter(deepcopy([offer for _, offer in self._completed_offers[key].values()])))
         quick = _quick_offers.get()
         # A quick whole-plan pass tries ready nominations before re-entering
         # lazy custom tails. Every ordinary feed remains available afterward.
@@ -250,9 +294,11 @@ class RouteBootstrap:
 
     def _ready_offers(self):
         result = {}
-        for key, entries in self._queries.items():
+        for key in dict.fromkeys((*self._queries, *self._completed_offers)):
+            entries = self._queries.get(key, ())
             rows = [(revision, offer) for entry in entries
                     for revision, offer in zip(entry['offer_revisions'], entry['offers'], strict=True)]
+            rows.extend(self._completed_offers.get(key, {}).values())
             result[key] = [deepcopy(offer) for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
         return result
 
@@ -336,8 +382,9 @@ class RouteBootstrap:
             if attempt['firstCandidateMs'] is None:
                 attempt['firstCandidateMs'] = self._elapsed_ms()
             self.revision += 1
+            self._publication_sequence += 1
             entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
-            entry['offer_revisions'].extend([self.revision] * len(rows))
+            entry['offer_revisions'].extend([self._publication_sequence] * len(rows))
             self._changed.set()
 
     async def _discover(self, feed, entry, attempt):

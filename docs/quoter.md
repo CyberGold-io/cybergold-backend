@@ -116,6 +116,20 @@ bound this work. Initial canonical pool observations release owned pricing
 permits while waiting, just like later SDK state requests, and reacquire them
 before SDK arithmetic. Shared read subscriptions retain their existing owners.
 
+Completed path prefixes also join the shared feed. Ordered SDK replay publishes
+their topology with the original source, actual branch funding and inherited
+discovery origins, including prefixes of optional selected Market routes. This
+can bootstrap a Core acquisition while another route still awaits state. The
+receiving plan normalizes and reprices that topology against its own private
+bank; no quote output, fee or simulated post-state is shared. Request-local
+semantic deduplication prevents replay/arrival feedback, and merging origins
+alone starts no economic work. All completed hints remain stored; arrivals wake
+reevaluation for existing query dependencies, while a future query reads its
+stored hints immediately. Internal publication order is separate from that
+notification revision. The ordinary feeds remain available. Publication uses
+the existing search owner and stops with it; preparation outside that scope
+starts no discovery.
+
 Local graph-dependent tools also invalidate their nomination cache when the
 canonical physical catalog changes. The session observes existing connector
 and persisted-catalog completion signals, retains old offers, and coalesces a
