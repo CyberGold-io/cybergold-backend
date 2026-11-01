@@ -9,11 +9,12 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
-from inspect import isawaitable
+from inspect import isawaitable, iscoroutine
 
 from ..quote_budget import SearchStopped, current_budget
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
+from .route_tools import PendingRouteTool, RouteQuery, RouteTool, round_robin
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
@@ -43,9 +44,11 @@ class RouteBootstrap:
         self._started_mono = self._loop.time()
         self._started_ms = self._elapsed_ms()
         self._finished_ms = None
-        self._owners = [] if isinstance(providers, Mapping) else list(providers)
-        self.providers = (list(providers.items()) if isinstance(providers, Mapping)
-                          else [(provider.name, provider.discover) for provider in self._owners])
+        self._owners = ([PendingRouteTool(discover, name) for name, discover in providers.items()]
+                        if isinstance(providers, Mapping) else
+                        [provider if isinstance(provider, RouteTool) else PendingRouteTool(provider)
+                         for provider in providers])
+        self.providers = [(provider.name, provider) for provider in self._owners]
         self._queries, self._attempts, self._tasks = {}, [], set()
         self._close_errors = []
         self._changed = asyncio.Event()
@@ -65,6 +68,8 @@ class RouteBootstrap:
         last completed/cancelled attempts; pending counts remain independent.
         Duration spans the first attempt to its latest finish (or now while a
         query is pending), not the sum of overlapping supplier query durations.
+        Immediate repeatable feeds have no artificial asynchronous completion;
+        feedReadMs/counts separately report their consumed enumeration work.
         Without a producer budget these coordinates start at session creation.
         """
         result = {}
@@ -74,7 +79,8 @@ class RouteBootstrap:
             completed = max((row['completedMs'] for row in attempts if row['completedMs'] is not None), default=None)
             cancelled = max((row['cancelledMs'] for row in attempts if row['cancelledMs'] is not None), default=None)
             pending = sum(row['status'] == 'pending' for row in attempts)
-            end = self._elapsed_ms() if pending else max(
+            available = any(row['status'] == 'available' for row in attempts)
+            end = (self._finished_ms if self._finished_ms is not None else self._elapsed_ms()) if pending or available else max(
                 (value for value in (completed, cancelled) if value is not None), default=started)
             result[name] = {'started': len(attempts), 'pending': pending, 'startedMs': started,
                 'firstCandidateMs': min((row['firstCandidateMs'] for row in attempts
@@ -85,7 +91,7 @@ class RouteBootstrap:
 
     @property
     def metrics(self):
-        statuses = ('pending', 'completed', 'empty', 'unavailable', 'error',
+        statuses = ('available', 'pending', 'completed', 'empty', 'unavailable', 'error',
                     'cancelled', 'stopped', 'invalidated')
         result = {}
         timings = self.timings
@@ -94,6 +100,15 @@ class RouteBootstrap:
             result[name] = {'started': len(attempts),
                 **{status: sum(row['status'] == status for row in attempts) for status in statuses},
                 'candidates': sum(row['candidates'] for row in attempts),
+                'feedReads': sum(row['feedReads'] for row in attempts),
+                'feedIterations': sum(row['feedIterations'] for row in attempts),
+                'feedErrors': sum(row['feedErrors'] for row in attempts),
+                'feedReadMs': round(sum(row['feedReadMs'] for row in attempts), 3),
+                'engineAttribution': {
+                    'engines': {engine: sum(row.get('engineAttribution', {}).get('engine') == engine for row in attempts)
+                                for engine in ('uniroute', 'guidestar', 'unverified')},
+                    'evidence': {evidence: sum(row.get('engineAttribution', {}).get('evidence') == evidence for row in attempts)
+                                 for evidence in ('route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous')}},
                 **{key: value for key, value in timings[name].items() if key.endswith('Ms')}}
         finished = self._finished_ms if self._finished_ms is not None else self._elapsed_ms()
         return {'queries': len(self._queries), 'revision': self.revision,
@@ -120,41 +135,105 @@ class RouteBootstrap:
         if failures:
             raise failures[0]
 
-    def candidates(self, source, target, amount, block):
+    def candidates(self, source, target, amount, block, *, path_projection=None):
         """Backward-compatible branch-only view of completed nominations."""
-        return [offer['branches'] for offer in self.offers(source, target, amount, block)]
+        return [offer['branches'] for offer in self.offers(source, target, amount, block,
+                                                          path_projection=path_projection)]
 
-    def offers(self, source, target, amount, block):
-        """Start suppliers; return completed branches with diagnostic origins.
+    def offers(self, source, target, amount, block, *, path_projection=None):
+        """Start suppliers; fairly consume immediate/completed nominations.
 
         Origins neither authorize a candidate nor change query sharing/ranking.
         Duplicate nominations retain each supplier for the consumer to combine.
         """
+        return round_robin(self.offer_feeds(source, target, amount, block, path_projection=path_projection))
+
+    def offer_feeds(self, source, target, amount, block, *, path_projection=None):
+        """Start all pending tools now; return their separate lazy offer feeds."""
         self._raise_failure()
         if self._closed:
             return []
         key = source.lower(), target.lower(), int(amount)
         if key not in self._queries:
             self._queries[key] = []
-            for name, discover in self.providers:
+            query = RouteQuery(*key, block)
+            for name, provider in self.providers:
                 attempt = {'provider': name, 'status': 'pending', 'candidates': 0,
                     'startedMs': self._elapsed_ms(), 'firstCandidateMs': None,
-                    'completedMs': None, 'cancelledMs': None}
+                    'completedMs': None, 'cancelledMs': None,
+                    'feedReads': 0, 'feedIterations': 0, 'feedReadMs': 0.0, 'feedErrors': 0}
                 self._attempts.append(attempt)
-                task = asyncio.create_task(self._discover(discover, key, block, attempt))
-                self._tasks.add(task)
-                task.add_done_callback(lambda done, row=attempt: self._completed(done, row))
-        return deepcopy(self._queries[key])
+                try:
+                    feed = provider.discover(query)
+                    operation = feed.pending
+                    entry = {'feed': feed, 'attempt': attempt, 'offers': []}
+                    self._queries[key].append(entry)
+                    if operation is None:
+                        attempt['status'] = 'available'
+                    else:
+                        task = asyncio.create_task(self._discover(operation, entry))
+                        self._tasks.add(task)
+                        task.add_done_callback(lambda done, row=attempt: self._completed(done, row))
+                except SnapshotChanged:
+                    raise
+                except Exception as error:
+                    attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
+                    attempt['completedMs'] = self._elapsed_ms()
+        return [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
+                for entry in self._queries[key]]
 
-    async def _discover(self, discover, key, block, attempt):
+    def _available(self, entry, path_projection=None):
+        attempt = entry['attempt']
+        attempt['feedIterations'] += 1
+        iterator = None
+        try:
+            iterator = iter(entry['feed'].available_projected(path_projection))
+            while True:
+                started = self._loop.time()
+                try:
+                    with origin_scope(attempt['provider']):
+                        candidate = next(iterator)
+                except StopIteration:
+                    return
+                finally:
+                    attempt['feedReadMs'] += (self._loop.time() - started) * 1000
+                attempt['feedReads'] += 1
+                attempt['candidates'] += 1
+                if attempt['firstCandidateMs'] is None:
+                    attempt['firstCandidateMs'] = self._elapsed_ms()
+                yield {'branches': deepcopy(candidate), 'origins': [attempt['provider']]}
+        except SnapshotChanged:
+            raise
+        except Exception:
+            attempt['feedErrors'] += 1
+        finally:
+            close = getattr(iterator, 'close', None)
+            if close is not None:
+                try:
+                    close()
+                except SnapshotChanged:
+                    raise
+                except Exception:
+                    attempt['feedErrors'] += 1
+
+    async def _discover(self, operation, entry):
+        attempt = entry['attempt']
         try:
             with origin_scope(attempt['provider']):
-                rows = deepcopy(list(await discover(key[0], key[1], key[2], block)))
+                response = await operation
+                rows = deepcopy(list(response))
+            attribution = getattr(response, 'engine_attribution', None)
+            if isinstance(attribution, dict):
+                attempt['engineAttribution'] = {
+                    'engine': attribution.get('engine') if attribution.get('engine') in (
+                        'uniroute', 'guidestar', 'unverified') else 'unverified',
+                    'evidence': attribution.get('evidence') if attribution.get('evidence') in (
+                        'route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous') else 'not-disclosed'}
             attempt['status'] = 'completed' if rows else 'empty'
-            attempt['candidates'] = len(rows)
+            attempt['candidates'] += len(rows)
             if rows:
                 attempt['firstCandidateMs'] = self._elapsed_ms()
-                self._queries[key].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
+                entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
                 self.revision += 1
         except ProviderUnavailable:
             attempt['status'] = 'unavailable'
@@ -244,6 +323,13 @@ class RouteBootstrap:
             if not task.done():
                 task.cancel()
         outcomes = await asyncio.gather(*self._tasks, return_exceptions=True)
+        for entries in self._queries.values():
+            for entry in entries:
+                operation = entry['feed'].pending
+                if iscoroutine(operation):
+                    # A task cancelled before its first turn never awaited the
+                    # feed's coroutine. Close that owned pending object too.
+                    operation.close()
         async def close_provider(provider):
             close = getattr(provider, 'close', None)
             if close is not None:

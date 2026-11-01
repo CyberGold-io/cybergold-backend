@@ -98,13 +98,22 @@ copies can retain that previous observation while showing the error.
 
 ## Search and selected-plan preparation
 
-Production fresh searches run custom discovery alongside the configured Uniswap
-route suppliers. A request-local session starts real AlphaRouter nomination and
-optional standard Trading API/Guidestar topology requests when a conversion's
-pair and amount are known. Conversion reads only already available hints and
-returns independently. New hints wake a separate detailed whole-plan pass;
-neither first-result nor detailed custom improvements wait for a provider tail.
-The original search clock and pricing slots still bound this work.
+Production fresh searches use one `RouteQuery` / `CandidateFeed` API for
+`CustomRoutes`, AlphaRouter, `uniroute-local`, `uniroute-api` and Guidestar.
+Immediate custom candidates remain lazy; pending sources start together when
+the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
+available nominations fairly and returns independently. New hints wake a
+separate detailed whole-plan pass; neither first-result nor detailed custom
+improvements wait for a provider tail. The original search clock and pricing
+slots still bound this work.
+
+Both pure-Market and Market+Core plans call that AMM adapter. Tools search only
+the AMM segments: they receive no Core preview, basket, fee or economic intent
+work. The Quoter composes their canonically replayed segments with Core
+issuance/redemption and compares complete economic plans. Market anchoring,
+quick-pass seed preference, native funding and split rounding belong to the
+adapter. Its raw-path projection runs before custom split construction, without
+changing query sharing or the generic provider's independent path coverage.
 
 Hints are reconstructed through the existing connected-path producer, including
 native/WETH transitions, and replayed against each candidate's private pool bank.
@@ -118,8 +127,13 @@ The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
 `CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
 ordinary API/AlphaRouter failures leave local discovery available. Actual chain
 IDs are retained: the upstream AlphaRouter configuration and Guidestar beta
-do not support Sandbox 31338 as Mainnet. A standard API result is independently
-named; the published UniRoute engine remains unavailable rather than simulated.
+do not support Sandbox 31338 as Mainnet. The wired local UniRoute finder retains
+actual chain 31338 and the existing three-physical-hop/native transition rules.
+It executes the unchanged published RouteFinder component with explicit model
+wiring, not the private full quote/split optimizer. `uniroute-api` uses the
+standard Trading API path; no documented engine selector exists. Response
+evidence records UniRoute/Guidestar/unverified backend attribution separately
+from that integration-source name, without requiring it to use a candidate.
 Internal `metrics.routeDiscovery` records provider outcomes, nomination and
 completion/cancellation timing, reevaluation, physical RPC HTTP attempts and
 hosted API requests separately. Physical counts sit below coalescing: one
@@ -128,6 +142,9 @@ one envelope and its members. A Multicall `eth_call` remains one member, without
 claiming a count of its inner functions. Elapsed transport times can overlap;
 their sum is not the producer's wall time. No credential, URL, parameters or
 supplier error text is recorded.
+Common replay/Core/canonicality RPC belongs to `cybergold-quoter`; the pure
+custom graph enumerator is not falsely charged for those reads. Explicit
+supplier callbacks and API identity acquisition retain their own issuer tags.
 
 Selected conversions retain `discoveryOrigins`; `routeOrigins` summarizes the
 whole quote's nominators separately from its canonical CyberGold evaluator.

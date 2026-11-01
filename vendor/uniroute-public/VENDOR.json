@@ -1,0 +1,28 @@
+{
+  "repository": "Uniswap/uniroute-public",
+  "commit": "9f04cb6874a7767fbc0bf51cdfacf9e6c1637999",
+  "component": "src/core/route/RouteFinder.ts",
+  "gitBlob": "4f4692ca845b018eb831718e4df5663b4b4577ce",
+  "sourceSha256": "efe814f8d9b9f7040c154cb847698cb5df4ff194c122877cab0c71d9d7c1d744",
+  "upstreamLicenseStatement": "README.md: MIT License. No standalone LICENSE file exists in the inspected public tree.",
+  "compiler": {
+    "package": "typescript",
+    "version": "5.9.3",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "sourceMap": true,
+    "inlineSources": true,
+    "sourceRoot": "../../../upstream/src/core/route"
+  },
+  "generatedArtifacts": {
+    "runtime/core/route/RouteFinder.js": "927f65788e27fab43747751b88f51c00542f658b4f31ac1d57524502e994b378",
+    "runtime/core/route/RouteFinder.js.map": "7d2524336136073d0b0a1173dc154acb2f6a7655585e1f981a7a9d2563807087"
+  },
+  "wiring": "CyberGold model/configuration and pass-through missing policy interfaces; published RouteFinder algorithm unchanged.",
+  "productionRouteFinderConfig": {
+    "MaxHops": 3,
+    "MaxHopsExtended": 3,
+    "MinRoutesThreshold": 0,
+    "MaxExtendedRoutes": 0
+  }
+}

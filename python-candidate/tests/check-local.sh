@@ -51,9 +51,11 @@ export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_universal_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_discovery.py
+python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_uniroute_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_directional_bitmap_acquisition.py

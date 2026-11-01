@@ -25,6 +25,36 @@ class HostedRouteError(RuntimeError):
     """Supplier failure with no response body, credential or URL in its text."""
 
 
+class HostedCandidates(list):
+    """Candidate list plus optional response-scoped engine observations.
+
+    The integration source and the API's actual backend engine are separate.
+    This metadata never admits, rejects or ranks a candidate.
+    """
+    def __init__(self, candidates, engine_attribution):
+        super().__init__(candidates)
+        self.engine_attribution = engine_attribution
+
+
+def observed_engine(document):
+    """Use only documented response evidence; missing metadata stays unknown.
+
+    Official OpenAPI: nonempty routeCandidates is UniRoute-backed; swapSteps
+    is emitted when Guidestar serves the quote. There is no documented UniRoute
+    request selector. An empty/absent field is not an engine eligibility rule.
+    """
+    quote = document['quote']
+    uniroute = isinstance(quote.get('routeCandidates'), list) and bool(quote['routeCandidates'])
+    guidestar = isinstance(quote.get('swapSteps'), list) and bool(quote['swapSteps'])
+    if uniroute and guidestar:
+        return {'engine': 'unverified', 'evidence': 'ambiguous'}
+    if uniroute:
+        return {'engine': 'uniroute', 'evidence': 'route-candidates'}
+    if guidestar:
+        return {'engine': 'guidestar', 'evidence': 'swap-steps'}
+    return {'engine': 'unverified', 'evidence': 'not-disclosed'}
+
+
 def _pair(protocol, source, target, *, fee=3000, tick_spacing=None, hooks=None):
     value = {'protocol': protocol, 'tokenA': source, 'tokenB': target, 'fee': int(fee)}
     if protocol == 'v4':
@@ -78,7 +108,7 @@ def topology_identifiers(document, *, guidestar=False):
     """
     quote = document['quote']
     identifiers = []
-    if guidestar:
+    if guidestar or (isinstance(quote.get('swapSteps'), list) and quote['swapSteps']):
         for step in quote['swapSteps']:
             kind = step['type']
             if kind in ('V2_SWAP_EXACT_IN', 'V2_SWAP_EXACT_OUT'):
@@ -144,7 +174,22 @@ class UniswapApiProvider:
         identifiers = topology_identifiers(document, guidestar=self.guidestar)
         resolved = await owned_reads(*(self.resolver.resolve(identifier, block) for identifier in identifiers))
         pools = {pool_identity(pool): pool for pool in resolved if pool is not None}
-        return list(route_candidates(paths(list(pools.values()), source, target), int(amount)))
+        return HostedCandidates(
+            list(route_candidates(paths(list(pools.values()), source, target), int(amount))),
+            observed_engine(document))
 
     async def close(self):
         await asyncio.gather(*(client.aclose() for client in tuple(self.clients)))
+
+
+class UniRouteApiProvider(UniswapApiProvider):
+    """UniRoute API integration through standard Uniswap Trading API routing.
+
+    ``includeRouteCandidates`` requests UniRoute's optional diagnostics, not a
+    dedicated engine selector. Structured served topology remains useful when
+    the API does not disclose its backend engine. Runtime configuration replaces
+    the standard API provider with this adapter; it does not send both requests.
+    """
+    def __init__(self, engine, settings, *, client_factory=None, resolver=None):
+        super().__init__(engine, settings, client_factory=client_factory, resolver=resolver)
+        self.name = 'uniroute-api'

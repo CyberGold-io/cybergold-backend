@@ -16,7 +16,8 @@ import time
 
 
 DISCOVERY_PROVIDERS = frozenset(('cybergold-custom', 'uniswap-alpharouter',
-    'uniswap-standard-api', 'uniswap-guidestar', 'uniroute'))
+    'uniswap-standard-api', 'uniswap-guidestar', 'uniroute', 'uniroute-api', 'uniroute-local'))
+TRANSPORT_ORIGINS = DISCOVERY_PROVIDERS | frozenset(('cybergold-quoter', 'other'))
 RPC_METHODS = frozenset(('eth_call', 'eth_chainId', 'eth_getBlockByNumber', 'eth_getBlockByHash',
     'eth_getCode', 'eth_getStorageAt', 'eth_getBalance', 'eth_getLogs', 'eth_estimateGas',
     'eth_getTransactionReceipt', 'eth_getTransactionByHash', 'eth_getTransactionCount',
@@ -24,7 +25,7 @@ RPC_METHODS = frozenset(('eth_call', 'eth_chainId', 'eth_getBlockByNumber', 'eth
     'web3_clientVersion', 'debug_traceTransaction', 'trace_transaction'))
 
 _recorder = ContextVar('route_transport_observations', default=None)
-_origin = ContextVar('route_discovery_origin', default='cybergold-custom')
+_origin = ContextVar('route_discovery_origin', default='cybergold-quoter')
 
 
 def current_route_observations():
@@ -44,7 +45,7 @@ def route_observation_scope(recorder):
 def origin_scope(name):
     # These labels are diagnostics only. Unknown names share one bounded label;
     # they never decide whether a provider or quote can run.
-    token = _origin.set(name if isinstance(name, str) and name in DISCOVERY_PROVIDERS else 'other')
+    token = _origin.set(name if isinstance(name, str) and name in TRANSPORT_ORIGINS else 'other')
     try:
         yield
     finally:
@@ -198,7 +199,7 @@ def _project_transport(source, *, api=False):
     origins = source.get('origins')
     if isinstance(origins, dict):
         rows = {name: _numbers(row, names) for name, row in origins.items()
-                if name in DISCOVERY_PROVIDERS or name == 'other'}
+                if name in TRANSPORT_ORIGINS}
         if rows:
             result['origins'] = rows
     methods = source.get('methods')
@@ -217,10 +218,23 @@ def project_route_discovery(source):
         result['clock'] = source['clock']
     providers = source.get('providers')
     if isinstance(providers, dict):
-        names = ('started', 'pending', 'completed', 'empty', 'unavailable', 'error', 'cancelled',
+        names = ('started', 'available', 'pending', 'completed', 'empty', 'unavailable', 'error', 'cancelled',
                  'stopped', 'invalidated', 'candidates', 'startedMs', 'firstCandidateMs',
-                 'completedMs', 'cancelledMs', 'durationMs')
-        rows = {name: _numbers(row, names) for name, row in providers.items() if name in DISCOVERY_PROVIDERS}
+                 'completedMs', 'cancelledMs', 'durationMs', 'feedReads', 'feedIterations',
+                 'feedErrors', 'feedReadMs')
+        rows = {}
+        for name, row in providers.items():
+            if name not in DISCOVERY_PROVIDERS:
+                continue
+            observed = _numbers(row, names)
+            attribution = row.get('engineAttribution') if isinstance(row, dict) else None
+            if isinstance(attribution, dict):
+                engines = _numbers(attribution.get('engines'), ('uniroute', 'guidestar', 'unverified'))
+                evidence = _numbers(attribution.get('evidence'),
+                    ('route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous'))
+                if engines or evidence:
+                    observed['engineAttribution'] = {'engines': engines, 'evidence': evidence}
+            rows[name] = observed
         if rows:
             result['providers'] = rows
     for key, api in (('physicalRpc', False), ('apiRequests', True)):

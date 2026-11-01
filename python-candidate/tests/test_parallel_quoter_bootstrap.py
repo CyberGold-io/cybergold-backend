@@ -8,11 +8,13 @@ from unittest.mock import patch
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.bootstrap import current_bootstrap
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
+from cybergold_candidate.quoter.custom_routes import CustomRoutes
+from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.sdk_worker import SdkWorker
 from quoter_fixture import service, synthetic_pool
-from test_universal_quote import WETH, PAXG, CORE, OTHER
+from test_universal_quote import WETH, PAXG, CORE, OTHER, BLOCK, Quotes, Engine, request as fixture_request
 
 
 class Provider:
@@ -51,6 +53,43 @@ def hops(pools, source):
 
 
 class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_core_basket_has_no_amm_nominator(self):
+        q = Quotes(Engine())
+        request = fixture_request(3)
+        value = await Quoter.get(q, request)
+        self.assertEqual(value['routeOrigins']['economicEvaluator'], 'cybergold-quoter')
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], [])
+        self.assertEqual(value['metrics']['routeDiscovery']['queries'], 0)
+
+    async def test_same_amm_tool_api_serves_market_and_market_plus_core_segments(self):
+        from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
+        for share in (0, 50):
+            q = Quotes(Engine())
+            query_rows = []
+            class Spy:
+                name = 'uniroute-api'
+                async def discover(self, source, target, amount, block):
+                    query_rows.append((source, target, amount, deepcopy(block)))
+                    return []
+            session = RouteBootstrap([CustomRoutes(q.engine.registry), PendingRouteTool(Spy())])
+            request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10001'}],
+                       'outputCurrency': CORE}
+            async def no_arrival():
+                pass
+            with bootstrap_scope(session):
+                result = await session.run(q.candidate(request, share, 'core-first', BLOCK,
+                                                      [PAXG, OTHER], [500000, 500000]), no_arrival)
+            kinds = {row['kind'] for row in result['plan']['allocations']}
+            self.assertEqual(kinds, {1} if share == 0 else {0, 1})
+            self.assertEqual(bool(q.previews), share != 0)
+            self.assertTrue(query_rows)
+            self.assertTrue(all(isinstance(a, str) and isinstance(b, str) and isinstance(amount, int)
+                                and context == BLOCK for a, b, amount, context in query_rows))
+            if share:
+                pairs = {(a.lower(), b.lower()) for a, b, _, _ in query_rows}
+                self.assertIn((WETH.lower(), PAXG.lower()), pairs)
+                self.assertIn((WETH.lower(), OTHER.lower()), pairs)
+
     def fixture(self, *, better=True, failure=None):
         old = synthetic_pool(WETH, PAXG, 201, 'v3', liquidity=10**9)
         anchor = synthetic_pool(PAXG, CORE, 202, 'v4', liquidity=10**9)
@@ -67,7 +106,7 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
             pass
         q.discover = discover
         provider = Provider(hops([external, anchor], WETH), failure=failure)
-        q.route_provider_factory = lambda: [provider]
+        q.route_provider_factory = lambda: [CustomRoutes(q.engine.registry), PendingRouteTool(provider)]
         request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
         return q, request, provider
 
@@ -122,7 +161,7 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         q.engine.registry.observed[unrelated['id']] = deepcopy(unrelated)
         provider.route = hops([unrelated, q.engine.registry.seed], OTHER)
         provider.release.set()
-        q.route_provider_factory = lambda: [provider]
+        q.route_provider_factory = lambda: [CustomRoutes(q.engine.registry), PendingRouteTool(provider)]
         result = await q.get(request)
         self.assertEqual(result['quotedOutput'], baseline['quotedOutput'])
         self.assertTrue(provider.closed)

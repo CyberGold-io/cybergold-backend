@@ -18,7 +18,7 @@ def attach_origins(quote):
     quote['routeOrigins'] = {'economicEvaluator': 'cybergold-quoter',
         'pricing': 'canonical-sdk-and-core-previews',
         'discoveryProviders': sorted({name for names in conversions.values() for name in names})
-                              if conversions else ['cybergold-custom'],
+                              if conversions else [],
         'conversions': conversions}
     return quote
 

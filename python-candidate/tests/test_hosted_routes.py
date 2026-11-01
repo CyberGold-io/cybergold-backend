@@ -10,7 +10,8 @@ import httpx
 
 from cybergold_candidate.quoter.bootstrap import ProviderUnavailable
 from cybergold_candidate.quoter.hosted_routes import (
-    HostedRouteError, QUOTE_URL, UniswapApiProvider, topology_identifiers)
+    HostedCandidates, HostedRouteError, QUOTE_URL, UniRouteApiProvider, UniswapApiProvider,
+    topology_identifiers)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_v4 import v4_pool_id
@@ -94,7 +95,7 @@ class FixtureTransport(httpx.AsyncBaseTransport):
 
 
 def make_provider(document, *, guidestar=False, config=None, registry=None, status=200, handler=None,
-                  resolver=None):
+                  resolver=None, uniroute=False):
     registry = registry or Registry()
     transport = FixtureTransport(document, status, handler)
     created = []
@@ -102,12 +103,76 @@ def make_provider(document, *, guidestar=False, config=None, registry=None, stat
         value = httpx.AsyncClient(transport=transport, timeout=None)
         created.append(value)
         return value
-    provider = UniswapApiProvider(SimpleNamespace(registry=registry), config or settings(),
-        guidestar=guidestar, client_factory=client_factory, resolver=resolver)
+    provider_type = UniRouteApiProvider if uniroute else UniswapApiProvider
+    provider = provider_type(SimpleNamespace(registry=registry), config or settings(),
+        **({} if uniroute else {'guidestar': guidestar}),
+        client_factory=client_factory, resolver=resolver)
     return provider, registry, transport, created
 
 
 class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
+    async def test_uniroute_api_has_explicit_integration_source_and_optional_engine_evidence(self):
+        document = {'routing': 'CLASSIC', 'quote': {'route': [[standard_pool('v3', A, B, fee=3000)]],
+            'routeCandidates': [{'routeString': 'NEVER PARSE THIS', 'quoteAmount': str(2**255)}]}}
+        provider, _, transport, _ = make_provider(document, uniroute=True)
+        candidates = await provider.discover(A, B, 101, BLOCK)
+        self.assertEqual(provider.name, 'uniroute-api')
+        self.assertIsInstance(candidates, HostedCandidates)
+        self.assertEqual(candidates.engine_attribution, {'engine': 'uniroute', 'evidence': 'route-candidates'})
+        self.assertEqual(candidates[0][0]['amountIn'], '101')
+        self.assertEqual(len(candidates), 1)
+        request, = transport.requests
+        self.assertTrue(json.loads(request.content)['includeRouteCandidates'])
+        self.assertNotIn('x-api-experimental', request.headers)
+        self.assertNotIn('routingEngine', json.loads(request.content))
+        self.assertEqual(len(transport.requests), 1)
+
+    async def test_missing_or_empty_engine_metadata_does_not_reject_api_candidates(self):
+        results = []
+        for metadata in ({}, {'routeCandidates': []}):
+            document = {'quote': {'route': [[standard_pool('v2', A, B)]], **metadata}}
+            provider, _, _, _ = make_provider(document, uniroute=True)
+            result = await provider.discover(A, B, 101, BLOCK)
+            self.assertTrue(result)
+            self.assertEqual(result.engine_attribution, {'engine': 'unverified', 'evidence': 'not-disclosed'})
+            results.append(result)
+        self.assertEqual(results[0], results[1])
+
+    async def test_api_source_uses_actual_swap_steps_and_does_not_claim_uniroute_engine(self):
+        document = {'quote': {'route': [], 'swapSteps': [
+            {'type': 'V3_SWAP_EXACT_IN', 'amountIn': str(2**255),
+             'path': packed([A, B], [500]), 'amountOutMin': str(2**255)}]}}
+        provider, _, _, _ = make_provider(document, uniroute=True)
+        result = await provider.discover(A, B, 101, BLOCK)
+        self.assertEqual(provider.name, 'uniroute-api')
+        self.assertTrue(result)
+        self.assertEqual(result.engine_attribution, {'engine': 'guidestar', 'evidence': 'swap-steps'})
+        self.assertNotIn(str(2**255), repr(result))
+
+    async def test_ambiguous_metadata_does_not_change_candidate_admission(self):
+        document = {'quote': {'route': [], 'swapSteps': [
+            {'type': 'V2_SWAP_EXACT_IN', 'path': [A, B]}],
+            'routeCandidates': [{'routeString': 'DO NOT PARSE', 'quoteAmount': '999999'}]}}
+        provider, _, _, _ = make_provider(document, uniroute=True)
+        result = await provider.discover(A, B, 101, BLOCK)
+        self.assertTrue(result)
+        self.assertEqual(result.engine_attribution, {'engine': 'unverified', 'evidence': 'ambiguous'})
+
+    async def test_engine_observations_belong_to_each_response_not_shared_provider_state(self):
+        def response(request):
+            amount = json.loads(request.content)['amount']
+            quote = {'route': [[standard_pool('v2', A, B)]]}
+            if amount == '101':
+                quote['routeCandidates'] = [{'routeString': 'NOT PARSED', 'quoteAmount': '1234'}]
+            return httpx.Response(200, json={'quote': quote})
+        provider = UniRouteApiProvider(SimpleNamespace(registry=Registry()), settings(),
+            client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(response), timeout=None))
+        first, second = await asyncio.gather(provider.discover(A, B, 101, BLOCK),
+                                             provider.discover(A, B, 202, BLOCK))
+        self.assertEqual(first.engine_attribution['engine'], 'uniroute')
+        self.assertEqual(second.engine_attribution['engine'], 'unverified')
+        self.assertEqual([first[0][0]['amountIn'], second[0][0]['amountIn']], ['101', '202'])
+
     async def test_standard_mixed_topology_resolves_factory_and_v4_key_at_selected_block(self):
         document = {'routing': 'CLASSIC', 'quote': {'output': {'amount': str(2**255)}, 'route': [[
             standard_pool('v2', A, B), standard_pool('v3', B, C, fee='3000'),
@@ -272,7 +337,11 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             await provider.discover(A, B, 100, BLOCK)
         self.assertEqual(registry.calls, [])
         self.assertTrue(transport.closed)
-        self.assertEqual(topology_identifiers(document), [])
+        with self.assertRaises(ValueError):
+            topology_identifiers(document)
+        without_steps = deepcopy(document)
+        without_steps['quote'].pop('swapSteps')
+        self.assertEqual(topology_identifiers(without_steps), [])
 
 
 if __name__ == '__main__':

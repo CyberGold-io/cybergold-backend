@@ -37,7 +37,8 @@ from .exploration import explore
 from .funding import reconstruct
 from .reuse_routes import neighbor_proposals
 from .bootstrap import RouteBootstrap, bootstrap_scope, current_bootstrap
-from .candidate_hints import interleave, normalize_hints
+from .amm_adapter import CyberGoldAmmAdapter
+from .custom_routes import CustomRoutes
 from .provenance import attach_origins, merge_origins
 from ..route_observations import RouteObservations, current_route_observations, route_observation_scope
 
@@ -84,6 +85,7 @@ class Quoter:
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
         self.helpers = configured_address(settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS')
         self.core = configured_address(settings, 'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS')
+        self.amm = CyberGoldAmmAdapter(engine, self.core)
         self.preview = preview
         self.basis_reader = basis_reader
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
@@ -193,85 +195,9 @@ class Quoter:
     async def price_path(self, route, amount, block, bank, canonical):
         return await price_path(self.engine, route, amount, block, bank, canonical)
 
-    async def conversion(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0, capture=None):
-        if not amount or source.lower() == target.lower():
-            if capture is not None:
-                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
-                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
-                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
-            return identity_template(source), amount, []
-        registry = self.engine.registry
-        bootstrap = current_bootstrap()
-        hints = bootstrap.offers(source, target, amount, block) if bootstrap is not None else ()
-        selected = paths(list(registry.inventory.values()), source, target)
-        if market:
-            anchor = pool_identity(registry.seed)
-            selected = [route for route in selected if pool_identity(
-                next(hop for hop in (route if source.lower() == self.core.lower() else reversed(route))
-                     if 'pool' in hop)['pool']) == anchor]
-        if first:
-            # Keep the V3 seed ahead of newly discovered V2 and noncanonical V4
-            # paths, including after their addresses become known. A thin V2
-            # acquisition must not displace the prompt Core candidate. Refinement
-            # still compares every selected protocol/path and split allocation.
-            canonical_edge = pool_identity(registry.seed)
-            selected.sort(key=lambda route: (sum(hop['pool']['protocol'] != 'v3' and
-                pool_identity(hop['pool']) != canonical_edge for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and not hop['pool'].get('address') for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and hop['pool']['feePips'] != 3000 for hop in route if 'pool' in hop), len(route)))
-        best, rpc_error = None, None
-        candidates = interleave(route_candidates(selected, amount), normalize_hints(hints, source, target),
-            market=market, core=self.core, source=source, anchor=anchor if market else None)
-        for branches, origins in candidates:
-            # A common leading wrap belongs to Helpers funding, not to the
-            # adapter's whole-conversion intermediate set.
-            trial = deepcopy(bank)
-            output, consumed, retained = 0, 0, []
-            try:
-                leading = [row['hops'][0].get('kind') for row in branches]
-                normalized = deepcopy(branches)
-                physical_source = source
-                if leading and leading[0] in ('wrap', 'unwrap') and all(value == leading[0] for value in leading):
-                    physical_source = normalized[0]['hops'][0]['currencyOut']
-                    for row in normalized:
-                        row['hops'] = row['hops'][1:]
-                routes = weighted_routes(normalized)
-                for row, funded in zip(normalized, split_runtime(amount, routes), strict=True):
-                    row['amountIn'] = str(funded)
-                for row in normalized:
-                    funded = int(row['amountIn'])
-                    used, received = await self.price_path(row['hops'], funded, block, trial, canonical)
-                    output += received
-                    consumed += used
-                    if used < funded:
-                        retained.append({'branch': branch, 'stage': stage + (physical_source.lower() != source.lower()), 'currency': physical_source,
-                                         'amount': str(funded - used)})
-            except SnapshotChanged:
-                raise
-            except Exception as error:
-                if public_quote_error(error).get('code', '').startswith('rpc-'):
-                    rpc_error = error
-                continue
-            if retained:
-                retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
-            if best is None or output > best[0]:
-                template = {'inputCurrency': physical_source, 'outputCurrency': target,
-                            'routes': routes}
-                best = output, template, retained, trial, deepcopy(normalized), consumed, origins
-                if first and output > 0:
-                    break
-            await asyncio.sleep(0)
-        if best is None:
-            raise rpc_error or QuoteFailure('quote-no-route')
-        if capture is not None:
-            capture.update(inputCurrency=source, outputCurrency=target, branches=[{'hops': row['hops']} for row in best[4]], template=deepcopy(best[1]),
-                           discoveryOrigins=sorted(best[6]),
-                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(amount),
-                                         'consumedInput': str(best[5]), 'outputCurrency': target, 'output': str(best[0])})
-        bank.clear()
-        bank.update(best[3])
-        return best[1], best[0], best[2]
+    async def conversion(self, source, target, amount, block, bank, canonical, **options):
+        return await self.amm.convert(source, target, amount, block, bank, canonical,
+                                      price_path=self.price_path, **options)
 
     async def candidate(self, request, share, order, block, assets, weights, *, first=False,
                         observations=None, selected=None, selection=True):
@@ -566,12 +492,11 @@ class Quoter:
                 await owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
                                     for share, order in grid))
 
-            if self.route_provider_factory is None:
-                await ordinary_search()
-            else:
-                route_bootstrap = RouteBootstrap(self.route_provider_factory())
-                with bootstrap_scope(route_bootstrap):
-                    await route_bootstrap.run(ordinary_search(), provider_arrival)
+            tools = (self.route_provider_factory() if self.route_provider_factory is not None
+                     else [CustomRoutes(registry)])
+            route_bootstrap = RouteBootstrap(tools)
+            with bootstrap_scope(route_bootstrap):
+                await route_bootstrap.run(ordinary_search(), provider_arrival)
         except SearchStopped:
             pass
         finally:
@@ -598,7 +523,7 @@ class Quoter:
                 best['metrics']['nearbySearch'] = neighbor_metrics
             if route_bootstrap is not None:
                 best['metrics']['routeDiscovery'] = route_bootstrap.metrics
-                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute': 'engine-unavailable'}
+                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder', 'uniroute-api': 'trading-api-observed-engine'}
         await rpc.assert_canonical(block)
         budget.canonical_done()
         if best is None:

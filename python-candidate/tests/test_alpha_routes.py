@@ -145,3 +145,7 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         await provider.close()
         with self.assertRaises(ProviderUnavailable):
             await provider.discover(A, C, 1000, BLOCK)
+
+
+if __name__ == '__main__':
+    unittest.main()

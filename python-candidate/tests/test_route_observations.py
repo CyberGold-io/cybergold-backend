@@ -10,6 +10,8 @@ from aiohttp import ClientResponseError, web
 import httpx
 
 from cybergold_candidate.quoter.hosted_routes import HostedRouteError, UniswapApiProvider
+from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
+from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.route_observations import (
     RouteObservations, api_exchange, origin_scope, route_observation_scope)
 from cybergold_candidate.rpc_transport import rpc_provider
@@ -53,7 +55,7 @@ class PhysicalTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_coalesced_read_counts_one_post_for_first_issuing_owner_only(self):
         self.release.clear()
         first, second = RouteObservations(), RouteObservations()
-        with route_observation_scope(first), origin_scope('cybergold-custom'):
+        with route_observation_scope(first):
             left = asyncio.create_task(self.provider.make_request('eth_call', deepcopy(PINNED)))
         await asyncio.wait_for(self.entered.wait(), 1)
         with route_observation_scope(second), origin_scope('uniswap-alpharouter'):
@@ -69,7 +71,8 @@ class PhysicalTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(first.metrics['jsonRpcMembers'], 1)
         self.assertEqual(first.metrics['methods'], {'eth_call': 1})
-        self.assertEqual(first.metrics['origins']['cybergold-custom']['requests'], 1)
+        self.assertEqual(first.metrics['origins']['cybergold-quoter']['requests'], 1)
+        self.assertNotIn('cybergold-custom', first.metrics['origins'])
         self.assertEqual(first.metrics['completed'], 1)
         self.assertEqual(second.metrics['origins'], {})
 
@@ -89,7 +92,7 @@ class PhysicalTransportTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_independent_recorders_preserve_method_and_origin_counts(self):
         one, two = RouteObservations(), RouteObservations()
-        with route_observation_scope(one), origin_scope('cybergold-custom'):
+        with route_observation_scope(one):
             first = asyncio.create_task(self.provider.make_request('eth_chainId', []))
         with route_observation_scope(two), origin_scope('uniswap-guidestar'):
             second = asyncio.create_task(self.provider.make_request('eth_getCode', [PINNED[0]['to'], 'latest']))
@@ -97,8 +100,32 @@ class PhysicalTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((one.metrics['requests'], two.metrics['requests']), (1, 1))
         self.assertEqual(one.metrics['methods'], {'eth_chainId': 1})
         self.assertEqual(two.metrics['methods'], {'eth_getCode': 1})
-        self.assertEqual(set(one.metrics['origins']), {'cybergold-custom'})
+        self.assertEqual(set(one.metrics['origins']), {'cybergold-quoter'})
         self.assertEqual(set(two.metrics['origins']), {'uniswap-guidestar'})
+
+    async def test_external_only_factory_keeps_common_replay_reads_on_quoter_origin(self):
+        provider, recorder = self.provider, RouteObservations()
+        class External:
+            name = 'uniswap-alpharouter'
+            async def discover(self, *_):
+                await provider.make_request('eth_getCode', [PINNED[0]['to'], 'latest'])
+                return []
+        session = RouteBootstrap([PendingRouteTool(External())])
+        async def ordinary():
+            session.offers('source', 'target', 100, {'number': 1, 'hash': HASH})
+            await provider.make_request('eth_call', deepcopy(PINNED))
+        async def reevaluate():
+            self.fail('The external source returned no nominations')
+        with route_observation_scope(recorder), bootstrap_scope(session):
+            await session.run(ordinary(), reevaluate)
+        self.assertEqual(recorder.metrics['requests'], 2)
+        self.assertEqual(recorder.metrics['origins']['cybergold-quoter']['requests'], 1)
+        self.assertEqual(recorder.metrics['origins']['uniswap-alpharouter']['requests'], 1)
+        self.assertNotIn('cybergold-custom', recorder.metrics['origins'])
+        projected = economic_evidence({'metrics': {'routeDiscovery': {'physicalRpc': recorder.metrics}}},
+                                     {'operationKind': 'quoter', 'resultSource': 'search'})
+        origins = projected['producerMetrics']['routeDiscovery']['physicalRpc']['origins']
+        self.assertEqual(set(origins), {'cybergold-quoter', 'uniswap-alpharouter'})
 
     async def test_http_failure_and_inflight_cancellation_are_counted_attempts(self):
         failed, cancelled = RouteObservations(), RouteObservations()
@@ -212,6 +239,30 @@ class ObservationProjectionTests(unittest.IsolatedAsyncioTestCase):
                 'providers': {'uniswap-guidestar': {'started': 1, 'cancelled': 1, 'cancelledMs': 5000}}}}})
         self.assertEqual(result['producerMetrics']['routeDiscovery']['elapsedMs'], 5000)
         self.assertEqual(result['producerMetrics']['routeDiscovery']['providers']['uniswap-guidestar']['cancelled'], 1)
+
+    def test_shared_tool_feed_work_and_api_engine_evidence_have_closed_log_projection(self):
+        value = {'routeOrigins': {'economicEvaluator': 'cybergold-quoter',
+            'pricing': 'canonical-sdk-and-core-previews',
+            'discoveryProviders': ['uniroute-api', 'uniroute-local', 'cybergold-custom']},
+            'metrics': {'routeDiscovery': {'providers': {
+                'cybergold-custom': {'started': 1, 'available': 1, 'feedReads': 4,
+                    'feedIterations': 2, 'feedReadMs': 0.5, 'feedErrors': 0},
+                'uniroute-local': {'started': 1, 'completed': 1, 'candidates': 1},
+                'uniroute-api': {'started': 3, 'completed': 3, 'engineAttribution': {
+                    'engines': {'uniroute': 1, 'guidestar': 0, 'unverified': 2, 'private': 50},
+                    'evidence': {'route-candidates': 1, 'not-disclosed': 1, 'ambiguous': 1,
+                                 'private': 20}, 'private': 'secret'}}}}}}
+        projected = economic_evidence(value, {'operationKind': 'quoter', 'resultSource': 'search'})
+        self.assertEqual(projected['routeOrigins']['discoveryProviders'],
+                         ['cybergold-custom', 'uniroute-api', 'uniroute-local'])
+        providers = projected['producerMetrics']['routeDiscovery']['providers']
+        self.assertEqual(providers['cybergold-custom']['feedReadMs'], 0.5)
+        self.assertEqual(providers['cybergold-custom']['available'], 1)
+        self.assertEqual(providers['uniroute-api']['engineAttribution'], {
+            'engines': {'uniroute': 1, 'guidestar': 0, 'unverified': 2},
+            'evidence': {'route-candidates': 1, 'not-disclosed': 1, 'ambiguous': 1}})
+        self.assertNotIn('private', json.dumps(projected))
+        self.assertNotIn('secret', json.dumps(projected))
 
 
 if __name__ == '__main__':

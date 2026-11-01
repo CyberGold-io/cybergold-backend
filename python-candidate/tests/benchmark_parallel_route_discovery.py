@@ -23,8 +23,7 @@ import subprocess
 import time
 from types import SimpleNamespace
 
-from cybergold_candidate.quoter.alpha_routes import AlphaRoutes
-from cybergold_candidate.quoter.hosted_routes import UniswapApiProvider
+from cybergold_candidate.quoter.providers import route_providers
 from cybergold_candidate.sdk_worker import SdkWorker
 from quoter_fixture import service, synthetic_pool
 from test_universal_quote import BLOCK, CORE, PAXG, WETH
@@ -34,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_FILES = (
     'package.json', 'package-lock.json',
     'src/uniswap-sdk/alpha-provider.ts', 'src/uniswap-sdk/alpha-worker.ts',
+    'src/uniswap-sdk/uniroute-local.ts', 'src/uniswap-sdk/uniroute-worker.ts',
     'src/uniswap-sdk/engine.ts', 'src/uniswap-sdk/worker.ts',
     'python-candidate/src/cybergold_candidate/quoter/alpha_routes.py',
     'python-candidate/src/cybergold_candidate/quoter/bootstrap.py',
@@ -41,6 +41,11 @@ SOURCE_FILES = (
     'python-candidate/src/cybergold_candidate/quoter/provenance.py',
     'python-candidate/src/cybergold_candidate/quoter/search.py',
     'python-candidate/src/cybergold_candidate/quoter/hosted_routes.py',
+    'python-candidate/src/cybergold_candidate/quoter/route_tools.py',
+    'python-candidate/src/cybergold_candidate/quoter/custom_routes.py',
+    'python-candidate/src/cybergold_candidate/quoter/uniroute_routes.py',
+    'python-candidate/src/cybergold_candidate/quoter/providers.py',
+    'python-candidate/src/cybergold_candidate/quoter/amm_adapter.py',
     'python-candidate/src/cybergold_candidate/route_observations.py',
     'python-candidate/src/cybergold_candidate/route_quote_engine.py',
     'python-candidate/src/cybergold_candidate/sdk_worker.py',
@@ -55,7 +60,10 @@ def git(*arguments):
 
 
 def bindings():
-    return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in SOURCE_FILES}
+    vendor = ROOT / 'vendor/uniroute-public'
+    names = {*SOURCE_FILES, *(path.relative_to(ROOT).as_posix()
+        for path in vendor.rglob('*') if path.is_file())}
+    return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in sorted(names)}
 
 
 class Resources:
@@ -91,9 +99,13 @@ async def trial(strategy, amount, repeat, node):
     suppliers = []
     if strategy == 'parallel':
         def providers():
-            rows = [AlphaRoutes(quoter.engine, command=[node, str(ROOT / 'src/uniswap-sdk/alpha-worker.ts')]),
-                    UniswapApiProvider(quoter.engine, config),
-                    UniswapApiProvider(quoter.engine, config, guidestar=True)]
+            rows = route_providers(config, quoter.engine)
+            # Keep the public Query -> CandidateFeed factory exactly as used
+            # by serving. Only choose this benchmark's pinned Node executable.
+            for tool in rows:
+                provider = getattr(tool, 'provider', tool)
+                if hasattr(provider, 'command'):
+                    provider.command = [node, *provider.command[1:]]
             suppliers.extend(rows)
             return rows
         quoter.route_provider_factory = providers
@@ -127,8 +139,17 @@ async def trial(strategy, amount, repeat, node):
         row['updates'] = updates
         row['registryHeadReads'] = quoter.engine.registry.heads
         row['registryCanonicalChecks'] = quoter.engine.registry.verifications
-        row['allSuppliersClosed'] = all(getattr(item, 'closed', not getattr(item, 'clients', set()))
-                                        for item in suppliers)
+        row['supplierCleanup'] = {}
+        for tool in suppliers:
+            provider = getattr(tool, 'provider', tool)
+            child = getattr(provider, 'process', None)
+            row['supplierCleanup'][tool.name] = {
+                'closedFlag': getattr(provider, 'closed', None),
+                'activeHttpClients': len(getattr(provider, 'clients', ())),
+                'childRetired': child is None or child.returncode is not None}
+        row['allSuppliersClosed'] = all(item['closedFlag'] is not False
+            and item['activeHttpClients'] == 0 and item['childRetired']
+            for item in row['supplierCleanup'].values())
     return row
 
 
@@ -176,17 +197,20 @@ async def main():
     args = parser.parse_args()
     version = subprocess.check_output([args.node, '--version'], text=True).strip()
     before = bindings()
-    report = {'schema': 'cybergold.parallel-route-discovery.offline-comparison.v1',
+    report = {'schema': 'cybergold.shared-route-tools.offline-comparison.v1',
         'observedAtUTC': datetime.now(timezone.utc).isoformat(),
         'baselineCommit': 'e9a4803d3f882af5c88640c01cae71f10be36fb8',
         'branch': git('branch', '--show-current'), 'head': git('rev-parse', 'HEAD'),
         'workingTreeStatus': git('status', '--short').splitlines(),
         'runtime': {'node': version, 'nodeExecutable': args.node},
-        'scope': ['Actual Quoter, AlphaRouter and canonical SDK subprocesses; fresh processes per trial.',
+        'scope': ['Actual Quoter and public RouteQuery -> CandidateFeed API; fresh processes per trial.',
+            'Parallel factory includes custom, AlphaRouter, local published UniRoute finder, UniRoute API and Guidestar.',
+            'UniRoute local is the pinned published RouteFinder plus explicit missing-dependency bindings, not its private full optimizer.',
             'Identical complete synthetic WETH/PAXG and PAXG/CYGLD pool snapshots, fixed block/hash.',
             'Custom seed/catalog acquisition is replaced by the fixed injected catalog in both strategies.',
             'No mocked AlphaRouter or pricing. Core preview and other basket liquidity are not represented.',
-            'Hosted providers deliberately unconfigured; no API key is loaded or used.',
+            'UniRoute API and Guidestar deliberately unconfigured; no API key is loaded or used.',
+            'UniRoute API integration has no documented engine selector; response engine observations are optional diagnostics.',
             'Zero physical RPC is expected from injected state and does not establish a saving.',
             'No live API latency, real acquisition cost, gas or production performance claim.',
             'Small local timing sample; concurrent qualification/system load is not controlled.',

@@ -26,14 +26,14 @@ class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
             return [candidate(200)]
         session = RouteBootstrap({'tool-one': discover, 'tool-two': discover})
         async def ordinary():
-            self.assertEqual(session.offers('source', 'target', 100, BLOCK), [])
+            self.assertEqual(list(session.offers('source', 'target', 100, BLOCK)), [])
             self.assertEqual(session.candidates('SOURCE', 'TARGET', '100', BLOCK), [])
         async def reevaluate():
             offered.extend(session.offers('source', 'target', 100, BLOCK))
-            copied = session.offers('source', 'target', 100, BLOCK)
+            copied = list(session.offers('source', 'target', 100, BLOCK))
             copied[0]['origins'].append('untrusted-copy')
             copied[0]['branches'][0]['amountIn'] = '1'
-            self.assertNotIn('untrusted-copy', repr(session.offers('source', 'target', 100, BLOCK)))
+            self.assertNotIn('untrusted-copy', repr(list(session.offers('source', 'target', 100, BLOCK))))
             self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(200), candidate(200)])
         await session.run(ordinary(), reevaluate)
         self.assertEqual(len(calls), 2)
