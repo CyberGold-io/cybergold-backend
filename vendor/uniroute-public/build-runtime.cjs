@@ -4,15 +4,20 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
-const source = fs.readFileSync(path.join(__dirname, 'upstream/src/core/route/RouteFinder.ts'), 'utf8');
-const result = ts.transpileModule(source, { fileName: 'RouteFinder.ts', compilerOptions: {
-  module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-  sourceMap: true, inlineSources: true, sourceRoot: '../../../upstream/src/core/route',
-} });
-const outputs = {
-  'runtime/core/route/RouteFinder.js': result.outputText,
-  'runtime/core/route/RouteFinder.js.map': result.sourceMapText,
-};
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'VENDOR.json'), 'utf8'));
+const outputs = {};
+for (const { component } of manifest.components) {
+  const source = fs.readFileSync(path.join(__dirname, 'upstream', component), 'utf8');
+  const runtime = 'runtime/'+component.replace(/^src\//, '').replace(/\.ts$/, '.js');
+  const sourceRoot = path.relative(path.dirname(path.join(__dirname, runtime)),
+    path.dirname(path.join(__dirname, 'upstream', component))).split(path.sep).join('/');
+  const result = ts.transpileModule(source, { fileName: path.basename(component), compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+    sourceMap: true, inlineSources: true, sourceRoot,
+  } });
+  outputs[runtime] = result.outputText.replace(/[\t ]+$/gm, '');
+  outputs[runtime+'.map'] = result.sourceMapText;
+}
 for (const [name, content] of Object.entries(outputs)) {
   const filename = path.join(__dirname, name);
   if (process.argv.includes('--check')) {

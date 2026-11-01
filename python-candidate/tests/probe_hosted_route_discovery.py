@@ -40,7 +40,7 @@ from cybergold_candidate.quoter.amm_adapter import CyberGoldAmmAdapter, adapt_ca
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
 from cybergold_candidate.quoter.discovery import route_identity
 from cybergold_candidate.quoter.providers import route_providers
-from cybergold_candidate.quoter.route_tools import RouteQuery
+from cybergold_candidate.quoter.route_tools import RouteQuery, async_batches
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context, current_budget
 from cybergold_candidate.routing_encoding import split_runtime, weighted_routes
@@ -178,7 +178,7 @@ async def trial(settings, block, strategy, amount, repeat, node):
 
     async def supply(tool):
         state = row['sources'][tool.name] = {'status': 'pending', 'startedMs': elapsed(),
-            'completedMs': None, 'candidates': 0}
+            'completedMs': None, 'candidates': 0, 'batches': 0}
         try:
             with origin_scope(tool.name):
                 feed = tool.discover(RouteQuery(WETH, USDC, amount, block))
@@ -186,15 +186,23 @@ async def trial(settings, block, strategy, amount, repeat, node):
                     state['candidates'] += 1
                     queue.put_nowait(('candidate', tool.name, candidate))
                     await asyncio.sleep(0)
-                if feed.pending is not None:
-                    candidates = await budget.discovery(feed.pending)
-                    attribution = getattr(candidates, 'engine_attribution', None)
-                    if attribution is not None:
-                        state['engineAttribution'] = attribution
-                    for candidate in candidates:
-                        state['candidates'] += 1
-                        queue.put_nowait(('candidate', tool.name, candidate))
-                        await asyncio.sleep(0)
+                batches = async_batches(feed)
+                try:
+                    while True:
+                        try:
+                            candidates = await budget.discovery(anext(batches))
+                        except StopAsyncIteration:
+                            break
+                        state['batches'] += 1
+                        attribution = getattr(candidates, 'engine_attribution', None)
+                        if attribution is not None:
+                            state['engineAttribution'] = attribution
+                        for candidate in candidates:
+                            state['candidates'] += 1
+                            queue.put_nowait(('candidate', tool.name, candidate))
+                            await asyncio.sleep(0)
+                finally:
+                    await batches.aclose()
             state['status'] = 'completed' if state['candidates'] else 'empty'
         except ProviderUnavailable:
             state['status'] = 'unavailable'
@@ -210,6 +218,10 @@ async def trial(settings, block, strategy, amount, repeat, node):
         except Exception as error:
             state.update(status='error', failureType=type(error).__name__)
         finally:
+            diagnostics = getattr(tool, 'diagnostics', {})
+            state.update({name: diagnostics[name] for name in
+                ('workerQueries', 'quoteCallbacks', 'quoteCallbackFailures', 'quoteCallbackMs')
+                if type(diagnostics.get(name)) in (int, float)})
             state['completedMs'] = elapsed()
             state['durationMs'] = round(state['completedMs'] - state['startedMs'], 3)
             queue.put_nowait(('done', tool.name, None))

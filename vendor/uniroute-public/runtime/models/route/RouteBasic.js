@@ -1,6 +1,11 @@
 "use strict";
-// Missing upstream model: the published finder only stores protocol and path.
+// Missing upstream model: preserve path references and percentage identity.
 class RouteBasic {
-  constructor(protocol, path) { this.protocol = protocol; this.path = path; }
+  constructor(protocol, path, percentage = 100) {
+    this.protocol = protocol; this.path = path; this.percentage = percentage;
+  }
+  toString() {
+    return this.protocol+':'+this.path.map(pool => pool.address.toString()).join(',')+':'+this.percentage;
+  }
 }
 exports.RouteBasic = RouteBasic;

@@ -188,6 +188,45 @@ class MatrixAcquisitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.catalog_state(), second.catalog_state())
         self.assertEqual(canonical_cache(first.registry), canonical_cache(second.registry))
 
+    async def test_disjoint_asymmetric_sdk_curves_have_a_finer_split_opportunity(self):
+        case = next(row for row in matrix_cases() if row.name == 'core-disjoint-asymmetric-amm')
+        service, transport = await self.fixture(case)
+        assets, _ = await service.quoter.basis(BLOCK)
+        lot = int(case.request['inputs'][0]['amount']) // len(assets)
+        used, coarse, fine = [], [], []
+        for asset in assets:
+            pools = [pool for pool in service.registry.inventory.values()
+                if {pool['token0']['address'].lower(), pool['token1']['address'].lower()}
+                   == {case.request['inputs'][0]['currency'].lower(), asset.lower()}]
+            self.assertEqual({pool['protocol'] for pool in pools}, {'v2', 'v3'})
+            used.append({pool['id'] for pool in pools})
+            thin = next(pool for pool in pools if pool['protocol'] == 'v2')
+            deep = next(pool for pool in pools if pool['protocol'] == 'v3')
+            quotes = {}
+            for percentage in range(0, 101, 5):
+                branches = []
+                for pool, amount in ((thin, lot*percentage//100), (deep, lot-lot*percentage//100)):
+                    if amount:
+                        branches.append({'amountIn': str(amount), 'hops': [{'pool': pool,
+                            'zeroForOne': pool['token0']['address'].lower()
+                                == case.request['inputs'][0]['currency'].lower()}]})
+                value = await service.engine.quote_branches(branches, 'exactIn', lot, BLOCK)
+                self.assertTrue(value['fullyFilled'])
+                quotes[percentage] = int(value['amountOut'])
+            coarse.append(max(value for share, value in quotes.items() if share % 25 == 0))
+            fine.append(max(quotes.values()))
+        self.assertTrue(used[0].isdisjoint(used[1]))
+        self.assertTrue(all(value < 2000 for value in fine))
+        # This is a genuine SDK grid reference, not a required measured-tool
+        # winner. Actual finder/deeper/parallel outcomes remain unconstrained.
+        previous = await service.quoter.core_preview('issue-exact-in',
+            {'maximumAmountsIn': list(map(str, coarse))}, BLOCK)
+        improved = await service.quoter.core_preview('issue-exact-in',
+            {'maximumAmountsIn': list(map(str, fine))}, BLOCK)
+        self.assertGreater(int(improved['netCygldOut']), int(previous['netCygldOut']))
+        self.assertGreater(transport.counts()['httpEnvelopes'], 0)
+        self.assertEqual(transport.counts()['unsupported'], {})
+
 
 class MatrixSummaryTests(unittest.TestCase):
     def row(self, strategy, *, status='completed', output='100', repeat=1, wall=1):

@@ -533,7 +533,7 @@ class Quoter:
                 best['metrics']['nearbySearch'] = neighbor_metrics
             if route_bootstrap is not None:
                 best['metrics']['routeDiscovery'] = route_bootstrap.metrics
-                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder', 'uniroute-api': 'trading-api-observed-engine'}
+                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder-and-quote-split-components', 'uniroute-api': 'trading-api-observed-engine'}
         await rpc.assert_canonical(block)
         budget.canonical_done()
         if best is None:

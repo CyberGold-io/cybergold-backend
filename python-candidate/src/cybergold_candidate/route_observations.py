@@ -227,7 +227,8 @@ def project_route_discovery(source):
         names = ('started', 'available', 'pending', 'completed', 'empty', 'unavailable', 'error', 'cancelled',
                  'stopped', 'invalidated', 'candidates', 'startedMs', 'firstCandidateMs',
                  'completedMs', 'cancelledMs', 'durationMs', 'feedReads', 'feedIterations',
-                 'feedErrors', 'feedReadMs')
+                 'feedErrors', 'feedReadMs', 'batches', 'workerQueries', 'quoteCallbacks',
+                 'quoteCallbackFailures', 'quoteCallbackMs')
         rows = {}
         for name, row in providers.items():
             if name not in DISCOVERY_PROVIDERS:

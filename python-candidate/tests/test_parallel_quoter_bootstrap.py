@@ -2,6 +2,7 @@
 import asyncio
 from copy import deepcopy
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -57,6 +58,125 @@ def hops(pools, source):
 
 
 class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_actual_finder_prefix_qualifies_while_deep_callback_is_blocked(self):
+        connector = synthetic_pool(WETH, PAXG, 1601, 'v2')
+        connector.update(reserve0=str(10**12), reserve1=str(10**12))
+        anchor = synthetic_pool(PAXG, CORE, 1602, 'v3', liquidity=10**6)
+        q = service(self, [connector, anchor])
+        q.seed_routes = lambda *_: None
+        async def discover(*_):
+            pass
+        q.discover = discover
+        entered, release, qualified = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class Local(UnirouteLocal):
+            async def _quote(self, *args):
+                entered.set()
+                await release.wait()
+                return await super()._quote(*args)
+        local = Local(q.engine)
+        q.route_provider_factory = lambda: [PendingRouteTool(local)]
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
+        budget = QuoteBudget()
+        async def publish(frame):
+            value = frame['value']
+            if value['searchCoverage']['selectedPhase'] == 'backward-prefix':
+                self.assertFalse(release.is_set())
+                qualified.set()
+                budget.finish_selection('best-initial')
+        with budget_context(budget):
+            async with asyncio.timeout(10):
+                task = asyncio.create_task(q.get(request, publish))
+                await entered.wait()
+                await qualified.wait()
+                value = await task
+        self.assertEqual(value['inputs'][0]['amount'], '3025')
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
+        self.assertGreater(local.diagnostics['quoteCallbacks'], 0)
+        self.assertEqual(value['metrics']['routeDiscovery']['providers']['uniroute-local']['quoteCallbacks'],
+                         local.diagnostics['quoteCallbacks'])
+        self.assertIsNone(local.process)
+        self.assertTrue(local.closed)
+        queries = local.sequence
+        prepared = await TransactionPreparation(q).prepare({'quote': value, 'sender': USER, 'recipient': USER})
+        self.assertEqual(prepared['economicQuote']['quotedOutput'], value['quotedOutput'])
+        self.assertEqual(local.sequence, queries)
+
+    async def test_actual_later_five_percent_split_beats_early_finder_candidates(self):
+        narrow = synthetic_pool(WETH, PAXG, 1603, 'v3', liquidity=6*10**6)
+        broad = synthetic_pool(WETH, PAXG, 1604, 'v2')
+        broad.update(reserve0='80000', reserve1='80000')
+        anchor = synthetic_pool(PAXG, CORE, 1605, 'v4', liquidity=10**12)
+        q = service(self, [narrow, broad, anchor])
+        async def basis(_):
+            return [PAXG], [1000000]
+        async def preview(_mode, value, _block):
+            acquired = value['maximumAmountsIn'][0]
+            return {'netCygldOut': str(int(acquired)*2), 'amountsInExact': [acquired],
+                    'orderedCoreAssets': [PAXG],
+                    'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        q.basis_reader, q.preview = basis, preview
+        q.seed_routes = lambda *_: None
+        async def discover(*_):
+            pass
+        q.discover = discover
+        entered, release, linear_ready = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class Local(UnirouteLocal):
+            async def _quote(self, *args):
+                entered.set()
+                await release.wait()
+                return await super()._quote(*args)
+        local = Local(q.engine)
+        q.route_provider_factory = lambda: [PendingRouteTool(local)]
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '25000'}], 'outputCurrency': CORE}
+        budget, updates = QuoteBudget(), []
+        async def publish(frame):
+            value = frame['value']
+            updates.append(deepcopy(value))
+            split = any(len(row.get('branches', [])) > 1 for row in value['plan']['conversions'].values())
+            if split:
+                budget.finish_selection('best-initial')
+            else:
+                linear_ready.set()
+        with budget_context(budget):
+            async with asyncio.timeout(10):
+                task = asyncio.create_task(q.get(request, publish))
+                await entered.wait()
+                await linear_ready.wait()
+                release.set()
+                value = await task
+        early = max(int(item['quotedOutput']) for item in updates if not any(
+            len(row.get('branches', [])) > 1 for row in item['plan']['conversions'].values()))
+        self.assertGreater(int(value['quotedOutput']), early)
+        self.assertTrue(any(len(row.get('branches', [])) > 1 for row in value['plan']['conversions'].values()))
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
+        self.assertGreater(local.diagnostics['quoteCallbacks'], 0)
+        for name, count in local.diagnostics.items():
+            self.assertEqual(value['metrics']['routeDiscovery']['providers']['uniroute-local'][name], count)
+        self.assertIsNone(local.process)
+        replay = await q.evaluate_selected({**request, 'inputs': value['inputs']}, value['plan'])
+        self.assertEqual(replay['quotedOutput'], value['quotedOutput'])
+
+    async def test_actual_deep_callback_failures_preserve_executable_finder_hints(self):
+        connector = synthetic_pool(WETH, PAXG, 1606, 'v3', liquidity=10**9)
+        anchor = synthetic_pool(PAXG, CORE, 1607, 'v4', liquidity=10**9)
+        q = service(self, [connector, anchor])
+        q.seed_routes = lambda *_: None
+        async def discover(*_):
+            pass
+        q.discover = discover
+        async def unavailable(*_args, **_kwargs):
+            raise OSError('ordinary callback state unavailable')
+        callback_engine = SimpleNamespace(registry=q.engine.registry, semaphore=q.engine.semaphore,
+                                         quote_sdk_branches=unavailable)
+        local = UnirouteLocal(callback_engine)
+        q.route_provider_factory = lambda: [PendingRouteTool(local)]
+        value = await q.get({'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE})
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertEqual(value['routeOrigins']['discoveryProviders'], ['uniroute-local'])
+        self.assertGreater(local.diagnostics['quoteCallbackFailures'], 0)
+        self.assertEqual(local.diagnostics['quoteCallbacks'], local.diagnostics['quoteCallbackFailures'])
+        self.assertIsNone(local.process)
+
     async def test_actual_uniroute_refreshes_same_query_after_late_catalog_discovery(self):
         connector = synthetic_pool(WETH, PAXG, 1501, 'v3', liquidity=10**9)
         anchor = synthetic_pool(PAXG, CORE, 1502, 'v4', liquidity=10**9)
@@ -66,12 +186,14 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         old_finished = asyncio.Event()
         pair_calls = []
         class Local(UnirouteLocal):
-            async def discover(self, source, target, amount, block):
-                result = await super().discover(source, target, amount, block)
+            async def discover_batches(self, source, target, amount, block):
+                result = []
+                async for batch in super().discover_batches(source, target, amount, block):
+                    result.extend(batch)
+                    yield batch
                 if (source.lower(), target.lower(), amount) == (WETH.lower(), CORE.lower(), 10000):
                     pair_calls.append(len(result))
                     old_finished.set()
-                return result
         local = Local(q.engine)
         async def delayed_discovery(*_):
             await old_finished.wait()

@@ -114,7 +114,7 @@ async def prime(service, request):
     return row
 
 
-async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
+async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0, provider_factory=None):
     setup, session_cpu = time.perf_counter(), os.times()
     transport = await LoopbackState(case.pools, delay_ms=rpc_delay_ms).start()
     service = MatrixService(case, transport, node, ROOT)
@@ -132,9 +132,10 @@ async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
         row['canonicalCacheBefore'] = canonical_cache(service.registry)
         family_counts = deepcopy(service.families)
         preview_count = service.preview_calls
-        if strategy == 'parallel':
+        if strategy != 'custom-only':
             def providers():
-                tools = route_providers(service.settings, service.engine)
+                tools = (provider_factory(service.settings, service.engine) if provider_factory is not None
+                         else route_providers(service.settings, service.engine))
                 for tool in tools:
                     provider = getattr(tool, 'provider', tool)
                     if hasattr(provider, 'command'):
@@ -149,6 +150,7 @@ async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
             value = frame['value']
             updates.append({'arrivalMs': round((time.perf_counter()-started)*1000, 3),
                             'netOutput': value['quotedOutput'], 'family': value['routeFamily'],
+                            'funding': deepcopy(value['inputs']), 'fees': deepcopy(value.get('fees', {})),
                             'phase': value.get('searchCoverage', {}).get('selectedPhase'),
                             'origins': value.get('routeOrigins', {}).get('discoveryProviders', [])})
         try:
@@ -165,6 +167,11 @@ async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
         row['wallToResultMs'] = round((time.perf_counter()-started)*1000, 3)
         row['pythonCpuMs'] = round((time.process_time()-python_cpu)*1000, 3)
         row['updates'] = updates
+        row['firstWholePlan'] = deepcopy(updates[0]) if updates else None
+        provider_metrics = row['metrics'].get('routeDiscovery', {}).get('providers', {})
+        row['providerWork'] = {name: {key: values[key] for key in
+            ('workerQueries', 'quoteCallbacks', 'quoteCallbackFailures', 'quoteCallbackMs', 'batches')
+            if type(values.get(key)) in (int, float)} for name, values in provider_metrics.items()}
         row['completedCandidateFamilies'] = {key: count-family_counts.get(key, 0)
             for key, count in service.families.items() if count-family_counts.get(key, 0)}
         row['syntheticCorePreviewCalls'] = service.preview_calls-preview_count
@@ -350,7 +357,7 @@ if __name__ == '__main__':
     parser.add_argument('--node', default=os.environ.get('CYBERGOLD_TEST_NODE', 'node'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=2)
-    parser.add_argument('--cases', help='Comma-separated matrix case names; default all eight.')
+    parser.add_argument('--cases', help='Comma-separated matrix case names; default all nine.')
     parser.add_argument('--cache-modes', default='cold,warm')
     parser.add_argument('--rpc-delay-ms', type=float, default=0)
     asyncio.run(main(parser.parse_args()))

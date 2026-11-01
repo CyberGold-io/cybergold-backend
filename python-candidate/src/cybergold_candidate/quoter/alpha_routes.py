@@ -6,6 +6,7 @@ RPC transport or authority over observed prices, economic ranking or execution.
 import asyncio
 from copy import deepcopy
 import json
+import time
 
 from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import engine_work
@@ -27,6 +28,14 @@ class AlphaRoutes:
         self.lock = asyncio.Lock()
         self.sequence = 0
         self.closed = False
+        self.quote_callbacks = self.quote_callback_failures = 0
+        self.quote_callback_ms = 0.0
+
+    @property
+    def diagnostics(self):
+        return {'workerQueries': self.sequence, 'quoteCallbacks': self.quote_callbacks,
+                'quoteCallbackFailures': self.quote_callback_failures,
+                'quoteCallbackMs': round(self.quote_callback_ms, 3)}
 
     async def _stop(self, process=None):
         process = self.process if process is None else process
@@ -44,6 +53,12 @@ class AlphaRoutes:
         await self._stop()
 
     async def discover(self, source, target, amount, block):
+        candidates = []
+        async for batch in self.discover_batches(source, target, amount, block):
+            candidates.extend(batch)
+        return candidates
+
+    async def discover_batches(self, source, target, amount, block):
         async with self.lock:
             if self.closed:
                 raise ProviderUnavailable('AlphaRouter session is closed')
@@ -83,11 +98,20 @@ class AlphaRoutes:
                     if response.get('id') != identity:
                         raise AlphaRouteError('AlphaRouter response differs from request')
                     if response.get('operation') == 'quote':
-                        result = await self._quote(response, block, canonical)
+                        self.quote_callbacks += 1
+                        started = time.perf_counter()
+                        try:
+                            result = await self._quote(response, block, canonical)
+                            self.quote_callback_failures += result.get('quote') is None
+                        finally:
+                            self.quote_callback_ms += (time.perf_counter() - started) * 1000
                         await self._write(process, {'id': identity, 'operation': 'quoteResult',
                             'quoteId': response['quoteId'], 'result': result})
+                    elif response.get('operation') == 'candidates':
+                        yield response['candidates']
                     elif 'candidates' in response:
-                        return response['candidates']
+                        yield response['candidates']
+                        return
                     else:
                         # Do not expose arbitrary child text, URLs or inputs.
                         raise AlphaRouteError('AlphaRouter candidate discovery unavailable')
@@ -108,8 +132,9 @@ class AlphaRoutes:
             async with engine_work(self.engine.semaphore):
                 value = await self.engine.quote_sdk_branches(branches, mode, amount, block,
                     candidate={}, canonical=canonical)
-            return {'quote': (str(value['amountOut' if mode == 'exactIn' else 'amountIn'])
-                             if value['fullyFilled'] and value['settled'] else None)}
+            quote = (str(value['amountOut' if mode == 'exactIn' else 'amountIn'])
+                     if value['fullyFilled'] and value['settled'] else None)
+            return {'quote': quote}
         except SnapshotChanged:
             raise
         except Exception:

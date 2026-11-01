@@ -27,7 +27,7 @@ def engine(chain=1):
 
 class LocalUniRouteTests(unittest.IsolatedAsyncioTestCase):
     def provider(self, value):
-        return UnirouteLocal(value, command=['node', str(ROOT/'src/uniswap-sdk/uniroute-worker.ts')])
+        return UnirouteLocal(value, command=['node', str(ROOT/'src/uniswap-sdk/uniroute-worker.ts'), '--finder-only'])
 
     async def test_actual_public_finder_returns_mixed_forward_hops_without_pricing(self):
         value = engine()
@@ -43,6 +43,7 @@ class LocalUniRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(reverse), 1)
             self.assertIs(provider.process, child)
             self.assertEqual(value.registry.inventory, original)
+            self.assertEqual(provider.diagnostics['quoteCallbacks'], 0)
         finally:
             await provider.close()
         self.assertIsNotNone(child.returncode)

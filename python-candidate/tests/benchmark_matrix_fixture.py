@@ -66,6 +66,17 @@ def matrix_cases():
     prefix_connector = synthetic_pool(WETH, PAXG, 907, 'v2')
     prefix_connector.update(reserve0=str(10**12), reserve1=str(10**12))
     narrow_anchor = synthetic_pool(PAXG, CORE, 908, 'v3', liquidity=10**6)
+    disjoint_pools = []
+    for asset, number in ((PAXG, 909), (OTHER, 911)):
+        deep = synthetic_pool(WETH, asset, number, 'v3', liquidity=10**12)
+        thin = synthetic_pool(WETH, asset, number+1, 'v2')
+        # A thin pool has a modestly better initial price than its deep
+        # alternative. Its finite reserves, not a supplied quote, make the
+        # useful allocation smaller than the existing 25% grid.
+        thin['reserve0'], thin['reserve1'] = (
+            ('3000', '3300') if thin['token0']['address'].lower() == WETH.lower()
+            else ('3300', '3000'))
+        disjoint_pools.extend((deep, thin))
     request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}],
                'outputCurrency': CORE}
     return [
@@ -88,6 +99,9 @@ def matrix_cases():
         MatrixCase('core-shared-acquisition', 'market-plus-core', (standard, bridge, anchor),
                    deepcopy(request), True,
                    'One supported scalar input: its two Core basket acquisitions share WETH/PAXG state.'),
+        MatrixCase('core-disjoint-asymmetric-amm', 'market-plus-core', (*disjoint_pools, anchor),
+                   {**deepcopy(request), 'inputs': [{'currency': WETH, 'amount': '3000'}]}, True,
+                   'Disjoint basket acquisitions each offer a thin V2 pool at a modest price premium and a deep V3 alternative; actual SDK curves expose a finer-than-25% split opportunity below the unchanged synthetic Core cap.'),
     ]
 
 

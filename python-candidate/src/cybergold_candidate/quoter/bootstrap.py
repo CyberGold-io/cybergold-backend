@@ -15,7 +15,7 @@ from ..quote_budget import SearchStopped, current_budget
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
-from .route_tools import PendingRouteTool, RouteQuery, RouteTool, round_robin
+from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
@@ -156,11 +156,12 @@ class RouteBootstrap:
                     'cancelled', 'stopped', 'invalidated')
         result = {}
         timings = self.timings
-        for name, _ in self.providers:
+        for name, provider in self.providers:
             attempts = [row for row in self._attempts if row['provider'] == name]
             result[name] = {'started': len(attempts),
                 **{status: sum(row['status'] == status for row in attempts) for status in statuses},
                 'candidates': sum(row['candidates'] for row in attempts),
+                'batches': sum(row['batches'] for row in attempts),
                 'feedReads': sum(row['feedReads'] for row in attempts),
                 'feedIterations': sum(row['feedIterations'] for row in attempts),
                 'feedErrors': sum(row['feedErrors'] for row in attempts),
@@ -171,6 +172,16 @@ class RouteBootstrap:
                     'evidence': {evidence: sum(row.get('engineAttribution', {}).get('evidence') == evidence for row in attempts)
                                  for evidence in ('route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous')}},
                 **{key: value for key, value in timings[name].items() if key.endswith('Ms')}}
+            try:
+                diagnostics = getattr(provider, 'diagnostics', {})
+            except Exception:
+                diagnostics = {}  # Optional counters never decide quote eligibility.
+            if isinstance(diagnostics, dict):
+                # Each provider is request-owned. Copy aggregate counters once;
+                # overlapping query-attempt snapshots must not be summed.
+                result[name].update({key: diagnostics[key] for key in (
+                    'workerQueries', 'quoteCallbacks', 'quoteCallbackFailures', 'quoteCallbackMs')
+                    if type(diagnostics.get(key)) in (int, float)})
         finished = self._finished_ms if self._finished_ms is not None else self._elapsed_ms()
         return {'queries': len(self._queries), 'revision': self.revision,
                 'reevaluations': self.reevaluations, 'providers': result,
@@ -228,7 +239,7 @@ class RouteBootstrap:
                 for entry in self._queries[key] if entry.get('feed') is not None]
 
     def _start_entry(self, entry):
-        attempt = {'provider': entry['name'], 'status': 'pending', 'candidates': 0,
+        attempt = {'provider': entry['name'], 'status': 'pending', 'candidates': 0, 'batches': 0,
             'startedMs': self._elapsed_ms(), 'firstCandidateMs': None,
             'completedMs': None, 'cancelledMs': None,
             'feedReads': 0, 'feedIterations': 0, 'feedReadMs': 0.0, 'feedErrors': 0}
@@ -238,11 +249,10 @@ class RouteBootstrap:
         try:
             feed = entry['provider'].discover(entry['query'])
             entry['feed'] = feed
-            operation = feed.pending
-            if operation is None:
+            if feed.pending is None and getattr(feed, 'updates', None) is None:
                 attempt['status'] = 'available'
             else:
-                task = asyncio.create_task(self._discover(operation, entry, attempt))
+                task = asyncio.create_task(self._discover(feed, entry, attempt))
                 entry['task'] = task
                 self._tasks.add(task)
                 task.add_done_callback(lambda done: self._completed(done, attempt, entry))
@@ -286,24 +296,30 @@ class RouteBootstrap:
                 except Exception:
                     attempt['feedErrors'] += 1
 
-    async def _discover(self, operation, entry, attempt):
+    def _publish_batch(self, response, entry, attempt):
+        rows = deepcopy(list(response))
+        attribution = getattr(response, 'engine_attribution', None)
+        if isinstance(attribution, dict):
+            attempt['engineAttribution'] = {
+                'engine': attribution.get('engine') if attribution.get('engine') in (
+                    'uniroute', 'guidestar', 'unverified') else 'unverified',
+                'evidence': attribution.get('evidence') if attribution.get('evidence') in (
+                    'route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous') else 'not-disclosed'}
+        attempt['batches'] += 1
+        attempt['candidates'] += len(rows)
+        if rows:
+            if attempt['firstCandidateMs'] is None:
+                attempt['firstCandidateMs'] = self._elapsed_ms()
+            entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
+            self.revision += 1
+            self._changed.set()
+
+    async def _discover(self, feed, entry, attempt):
         try:
             with origin_scope(attempt['provider']):
-                response = await operation
-                rows = deepcopy(list(response))
-            attribution = getattr(response, 'engine_attribution', None)
-            if isinstance(attribution, dict):
-                attempt['engineAttribution'] = {
-                    'engine': attribution.get('engine') if attribution.get('engine') in (
-                        'uniroute', 'guidestar', 'unverified') else 'unverified',
-                    'evidence': attribution.get('evidence') if attribution.get('evidence') in (
-                        'route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous') else 'not-disclosed'}
-            attempt['status'] = 'completed' if rows else 'empty'
-            attempt['candidates'] += len(rows)
-            if rows:
-                attempt['firstCandidateMs'] = self._elapsed_ms()
-                entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
-                self.revision += 1
+                async for response in async_batches(feed):
+                    self._publish_batch(response, entry, attempt)
+            attempt['status'] = 'completed' if attempt['candidates'] else 'empty'
         except ProviderUnavailable:
             attempt['status'] = 'unavailable'
         except SnapshotChanged:
@@ -410,6 +426,13 @@ class RouteBootstrap:
                     # A task cancelled before its first turn never awaited the
                     # feed's coroutine. Close that owned pending object too.
                     operation.close()
+                updates = getattr(entry['feed'], 'updates', None) if entry.get('feed') is not None else None
+                close = getattr(updates, 'aclose', None)
+                if close is not None:
+                    try:
+                        await close()
+                    except BaseException as error:
+                        outcomes.append(error)
         async def close_provider(provider):
             close = getattr(provider, 'close', None)
             if close is not None:

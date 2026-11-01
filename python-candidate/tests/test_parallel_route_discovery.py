@@ -2,6 +2,7 @@
 import asyncio
 from copy import deepcopy
 import json
+import inspect
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -11,7 +12,7 @@ from cybergold_candidate.quoter.bootstrap import (
     ProviderUnavailable, RouteBootstrap, bootstrap_scope, current_bootstrap)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
-from cybergold_candidate.quoter.route_tools import CandidateFeed, PendingRouteTool, RouteTool
+from cybergold_candidate.quoter.route_tools import CandidateFeed, PendingRouteTool, RouteTool, async_batches
 
 
 BLOCK = {'blockNumber': '101', 'blockHash': '0x' + 'ab'*32, 'chainId': 1}
@@ -22,6 +23,131 @@ def candidate(amount):
 
 
 class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_incremental_batch_wakes_before_completion_and_survives_ordinary_failure(self):
+        release, ready, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class Stream:
+            name = 'uniroute-local'
+            async def discover_batches(_self, *_):
+                try:
+                    yield [candidate(101)]
+                    await release.wait()
+                    raise OSError('private supplier failure')
+                finally:
+                    drained.set()
+        session = RouteBootstrap([PendingRouteTool(Stream())])
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [])
+        async def reevaluate():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(101)])
+            ready.set()
+        task = asyncio.create_task(session.run(ordinary(), reevaluate))
+        await ready.wait()
+        row = session.metrics['providers']['uniroute-local']
+        self.assertEqual(row['pending'], 1)
+        self.assertEqual(row['batches'], 1)
+        self.assertIsNone(row['completedMs'])
+        self.assertFalse(task.done())
+        release.set()
+        await task
+        self.assertTrue(drained.is_set())
+        row = session.metrics['providers']['uniroute-local']
+        self.assertEqual(row['error'], 1)
+        self.assertEqual(row['candidates'], 1)
+        self.assertNotIn('private', json.dumps(session.metrics))
+
+    async def test_incremental_catalog_refresh_keeps_early_offers_and_coalesces_next_query(self):
+        release, ready, calls = asyncio.Event(), asyncio.Event(), []
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        class Stream:
+            name, catalog_dependent = 'uniroute-local', True
+            async def discover_batches(_self, *_):
+                count = len(catalog.inventory)
+                calls.append(count)
+                yield [candidate(100+count)]
+                if len(calls) == 1:
+                    ready.set()
+                    await release.wait()
+                yield []
+        session = RouteBootstrap([PendingRouteTool(Stream())], catalog=catalog)
+        self.addAsyncCleanup(session.close)
+        session.candidates('source', 'target', 100, BLOCK)
+        await ready.wait()
+        self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(101)])
+        catalog.inventory['two'] = self.catalog_pool('other')
+        session.refresh_catalog()
+        catalog.inventory['three'] = self.catalog_pool('third')
+        session.refresh_catalog()
+        self.assertEqual(calls, [1])
+        release.set()
+        await self.settle(session)
+        self.assertEqual(calls, [1, 3])
+        self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(101), candidate(103)])
+
+    async def test_incremental_caller_cancel_and_existing_budget_stop_close_stream(self):
+        for stop in (False, True):
+            ready, drained = asyncio.Event(), asyncio.Event()
+            class Stream:
+                name = 'uniroute-local'
+                async def discover_batches(_self, *_):
+                    try:
+                        yield [candidate(101)]
+                        await asyncio.Event().wait()
+                    finally:
+                        drained.set()
+            budget = QuoteBudget()
+            with budget_context(budget):
+                session = RouteBootstrap([PendingRouteTool(Stream())])
+                async def ordinary():
+                    session.candidates('source', 'target', 100, BLOCK)
+                async def reevaluate():
+                    ready.set()
+                task = asyncio.create_task(session.run(ordinary(), reevaluate))
+                await ready.wait()
+                if stop:
+                    budget.finish_selection('best-initial')
+                else:
+                    task.cancel()
+                with self.assertRaises(SearchStopped if stop else asyncio.CancelledError):
+                    await task
+            self.assertTrue(drained.is_set())
+            self.assertEqual(session.metrics['providers']['uniroute-local']['cancelled'], 1)
+
+    async def test_common_async_batch_helper_consumes_both_parts_without_metadata_gate(self):
+        async def updates():
+            yield [candidate(101)]
+        async def pending():
+            return [candidate(102)]
+        feed = CandidateFeed(updates=updates(), pending=pending())
+        self.assertEqual([row async for row in async_batches(feed)], [[candidate(101)], [candidate(102)]])
+
+    async def test_common_batch_cancellation_closes_unconsumed_pending_part(self):
+        for as_task in (False, True):
+            ready, drained = asyncio.Event(), asyncio.Event()
+            async def updates():
+                yield [candidate(101)]
+                ready.set()
+                await asyncio.Event().wait()
+            async def pending():
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    drained.set()
+            operation = asyncio.create_task(pending()) if as_task else pending()
+            feed = CandidateFeed(updates=updates(), pending=operation)
+            async def consume():
+                async for _ in async_batches(feed):
+                    pass
+            task = asyncio.create_task(consume())
+            await ready.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            if as_task:
+                self.assertTrue(operation.cancelled())
+                self.assertTrue(drained.is_set())
+            else:
+                self.assertEqual(inspect.getcoroutinestate(operation), inspect.CORO_CLOSED)
+
     def catalog_pool(self, target='target'):
         return {'id': target, 'protocol': 'v2', 'token0': {'address': 'source'},
                 'token1': {'address': target}, 'feePips': 3000}

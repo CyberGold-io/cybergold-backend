@@ -54,6 +54,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_dis
 python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
+python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
 python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py

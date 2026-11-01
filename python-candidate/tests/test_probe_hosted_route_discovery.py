@@ -189,6 +189,42 @@ class ProbeReplayTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(FailingRpc.closed)
             self.assertNotIn(private, document + output.getvalue())
 
+    async def test_async_batch_qualifies_before_terminal_work_and_retains_callback_counts(self):
+        pool = synthetic_pool(probe.WETH, probe.USDC, 974, 'v2')
+        branch = self.branch(pool, 10000)
+        class TrialRegistry(Registry):
+            def __init__(self, *_):
+                super().__init__([pool])
+            async def close(self):
+                await self.pending.close()
+        class Streaming(RouteTool):
+            name = 'uniroute-api'
+            diagnostics = {'workerQueries': 1, 'quoteCallbacks': 2,
+                'quoteCallbackFailures': 0, 'quoteCallbackMs': 3.5}
+            def __init__(self):
+                self.drained = False
+            def discover(self, _):
+                async def batches():
+                    try:
+                        yield [[deepcopy(branch)]]
+                        await asyncio.Event().wait()
+                    finally:
+                        self.drained = True
+                return CandidateFeed(updates=batches())
+        stream = Streaming()
+        budget = QuoteBudget(initial=.5, extension=.5)
+        with patch.object(probe, 'PoolRegistry', TrialRegistry), \
+             patch.object(probe, 'route_providers', return_value=[stream]), budget_context(budget):
+            row = await budget.produce(probe.trial(settings(), BLOCK, 'hosted-only', 10000, 1, NODE))
+        self.assertEqual(row['status'], 'completed')
+        self.assertEqual(budget.reason, 'best-initial')
+        self.assertIsNotNone(row['best'])
+        self.assertTrue(stream.drained)
+        self.assertTrue(row['allResourcesClosed'])
+        self.assertEqual(row['sources'][stream.name]['batches'], 1)
+        self.assertEqual(row['sources'][stream.name]['quoteCallbacks'], 2)
+        self.assertEqual(row['sources'][stream.name]['quoteCallbackMs'], 3.5)
+
 
 class ProbeConfigurationTests(unittest.TestCase):
     def test_selected_settings_remain_data_and_projection_contains_no_values(self):
