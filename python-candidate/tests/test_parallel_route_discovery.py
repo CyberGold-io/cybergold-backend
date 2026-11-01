@@ -4,11 +4,14 @@ from copy import deepcopy
 import json
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context
 from cybergold_candidate.quoter.bootstrap import (
     ProviderUnavailable, RouteBootstrap, bootstrap_scope, current_bootstrap)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.quoter.custom_routes import CustomRoutes
+from cybergold_candidate.quoter.route_tools import CandidateFeed, PendingRouteTool, RouteTool
 
 
 BLOCK = {'blockNumber': '101', 'blockHash': '0x' + 'ab'*32, 'chainId': 1}
@@ -19,6 +22,180 @@ def candidate(amount):
 
 
 class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    def catalog_pool(self, target='target'):
+        return {'id': target, 'protocol': 'v2', 'token0': {'address': 'source'},
+                'token1': {'address': target}, 'feePips': 3000}
+
+    async def settle(self, session):
+        async with asyncio.timeout(1):
+            while any(not task.done() for task in session._tasks):
+                await asyncio.gather(*tuple(session._tasks))
+                await asyncio.sleep(0)
+
+    async def test_changed_catalog_coalesces_inflight_local_inputs_and_preserves_offers(self):
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        entered, release, calls, hosted_calls = asyncio.Event(), asyncio.Event(), [], []
+        class Local:
+            name, catalog_dependent = 'uniroute-local', True
+            async def discover(_self, *_):
+                count = len(catalog.inventory)
+                calls.append(count)
+                if len(calls) == 1:
+                    entered.set()
+                    await release.wait()
+                return [candidate(100+count)]
+        class Hosted:
+            name = 'uniroute-api'
+            async def discover(_self, *_):
+                hosted_calls.append(True)
+                return [candidate(200)]
+        session = RouteBootstrap([PendingRouteTool(Local()), PendingRouteTool(Hosted())], catalog=catalog)
+        self.addAsyncCleanup(session.close)
+        session.candidates('source', 'target', 100, BLOCK)
+        await entered.wait()
+        catalog.inventory['two'] = self.catalog_pool('other')
+        self.assertTrue(session.refresh_catalog())
+        catalog.inventory['three'] = self.catalog_pool('third')
+        self.assertTrue(session.refresh_catalog())
+        self.assertFalse(session.refresh_catalog())
+        self.assertEqual(calls, [1])
+        release.set()
+        await self.settle(session)
+        self.assertEqual(calls, [1, 3])
+        self.assertEqual(len(hosted_calls), 1)
+        self.assertCountEqual(session.candidates('source', 'target', 100, BLOCK),
+                              [candidate(101), candidate(103), candidate(200)])
+        # Optional display data, scalar observations and a second alias for the
+        # same execution key do not change the graph or repeat hosted/local work.
+        catalog.inventory['one']['token0']['symbol'] = 'optional'
+        catalog.inventory['one']['reserve0'] = '2000'
+        catalog.inventory['alias'] = {**deepcopy(catalog.inventory['one']), 'id': 'alias'}
+        self.assertFalse(session.refresh_catalog())
+        self.assertEqual(calls, [1, 3])
+        self.assertEqual(session.metrics['queries'], 1)
+
+    async def test_persisted_catalog_completion_wakes_custom_without_waiting_on_load(self):
+        release, started, ordinary_done, refreshed = (asyncio.Event() for _ in range(4))
+        catalog = SimpleNamespace(inventory={}, load_task=None)
+        async def load():
+            await release.wait()
+            catalog.inventory['one'] = self.catalog_pool()
+        catalog.load_task = asyncio.create_task(load())
+        session = RouteBootstrap([CustomRoutes(catalog)], catalog=catalog)
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [])
+            started.set()
+            await ordinary_done.wait()
+        async def reevaluate():
+            self.assertEqual(len(session.candidates('source', 'target', 100, BLOCK)), 1)
+            refreshed.set()
+            ordinary_done.set()
+        task = asyncio.create_task(session.run(ordinary(), reevaluate))
+        await started.wait()
+        self.assertFalse(catalog.load_task.done())
+        release.set()
+        await task
+        self.assertTrue(refreshed.is_set())
+        self.assertEqual(session.revision, 1)
+
+    async def test_close_detaches_pending_catalog_load_without_waiting_or_cancelling_it(self):
+        release = asyncio.Event()
+        catalog = SimpleNamespace(inventory={}, load_task=None)
+        async def load():
+            await release.wait()
+            catalog.inventory['one'] = self.catalog_pool()
+        catalog.load_task = asyncio.create_task(load())
+        session = RouteBootstrap([CustomRoutes(catalog)], catalog=catalog)
+        async def ordinary():
+            session.candidates('source', 'target', 100, BLOCK)
+        async def reevaluate():
+            self.fail('Closed sessions cannot consume later DB completions')
+        await session.run(ordinary(), reevaluate)
+        self.assertFalse(catalog.load_task.done())
+        before = session.metrics
+        release.set()
+        await catalog.load_task
+        await asyncio.sleep(0)
+        self.assertFalse(session.refresh_catalog())
+        self.assertEqual(session.metrics, before)
+
+    async def test_existing_budget_stop_prevents_catalog_followup_before_close(self):
+        release, entered, calls = asyncio.Event(), asyncio.Event(), []
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        class Local:
+            name, catalog_dependent = 'uniroute-local', True
+            async def discover(_self, *_):
+                calls.append(True)
+                entered.set()
+                await release.wait()
+                return []
+        budget = QuoteBudget()
+        with budget_context(budget):
+            session = RouteBootstrap([PendingRouteTool(Local())], catalog=catalog)
+            session.candidates('source', 'target', 100, BLOCK)
+            await entered.wait()
+            catalog.inventory['two'] = self.catalog_pool('other')
+            self.assertTrue(session.refresh_catalog())
+            budget.finish_selection('best-initial')
+            catalog.inventory['three'] = self.catalog_pool('third')
+            self.assertFalse(session.refresh_catalog())
+            release.set()
+            await self.settle(session)
+            self.assertEqual(len(calls), 1)
+            await session.close()
+
+    async def test_immediate_static_feed_honors_its_declared_catalog_dependency(self):
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        calls = []
+        class Static(RouteTool):
+            name, catalog_dependent = 'static-local', True
+            def discover(_self, query):
+                calls.append(True)
+                return CandidateFeed(available=[candidate(query.amount+len(catalog.inventory))])
+        session = RouteBootstrap([Static()], catalog=catalog)
+        self.addAsyncCleanup(session.close)
+        self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(101)])
+        catalog.inventory['two'] = self.catalog_pool('other')
+        self.assertTrue(session.refresh_catalog())
+        self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(102)])
+        self.assertFalse(session.refresh_catalog())
+        self.assertEqual(len(calls), 2)
+
+    async def test_completed_catalog_load_is_consumed_before_queued_callback_delivery(self):
+        release = asyncio.Event()
+        catalog = SimpleNamespace(inventory={}, load_task=None)
+        rounds, delivered, closed_when_published = [], [], []
+        async def load():
+            await release.wait()
+            closed_when_published.append(session._closed)
+            catalog.inventory['one'] = self.catalog_pool()
+        catalog.load_task = asyncio.create_task(load())
+        session = RouteBootstrap([CustomRoutes(catalog)], catalog=catalog)
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [])
+            await asyncio.sleep(0)
+        async def reevaluate():
+            rounds.append(len(session.candidates('source', 'target', 100, BLOCK)))
+            # An unrelated connector update during this pass is not another
+            # completion of the already-consumed DB task.
+            catalog.inventory['two'] = self.catalog_pool('other')
+            await asyncio.sleep(0)
+        original = asyncio.gather
+        def gather(*arguments, **keywords):
+            if (len(arguments) == 1 and isinstance(arguments[0], asyncio.Task)
+                    and arguments[0].cancelling() and not delivered):
+                delivered.append(True)
+                # The load publishes before run resumes from its cancelled
+                # change-wait drain, with its callback queued behind run.
+                arguments[0].add_done_callback(lambda _: release.set())
+            return original(*arguments, **keywords)
+        with patch('asyncio.gather', gather):
+            await session.run(ordinary(), reevaluate)
+        await catalog.load_task
+        self.assertEqual(closed_when_published, [False])
+        self.assertEqual(rounds, [1])
+        self.assertEqual(session.revision, 1)
+
     async def test_duplicate_nominations_retain_independent_origins_without_changing_sharing(self):
         calls, offered = [], []
         async def discover(*args):

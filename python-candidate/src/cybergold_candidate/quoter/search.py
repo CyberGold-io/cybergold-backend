@@ -157,6 +157,9 @@ class Quoter:
     async def discover(self, request, assets, block):
         registry = self.engine.registry
         await registry.ensure_loaded()
+        bootstrap = current_bootstrap()
+        if bootstrap is not None:
+            bootstrap.watch_catalog_load()
         payment = request['inputs'][0]['currency'] if request['intent'] == 0 else request['outputCurrency']
         if payment.lower() == ZERO:
             payment = WETH
@@ -378,6 +381,7 @@ class Quoter:
             try:
                 if request['intent'] != 3:
                     await budget.discovery(self.discover(request, assets, block))
+                    route_bootstrap.refresh_catalog()
                 session.discovery_done.set()
                 await owned_reads(*(evaluate(share, order, False) for share, order in grid))
             except SnapshotChanged:
@@ -500,7 +504,7 @@ class Quoter:
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
-            route_bootstrap = RouteBootstrap(tools)
+            route_bootstrap = RouteBootstrap(tools, catalog=registry)
             with bootstrap_scope(route_bootstrap):
                 await route_bootstrap.run(ordinary_search(), provider_arrival)
         except SearchStopped:

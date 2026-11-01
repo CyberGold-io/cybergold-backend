@@ -124,8 +124,11 @@ async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
            'samePinnedStateSha256': case.digest}
     try:
         row['harnessSetupMs'] = round((time.perf_counter()-setup)*1000, 3)
+        row['catalogBeforePrimer'] = service.catalog_state()
         if cache_mode == 'warm':
             row['primer'] = await prime(service, case.request)
+        row['catalogBeforeSearch'] = service.catalog_state()
+        row['catalogEventsBeforeSearch'] = deepcopy(service.catalog_events)
         row['canonicalCacheBefore'] = canonical_cache(service.registry)
         family_counts = deepcopy(service.families)
         preview_count = service.preview_calls
@@ -171,6 +174,8 @@ async def trial(case, strategy, cache_mode, repeat, node, *, rpc_delay_ms=0):
             'attemptsMinusReceivedEnvelopes': physical.get('requests', 0)-row['serverRpc']['httpEnvelopes'],
             'attemptedMinusReceivedMembers': physical.get('jsonRpcMembers', 0)-row['serverRpc']['jsonRpcMembers']}
         row['canonicalCacheAfter'] = canonical_cache(service.registry)
+        row['catalogAfterSearch'] = service.catalog_state()
+        row['catalogEvents'] = deepcopy(service.catalog_events)
         row['supplierCleanup'] = {}
         for tool in suppliers:
             provider = getattr(tool, 'provider', tool)
@@ -260,6 +265,8 @@ def summary(trials):
                 wallDeltaMs=round(right['wallToResultMs']-left['wallToResultMs'], 3),
                 physicalRpcDelta=right['metrics'].get('routeDiscovery', {}).get('physicalRpc', {}).get('requests', 0)
                     - left['metrics'].get('routeDiscovery', {}).get('physicalRpc', {}).get('requests', 0))
+            if 'catalogBeforeSearch' in left and 'catalogBeforeSearch' in right:
+                pair['sameStartingCatalog'] = left['catalogBeforeSearch'] == right['catalogBeforeSearch']
         if both:
             baseline, result = int(left['netOutput']), int(right['netOutput'])
             incumbent = {'quotedOutput': left['netOutput'], 'inputs': left['funding']}
@@ -298,7 +305,9 @@ async def main(args):
                     'python': subprocess.check_output([os.sys.executable, '--version'], text=True).strip()},
         'scope': ['Invented pinned Mainnet-shaped pool data; loopback HTTP, not live chain or API evidence.',
             'Actual full Quoter, public RouteTool factory, AlphaRouter, published UniRoute RouteFinder and SDK pricing.',
-            'Identical topology catalog injected in both strategies; canonical getter/bitmap/tick observations are acquired.',
+            'Identical initial topology catalog for each pair; canonical getter/bitmap/tick observations are acquired.',
+            'Delayed-catalog case starts anchor-only; the full synthetic chain state is available while ordinary discovery publishes connector identities after 300 ms.',
+            'Each warm custom-only primer independently expands its own catalog before the measured strategy starts.',
             'Cold: fresh registry/getter cache/SDK. Warm: identical custom-only primer, reported separately and excluded from measured counters.',
             'New AlphaRouter and UniRoute-local supplier processes remain search-owned in both cache modes.',
             'Core preview is an explicitly synthetic producer reply through the normal callback, never an onchain observation.',
@@ -314,6 +323,8 @@ async def main(args):
         'cases': [{'name': case.name, 'family': case.family, 'description': case.description,
                    'syntheticCorePreview': case.core_preview, 'block': BLOCK,
                    'request': case.request, 'stateSha256': case.digest,
+                   'initialCatalog': 'anchor-only' if case.catalog_delay_ms else 'complete',
+                   'controlledCatalogDelayMs': case.catalog_delay_ms,
                    'poolProtocols': dict(Counter(pool['protocol'] for pool in case.pools))} for case in cases],
         'sourceSha256Before': before, 'trials': []}
     for index, case in enumerate(cases):
@@ -339,7 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--node', default=os.environ.get('CYBERGOLD_TEST_NODE', 'node'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=2)
-    parser.add_argument('--cases', help='Comma-separated matrix case names; default all seven.')
+    parser.add_argument('--cases', help='Comma-separated matrix case names; default all eight.')
     parser.add_argument('--cache-modes', default='cold,warm')
     parser.add_argument('--rpc-delay-ms', type=float, default=0)
     asyncio.run(main(parser.parse_args()))

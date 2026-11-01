@@ -108,6 +108,16 @@ same search session; neither first-result nor detailed custom
 improvements wait for a provider tail. The original search clock and pricing
 slots still bound this work.
 
+Local graph-dependent tools also invalidate their nomination cache when the
+canonical physical catalog changes. The session observes existing connector
+and persisted-catalog completion signals, retains old offers, and coalesces a
+follow-up behind in-flight work. It never waits for or cancels the shared
+database load. The optional dependency marker affects cache invalidation only;
+hosted API requests do not repeat for local catalog growth. Display/scalar
+changes and physical aliases do not change the graph identity. Refresh work
+uses the same selection clock, and detached callbacks start no work after
+selection stops or the owner closes.
+
 Both pure-Market and Market+Core plans call that AMM adapter. Tools search only
 the AMM segments: they receive no Core preview, basket, fee or economic intent
 work. The Quoter composes their canonically replayed segments with Core

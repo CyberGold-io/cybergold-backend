@@ -41,6 +41,8 @@ class CandidateFeed:
 class RouteTool:
     """Public tool facade; source-specific clients stay behind this boundary."""
     name: str
+    # Cache dependency only; every tool runs regardless of this optional flag.
+    catalog_dependent = False
 
     def discover(self, query: RouteQuery) -> CandidateFeed:
         raise NotImplementedError
@@ -54,6 +56,7 @@ class PendingRouteTool(RouteTool):
     def __init__(self, provider, name=None):
         self.provider = provider
         self.name = name if name is not None else provider.name
+        self.catalog_dependent = getattr(provider, 'catalog_dependent', False)
         self._discover = getattr(provider, 'discover', provider)
 
     def discover(self, query):

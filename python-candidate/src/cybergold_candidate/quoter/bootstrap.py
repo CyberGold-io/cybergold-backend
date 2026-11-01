@@ -14,6 +14,7 @@ from inspect import isawaitable, iscoroutine
 from ..quote_budget import SearchStopped, current_budget
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
+from ..uniswap_routes import pool_identity
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, round_robin
 
 
@@ -38,7 +39,7 @@ class ProviderUnavailable(RuntimeError):
 
 
 class RouteBootstrap:
-    def __init__(self, providers):
+    def __init__(self, providers, *, catalog=None):
         self._loop = asyncio.get_running_loop()
         self._budget = current_budget()
         self._started_mono = self._loop.time()
@@ -54,6 +55,66 @@ class RouteBootstrap:
         self._changed = asyncio.Event()
         self._closed, self._close_task = False, None
         self.revision, self.reevaluations = 0, 0
+        self._catalog = catalog
+        self._catalog_input = self._catalog_identity()
+        self._catalog_load = None
+        self._handled_catalog_load = None
+        self.watch_catalog_load()
+
+    def _catalog_identity(self):
+        # The existing execution pool keys establish graph connectivity.
+        # Observed prices, coverage, aliases and optional display metadata do
+        # not change that graph or require another optimizer calculation.
+        return (frozenset(pool_identity(pool) for pool in self._catalog.inventory.values())
+                if self._catalog is not None else None)
+
+    def watch_catalog_load(self):
+        """Observe the registry owner's background load without owning its wait."""
+        if self._closed or self._catalog is None:
+            return
+        task = getattr(self._catalog, 'load_task', None)
+        if task is self._catalog_load:
+            return
+        if self._catalog_load is not None:
+            self._catalog_load.remove_done_callback(self._catalog_loaded)
+        self._catalog_load = task
+        if task is not None:
+            task.add_done_callback(self._catalog_loaded)
+
+    def _catalog_loaded(self, task):
+        if (not self._closed and task is self._catalog_load
+                and task is not self._handled_catalog_load):
+            self._handled_catalog_load = task
+            self.refresh_catalog()
+
+    def refresh_catalog(self):
+        """Invalidate changed local graph inputs, retaining existing nominations.
+
+        A pending calculation finishes independently; successive catalog events
+        coalesce into one calculation against the latest input. Hosted queries
+        have no local-graph dependency and are not repeated by this event.
+        """
+        if self._closed:
+            return False
+        if self._budget is not None and self._budget.stop.is_set():
+            return False
+        self.watch_catalog_load()
+        current = self._catalog_identity()
+        if current == self._catalog_input:
+            return False
+        self._catalog_input = current
+        for entries in self._queries.values():
+            for entry in entries:
+                if entry['catalog_dependent']:
+                    entry['wanted_catalog'] = current
+                    task = entry.get('task')
+                    if task is None or (task.done() and not task.cancelled() and task.exception() is None):
+                        self._start_entry(entry)
+        # Lazy custom feeds also need a new whole-plan pass when a persisted
+        # catalog load completes after the ordinary discovery snapshot.
+        self.revision += 1
+        self._changed.set()
+        return True
 
     def _elapsed_ms(self):
         value = self._budget.elapsed() if self._budget is not None else (
@@ -158,29 +219,38 @@ class RouteBootstrap:
             self._queries[key] = []
             query = RouteQuery(*key, block)
             for name, provider in self.providers:
-                attempt = {'provider': name, 'status': 'pending', 'candidates': 0,
-                    'startedMs': self._elapsed_ms(), 'firstCandidateMs': None,
-                    'completedMs': None, 'cancelledMs': None,
-                    'feedReads': 0, 'feedIterations': 0, 'feedReadMs': 0.0, 'feedErrors': 0}
-                self._attempts.append(attempt)
-                try:
-                    feed = provider.discover(query)
-                    operation = feed.pending
-                    entry = {'feed': feed, 'attempt': attempt, 'offers': []}
-                    self._queries[key].append(entry)
-                    if operation is None:
-                        attempt['status'] = 'available'
-                    else:
-                        task = asyncio.create_task(self._discover(operation, entry))
-                        self._tasks.add(task)
-                        task.add_done_callback(lambda done, row=attempt: self._completed(done, row))
-                except SnapshotChanged:
-                    raise
-                except Exception as error:
-                    attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
-                    attempt['completedMs'] = self._elapsed_ms()
+                entry = {'provider': provider, 'name': name, 'query': query, 'offers': [],
+                         'catalog_dependent': getattr(provider, 'catalog_dependent', False),
+                         'wanted_catalog': self._catalog_input, 'task': None}
+                self._queries[key].append(entry)
+                self._start_entry(entry)
         return [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
-                for entry in self._queries[key]]
+                for entry in self._queries[key] if entry.get('feed') is not None]
+
+    def _start_entry(self, entry):
+        attempt = {'provider': entry['name'], 'status': 'pending', 'candidates': 0,
+            'startedMs': self._elapsed_ms(), 'firstCandidateMs': None,
+            'completedMs': None, 'cancelledMs': None,
+            'feedReads': 0, 'feedIterations': 0, 'feedReadMs': 0.0, 'feedErrors': 0}
+        self._attempts.append(attempt)
+        entry['attempt'] = attempt
+        entry['started_catalog'] = entry['wanted_catalog']
+        try:
+            feed = entry['provider'].discover(entry['query'])
+            entry['feed'] = feed
+            operation = feed.pending
+            if operation is None:
+                attempt['status'] = 'available'
+            else:
+                task = asyncio.create_task(self._discover(operation, entry, attempt))
+                entry['task'] = task
+                self._tasks.add(task)
+                task.add_done_callback(lambda done: self._completed(done, attempt, entry))
+        except SnapshotChanged:
+            raise
+        except Exception as error:
+            attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
+            attempt['completedMs'] = self._elapsed_ms()
 
     def _available(self, entry, path_projection=None):
         attempt = entry['attempt']
@@ -216,8 +286,7 @@ class RouteBootstrap:
                 except Exception:
                     attempt['feedErrors'] += 1
 
-    async def _discover(self, operation, entry):
-        attempt = entry['attempt']
+    async def _discover(self, operation, entry, attempt):
         try:
             with origin_scope(attempt['provider']):
                 response = await operation
@@ -255,13 +324,18 @@ class RouteBootstrap:
             if attempt['status'] != 'cancelled':
                 attempt['completedMs'] = self._elapsed_ms()
 
-    def _completed(self, task, attempt):
+    def _completed(self, task, attempt, entry):
         if task.cancelled():
             attempt['status'] = 'cancelled'
             if attempt['cancelledMs'] is None:
                 attempt['cancelledMs'] = self._elapsed_ms()
         else:
-            task.exception()  # Retrieve failures even if the owner is already draining.
+            failure = task.exception()  # Retrieve failures even if already draining.
+            if (not self._closed and failure is None and entry.get('task') is task
+                    and not (self._budget is not None and self._budget.stop.is_set())
+                    and entry['catalog_dependent']
+                    and entry['wanted_catalog'] != entry['started_catalog']):
+                self._start_entry(entry)
         self._changed.set()
 
     async def run(self, ordinary, reevaluate):
@@ -274,6 +348,12 @@ class RouteBootstrap:
         result = None
         try:
             while True:
+                # A load can have published while its done callback is still
+                # queued behind this continuation. Consume that existing event
+                # before deciding the request has no remaining work.
+                if (self._catalog_load is not None and self._catalog_load.done()
+                        and self._catalog_load is not self._handled_catalog_load):
+                    self._catalog_loaded(self._catalog_load)
                 self._raise_failure()
                 if ordinary_task.done():
                     result = await ordinary_task
@@ -325,7 +405,7 @@ class RouteBootstrap:
         outcomes = await asyncio.gather(*self._tasks, return_exceptions=True)
         for entries in self._queries.values():
             for entry in entries:
-                operation = entry['feed'].pending
+                operation = entry['feed'].pending if entry.get('feed') is not None else None
                 if iscoroutine(operation):
                     # A task cancelled before its first turn never awaited the
                     # feed's coroutine. Close that owned pending object too.
@@ -348,6 +428,9 @@ class RouteBootstrap:
     async def close(self):
         if self._close_task is None:
             self._closed = True
+            if self._catalog_load is not None:
+                self._catalog_load.remove_done_callback(self._catalog_loaded)
+                self._catalog_load = None
             self._close_task = asyncio.create_task(self._close())
         try:
             await asyncio.shield(self._close_task)

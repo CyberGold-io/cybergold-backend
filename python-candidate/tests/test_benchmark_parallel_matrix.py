@@ -9,7 +9,7 @@ from cybergold_candidate.route_observations import RouteObservations, route_obse
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.rpc_transport import rpc_provider
 from benchmark_matrix_fixture import BLOCK, MatrixService, LoopbackState, matrix_cases
-from benchmark_parallel_matrix import difference, selected_request, selected_topology, summary
+from benchmark_parallel_matrix import canonical_cache, difference, prime, selected_request, selected_topology, summary
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -140,6 +140,53 @@ class MatrixAcquisitionTests(unittest.IsolatedAsyncioTestCase):
         replay = await service.quoter.evaluate_selected(selected_request(case.request, value), value['plan'])
         self.assertEqual(replay['quotedOutput'], value['quotedOutput'])
         self.assertEqual(transport.counts()['unsupported'], {})
+
+    async def test_delayed_catalog_publishes_only_identities_then_acquires_real_http_state(self):
+        case = next(row for row in matrix_cases() if row.name == 'market-delayed-catalog')
+        service, transport = await self.fixture(case)
+        self.assertEqual(len(transport.pools), 2)
+        self.assertEqual(service.catalog_state()['inventoryPools'], 1)
+        self.assertFalse(service.catalog_expanded)
+        self.assertEqual(service.registry.observed, {})
+        assets, weights = await service.quoter.basis(BLOCK)
+        discovery = asyncio.create_task(service.quoter.discover(case.request, assets, BLOCK))
+        try:
+            await asyncio.sleep(0)
+            self.assertFalse(discovery.done())
+            self.assertEqual(len(service.registry.inventory), 1)
+            await discovery
+        finally:
+            discovery.cancel()
+            await asyncio.gather(discovery, return_exceptions=True)
+        self.assertEqual(service.catalog_state()['inventoryPools'], 2)
+        self.assertEqual(service.catalog_expansions, 1)
+        self.assertEqual(service.catalog_events[0]['clock'], 'harness-session')
+        self.assertEqual(service.registry.observed, {})
+        self.assertEqual(transport.counts()['httpEnvelopes'], 0)
+        recorder = RouteObservations()
+        with route_observation_scope(recorder):
+            value = await service.quoter.candidate(deepcopy(case.request), 0, 'core-first', BLOCK,
+                                                   assets, weights, first=True)
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertGreater(recorder.metrics['requests'], 0)
+        self.assertEqual(recorder.metrics['requests'], transport.counts()['httpEnvelopes'])
+        self.assertEqual(transport.counts()['unsupported'], {})
+
+    async def test_delayed_catalog_warm_primers_expand_fresh_catalogs_independently(self):
+        case = next(row for row in matrix_cases() if row.name == 'market-delayed-catalog')
+        first, first_transport = await self.fixture(case)
+        second, second_transport = await self.fixture(case)
+        self.assertIsNot(first.registry, second.registry)
+        self.assertEqual(len(first.registry.inventory), 1)
+        self.assertEqual(len(second.registry.inventory), 1)
+        for service, transport in ((first, first_transport), (second, second_transport)):
+            primer = await prime(service, case.request)
+            self.assertEqual(primer['status'], 'completed')
+            self.assertEqual(service.catalog_state()['inventoryPools'], 2)
+            self.assertEqual(service.catalog_expansions, 1)
+            self.assertGreater(transport.counts()['httpEnvelopes'], 0)
+        self.assertEqual(first.catalog_state(), second.catalog_state())
+        self.assertEqual(canonical_cache(first.registry), canonical_cache(second.registry))
 
 
 class MatrixSummaryTests(unittest.TestCase):

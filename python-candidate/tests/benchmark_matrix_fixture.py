@@ -4,6 +4,7 @@ These are invented pool states and Core producer replies, never live-chain or
 historical observations. The loopback server only supplies ABI getter data;
 the actual SDK performs pool arithmetic, including shared-pool replay.
 """
+import asyncio
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ class MatrixCase:
     request: dict
     core_preview: bool = False
     description: str = ''
+    catalog_delay_ms: float = 0
 
     @property
     def digest(self):
@@ -41,6 +43,8 @@ class MatrixCase:
             'pools': self.pools, 'request': self.request, 'block': BLOCK,
             'corePreview': self.core_preview,
             'corePreviewModel': 'two-equal-assets-capped-2000-net-three-per-match-v1',
+            'initialCatalog': 'anchor-only' if self.catalog_delay_ms else 'complete',
+            'catalogDelayMs': self.catalog_delay_ms,
         }, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -67,6 +71,9 @@ def matrix_cases():
     return [
         market('market-two-hop', [standard, anchor],
                description='V3 acquisition then the accepted V4 Core market anchor.'),
+        MatrixCase('market-delayed-catalog', 'pure-market', (standard, anchor), deepcopy(request),
+                   description='Full synthetic chain state, anchor-only initial catalog; ordinary discovery publishes the connector after a controlled 300 ms delay.',
+                   catalog_delay_ms=300),
         market('market-split-capacity', [split_a, split_b, anchor], amount=25000,
                description='Narrow V3 plus V2 alternative; split branches share the final V4 anchor.'),
         market('market-native-v4', [native, anchor], source=ZERO,
@@ -260,8 +267,14 @@ class MatrixService:
                   'bitmapWords', 'ticks', 'context', 'lpFee', 'protocolFee'}
         identities = [{key: deepcopy(value) for key, value in pool.items() if key not in scalar}
                       for pool in case.pools]
-        self.registry.inventory = {pool['id']: pool for pool in identities}
+        self.catalog_identities = {pool['id']: pool for pool in identities}
+        self.registry.inventory = ({identities[-1]['id']: deepcopy(identities[-1])}
+            if case.catalog_delay_ms else deepcopy(self.catalog_identities))
         self.registry.seed = deepcopy(identities[-1])
+        self.catalog_expanded = not bool(case.catalog_delay_ms)
+        self.catalog_expansions = self.discovery_calls = 0
+        self.catalog_events = []
+        self.started = time.perf_counter()
         self.registry.loaded = True
         self.registry.loaded_at = time.monotonic()
         self.engine = RouteQuoteEngine(self.settings, self.registry,
@@ -284,7 +297,21 @@ class MatrixService:
                              basis_reader=basis, exploration_seed=42)
         self.quoter.seed_routes = lambda *_: None
         async def discover(*_):
-            pass
+            self.discovery_calls += 1
+            if not self.catalog_expanded:
+                # The server already owns every immutable pool observation.
+                # Only ordinary topology publication is delayed; state still
+                # comes from production HTTP getter/bitmap/tick acquisition.
+                started = time.perf_counter()
+                await asyncio.sleep(case.catalog_delay_ms / 1000)
+                self.registry.inventory.update(deepcopy(self.catalog_identities))
+                self.catalog_expanded = True
+                self.catalog_expansions += 1
+                self.catalog_events.append({'kind': 'controlled-catalog-publication',
+                    'clock': 'harness-session',
+                    'arrivalMs': round((time.perf_counter()-self.started)*1000, 3),
+                    'delayElapsedMs': round((time.perf_counter()-started)*1000, 3),
+                    'inventoryPools': len(self.registry.inventory)})
         self.quoter.discover = discover
         candidate = self.quoter.candidate
         async def observed_candidate(*args, **kwargs):
@@ -292,6 +319,14 @@ class MatrixService:
             self.families[value['routeFamily']] += 1
             return value
         self.quoter.candidate = observed_candidate
+
+    def catalog_state(self):
+        return {'inventoryPools': len(self.registry.inventory),
+            'fullCatalogPools': len(self.catalog_identities),
+            'expanded': self.catalog_expanded, 'expansions': self.catalog_expansions,
+            'discoveryCalls': self.discovery_calls,
+            'sha256': hashlib.sha256(json.dumps(self.registry.inventory,
+                sort_keys=True, separators=(',', ':')).encode()).hexdigest()}
 
     async def close(self):
         await self.engine.close()

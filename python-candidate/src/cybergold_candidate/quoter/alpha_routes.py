@@ -18,6 +18,7 @@ class AlphaRouteError(RuntimeError):
 
 class AlphaRoutes:
     name = 'uniswap-alpharouter'
+    catalog_dependent = True
 
     def __init__(self, engine, command=None):
         self.engine = engine
