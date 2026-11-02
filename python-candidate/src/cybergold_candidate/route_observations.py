@@ -62,6 +62,11 @@ def _snapshot(row):
             'summedElapsedMs': round(row['summedElapsedMs'], 3)}
 
 
+def _api_row():
+    return {**_row(), 'httpStatuses': Counter(), 'queueEntries': 0,
+            'queueCancelled': 0, 'summedQueueWaitMs': 0.0, 'retries': 0}
+
+
 def _rpc_members(data):
     try:
         value = json.loads(data) if isinstance(data, (bytes, bytearray, str)) else data
@@ -74,7 +79,7 @@ def _rpc_members(data):
 
 class RouteObservations:
     def __init__(self):
-        self.rpc, self.api = _row(), _row()
+        self.rpc, self.api = _row(), _api_row()
         self.rpc_origins, self.api_origins = {}, {}
         self.methods = Counter()
         self.discovery = {}
@@ -88,18 +93,24 @@ class RouteObservations:
     @property
     def api_metrics(self):
         # Hosted routing HTTP is not chain RPC and is never added to RPC totals.
-        keys = ('requests', 'completed', 'errors', 'cancelled', 'inFlight', 'summedElapsedMs')
+        keys = ('requests', 'completed', 'errors', 'cancelled', 'inFlight', 'summedElapsedMs',
+                'queueEntries', 'queueCancelled', 'retries')
         def project(row):
             observed = _snapshot(row)
-            return {key: observed[key] for key in keys}
+            return {**{key: observed[key] for key in keys},
+                    'summedQueueWaitMs': round(row['summedQueueWaitMs'], 3),
+                    'httpStatuses': dict(sorted(row['httpStatuses'].items()))}
         return {'scope': 'hosted-api-http-attempts', **project(self.api),
                 'origins': {name: project(row) for name, row in sorted(self.api_origins.items())}}
+
+    def api_rows(self):
+        return self.api, self.api_origins.setdefault(_origin.get(), _api_row())
 
     @contextmanager
     def record_http(self, data=None, *, api=False):
         """Surround an actual post attempt after any cached-session acquisition."""
         aggregate, origins = (self.api, self.api_origins) if api else (self.rpc, self.rpc_origins)
-        owned = origins.setdefault(_origin.get(), _row())
+        owned = origins.setdefault(_origin.get(), _api_row() if api else _row())
         rows = aggregate, owned
         for row in rows:
             row['requests'] += 1
@@ -146,6 +157,42 @@ def api_exchange():
     else:
         with recorder.record_http(api=True):
             yield
+
+
+def record_api_status(status):
+    recorder = _recorder.get()
+    if recorder is not None:
+        for row in recorder.api_rows():
+            row['httpStatuses'][str(status)] += 1
+
+
+def record_api_retry():
+    recorder = _recorder.get()
+    if recorder is not None:
+        for row in recorder.api_rows():
+            row['retries'] += 1
+
+
+@contextmanager
+def api_queue_wait():
+    recorder = _recorder.get()
+    if recorder is None:
+        yield
+        return
+    rows = recorder.api_rows()
+    started = time.perf_counter()
+    for row in rows:
+        row['queueEntries'] += 1
+    try:
+        yield
+    except asyncio.CancelledError:
+        for row in rows:
+            row['queueCancelled'] += 1
+        raise
+    finally:
+        elapsed = (time.perf_counter() - started) * 1000
+        for row in rows:
+            row['summedQueueWaitMs'] += elapsed
 
 
 def _numbers(source, names):
@@ -199,12 +246,21 @@ def _project_transport(source, *, api=False):
     if source.get('scope') != scope:
         return {}
     names = ('requests', 'completed', 'errors', 'cancelled', 'inFlight', 'summedElapsedMs')
-    if not api:
+    if api:
+        names += ('queueEntries', 'queueCancelled', 'summedQueueWaitMs', 'retries')
+    else:
         names += ('jsonRpcMembers', 'batchRequests', 'batchMembers')
-    result = {'scope': scope, **_numbers(source, names)}
+    def project(row):
+        result = _numbers(row, names)
+        statuses = row.get('httpStatuses') if isinstance(row, dict) else None
+        if api and isinstance(statuses, dict):
+            result['httpStatuses'] = _numbers(statuses,
+                tuple(str(status) for status in range(100, 600)))
+        return result
+    result = {'scope': scope, **project(source)}
     origins = source.get('origins')
     if isinstance(origins, dict):
-        rows = {name: _numbers(row, names) for name, row in origins.items()
+        rows = {name: project(row) for name, row in origins.items()
                 if name in TRANSPORT_ORIGINS}
         if rows:
             result['origins'] = rows

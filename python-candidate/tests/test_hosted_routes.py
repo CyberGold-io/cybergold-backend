@@ -15,6 +15,7 @@ from cybergold_candidate.quoter.hosted_routes import (
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_v4 import v4_pool_id
+from cybergold_candidate.uniswap_api_queue import UniswapApiQueue
 
 
 A, B, C, D, HELPERS, CANONICAL_V2, CANONICAL_V3, MANAGER, FAKE = (
@@ -104,7 +105,7 @@ def make_provider(document, *, guidestar=False, config=None, registry=None, stat
         created.append(value)
         return value
     provider_type = UniRouteApiProvider if uniroute else UniswapApiProvider
-    provider = provider_type(SimpleNamespace(registry=registry), config or settings(),
+    provider = provider_type(SimpleNamespace(registry=registry, uniswap_api_queue=UniswapApiQueue()), config or settings(),
         **({} if uniroute else {'guidestar': guidestar}),
         client_factory=client_factory, resolver=resolver)
     return provider, registry, transport, created
@@ -169,7 +170,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             if amount == '101':
                 quote['routeCandidates'] = [{'routeString': 'NOT PARSED', 'quoteAmount': '1234'}]
             return httpx.Response(200, json={'quote': quote})
-        provider = UniRouteApiProvider(SimpleNamespace(registry=Registry()), settings(),
+        provider = UniRouteApiProvider(SimpleNamespace(registry=Registry(), uniswap_api_queue=UniswapApiQueue()), settings(),
             client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(response), timeout=None))
         self.addAsyncCleanup(provider.close)
         first, second = await asyncio.gather(provider.discover(A, B, 101, BLOCK),
