@@ -114,11 +114,9 @@ class HelpersExecution:
             self.rpc = HelpersExecutionRpc(self.settings)
         helpers = getattr(self.settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS', os.environ.get('NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS'))
         async with asyncio.timeout(15):
-            block = await self.rpc.block()
             gas = await self.rpc.estimate(helpers, payload)
-            await self.rpc.assert_canonical(block)
-            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                'blockHash': Web3.to_hex(block['hash']), 'blockTimestamp': str(block['timestamp']), 'observedAt': self.now()},
+            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': None,
+                'blockHash': None, 'blockTimestamp': None, 'blockTag': 'latest', 'observedAt': self.now()},
                 'helpers': helpers, 'owner': Web3.to_checksum_address(payload.owner),
                 'operation': payload.operation, 'gas': str(gas), 'blockTag': 'latest'}
 

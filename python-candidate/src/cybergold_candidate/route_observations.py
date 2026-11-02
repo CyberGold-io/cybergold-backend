@@ -161,7 +161,7 @@ def project_route_origins(source):
         return {}
     result = {}
     for key, known in (('economicEvaluator', ('cybergold-quoter',)),
-                       ('pricing', ('cybergold-sdk', 'canonical-sdk-and-core-previews'))):
+                       ('pricing', ('cybergold-sdk', 'canonical-sdk-and-core-previews', 'helpers-execution-with-policy-fees'))):
         if source.get(key) in known:
             result[key] = source[key]
     def providers(value):

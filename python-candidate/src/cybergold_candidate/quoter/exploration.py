@@ -3,11 +3,12 @@ import random
 
 from ..quote_budget import current_budget
 from ..recovery_rpc import SnapshotChanged
+from ..quote_errors import QuoteFailure
+from ..market_fee import get_market_fee_rate, routed_sell_budget
 from ..route_scheduler import schedule_routes
 from .amm import PartialPath
 from .contracts import capture_paths
 from .discovery import market_plan, route_identity
-from .policy import dominated, output_upper_bound
 from .prefix import repair_prefix
 
 
@@ -41,17 +42,24 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         if identity in session.resolved:
             return
         session.resolved.add(identity)
-        bound = output_upper_bound(quoter.engine.registry, request, route, block, observations=observations)
-        if dominated(bound, incumbent()):
-            session.pruned += 1
-            return
+        # SDK-head bounds cannot disprove a latest Helpers-priced quote.
+        # Supplier topology remains eligible for execution simulation.
         if not session.claim():
             return
         session.started.add(identity)
         try:
             with capture_paths():
-                await evaluate(0, 'core-first', False, selected=market_plan(source, target, route, amount, origins=origins),
-                    phase='route-family-exploration' if seeded else 'route-family', partial=True)
+                try:
+                    await evaluate(0, 'core-first', False, selected=market_plan(source, target, route, amount, origins=origins),
+                        phase='route-family-exploration' if seeded else 'route-family', partial=True)
+                except QuoteFailure as error:
+                    if error.code != 'quote-contract-reverted':
+                        raise
+                    # Explore why this new path cannot settle, so the existing
+                    # backward-prefix producer can construct a different plan.
+                    rate = get_market_fee_rate(quoter.engine.registry.chain, source, target, 'exact-in')
+                    funding = amount - routed_sell_budget(amount, rate)[1] if request['intent'] == 1 else amount
+                    await quoter.price_path(route, funding, block, {}, observations)
         except PartialPath as error:
             # Inline in the parent lease: no nested scheduler permit wait.
             if not session.claim():

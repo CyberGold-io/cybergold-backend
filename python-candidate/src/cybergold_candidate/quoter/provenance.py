@@ -21,7 +21,8 @@ def attach_origins(quote):
             # invent a supplier when replaying such a historical observation.
             conversions[operation] = origin_names(chosen.get('discoveryOrigins')) or ['unspecified']
     quote['routeOrigins'] = {'economicEvaluator': 'cybergold-quoter',
-        'pricing': 'canonical-sdk-and-core-previews',
+        'pricing': ('helpers-execution-with-policy-fees' if quote.get('pricingEvidence', {}).get('engine') == 'helpers-execution'
+                    else 'canonical-sdk-and-core-previews'),
         'discoveryProviders': sorted({name for names in conversions.values() for name in names})
                               if conversions else [],
         'conversions': conversions,

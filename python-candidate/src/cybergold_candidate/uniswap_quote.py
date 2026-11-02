@@ -9,6 +9,7 @@ from web3 import AsyncWeb3, Web3
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .recovery_rpc import RecoveryRpc
 from .rpc_transport import rpc_provider
+from .rpc_block_context import LATEST_BLOCK
 from .route_work_slots import engine_work
 from .uniswap_routes import v3_plan
 
@@ -49,14 +50,12 @@ class UniswapQuote:
         if self.rpc is None:
             self.rpc = QuoteContextRpc(self.settings)
         async with asyncio.timeout(15):
-            block = await self.rpc.block(None)
             async with engine_work(self.engine.semaphore):
-                value = await self.engine.quote_branches(plan['branches'], plan['mode'], amount, block)
-            await self.rpc.assert_canonical(block)
+                value = await self.engine.quote_branches(plan['branches'], plan['mode'], amount, LATEST_BLOCK)
             result = {'amount': str(value['amountOut' if plan['mode'] == 'exactIn' else 'amountIn'])}
             return {'mode': request['mode'], 'qualification': 'sdk', 'result': result,
-                    'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                                'blockHash': block['hash'], 'observedAt': self.now()}}
+                    'context': {'chainId': self.rpc.chain_id, 'blockNumber': None,
+                                'blockHash': None, 'blockTag': 'latest', 'observedAt': self.now()}}
 
     async def close(self):
         if self.rpc:

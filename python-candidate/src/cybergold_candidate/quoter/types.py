@@ -43,6 +43,7 @@ class EconomicQuote(BaseModel):
     searchCoverage: dict
     metrics: dict | None = None
     routeOrigins: dict | None = Field(default=None, exclude_if=lambda value: value is None)
+    pricingEvidence: dict | None = Field(default=None, exclude_if=lambda value: value is None)
 
     # The public response also retains the familiar economic discriminants.
     strategy: Literal['universal'] = 'universal'

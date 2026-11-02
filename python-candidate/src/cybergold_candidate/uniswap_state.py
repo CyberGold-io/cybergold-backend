@@ -22,6 +22,7 @@ from .uniswap_routes import pool_key, v4_pool_id, pool_identity as execution_poo
 from .wallet_balances import TOKENS
 from .quote_errors import QuoteFailure, rpc_failure
 from .recovery_rpc import RecoveryApiError, SnapshotChanged
+from .rpc_block_context import is_latest, rpc_block_parameter
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
 
 ZERO = '0x'+'00'*20
@@ -157,12 +158,13 @@ class UniswapRpc(PoolRpc):
                     await self.before_request()
                 response = await self.w3.provider.make_request('eth_call', [
                     {'to': Web3.to_checksum_address(address), 'data': Web3.to_hex(data)},
-                    {'blockHash': block['hash'], 'requireCanonical': True}])
+                    rpc_block_parameter(block)])
             decode(response)  # A failed typed observation is never retained.
             return [response]
         counts = {}
         try:
-            rows, _ = await self.reads.many([key], produce, retain=self.chain_id == 1, counts=counts)
+            rows, _ = await self.reads.many([key], produce,
+                retain=self.chain_id == 1 and not is_latest(block), counts=counts)
         finally:
             from .telemetry import getter_reads
             getter_reads(counts)
@@ -462,9 +464,11 @@ class PoolRegistry:
         self.persist('observation', state['id'], state)
 
     def acquire_pool(self, pool, block):
-        """Retain a server-acquired identity with its ordinary rewind anchor."""
+        """Retain acquired identity; only pinned observations add rewind anchors."""
         if pool['id'] not in self.inventory:
-            pool = {**deepcopy(pool), 'acquisition': {'blockNumber': str(block['number']), 'blockHash': block['hash']}}
+            pool = deepcopy(pool)
+            if not is_latest(block):
+                pool['acquisition'] = {'blockNumber': str(block['number']), 'blockHash': block['hash']}
             self.inventory[pool['id']] = pool
             self.persist('inventory', pool['id'], pool)
         return self.inventory[pool['id']]
@@ -472,13 +476,15 @@ class PoolRegistry:
     async def snapshot(self, pool, block, *, publish=True):
         rpc = self.get_rpc()
         generation = self.generation
-        context = {'chainId': self.chain, 'blockNumber': str(block['number']), 'blockHash': block['hash']}
+        latest = is_latest(block)
+        context = ({'chainId': self.chain, 'blockNumber': None, 'blockHash': None, 'blockTag': 'latest'}
+                   if latest else {'chainId': self.chain, 'blockNumber': str(block['number']), 'blockHash': block['hash']})
         identity = observation_storage_id(pool)
         if pool['protocol'] == 'v3' and not pool.get('address'):
             identity = ':'.join(map(str, execution_pool_identity(pool)))
         key = (pool['protocol'], identity, block['hash'])
         async def produce():
-            old = self.observation(pool) if self.chain == 1 else None
+            old = self.observation(pool) if self.chain == 1 and not latest else None
             if old and int(old['context']['blockNumber']) < block['number']:
                 try:
                     state = await self.advance(pool, old, block)
@@ -527,7 +533,7 @@ class PoolRegistry:
                 state.update(await read_pool_state(rpc.read_function, rpc.state_view, pool['id'], block))
             state.update(context=context, ticks=[], bitmapWords=[])
             return state
-        old = self.observation(pool)
+        old = self.observation(pool) if not latest else None
         if self.chain == 1 and old and old['context']['blockHash'] == block['hash']:
             state = deepcopy(old)
         else:
@@ -535,7 +541,7 @@ class PoolRegistry:
         state['id'] = pool['id']
         # A shared acquisition stays pure. Each caller owns publication after
         # its accepted boundary, without duplicating event advancement/getters.
-        if publish and generation == self.generation:
+        if publish and generation == self.generation and not latest:
             if state['protocol'] == 'v4' and int(state['sqrtRatioX96']) != 0:
                 # The pinned StateView getter establishes initialized identity,
                 # just as the existing explicit pool producer does. A seed is
@@ -569,7 +575,8 @@ class PoolRegistry:
     async def _extend_ticks(self, snapshot, requests, block, generation):
         rpc = self.get_rpc()
         pool = snapshot
-        current = self.observation(pool)
+        latest = is_latest(block)
+        current = self.observation(pool) if not latest else None
         covered = current if current and current['context']['blockHash'] == block['hash'] else snapshot
         words = {int(row['wordPosition']): row for row in covered.get('bitmapWords', [])}
         ticks = {int(row['index']): row for row in covered.get('ticks', [])}
@@ -617,14 +624,16 @@ class PoolRegistry:
             ticks[row['index']] = row
         # Concurrent candidates can have requested different coverage from the
         # same observation. Merge their immutable tick observations at this hash.
-        current = self.observation(pool)
+        current = self.observation(pool) if not latest else None
         if current and current['context']['blockHash'] == block['hash']:
             words.update({int(row['wordPosition']): row for row in current.get('bitmapWords', [])})
             ticks.update({int(row['index']): row for row in current.get('ticks', [])})
         # extend_ticks owns the snapshot; coverage below replaces its old rows.
         # Subscriber, observed-state and persistence copies remain independent.
         result = {**snapshot, 'bitmapWords': list(words.values()), 'ticks': list(ticks.values())}
-        if generation == self.generation:
+        if latest:
+            result['context'] = {'chainId': self.chain, 'blockNumber': None, 'blockHash': None, 'blockTag': 'latest'}
+        if generation == self.generation and not latest:
             self.publish_observation(result)
         return result
 

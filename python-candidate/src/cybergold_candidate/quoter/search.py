@@ -29,6 +29,7 @@ from ..uniswap_routes import pool_identity, V4_CONNECTOR_KEYS, initial_v3_branch
 from ..uniswap_v4 import v4_pool_id, POOL_MANAGER
 from ..wallet_balances import TOKENS
 from ..uniswap_state import owned_reads
+from ..rpc_block_context import LATEST_BLOCK, rpc_block_parameter
 from .amm import price_path, PartialPath
 from .discovery import paths, route_candidates
 from .ranking import prefer_completed
@@ -86,7 +87,7 @@ def identity_template(currency):
 
 class Quoter:
     def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
-                 exploration_seed=None, optional_limit=16, route_provider_factory=None):
+                 exploration_seed=None, optional_limit=16, route_provider_factory=None, plan_simulator=None):
         self.settings, self.engine = settings, engine
         self.exploration_seed, self.optional_limit = exploration_seed, optional_limit
         self.route_provider_factory = route_provider_factory
@@ -97,6 +98,10 @@ class Quoter:
         self.preview = preview
         self.basis_reader = basis_reader
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
+        from .plan_simulation import HelpersPlanSimulation
+        self.plan_simulator = plan_simulator or HelpersPlanSimulation(settings, engine.registry,
+            helpers=self.helpers, adapter=self.adapter, core=self.core, now=self.now,
+            semaphore=engine.semaphore if plan_simulator is None else None)
 
     async def basis(self, block):
         if self.basis_reader:
@@ -116,7 +121,7 @@ class Quoter:
                 ['uint256[]'], [list(map(int, value['maximumAmountsIn']))])
             response = await rpc.w3.provider.make_request('eth_call', [
                 {'from': self.helpers, 'to': self.core, 'data': Web3.to_hex(data)},
-                {'blockHash': block['hash'], 'requireCanonical': True}])
+                rpc_block_parameter(block)])
             if 'error' in response:
                 raise preview_error(response['error'], mode=mode, arguments=value) or rpc_failure(response['error'])
             target, protocol_fee, exact, assets = rpc.w3.codec.decode(
@@ -214,11 +219,18 @@ class Quoter:
                         observations=None, selected=None, selection=True):
         from .evaluate import evaluate_candidate
         from .dormant_routes import with_dormant_routes
+        if selected is not None:
+            return await self.plan_simulator(request, selected)
         value = await evaluate_candidate(self, request, share, order, block, assets, weights,
                                          first=first, observations=observations, selected=selected, selection=selection)
-        # Preparation replays exactly the topology accepted by the caller.
-        return (with_dormant_routes(value, getattr(self.engine.registry, 'seed', None))
-                if selected is None else value)
+        value = with_dormant_routes(value, getattr(self.engine.registry, 'seed', None))
+        # SDK quantities choose promising paths/allocations. Only execution of
+        # the complete plan supplies the published economic result.
+        return await self.plan_simulator(request, value['plan'], candidate=value)
+
+    async def exploration_block(self):
+        """Local SDK metadata only; exploration needs no header acquisition."""
+        return deepcopy(LATEST_BLOCK)
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None):
@@ -251,8 +263,10 @@ class Quoter:
         neighbor_task = (asyncio.create_task(lookup_neighbors())
                          if neighbors is not None and not core_only else None)
         try:
-            result = await budget.produce(self._get(request, on_update, core_only=core_only,
-                                                   seed=seed, neighbor_task=neighbor_task))
+            from .plan_simulation import simulation_scope
+            async with simulation_scope():
+                result = await budget.produce(self._get(request, on_update, core_only=core_only,
+                                                       seed=seed, neighbor_task=neighbor_task))
         except Exception as error:
             # Private diagnostic evidence preserves the public error contract.
             # In particular, exhaustion can still return quote-no-route while
@@ -327,35 +341,37 @@ class Quoter:
         budget = current_budget()
         registry = self.engine.registry
         rpc = registry.get_rpc()
-        block = await budget.prepare(rpc.block(None))
+        block = None
         assets, weights = [], []
         route_bootstrap = None
+        direct_funding, default_funding = None, None
         async def prepare_basis():
-            nonlocal assets, weights
+            nonlocal assets, weights, block, direct_funding, default_funding
+            block = await budget.prepare(self.exploration_block())
+            if request['intent'] == 3:
+                direct_funding = await budget.prepare(self.direct_basket_funding(request, block))
+                default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
+                return
             assets, weights = await budget.prepare(self.basis(block))
             if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
                 raise InvalidPreview('Basket input currencies must follow Core basket order.')
             self.seed_routes(request, assets)
             if route_bootstrap is not None:
                 route_bootstrap.refresh_catalog()
-        preparation = asyncio.create_task(prepare_basis()) if request['intent'] != 3 else None
+        preparation = asyncio.create_task(prepare_basis())
         async def prepared():
             if preparation is not None:
                 try:
                     # Many candidate/feed owners await this one preparation.
                     # The producer below retains ownership through cleanup.
                     await asyncio.shield(preparation)
-                except SnapshotChanged:
-                    raise
+                except SnapshotChanged as error:
+                    failures.append(error)
+                    return False
                 except Exception as error:
                     failures.append(error)
                     return False
             return True
-        direct_funding = (await budget.prepare(self.direct_basket_funding(request, block))
-                          if request['intent'] == 3 else None)
-        # At zero supply the original request still receives Core's ordinary
-        # identified rejection; zero funding must not become a successful quote.
-        default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
         best, failures, observations = None, [], {}
         session = SearchSession(self.optional_limit,
             self.exploration_seed if self.exploration_seed is not None else randbits(64))
@@ -365,12 +381,18 @@ class Quoter:
             nonlocal best
             errors = failures if failure_sink is None else failure_sink
             try:
-                if uses_basket_basis(request, selected) and not await prepared():
+                if selected is None and not await prepared():
                     return
                 funding = default_funding if funding is None else funding
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
-                value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
-                    observations=observations, selected=selected))
+                try:
+                    value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
+                        observations=observations, selected=selected))
+                except SnapshotChanged as error:
+                    # The SDK only constructs proposals. A failed exploratory
+                    # snapshot says nothing about an independent Helpers quote.
+                    errors.append(error)
+                    return
                 if selected is not None:
                     # A legacy seed/neighbor is a newly offered quote here,
                     # unlike TransactionPreparation's already-accepted plan.
@@ -400,6 +422,11 @@ class Quoter:
                     raise
                 errors.append(error)
             except Exception as error:
+                if partial and isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted':
+                    # An optional failed whole path can ask the SDK to explore
+                    # a different funding/prefix shape; no SDK reprice is
+                    # required for a successful Helpers observation.
+                    raise
                 errors.append(error)
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
@@ -411,8 +438,8 @@ class Quoter:
                     route_bootstrap.refresh_catalog()
                 session.discovery_done.set()
                 await owned_reads(*(evaluate(share, order, False) for share, order in grid))
-            except SnapshotChanged:
-                raise
+            except SnapshotChanged as error:
+                failures.append(error)
             except Exception as error:
                 failures.append(error)
             finally:
@@ -550,7 +577,7 @@ class Quoter:
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
-            route_bootstrap = RouteBootstrap(tools, catalog=registry)
+            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True)
             with bootstrap_scope(route_bootstrap):
                 await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
         except SearchStopped:
@@ -571,7 +598,7 @@ class Quoter:
                 # including no-route, context disproof and caller cancellation.
                 measured.discovery = route_bootstrap.metrics
             if preparation_error is not None:
-                raise preparation_error
+                failures.append(preparation_error)
         budget.cleanup_done()
         if best is not None and not budget.stop.is_set():
             budget.finish_selection('complete')
@@ -591,8 +618,6 @@ class Quoter:
             if route_bootstrap is not None:
                 best['metrics']['routeDiscovery'] = route_bootstrap.metrics
                 best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder-and-quote-split-components', 'uniroute-api': 'trading-api-observed-engine'}
-        await rpc.assert_canonical(block)
-        budget.canonical_done()
         if best is None:
             informative = next((error for error in failures if not isinstance(error, InvalidPreview) and
                 not (isinstance(error, QuoteFailure) and error.code == 'quote-no-route')), None)
@@ -602,23 +627,15 @@ class Quoter:
     quote = get
 
     @budget_entry
-    async def evaluate_selected(self, request, selected):
-        """Replay selected routes at current state without route discovery."""
+    async def evaluate_selected(self, request, selected, *, recipient=None, minimum=1, accepted_core=None):
+        """Prepare through one fresh latest-state execution of the accepted plan."""
         request = self.normalise_request(request)
         from .types import EconomicPlan
         selected = EconomicPlan.model_validate(selected).model_dump()
         budget = current_budget()
         async def replay():
-            rpc = self.engine.registry.get_rpc()
-            block = await budget.prepare(rpc.block(None))
-            assets, weights = (await budget.prepare(self.basis(block))
-                               if uses_basket_basis(request, selected) else ([], []))
-            if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
-                raise InvalidPreview('Basket input currencies must follow Core basket order.')
-            value = await budget.prepare(self.candidate(request, 100, 'core-first', block, assets, weights,
-                                                       selected=selected))
+            value = await budget.prepare(self.plan_simulator(request, selected, pricing=False,
+                recipient=recipient, minimum=minimum, accepted_core=accepted_core))
             budget.cleanup_done()
-            await rpc.assert_canonical(block)
-            budget.canonical_done()
             return attach_origins(value)
         return await budget.produce(replay())

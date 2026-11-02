@@ -1,4 +1,4 @@
-"""Canonical-context HTTP/Core facade and shared pinned-state transport."""
+"""Latest quote facade with explicit pinned-context transport support."""
 import asyncio
 import json
 import logging
@@ -16,6 +16,7 @@ from web3 import Web3
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .pool_producer import PoolRpc
 from .shared_reads import SharedReads
+from .rpc_block_context import LATEST_BLOCK, is_latest, rpc_block_parameter
 from .telemetry import getter_reads, rpc_exchange
 from .uniswap_quote import QuoteContextRpc
 from .wallet_balances import TOKENS
@@ -97,7 +98,7 @@ class RouteSearchRpc(QuoteContextRpc):
     async def call_batch(self, calls, block):
         payload = [{'jsonrpc': '2.0', 'id': index, 'method': 'eth_call', 'params': [
             {'to': address, 'data': calldata},
-            {'blockHash': block['hash'], 'requireCanonical': True}]}
+            rpc_block_parameter(block)]}
             for index, (address, calldata) in enumerate(calls)]
         with rpc_exchange(len(payload)), rpc_call('eth_call', stage='route-search', secrets=self.rpc_secrets) as call:
             response = await self.client.post(self.url, json=payload)
@@ -111,11 +112,10 @@ class RouteSearchRpc(QuoteContextRpc):
         by_key = dict(zip(keys, calls, strict=True))
         async def produce(missing):
             return await self.call_batch([by_key[key] for key in missing], block)
-        # Mainnet hash-addressed state is immutable. Sandbox can change state
-        # under the same header via administrative overrides, so it retains
-        # only overlapping reads, never a completed pool observation.
+        # Only pinned Mainnet state is immutable. Latest and Sandbox reads
+        # retain overlapping work, never a completed pool observation.
         try:
-            return await self.pool_reads.many(keys, produce, retain=self.chain_id == 1, counts=counts)
+            return await self.pool_reads.many(keys, produce, retain=self.chain_id == 1 and not is_latest(block), counts=counts)
         finally:
             getter_reads(counts)
 
@@ -187,7 +187,7 @@ class RouteSearch:
         started = time.perf_counter()
         async with asyncio.timeout(15):
             owns_context = block is None
-            block = await self.rpc.block(None) if owns_context else block
+            block = LATEST_BLOCK if owns_context else block
             context_done = time.perf_counter()
             route_subphase('structured-search')
             async def progress(rows):
@@ -200,14 +200,13 @@ class RouteSearch:
                 first = failures[0]
                 raise QuoteFailure(first['code'], diagnostics=first.get('diagnostics'))
             quotes_done = time.perf_counter()
-            if owns_context:
-                route_subphase('canonicality')
-                await self.rpc.assert_canonical(block)
             finished = time.perf_counter()
-            context_reads = 3 if owns_context else 0
+            context_reads = 0
             return {'mode': request['mode'], 'qualification': 'sdk', 'results': public_rows(results),
-                'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                            'blockHash': block['hash'], 'observedAt': self.now()},
+                'context': {'chainId': self.rpc.chain_id,
+                            'blockNumber': None if is_latest(block) else str(block['number']),
+                            'blockHash': None if is_latest(block) else block['hash'],
+                            **({'blockTag': 'latest'} if is_latest(block) else {}), 'observedAt': self.now()},
                 # Engine state acquisition and SDK IPC are not counted
                 # by this facade. Do not present coordinator reads as supplier
                 # cost or infer savings from removing the old V3 batch wave.

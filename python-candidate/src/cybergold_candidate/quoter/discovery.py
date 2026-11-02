@@ -2,13 +2,15 @@
 from itertools import combinations
 from collections import defaultdict
 from copy import deepcopy
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from ..routing_encoding import ZERO, weighted_routes
 from ..route_search import WETH
 from ..uniswap_routes import pool_identity, opposite
 
 
-def paths(pools, source, target, weth=WETH, max_hops=3):
+def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
     """Selected pool graph plus explicit lossless native/WETH transitions."""
     graph = {}
     unique = {}
@@ -39,7 +41,93 @@ def paths(pools, source, target, weth=WETH, max_hops=3):
                 walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
                     'currencyOut': following}], visited | {following}, hops)
     walk(source.lower(), [], {source.lower()}, 0)
-    return sorted(found, key=lambda route: (len(route), repr(route)))
+    return sorted(found, key=lambda route: (len(route), repr(route))) if len(found) > 1 else found
+
+
+
+_topology = ContextVar('quote_topology_reuse', default=None)
+
+
+@contextmanager
+def topology_scope(cache):
+    token = _topology.set(cache)
+    try:
+        yield cache
+    finally:
+        _topology.reset(token)
+
+
+def current_topology():
+    return _topology.get()
+
+
+class TopologyCache:
+    """One discovery owner's immutable walks and rendered-route identities.
+
+    Pool dictionaries, observations, amounts and origins are never cached.
+    Current representatives are bound on every read; metadata still owns the
+    existing repr-based ordering. Split combinations remain lazy and fresh.
+    """
+    def __init__(self):
+        self.walks, self.validated = {}, {}
+        self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
+
+    def clear(self):
+        self.walks.clear()
+        self.validated.clear()
+
+    def paths(self, pools, source, target, weth, max_hops):
+        unique = {}
+        for pool in pools:
+            identity = pool_identity(pool)
+            if identity not in unique or pool.get('address'):
+                unique[identity] = pool
+        graph = tuple(sorted(((identity, pool['token0']['address'].lower(),
+            pool['token1']['address'].lower(), pool.get('hooks', ZERO).lower())
+            for identity, pool in unique.items()), key=repr))
+        key = source.lower(), target.lower(), weth.lower(), max_hops, graph
+        if key not in self.walks:
+            routes = _enumerate_paths(list(unique.values()), source, target, weth, max_hops)
+            self.walks[key] = tuple(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
+                if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route) for route in routes)
+            self.graph_builds += 1
+            return routes
+        self.path_hits += 1
+        routes = [[{'pool': unique[step[0]], 'zeroForOne': step[1]}
+                   if isinstance(step[0], tuple) else {'kind': step[0], 'currencyOut': step[1]}
+                   for step in route] for route in self.walks[key]]
+        return sorted(routes, key=lambda route: (len(route), repr(route))) if len(routes) > 1 else routes
+
+    def nomination_identity(self, candidate):
+        amounts = [int(row['amountIn']) for row in candidate]
+        total = sum(amounts)
+        shares = [0 if index == len(candidate)-1 else amount*1_000_000//total
+                  for index, amount in enumerate(amounts)]
+        result = []
+        for row, share in zip(candidate, shares, strict=True):
+            route = row['hops']
+            key = tuple(((hop['pool']['protocol'], hop['pool']['token0']['address'],
+                hop['pool']['token1']['address'], hop['pool']['feePips'],
+                hop['pool'].get('tickSpacing'), hop['pool'].get('hooks', ZERO), hop['zeroForOne'])
+                if 'pool' in hop else None,
+                (hop['kind'], hop['currencyOut']) if 'kind' in hop else None) for hop in route)
+            if key not in self.validated:
+                # Retain encoding validation before identity construction, as
+                # in the uncached nomination path. Current primitive fields
+                # invalidate both together; optional pool metadata stays live.
+                weighted_routes([{'amountIn': '1', 'hops': route}])
+                self.validated[key] = route_identity(route)
+                self.route_validations += 1
+            else:
+                self.validation_hits += 1
+            result.append((share, self.validated[key]))
+        return tuple(result)
+
+
+def paths(pools, source, target, weth=WETH, max_hops=3):
+    cache = current_topology()
+    return (cache.paths(pools, source, target, weth, max_hops) if cache is not None else
+            _enumerate_paths(pools, source, target, weth, max_hops))
 
 
 def route_candidates(routes, amount):

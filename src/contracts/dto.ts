@@ -40,6 +40,12 @@ export type UniversalExactInputRequest = {
 export type UniversalExactInputPlan = Omit<UniversalExactInputRequest, "slippageBps"> & {
   minimumOutput: string; body: string;
 };
+/** Latest simulations carry no independently verified block identity. */
+export type EconomicQuoteContext = {
+  chainId: number; blockNumber: string | null; blockHash: string | null; observedAt: string;
+  blockTag?: "latest" | { blockHash: string; requireCanonical: true };
+  verification?: "quote-observation" | "execution-simulation";
+};
 export type UniversalExactInputQuote = {
   strategy: "universal"; routeFamily: "core" | "market" | "mixed";
   operation: "executeExactInput"; settlementPolicy: "protocol-retained-input";
@@ -52,9 +58,9 @@ export type UniversalExactInputQuote = {
   fees: { coreProtocolFeeCygld: string; coreHelpersFeeCygld: string; marketFeeCygld: string };
   recoveryShares: { kind: number; token: string; id: string; amount: string }[];
   deployment: { helpers: string; adapter: string; encoding: "uniswap-routing-v1" };
-  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  context: EconomicQuoteContext;
   retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
-  searchCoverage: { coreSharesPercent: number[]; orders: string[]; maxCoreInvocations: number;
+  searchCoverage: { coreSharesPercent?: number[]; orders?: string[]; maxCoreInvocations: number;
     maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed"
       | "capacity-limited" | "route-family" | "route-family-exploration" | "backward-prefix" | "nearby-upper" | "nearby-lower" };
   /** Producer clocks, distinct from client request or browser journey duration. */
@@ -86,9 +92,12 @@ export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescrip
     consumedInput: string; outputCurrency: string; output: string }[];
   observation?: { source: "search" | "stored"; refresh: boolean };
   reuseSample?: EconomicReuseSample;
+  pricingEvidence?: { engine: "helpers-execution"; rpcCalls: number; funding: "ephemeral-overrides";
+    feeTreatment: "policy-output-arithmetic" | "plan-fees"; stages: Record<string, string>[];
+    coalesced?: number; reused?: number; rawTradeResult?: Record<string, unknown> };
 };
 export type EconomicQuoteRequest = EconomicRequest & { refresh?: boolean };
-/** Qualified frames contain canonical-ready full tuples; arithmetic stays separate. */
+/** Qualified frames contain complete simulated quote observations. */
 export type EconomicQuoteEvent = DiagnosticReferences & (
   | { type: "qualified"; value: EconomicQuote }
   /** Upper-route bootstrap ended; reveal the best validated candidate available. */
@@ -188,7 +197,7 @@ export type MarketQuote = {
   inputMaximum: string; outputMinimum: string; refundDust: string;
   outputRefundEstimate?: string;
   fee: MarketRetainedPlan["fee"]; params: MarketSwapParams; adapterData: string;
-  plan: MarketRetainedPlan; context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  plan: MarketRetainedPlan; context: EconomicQuoteContext;
   feeBeneficiaryDisplay?: { address: string; observedAt: string };
   /** AMM price impact excluding LP/protocol/application fees; absent without a coherent baseline. */
   priceImpactPpm?: string;
@@ -328,7 +337,7 @@ export type SafeExecutionRequest = Omit<SafeTransactionHashRequest, "nonce"> & {
 export type SafeExecution = { context: ProtocolFacts["context"]; address: string; executor: string; executorNonce: string;
   success: boolean; blockTag: "latest" };
 export type HelpersExecutionRequest = { owner: string; operation: "issueFromBasketExactOutWithMixedPermits" | "issueFromBasketExactOutWithPermit2" | "issueFromNativeExactOut" | "issueFromTokenExactOut" | "issueFromTokenExactOutWithPermit" | "issueFromTokenExactOutWithPermit2" | "swapExactOutput" | "executeExactInput"; args: unknown[]; value?: string };
-export type HelpersExecution = { context: ProtocolFacts["context"]; helpers: string; owner: string;
+export type HelpersExecution = { context: EconomicQuoteContext & { blockTimestamp: string | null }; helpers: string; owner: string;
   operation: HelpersExecutionRequest["operation"]; gas: string; blockTag: "latest" };
 export type TransactionFees = { context: ProtocolFacts["context"]; maxFeePerGas: string; maxPriorityFeePerGas: string };
 export type TransactionNonce = { context: ProtocolFacts["context"]; owner: string; blockTag: "pending"; nonce: string };
@@ -389,7 +398,7 @@ export type GovernanceSafePrincipal = {
 type PreviewOutput = { kind: number; token: string; id: string; amount: string };
 export type BasketMaxRequest = { driverToken: string; maximumAmountsIn: string[] };
 export type BasketMax = {
-  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  context: EconomicQuoteContext;
   helpers: string;
   orderedCoreAssets: string[];
   driverToken: string;
@@ -404,7 +413,7 @@ export type BasketPreviewRequest =
   | { mode: "redeem-exact-out"; minimumOutputs: { kind: number; token: string; id: string; minimumAmount: string }[] };
 export type BasketPreview = {
   basketModel?: QuoteModelPacket["protocol"];
-  context: { chainId: number; blockNumber: string; blockHash: string; observedAt: string };
+  context: EconomicQuoteContext;
   helpers: string;
 } & (
   | { mode: "issue-exact-in"; result: { netCygldOut: string; fees: PreviewFees; amountsInExact: string[]; orderedCoreAssets: string[] } }

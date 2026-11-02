@@ -1,5 +1,48 @@
 # Uniswap snapshot worker
 
+Complete CyberGold economic plans are priced by the existing Helpers
+`executeExactInput` function through one `eth_call` at `latest`. This applies to
+pure Market paths, ordered Core/Market branches and direct basket intents.
+Known saved plans skip SDK replay. SDK arithmetic chooses new paths, splits and
+funding shapes; a completed proposal receives its economic output from Helpers
+before publication. A reverted optional whole path can still use SDK traversal
+to construct a backward-prefix repair; that changed plan is simulated again.
+
+Quotes and execution preparation do not fetch a header or chain ID, nor reread
+a block to establish canonicality. Preparation makes a fresh `latest` execution
+call with the accepted fees, minimum outputs and actual recipient. Latest
+responses have null block number/hash and an explicit `latest` tag. An
+`eth_call` response does not contain the header; these responses claim no
+verified block identity. Basket/token previews, basket MAX, standalone SDK route
+quotes, legacy Core/Market quotation and Helpers gas preflight use the same
+latest-read boundary. Explicit historical/pinned callers and background
+indexing retain their real-hash contracts.
+
+Quote-only execution uses ephemeral balances and Helpers allowances for one
+synthetic payer. Funding adapters cover the configured ETH, WETH, USDC, USDT,
+PAXG, XAUt and configured CYGLD inputs. Pool balances, supply, reserve state,
+contract code and other accounts are never overridden. Unknown positive input
+currencies return the funding adapter's ordinary unsupported-input error;
+intermediate currencies require no funding override. Real-wallet funding,
+permit signatures and recipient behavior remain the wallet preflight's facts.
+
+Helpers accepts literal Market fees in its execution plan. Buy and residual
+conversions are observed with zero output-denominated Market fee; local policy
+arithmetic applies that fee to each measured gross output and records the final
+plan/net output. This leaves swap inputs and shared-pool execution unchanged.
+Sell fees are computed before execution, and the exact routed lot is allocated
+input minus that fee. Core fees come from execution. `pricingEvidence` retains
+the raw receipt separately from normalized quote amounts; cached observations
+and closed log projections retain the pricing and nomination origins.
+
+Identical successful simulations share one observation only within their
+owning search, preserving its original observation time and live nomination
+origins. Preparation always executes afresh. Changed funding reconstruction
+reuses measured conversion debits and only simulates a genuinely changed plan.
+Graph walks and normalized topology are also reused within the existing
+bootstrap scope; amounts, split rounding, origins and mutable pool state are
+never cached as topology. Later catalog and provider arrivals remain visible.
+
 Python owns RPC, inventory, event reconciliation and cached observations.
 The managed Node 26.10.0 JSONL worker receives raw-unit snapshots, quotes or
 simulates ordered branches, and reports missing bitmap/tick coverage to Python.
@@ -24,28 +67,24 @@ retire and reap the child. Supplier errors retain their existing public outcome;
 worker reuse does not change chain support, the selection clock, pricing slots
 or economic ranking.
 
-Known ordered AMM paths acquire their missing initial canonical pool snapshots
+New ordered AMM explorations acquire their missing initial pool snapshots
 concurrently. Replay consumes those observations in hop order and preserves the
-candidate's private post-state; bitmap/tick requests still follow exact SDK
-demand. Later ordinary read errors are consumed only when that hop is reached,
-and unused subscriptions are canceled and drained. Canonical disproof retains
-its existing effect on the whole quote.
+candidate's private post-state. Each distinct concentrated pool's first bitmap
+word starts after its snapshot, concurrently with sibling pools. Later bitmap
+words and initialized tick rows still follow exact SDK demand. Ordinary
+prefetch errors fall back to required reads; subscriptions are owned and drained.
+Unbound latest state and tick coverage stay outside persistent canonical banks,
+event advancement and completed cross-request getter caches. Exploratory state
+disproof affects its own construction/provider, not independently completed
+Helpers observations. SDK-head bounds no longer reject latest-priced candidates.
 
-A saved pure Market plan starts after the pinned head while ordinary Core
-basket preparation runs independently. Core and mixed plans still await their
-actual basket basis. Selected Market-only preparation omits the unused basket
-read. An ordinary basket-read failure affects dependent work, while a canonical
-disproof still invalidates every result. Both changes retain the existing
-selection clock, pricing capacity, comparator and parallel discovery suppliers.
-
-Core, Market and direct Uniswap quotes use the same structured route engine
-and completion-driven scheduler. Every swap candidate uses the pinned SDK
-simulation: V2, V3, V4, mixed and split routes, plus retained-route revalidation
-and caller-selected V3 paths. Contract Quoter and Router price calls are removed.
-Python acquires pool state at the pinned block and extends concentrated-liquidity
-tick coverage when the SDK requests it, within the existing producer deadline.
-SDK simulation accounts for shared state and intermediate remainders; Core
-replays shared pools in execution order before Helpers validates execution terms.
+Saved complete plans start while ordinary Core basket/path preparation runs
+independently. Both changes retain the existing selection clock, pricing
+capacity, comparator and parallel discovery suppliers. The structured SDK
+engine and completion-driven scheduler remain shared by V2, V3, V4, mixed and
+split exploration, retained-route construction and caller-selected V3 paths.
+Python extends concentrated-liquidity coverage as needed within the producer
+deadline; private pool state advances in actual swap order.
 Cold exact-output redemption can
 freshly price and qualify a complete initial seed before unrelated candidates
 refill the released pricing slots. Its seed estimate alone never establishes

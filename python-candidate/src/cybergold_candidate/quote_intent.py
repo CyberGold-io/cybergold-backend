@@ -16,8 +16,9 @@ from .route_search import RouteSearchRpc, RouteTarget
 from .token_preview import TokenPreviewRpc
 from .quote_revalidation import RetainedPlanChanged, core_bounds, revalidate, selected_route
 from .preview_errors import KnownPreviewError
-from .quote_errors import QuoteFailure, RpcTimeout, rpc_failure, public_quote_error
+from .quote_errors import QuoteFailure, rpc_failure, public_quote_error
 from .quote_budget import current_budget, SearchStopped
+from .rpc_block_context import LATEST_BLOCK, is_latest, rpc_block_parameter
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .issuance_capacity import capacity_amounts, read_capacity, read_supply_capacity, exhausted_capacity_error
 from .route_encoding import encode_route
@@ -147,16 +148,12 @@ class QuoteIntent:
         basket = BasketPreviewRpc(self.settings, rpc.w3)
         token = TokenPreviewRpc(self.settings, rpc.w3)
         started = time.perf_counter()
-        try:
-            async with asyncio.timeout(15):
-                block = (await budget.prepare(rpc.block(None)) if budget is not None else await rpc.block(None)) if block is None else block
-        except RpcTimeout:
-            raise
-        except TimeoutError:
-            raise RpcTimeout('RPC context acquisition timed out') from None
-        context = {'chainId': rpc.chain_id, 'blockNumber': str(block['number']),
-                   'blockHash': block['hash'], 'observedAt': self.now()}
-        metrics = {'rpcReads': 3, 'rpcReadsRequested': 3, 'rpcReadsCoalesced': 0,
+        block = deepcopy(LATEST_BLOCK) if block is None else block
+        latest = is_latest(block)
+        context = {'chainId': rpc.chain_id, 'blockNumber': None if latest else str(block['number']),
+                   'blockHash': None if latest else block['hash'], 'observedAt': self.now(),
+                   **({'blockTag': 'latest', 'verification': 'quote-observation'} if latest else {})}
+        metrics = {'rpcReads': 0, 'rpcReadsRequested': 0, 'rpcReadsCoalesced': 0,
                    'rpcReadsReused': 0, 'rpcReadsScope': 'coordinator', 'candidateCalls': 0, 'iterations': 0}
         memo, estimates = {}, set()
         recovery = None
@@ -233,11 +230,12 @@ class QuoteIntent:
                         if not improves(value):
                             provider_qualification_finish(probe, 'not-improved')
                             continue
-                        metrics['rpcReads'] += 1
-                        metrics['rpcReadsRequested'] += 1
-                        provider_qualification_stage('canonicality')
-                        async with asyncio.timeout(15):
-                            await rpc.assert_canonical(block)
+                        if not latest:
+                            metrics['rpcReads'] += 1
+                            metrics['rpcReadsRequested'] += 1
+                            provider_qualification_stage('canonicality')
+                            async with asyncio.timeout(15):
+                                await rpc.assert_canonical(block)
                         provider_qualification_stage('selection')
                         if budget is not None and not budget.qualified():
                             provider_qualification_finish(probe, 'cancelled')
@@ -701,7 +699,7 @@ class QuoteIntent:
                 response = await rpc.w3.provider.make_request('eth_call', [
                     {'to': Web3.to_checksum_address(self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS),
                      'data': contract.encode_abi('coreAttachedRecoveryAssets')},
-                    {'blockHash': block['hash'], 'requireCanonical': True}])
+                    rpc_block_parameter(block)])
             if 'error' in response:
                 raise rpc_failure(response['error'])
             return rpc.w3.codec.decode(['address[]'], bytes.fromhex(response['result'][2:]))[0]
@@ -862,7 +860,8 @@ class QuoteIntent:
                 quote_phase('capacity')
                 supply_values = await read_supply_capacity(rpc, self.settings, block, metrics, shared=quoted_ranking)
                 if error := exhausted_capacity_error(supply_values):
-                    await rpc.assert_canonical(block)
+                    if not latest:
+                        await rpc.assert_canonical(block)
                     raise error
             if self.history and epoch == self.history.epoch:
                 self.history.ensure_known_routes(engine, request, block, context)
@@ -948,13 +947,15 @@ class QuoteIntent:
                 result = deepcopy(qualified)
             if budget is not None:
                 await drain()
-            quote_phase('canonicality')
-            final_validation = provider_qualification_begin('canonicality')
+            final_stage = 'final-validation' if latest else 'canonicality'
+            quote_phase(final_stage)
+            final_validation = provider_qualification_begin(final_stage)
             with provider_qualification_scope(final_validation):
                 try:
                     qualification_terms(result)
-                    async with asyncio.timeout(15):
-                        await rpc.assert_canonical(block)
+                    if not latest:
+                        async with asyncio.timeout(15):
+                            await rpc.assert_canonical(block)
                 except asyncio.CancelledError:
                     freeze_quote_work()
                     provider_qualification_finish(final_validation, 'cancelled')
@@ -964,7 +965,7 @@ class QuoteIntent:
                     if isinstance(error, SnapshotChanged):
                         quote_qualified(False)
                     raise
-            if budget is not None:
+            if budget is not None and not latest:
                 budget.canonical_done()
             if context_error is not None:
                 raise context_error

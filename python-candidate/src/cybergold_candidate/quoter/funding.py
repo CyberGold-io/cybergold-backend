@@ -32,6 +32,8 @@ async def reconstruct(quoter, value, block, assets, weights, observations):
         return value
     if request['intent'] == 1 and any(row['kind'] != 1 for row in value['plan']['allocations']):
         return value
+    if value.get('pricingEvidence', {}).get('engine') == 'helpers-execution':
+        return await reconstruct_measured(quoter, value, block, assets, weights, observations)
     funded = {**request, 'inputs': deepcopy(value['inputs'])}
     with capture_paths() as traces:
         replay = await quoter.candidate(funded, 100, 'core-first', block, assets, weights,
@@ -84,4 +86,42 @@ async def reconstruct(quoter, value, block, assets, weights, observations):
         selected=plan, observations=observations, selection=False)
     proposal['request'] = deepcopy(request)
     proposal['searchCoverage'] = deepcopy(value['searchCoverage'])
+    return proposal if prefer_completed(proposal, value, scalar=True) else value
+
+
+async def reconstruct_measured(quoter, value, block, assets, weights, observations):
+    """Reuse completed execution measurements; only changed funding is repriced."""
+    request, plan = value['request'], deepcopy(value['plan'])
+    payment = request['inputs'][0]['currency'].lower()
+    measured = {row['operation']: row for row in value.get('conversionObservations', [])}
+    def consumed(operation, amount):
+        chosen, row = plan['conversions'].get(operation), measured.get(operation)
+        # A measured whole-conversion total cannot determine each split's
+        # debit. Preserve those shapes rather than infer branch principal.
+        if not chosen or not row or len(chosen['branches']) != 1 or row['inputCurrency'].lower() != payment:
+            return amount
+        return min(amount, int(row['consumedInput']))
+    for index, (allocation, branch) in enumerate(zip(plan['allocations'], plan['body']['branches'], strict=True)):
+        if branch['kind'] == 0:
+            acquisitions = branch['data']['acquisitions']
+            for asset_index, row in enumerate(acquisitions):
+                row['amountIn'] = str(consumed(f'{index}:acquire:{asset_index}', int(row['amountIn'])))
+            amount = sum(int(row['amountIn']) for row in acquisitions)
+        elif request['intent'] == 1:
+            original = int(branch['amountIn'])
+            routed = consumed(f'{index}:market', original - int(branch['data']['feeCygld']))
+            rate = get_market_fee_rate(quoter.engine.registry.chain, payment, request['outputCurrency'], 'exact-in')
+            amount = min(original, routed + quoted_fee(routed, rate))
+        else:
+            amount = consumed(f'{index}:market', int(branch['amountIn']))
+        if amount <= 0:
+            return value
+        allocation['amountIn'] = branch['amountIn'] = str(amount)
+    total = sum(int(row['amountIn']) for row in plan['allocations'])
+    if total >= int(value['inputs'][0]['amount']):
+        return value
+    funded = {**request, 'inputs': [{**value['inputs'][0], 'amount': str(total)}]}
+    proposal = await quoter.candidate(funded, 100, 'core-first', block, assets, weights,
+        selected=plan, observations=observations, selection=False)
+    proposal['request'] = deepcopy(request)
     return proposal if prefer_completed(proposal, value, scalar=True) else value

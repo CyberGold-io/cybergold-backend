@@ -1,4 +1,4 @@
-"""Wallet-bounded proportional basket MAX from one canonical Core snapshot."""
+"""Wallet-bounded proportional basket MAX using direct latest-state reads."""
 import asyncio
 from datetime import datetime, timezone
 
@@ -7,6 +7,7 @@ from pydantic import BaseModel, TypeAdapter
 from .basket_arithmetic import PPM, FP, ceil_div, gross_for_net
 from .basket_preview import BasketPreviewRpc, InvalidPreview, handle_basket_preview
 from .protocol_facts import ProtocolFactsRpc
+from .rpc_block_context import LATEST_BLOCK
 
 
 class BasketMaxRequest(BaseModel):
@@ -83,7 +84,7 @@ class BasketMax:
         # The retained fixed Helpers ABI establishes uint256 input bounds.
         self.rpc.encode(request)
         async with asyncio.timeout(15):
-            block = await self.rpc.block()
+            block = LATEST_BLOCK
             state = await self.rpc.state(block)
             assets, weights = state['assets'], state['weights']
             if len(request['maximumAmountsIn']) != len(assets):
@@ -108,15 +109,14 @@ class BasketMax:
                     budgets, weights, decimals,
                     state['conversions'], state['issueFee'], capacity, driver)
                 if amount:
-                    # All arithmetic inputs and the authoritative validation use
-                    # the same existing EIP-1898 hash/requireCanonical contract.
+                    # Helpers validates the computed funding at latest state;
+                    # this observation makes no pinned-block claim.
                     result = await self.rpc.preview(amounts, block)
                     net = result['netCygldOut']
                     if int(net) == 0:
                         amount, amounts = 0, [0] * len(assets)
-            await self.rpc.assert_canonical(block)
-            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                                'blockHash': block['hash'], 'observedAt': self.now()},
+            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': None,
+                                'blockHash': None, 'blockTag': 'latest', 'observedAt': self.now()},
                     'helpers': self.rpc.helpers, 'orderedCoreAssets': assets,
                     'driverToken': assets[driver], 'driverAmount': str(amount),
                     'maximumAmountsIn': [str(value) for value in amounts], 'netCygldOut': net}

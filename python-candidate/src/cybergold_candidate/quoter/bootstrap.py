@@ -16,7 +16,7 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
-from .discovery import route_identity
+from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
 
 
@@ -32,7 +32,8 @@ def current_bootstrap():
 def bootstrap_scope(session):
     token = _bootstrap.set(session)
     try:
-        yield session
+        with topology_scope(session.topology):
+            yield session
     finally:
         _bootstrap.reset(token)
 
@@ -42,7 +43,7 @@ class ProviderUnavailable(RuntimeError):
 
 
 class RouteBootstrap:
-    def __init__(self, providers, *, catalog=None):
+    def __init__(self, providers, *, catalog=None, nomination_only=False):
         self._loop = asyncio.get_running_loop()
         self._budget = current_budget()
         self._started_mono = self._loop.time()
@@ -54,6 +55,7 @@ class RouteBootstrap:
                          for provider in providers])
         self.providers = [(provider.name, provider) for provider in self._owners]
         self._queries, self._attempts, self._tasks = {}, [], set()
+        self.topology = TopologyCache()
         self._completed_offers = {}
         self._publication_sequence = 0
         self._close_errors = []
@@ -62,6 +64,9 @@ class RouteBootstrap:
         self.revision, self.reevaluations = 0, 0
         self.quick_reevaluations = 0
         self._catalog = catalog
+        # A Helpers-priced consumer treats supplier snapshots as exploratory
+        # inputs. Their disproof cannot invalidate independent execution results.
+        self.nomination_only = nomination_only
         self._catalog_input = self._catalog_identity()
         self._catalog_load = None
         self._handled_catalog_load = None
@@ -330,7 +335,10 @@ class RouteBootstrap:
                 self._tasks.add(task)
                 task.add_done_callback(lambda done: self._completed(done, attempt, entry))
         except SnapshotChanged:
-            raise
+            if not self.nomination_only:
+                raise
+            attempt['status'] = 'invalidated'
+            attempt['completedMs'] = self._elapsed_ms()
         except Exception as error:
             attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
             attempt['completedMs'] = self._elapsed_ms()
@@ -356,7 +364,9 @@ class RouteBootstrap:
                     attempt['firstCandidateMs'] = self._elapsed_ms()
                 yield {'branches': deepcopy(candidate), 'origins': [attempt['provider']]}
         except SnapshotChanged:
-            raise
+            if not self.nomination_only:
+                raise
+            attempt['feedErrors'] += 1
         except Exception:
             attempt['feedErrors'] += 1
         finally:
@@ -365,7 +375,9 @@ class RouteBootstrap:
                 try:
                     close()
                 except SnapshotChanged:
-                    raise
+                    if not self.nomination_only:
+                        raise
+                    attempt['feedErrors'] += 1
                 except Exception:
                     attempt['feedErrors'] += 1
 
@@ -399,7 +411,8 @@ class RouteBootstrap:
             attempt['status'] = 'unavailable'
         except SnapshotChanged:
             attempt['status'] = 'invalidated'
-            raise
+            if not self.nomination_only:
+                raise
         except asyncio.CancelledError:
             attempt['status'] = 'cancelled'
             attempt['cancelledMs'] = self._elapsed_ms()
@@ -527,10 +540,11 @@ class RouteBootstrap:
         outcomes.extend(await asyncio.gather(*(close_provider(provider) for provider in self._owners),
                                             return_exceptions=True))
         self._close_errors = [error for error in outcomes if isinstance(error, Exception)
-                              and not isinstance(error, SnapshotChanged)]
+                              and (self.nomination_only or not isinstance(error, SnapshotChanged))]
         self._finished_ms = self._elapsed_ms()
+        self.topology.clear()
         disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
-        if disproof is not None:
+        if disproof is not None and not self.nomination_only:
             raise disproof
 
     async def close(self):

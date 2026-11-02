@@ -17,6 +17,7 @@ from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_hints
 from .custom_routes import CustomRoutes
 from .contracts import path_nomination
+from .discovery import current_topology, route_identity
 from .route_tools import RouteQuery, round_robin
 
 
@@ -51,10 +52,13 @@ def adapt_candidates(candidates, source, core, *, market=False, anchor=None):
     seen = {}
     for candidate, origins in candidates:
         try:
-            weights = weighted_routes(candidate)
-            from .discovery import route_identity
-            identity = tuple((weight['sharePpm'], route_identity(row['hops']))
-                for row, weight in zip(candidate, weights, strict=True))
+            topology = current_topology()
+            if topology is not None:
+                identity = topology.nomination_identity(candidate)
+            else:
+                weights = weighted_routes(candidate)
+                identity = tuple((weight['sharePpm'], route_identity(row['hops']))
+                    for row, weight in zip(candidate, weights, strict=True))
             if market and any(pool_identity(next(hop for hop in (row['hops'] if source.lower() == core.lower()
                     else reversed(row['hops'])) if 'pool' in hop)['pool']) != anchor for row in candidate):
                 continue

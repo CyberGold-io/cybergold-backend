@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from copy import deepcopy
 
 from ..basket_preview import InvalidPreview
+from ..recovery_rpc import SnapshotChanged
 from ..route_quote_engine import RouteQuoteEngine
 from ..route_scheduler import raise_snapshot_disproof
 from ..route_work_slots import engine_work, required_state_wait
@@ -28,7 +29,7 @@ def pool_state(bank, pool):
 
 
 @asynccontextmanager
-async def initial_snapshots(engine, route, block, canonical):
+async def initial_snapshots(engine, route, block, canonical, candidate):
     """Start immutable path reads together; consume their results in hop order."""
     physical = [hop for hop in route if 'pool' in hop]
     enriched = RouteQuoteEngine.enrich_branches(engine, [{'hops': physical}])[0]['hops'] if physical else []
@@ -41,21 +42,54 @@ async def initial_snapshots(engine, route, block, canonical):
             if same_observed_pool(state, pool)), None)
 
     reads = []
+    async def prepare(pool, zero_for_one):
+        state = observed(pool)
+        if state is None:
+            state = await engine.registry.snapshot(pool, block)
+        if pool['protocol'] in ('v3', 'v4'):
+            try:
+                word = ((int(state['tick']) // int(state['tickSpacing']))
+                        + (0 if zero_for_one else 1)) >> 8
+                state = await engine.registry.extend_ticks(state,
+                    [{'poolId': state['id'], 'wordPositions': [word], 'ticks': []}], block)
+            except SnapshotChanged:
+                raise
+            except Exception:
+                # This first-word observation is advisory. The unchanged SDK
+                # continuation still owns exact required reads and their errors.
+                pass
+        return state
+
+    def merge_coverage(target, state):
+        for field, key in (('bitmapWords', 'wordPosition'), ('ticks', 'index')):
+            if field in state:
+                rows = {int(row[key]): row for row in state[field]}
+                rows.update({int(row[key]): row for row in target.get(field, [])})
+                target[field] = deepcopy(list(rows.values()))
+
     async def acquire(pool):
         pool = pools[id(pool)]
-        if observed(pool) is None:
-            read = next(task for previous, task in reads if same_observed_pool(pool, previous))
+        read = next((task for previous, task in reads if same_observed_pool(pool, previous)), None)
+        if read is not None:
             async with required_state_wait():
                 state = await read
             # A sibling may have filled canonical coverage while this read was
             # pending. Never replace that chosen observation with older coverage.
             if observed(pool) is None:
                 canonical[pool['id']] = {**state, 'id': pool['id']}
+            for bank in (canonical, candidate):
+                for previous in bank.values():
+                    if same_observed_pool(previous, pool):
+                        # Immutable coverage can fill a repeated pool without
+                        # replacing its advanced private price/tick/liquidity.
+                        merge_coverage(previous, state)
 
     try:
-        for pool in pools.values():
-            if observed(pool) is None and not any(same_observed_pool(pool, previous) for previous, _ in reads):
-                reads.append((pool, asyncio.create_task(engine.registry.snapshot(pool, block))))
+        for original, resolved in zip(physical, enriched, strict=True):
+            pool = resolved['pool']
+            if (observed(pool) is None or pool['protocol'] in ('v3', 'v4')) and not any(
+                    same_observed_pool(pool, previous) for previous, _ in reads):
+                reads.append((pool, asyncio.create_task(prepare(pool, original['zeroForOne']))))
         yield acquire
     finally:
         for _, task in reads:
@@ -81,7 +115,7 @@ async def price_path(engine, route, amount, block, bank, canonical):
             native = paths([], source, physical_source)
             leading = native[0] if native and 'pool' in route[0] else []
     current, used = amount, amount
-    async with initial_snapshots(engine, route if current else [], block, canonical) as acquire:
+    async with initial_snapshots(engine, route if current else [], block, canonical, bank) as acquire:
         for index, hop in enumerate(route):
             if not current:
                 break

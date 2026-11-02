@@ -1,18 +1,15 @@
-"""Subscription-owned canonical publication beside the unchanged Quoter.
+"""Subscription-owned publication of completed Helpers quote observations.
 
-The producer callback only snapshots/enqueues. Canonical reads and delivery run
-in a separate owned consumer, never inside the producer's selection budget.
+The producer callback snapshots/enqueues. Block verification belongs to
+execution preparation, not to delivery of a quote observation.
 """
 import asyncio
 from copy import deepcopy
-import json
-import logging
 
 from .quoter.ranking import prefer_completed
 from .quoter.provenance import merge_origins
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.types import EconomicRequest
-from .quote_errors import public_quote_error
 from .recovery_rpc import SnapshotChanged
 from .telemetry import observe
 
@@ -54,24 +51,6 @@ class CanonicalPublication:
                 continue
             if self.closed or not self.preferred(value):
                 continue
-            if kind == 'candidate':
-                context = value['context']
-                try:
-                    await self.quoter.engine.registry.get_rpc().assert_canonical({
-                        'number': int(context['blockNumber']), 'hash': context['blockHash']})
-                except SnapshotChanged as error:
-                    self.context = deepcopy(context)
-                    self.disproof = error
-                    raise
-                except Exception as error:
-                    # A failed read leaves this candidate unconfirmed. The
-                    # producer and its terminal canonical assertion continue.
-                    observe(lambda: logging.getLogger('cybergold.candidate').info(json.dumps({
-                        'event': 'economic_quote_refinement', 'phase': 'canonical-publication',
-                        'code': public_quote_error(error)['code']})))
-                    continue
-            if self.closed or not self.preferred(value):
-                continue
             self.best = {**attach_reuse_sample(value),
                          'observation': {'source': 'search', 'refresh': self.refresh}}
             await self.publish({'type': 'qualified', 'value': deepcopy(self.best)})
@@ -104,7 +83,7 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             # producer instead of being lost in an unobserved task exception.
             await consumer
         terminal = await producer
-        # The returned producer winner has already passed its canonical check.
+        # The returned winner has completed its Helpers execution simulation.
         publication.queue.put_nowait(('terminal', deepcopy(terminal)))
         publication.queue.put_nowait(None)
         await consumer

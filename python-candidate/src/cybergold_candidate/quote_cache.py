@@ -17,6 +17,7 @@ from .shared_reads import SharedReads
 from .quote_errors import RpcTimeout
 from .rpc_diagnostics import bind_quote_error, quote_failure_context, quote_candidate_scope
 from .quote_budget import budget_entry, current_budget
+from .rpc_block_context import LATEST_BLOCK, is_latest
 
 
 class BasketMath:
@@ -32,8 +33,9 @@ class BasketMath:
         self.hits = 0
 
     async def read(self, chain, block, address, data, produce):
-        key = (chain, block['hash'].lower(), address.lower(), data.lower())
-        row = self.completed.get(key) if chain == 1 else None
+        key = (chain, None if is_latest(block) else block['hash'].lower(), address.lower(), data.lower())
+        immutable = chain == 1 and not is_latest(block)
+        row = self.completed.get(key) if immutable else None
         if row and self.now() - row[0] < 10:
             self.hits += 1
             self.completed.move_to_end(key)
@@ -41,7 +43,7 @@ class BasketMath:
         self.completed.pop(key, None)
         async def fetch():
             result = await produce()  # Decoding/contract errors raise normally.
-            if chain == 1:
+            if immutable:
                 self.completed[key] = (self.now(), deepcopy(result))
                 self.completed.move_to_end(key)
                 while len(self.completed) > self.limit:
@@ -68,7 +70,8 @@ class GrossSeeds:
         total = sum(int(t['amount']) for t in request['targets'])
         allocations = [(t['inputAsset'].lower(), t['outputAsset'].lower(),
                         int(t['amount']) * 1_000_000 // max(1, total)) for t in request['targets']]
-        return (context['chainId'], context['blockHash'].lower(), request['token'].lower(),
+        block_hash = context.get('blockHash')
+        return (context['chainId'], block_hash.lower() if block_hash else None, request['token'].lower(),
                 request['quoteToken'].lower(), request['native'], request['adapter'].lower(),
                 tuple(a.lower() for a in request['orderedAssets']), tuple(allocations))
 
@@ -113,11 +116,12 @@ class VerifiedGrossSeed:
         self.rows, self.limit, self.now = OrderedDict(), limit, now
 
     def key(self, request, context):
-        return (context['chainId'], context['blockHash'].lower(), json.dumps(
+        block_hash = context.get('blockHash')
+        return (context['chainId'], block_hash.lower() if block_hash else None, json.dumps(
             {k: v for k, v in request.items() if k not in ('deadline', 'retainedPlan')}, sort_keys=True, separators=(',', ':')))
 
     def suggest(self, request, context):
-        if context['chainId'] != 1:
+        if context['chainId'] != 1 or context.get('blockHash') in (None, 'latest') or context.get('blockTag') == 'latest':
             return None
         key = self.key(request, context)
         row = self.rows.get(key)
@@ -128,7 +132,8 @@ class VerifiedGrossSeed:
         return None
 
     def observe(self, request, result):
-        if request['mode'] != 'redeem-exact-out' or result['context']['chainId'] != 1:
+        if (request['mode'] != 'redeem-exact-out' or result['context']['chainId'] != 1
+                or result['context'].get('blockHash') in (None, 'latest') or result['context'].get('blockTag') == 'latest'):
             return
         key = self.key(request, result['context'])
         # A repeated success does not extend the original acquisition lifetime.
@@ -150,7 +155,7 @@ class Subscriber:
 
 
 class IntentSharing:
-    """N6b: one producer for a full request+hash, latest-frame replay per client.
+    """One producer per full request and read context, with latest-frame replay.
 
     Slow clients cannot block the producer; a last disconnect cancels it.
     Results are removed at completion, including on Mainnet (no result TTL).
@@ -186,17 +191,18 @@ class IntentSharing:
             await budget.prepare(emit({'type': 'model', 'value': history.packet(request)}, epoch))
         if self.service.routes.rpc is None:
             self.service.routes.rpc = self.rpc_factory(self.service.settings)
-        rpc = self.service.routes.rpc
-        try:
-            async with asyncio.timeout_at(budget.deadline):
-                block = await self.head() if self.head else await rpc.block(None)
-        except RpcTimeout:
-            raise
-        except TimeoutError:
-            # This deadline encloses only chain/head RPC reads. Preserve their
-            # cause when the outer timer wins the provider's equal deadline.
-            raise RpcTimeout('RPC context acquisition timed out') from None
-        key = (block['hash'].lower(), json.dumps(request, sort_keys=True, separators=(',', ':')))
+        if self.head:
+            try:
+                async with asyncio.timeout_at(budget.deadline):
+                    block = await self.head()
+            except RpcTimeout:
+                raise
+            except TimeoutError:
+                raise RpcTimeout('RPC context acquisition timed out') from None
+        else:
+            block = deepcopy(LATEST_BLOCK)
+        key = (None if is_latest(block) else block['hash'].lower(),
+               json.dumps(request, sort_keys=True, separators=(',', ':')))
         entry = self.pending.get(key)
         subscriber = Subscriber()
         if entry is None:
