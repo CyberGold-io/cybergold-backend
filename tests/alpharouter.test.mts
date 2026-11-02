@@ -162,16 +162,39 @@ test('explicit Sandbox fork dependencies retain 31338 through actual Alpha and S
   assert.ok(selected[0].every((branch: any) => branch.hops.every((hop: any) => !hop.pool || hop.pool.token0.chainId === 31338)));
 });
 
-test('Alpha publishes each proposed topology before awaiting its SDK price', async () => {
+test('Alpha publishes simultaneous sibling topologies in one ordered batch before its SDK price', async () => {
   const fixture = cases.find(value => value.id === 'split-exact-in')!;
   const published: any[] = [];
-  const selected = await routeRequest({ id: 'early-alpha', chainId: 1, blockNumber: BLOCK,
+  const pricedPaths: string[] = [];
+  let entered!: () => void, release!: () => void;
+  const firstCallback = new Promise<void>(resolve => { entered = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let completed = false;
+  const calculation = routeRequest({ id: 'early-alpha', chainId: 1, blockNumber: BLOCK,
     source: fixture.tokenIn.address, target: fixture.tokenOut.address,
     amount: fixture.amount, pools: fixture.pools }, async request => {
-    assert.ok(published.length >= 2, 'all proposed sibling paths precede the first deep price callback');
+    assert.equal(published.length, 1, 'one simultaneous route batch precedes the first deep price callback');
+    assert.ok(published[0].length >= 2, 'the complete sibling path batch is already available');
+    const identity = JSON.stringify(request.branches[0].hops.map((hop: any) => hop.pool.id));
+    if (!pricedPaths.includes(identity)) pricedPaths.push(identity);
+    entered();
+    await held;
     return { quote: null };
   }, batch => { published.push(batch); });
+  void calculation.then(() => { completed = true; });
+  await firstCallback;
+  assert.equal(published.length, 1);
+  assert.ok(published[0].length >= 2);
+  assert.equal(completed, false);
+  release();
+  const selected = await calculation;
   assert.ok(published.length > 0);
+  assert.equal(published.length, 1);
+  const identities = published[0].map((candidate: any[]) => candidate.map(branch => branch.hops
+    .map((hop: any) => [hop.pool?.id, hop.zeroForOne, hop.kind, hop.currencyOut])));
+  assert.equal(new Set(identities.map((identity: any) => JSON.stringify(identity))).size, published[0].length);
+  assert.deepEqual(published[0].map((candidate: any[]) => JSON.stringify(candidate[0].hops
+    .map((hop: any) => hop.pool.id))), pricedPaths);
   assert.deepEqual(selected, []);
   assert.ok(published.every(batch => batch.every((candidate: any[]) => candidate.every(branch => !('quote' in branch)))));
 });

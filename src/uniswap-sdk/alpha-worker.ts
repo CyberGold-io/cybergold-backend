@@ -44,6 +44,7 @@ export async function routeRequest(request: Request, quote: (value: any) => Prom
   const offered = new Set<string>();
   let adapter: ReturnType<typeof createAlphaRouter>;
   const nominate = (routes: any[]) => {
+    const nominees: any[] = [];
     for (const route of routes) {
       const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
       const identity = JSON.stringify(hops.map(hop => hop.pool
@@ -54,9 +55,10 @@ export async function routeRequest(request: Request, quote: (value: any) => Prom
         offered.add(identity);
         // Actual Alpha topology is useful before its percentage observations.
         // Helpers still prices any complete plan that consumes this hint.
-        publish([[{ amountIn: request.amount, hops }]]);
+        nominees.push([{ amountIn: request.amount, hops }]);
       }
     }
+    if (nominees.length) publish(nominees);
   };
   adapter = createAlphaRouter({ chainId: request.chainId, blockNumber: request.blockNumber, pools: request.pools,
     nominateRoutes: nominate,
