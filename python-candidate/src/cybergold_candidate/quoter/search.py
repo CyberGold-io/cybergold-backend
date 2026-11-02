@@ -46,6 +46,14 @@ PAXG = dict(TOKENS)['paxg']
 CORE_SHARES = (0, 25, 50, 75, 100)
 
 
+def uses_basket_basis(request, selected=None):
+    """Market allocations have no dependency on Core's basket preparation."""
+    if request['intent'] not in (0, 1):
+        return request['intent'] != 3
+    return selected is None or any(row['kind'] == 0 and int(row['amountIn'])
+                                   for row in selected['allocations'])
+
+
 async def alongside_bootstrap(ordinary, bootstrap):
     """Optional cached work cannot prolong otherwise-completed discovery.
 
@@ -320,18 +328,35 @@ class Quoter:
         registry = self.engine.registry
         rpc = registry.get_rpc()
         block = await budget.prepare(rpc.block(None))
-        assets, weights = await budget.prepare(self.basis(block)) if request['intent'] != 3 else ([], [])
-        if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
-            raise InvalidPreview('Basket input currencies must follow Core basket order.')
-        if request['intent'] != 3:
+        assets, weights = [], []
+        route_bootstrap = None
+        async def prepare_basis():
+            nonlocal assets, weights
+            assets, weights = await budget.prepare(self.basis(block))
+            if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
+                raise InvalidPreview('Basket input currencies must follow Core basket order.')
             self.seed_routes(request, assets)
+            if route_bootstrap is not None:
+                route_bootstrap.refresh_catalog()
+        preparation = asyncio.create_task(prepare_basis()) if request['intent'] != 3 else None
+        async def prepared():
+            if preparation is not None:
+                try:
+                    # Many candidate/feed owners await this one preparation.
+                    # The producer below retains ownership through cleanup.
+                    await asyncio.shield(preparation)
+                except SnapshotChanged:
+                    raise
+                except Exception as error:
+                    failures.append(error)
+                    return False
+            return True
         direct_funding = (await budget.prepare(self.direct_basket_funding(request, block))
                           if request['intent'] == 3 else None)
         # At zero supply the original request still receives Core's ordinary
         # identified rejection; zero funding must not become a successful quote.
         default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
         best, failures, observations = None, [], {}
-        route_bootstrap = None
         session = SearchSession(self.optional_limit,
             self.exploration_seed if self.exploration_seed is not None else randbits(64))
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
@@ -340,6 +365,8 @@ class Quoter:
             nonlocal best
             errors = failures if failure_sink is None else failure_sink
             try:
+                if uses_basket_basis(request, selected) and not await prepared():
+                    return
                 funding = default_funding if funding is None else funding
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
                 value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
@@ -483,16 +510,26 @@ class Quoter:
                 # Each neighbor proceeds independently. Neither awaits the
                 # other's acquisition, nor changes E17's exact-seed event.
                 await owned_reads(replay_neighbor('upper'), replay_neighbor('lower'))
-            async def ordinary_search():
+            async def ordinary_body():
+                if not await prepared():
+                    return
                 ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
-                    observations=observations, seeded=seed is not None, core_only=core_only), seeded(), limited(),
+                    observations=observations, seeded=seed is not None, core_only=core_only), limited(),
                     owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
                 if neighbor_task is None:
                     await ordinary
                 else:
                     await alongside_bootstrap(ordinary, nearby())
 
+            async def ordinary_search():
+                # A saved Market plan can qualify at the pinned head while
+                # independent Core preparation continues. Every other feed
+                # retains its ordinary real-basket dependency.
+                await owned_reads(seeded(), ordinary_body())
+
             async def provider_arrival():
+                if not await prepared():
+                    return
                 # Late AMM nominations receive the same optional family and
                 # partial-prefix work as the initial/catalog snapshots. Reuse
                 # the existing starts/resolved allowance and selection clock;
@@ -503,6 +540,8 @@ class Quoter:
                                   for share, order in grid)))
 
             async def provider_quick():
+                if not await prepared():
+                    return
                 # Ready nominations can qualify while an older detailed pass
                 # still owns slow state reads. These remain complete economic
                 # candidates under the same comparator and selection budget.
@@ -517,11 +556,22 @@ class Quoter:
         except SearchStopped:
             pass
         finally:
+            preparation_error = None
+            if preparation is not None:
+                if not preparation.done():
+                    preparation.cancel()
+                outcome, = await asyncio.gather(preparation, return_exceptions=True)
+                if isinstance(outcome, SnapshotChanged):
+                    preparation_error = outcome
+                elif isinstance(outcome, Exception):
+                    failures.append(outcome)
             measured = current_route_observations()
             if measured is not None and route_bootstrap is not None:
                 # The session has drained before exposing its terminal outcome,
                 # including no-route, context disproof and caller cancellation.
                 measured.discovery = route_bootstrap.metrics
+            if preparation_error is not None:
+                raise preparation_error
         budget.cleanup_done()
         if best is not None and not budget.stop.is_set():
             budget.finish_selection('complete')
@@ -561,7 +611,8 @@ class Quoter:
         async def replay():
             rpc = self.engine.registry.get_rpc()
             block = await budget.prepare(rpc.block(None))
-            assets, weights = await budget.prepare(self.basis(block)) if request['intent'] != 3 else ([], [])
+            assets, weights = (await budget.prepare(self.basis(block))
+                               if uses_basket_basis(request, selected) else ([], []))
             if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
                 raise InvalidPreview('Basket input currencies must follow Core basket order.')
             value = await budget.prepare(self.candidate(request, 100, 'core-first', block, assets, weights,
