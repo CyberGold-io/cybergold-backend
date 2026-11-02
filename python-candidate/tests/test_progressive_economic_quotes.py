@@ -49,7 +49,12 @@ class ProgressiveFixture(unittest.IsolatedAsyncioTestCase):
         return {**deepcopy(self.base), 'quotedOutput': str(output), **changes}
 
     def service(self, script, canonical=None, store=None):
-        return EconomicQuotes(ScriptedQuoter(script, canonical), store or SharedStore())
+        service = EconomicQuotes(ScriptedQuoter(script, canonical), store or SharedStore())
+        self.addAsyncCleanup(service.close)
+        return service
+
+    async def persisted(self, service):
+        await asyncio.gather(*tuple(service.background))
 
 
 class ProgressiveTests(ProgressiveFixture):
@@ -71,6 +76,7 @@ class ProgressiveTests(ProgressiveFixture):
             frames.append(deepcopy(frame))
         service = self.service(script)
         result = await service.progressive(economic_request(), publish)
+        await self.persisted(service)
         self.assertEqual(result['routeOrigins']['discoveryProviders'],
                          ['cybergold-custom', 'uniswap-alpharouter'])
         self.assertEqual(result['quotedOutput'], first['quotedOutput'])
@@ -79,17 +85,19 @@ class ProgressiveTests(ProgressiveFixture):
         stored = service.store.rows[service.store.capture_scope(economic_request())]
         self.assertEqual(stored['routeOrigins'], result['routeOrigins'])
 
-    async def test_producer_disproof_cannot_release_a_held_quote_through_upper_cancellation(self):
+    async def test_neighbor_sdk_disproof_does_not_retract_a_completed_helpers_quote(self):
         from cybergold_candidate.quoter import search
+        from cybergold_candidate.quote_budget import QuoteBudget, budget_context
         from unittest.mock import patch
-        # Exercise the real Quoter neighbor ownership, publication queue and
-        # sibling cancellation. The candidate stand-in changes no chain state.
+        # Candidate construction cannot invalidate the independent completed
+        # plan. This component oracle never calls real Helpers.
         for fatal_side in ['upper', 'lower']:
             with self.subTest(fatal_side=fatal_side):
                 q = Quotes(Engine())
                 q.engine.registry.ensure_loaded = AsyncMock()
                 candidate = q.candidate
                 ordinary_ready, upper_started = asyncio.Event(), asyncio.Event()
+                disproved, budget = asyncio.Event(), QuoteBudget()
                 frames = []
                 async def measured(*args, **kwargs):
                     side = (kwargs.get('selected') or {}).get('_side')
@@ -97,12 +105,14 @@ class ProgressiveTests(ProgressiveFixture):
                         upper_started.set()
                         await ordinary_ready.wait()
                         if fatal_side == 'upper':
+                            disproved.set()
                             raise SnapshotChanged('upper context changed')
                         await asyncio.Event().wait()
                     if side == 'lower':
                         await upper_started.wait()
                         await ordinary_ready.wait()
                         if fatal_side == 'lower':
+                            disproved.set()
                             raise SnapshotChanged('lower context changed')
                         await asyncio.Event().wait()
                     return await candidate(*args, **kwargs)
@@ -110,11 +120,15 @@ class ProgressiveTests(ProgressiveFixture):
                 async def proposals_neighbors():
                     return {side: {'identity': side, 'quote': {'side': side}} for side in ['upper', 'lower']}
                 def proposals(quote, *_):
-                    return [{'plan': {'_side': quote['side']}, 'inputs': economic_request()['inputs']}]
+                    plan = deepcopy(self.base['plan'])
+                    plan['_side'] = quote['side']
+                    return [{'plan': plan, 'inputs': economic_request()['inputs']}]
                 async def publish(frame):
                     frames.append(deepcopy(frame))
                     if frame['type'] == 'qualified':
                         ordinary_ready.set()
+                        await disproved.wait()
+                        budget.finish_selection('best-initial')
                 # Keep ordinary discovery alive until the fatal neighbor is
                 # observed, rather than letting normal completion cancel it.
                 async def discovery(*_):
@@ -123,25 +137,25 @@ class ProgressiveTests(ProgressiveFixture):
                 service = EconomicQuotes(q, SharedStore())
                 service.store.neighbors = lambda *_args, **_kwargs: proposals_neighbors()
                 with patch.object(search, 'neighbor_proposals', proposals):
-                    async with asyncio.timeout(2):
-                        with self.assertRaises(SnapshotChanged):
-                            await service.progressive(economic_request(), publish)
+                    with budget_context(budget):
+                        async with asyncio.timeout(2):
+                            value = await service.progressive(economic_request(), publish)
+                self.assertGreater(int(value['quotedOutput']), 0)
                 self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
-                self.assertFalse(any(frame['type'] == 'upper-replay-settled' for frame in frames))
 
-    async def test_upper_settlement_follows_canonical_candidate_without_an_extra_read(self):
+    async def test_upper_settlement_follows_candidate_delivery_without_an_extra_read(self):
         started, release = asyncio.Event(), asyncio.Event()
-        async def canonical(_):
-            started.set()
-            await release.wait()
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
             await callback({'type': 'upper-replay-settled'})
             return self.value(100)
         frames = []
         async def publish(frame):
+            if frame['type'] == 'qualified':
+                started.set()
+                await release.wait()
             frames.append(deepcopy(frame))
-        service = self.service(script, canonical)
+        service = self.service(script)
         task = asyncio.create_task(service.progressive(economic_request(), publish))
         await asyncio.wait_for(started.wait(), 1)
         self.assertEqual(frames, [])
@@ -149,34 +163,33 @@ class ProgressiveTests(ProgressiveFixture):
         result = await asyncio.wait_for(task, 1)
         self.assertEqual([frame['type'] for frame in frames], ['qualified', 'upper-replay-settled'])
         self.assertEqual(result['quotedOutput'], '100')
-        self.assertEqual(len(service.quoter.canonical_calls), 1)
+        self.assertEqual(service.quoter.canonical_calls, [])
 
-    async def test_upper_settlement_does_not_hide_canonical_disproof(self):
-        async def canonical(_):
-            raise SnapshotChanged('captured context changed')
+    async def test_upper_settlement_does_not_hide_owned_producer_disproof(self):
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
             await callback({'type': 'upper-replay-settled'})
-            return self.value(100)
+            raise SnapshotChanged('owned producer disproved its observation')
         frames = []
         async def publish(frame):
             frames.append(deepcopy(frame))
-        service = self.service(script, canonical)
+        service = self.service(script)
         with self.assertRaises(SnapshotChanged):
             await service.progressive(economic_request(), publish)
-        self.assertEqual(frames, [])
+        self.assertEqual(service.quoter.canonical_calls, [])
 
-    async def test_upper_settlement_survives_ordinary_candidate_confirmation_failure(self):
-        async def canonical(_):
-            raise OSError('temporary provider failure')
+    async def test_upper_settlement_survives_ordinary_candidate_failure_before_nomination(self):
         async def script(value, callback, **_):
-            await callback({'type': 'qualified', 'value': self.value(100)})
+            try:
+                raise OSError('candidate simulation unavailable')
+            except OSError:
+                pass
             await callback({'type': 'upper-replay-settled'})
             return self.value(200)
         frames = []
         async def publish(frame):
             frames.append(deepcopy(frame))
-        service = self.service(script, canonical)
+        service = self.service(script)
         result = await service.progressive(economic_request(), publish)
         self.assertEqual([frame['type'] for frame in frames], ['upper-replay-settled', 'qualified'])
         self.assertEqual(result['quotedOutput'], '200')
@@ -211,36 +224,38 @@ class ProgressiveTests(ProgressiveFixture):
         self.assertIn('reuseSample', result)
         self.assertEqual((await service.store.lookup(economic_request(), scope=str(economic_request())))['quotedOutput'], '200')
 
-    async def test_candidate_callback_does_not_wait_for_canonical_or_transport(self):
-        canonical_started, release_canonical, search_done = (asyncio.Event() for _ in range(3))
-        async def canonical(_):
-            canonical_started.set(); await release_canonical.wait()
+    async def test_candidate_callback_does_not_wait_for_transport(self):
+        delivery_started, release_delivery, search_done = (asyncio.Event() for _ in range(3))
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
             search_done.set()
-            await canonical_started.wait()
+            await delivery_started.wait()
             return self.value(200)
         frames = []
-        service = self.service(script, canonical)
-        task = asyncio.create_task(service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=frames.append(frame))))
-        await asyncio.wait_for(canonical_started.wait(), 1)
+        async def publish(frame):
+            delivery_started.set()
+            await release_delivery.wait()
+            frames.append(frame)
+        service = self.service(script)
+        task = asyncio.create_task(service.progressive(economic_request(), publish))
+        await asyncio.wait_for(delivery_started.wait(), 1)
         self.assertTrue(search_done.is_set())
         self.assertFalse(frames)
-        release_canonical.set()
+        release_delivery.set()
         result = await task
         self.assertEqual(result['quotedOutput'], '200')
-        # Only the queued intermediate needed a publication assertion; the
-        # normal terminal producer result already has its own canonical check.
-        self.assertEqual(len(service.quoter.canonical_calls), 1)
+        self.assertEqual(service.quoter.canonical_calls, [])
 
-    async def test_serial_confirmation_cannot_publish_a_worse_older_tuple(self):
+    async def test_serial_delivery_cannot_publish_a_worse_older_tuple(self):
         started, release = asyncio.Event(), asyncio.Event()
         calls = 0
-        async def canonical(_):
+        frames = []
+        async def publish(frame):
             nonlocal calls
             calls += 1
             if calls == 1:
                 started.set(); await release.wait()
+            frames.append(frame)
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
             await started.wait()
@@ -248,29 +263,27 @@ class ProgressiveTests(ProgressiveFixture):
             await callback({'type': 'qualified', 'value': self.value(200)})
             release.set()
             return self.value(250)
-        frames = []
-        service = self.service(script, canonical)
-        result = await service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=frames.append(frame)))
+        service = self.service(script)
+        result = await service.progressive(economic_request(), publish)
         self.assertEqual([f['value']['quotedOutput'] for f in frames], ['100', '300'])
         self.assertEqual(result['quotedOutput'], '300')
 
-    async def test_provider_failure_leaves_candidate_unconfirmed_and_terminal_continues(self):
-        attempted = asyncio.Event()
-        async def canonical(_):
-            attempted.set(); raise QuoteFailure('rpc-unavailable')
+    async def test_quote_publication_never_calls_a_failing_canonical_hook(self):
+        canonical = AsyncMock(side_effect=QuoteFailure('rpc-unavailable'))
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
-            await attempted.wait()
             return self.value(200)
         frames = []
         service = self.service(script, canonical)
         result = await service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=frames.append(frame)))
-        self.assertEqual([f['value']['quotedOutput'] for f in frames], ['200'])
+        self.assertEqual([f['value']['quotedOutput'] for f in frames], ['100', '200'])
         self.assertEqual(result['quotedOutput'], '200')
+        canonical.assert_not_awaited()
+        self.assertEqual(service.quoter.canonical_calls, [])
 
     async def test_disproof_in_publisher_cancels_search_and_prevents_save(self):
         drained = asyncio.Event()
-        async def canonical(_):
+        async def publish(_):
             raise SnapshotChanged('existing disproof')
         async def script(value, callback, **_):
             try:
@@ -279,16 +292,16 @@ class ProgressiveTests(ProgressiveFixture):
             finally:
                 drained.set()
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
-        service = self.service(script, canonical, store)
+        service = self.service(script, store=store)
         with self.assertRaises(SnapshotChanged) as failure:
-            await asyncio.wait_for(service.progressive(economic_request(), AsyncMock()), 1)
+            await asyncio.wait_for(service.progressive(economic_request(), publish), 1)
         self.assertEqual(failure.exception.economic_context, self.base['context'])
         self.assertTrue(drained.is_set())
         store.save.assert_not_called()
 
     async def test_racing_terminal_does_not_outrun_publisher_disproof(self):
         checking, release = asyncio.Event(), asyncio.Event()
-        async def canonical(_):
+        async def publish(_):
             checking.set(); await release.wait(); raise SnapshotChanged('late canonical disproof')
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
@@ -296,7 +309,7 @@ class ProgressiveTests(ProgressiveFixture):
             return self.value(200)
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
         with self.assertRaises(SnapshotChanged):
-            await self.service(script, canonical, store).progressive(economic_request(), AsyncMock())
+            await self.service(script, store=store).progressive(economic_request(), publish)
         store.save.assert_not_called()
 
     async def test_stop_drains_search_then_saves_the_confirmed_snapshot_once(self):
@@ -318,6 +331,7 @@ class ProgressiveTests(ProgressiveFixture):
         await asyncio.wait_for(ready.wait(), 1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError): await task
+        await self.persisted(service)
         store.save.assert_awaited_once()
         self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
@@ -339,7 +353,7 @@ class ProgressiveTests(ProgressiveFixture):
     async def test_publisher_disproof_while_draining_also_prevents_save(self):
         ready, checking = asyncio.Event(), asyncio.Event()
         calls = 0
-        async def canonical(_):
+        async def publish(_):
             nonlocal calls
             calls += 1
             if calls == 2:
@@ -347,19 +361,19 @@ class ProgressiveTests(ProgressiveFixture):
                     checking.set(); await asyncio.Event().wait()
                 finally:
                     raise SnapshotChanged('publisher disproof during cancellation')
+            ready.set()
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
             await ready.wait()
             await callback({'type': 'qualified', 'value': self.value(200)})
             await asyncio.Event().wait()
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
-        task = asyncio.create_task(self.service(script, canonical, store).progressive(economic_request(),
-            lambda frame: asyncio.sleep(0, result=ready.set())))
+        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(), publish))
         await checking.wait(); task.cancel()
         with self.assertRaises(SnapshotChanged): await task
         store.save.assert_not_called()
 
-    async def test_cancel_during_optional_save_drains_that_write_without_retry(self):
+    async def test_service_close_drains_optional_write_after_quote_returned(self):
         saving, drained = asyncio.Event(), asyncio.Event()
         async def script(*_, **__): return self.value(100)
         async def save(*_, **__):
@@ -368,28 +382,33 @@ class ProgressiveTests(ProgressiveFixture):
             finally:
                 drained.set()
         store = SharedStore(); store.save = AsyncMock(side_effect=save)
-        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(), AsyncMock()))
-        await saving.wait(); task.cancel()
-        with self.assertRaises(asyncio.CancelledError): await task
+        service = self.service(script, store=store)
+        task = asyncio.create_task(service.progressive(economic_request(), AsyncMock()))
+        await asyncio.wait_for(saving.wait(), 1)
+        result = await asyncio.wait_for(task, 1)
+        self.assertEqual(result['quotedOutput'], '100')
+        self.assertFalse(drained.is_set())
+        await service.close()
         self.assertTrue(drained.is_set()); store.save.assert_awaited_once()
 
-    async def test_stop_before_confirmation_does_not_save_or_publish(self):
-        checking, canonical_drained, search_drained = (asyncio.Event() for _ in range(3))
-        async def canonical(_):
+    async def test_stop_during_delivery_drains_transport_and_retains_valid_observation(self):
+        checking, delivery_drained, search_drained = (asyncio.Event() for _ in range(3))
+        async def publish(_):
             try:
                 checking.set(); await asyncio.Event().wait()
-            finally: canonical_drained.set()
+            finally: delivery_drained.set()
         async def script(value, callback, **_):
             try:
                 await callback({'type': 'qualified', 'value': self.value(100)})
                 await asyncio.Event().wait()
             finally: search_drained.set()
-        store = SharedStore(); store.save = AsyncMock(wraps=store.save); publish = AsyncMock()
-        task = asyncio.create_task(self.service(script, canonical, store).progressive(economic_request(), publish))
+        store = SharedStore(); store.save = AsyncMock(wraps=store.save)
+        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(), publish))
         await checking.wait(); task.cancel()
         with self.assertRaises(asyncio.CancelledError): await task
-        self.assertTrue(canonical_drained.is_set() and search_drained.is_set())
-        publish.assert_not_called(); store.save.assert_not_called()
+        self.assertTrue(delivery_drained.is_set() and search_drained.is_set())
+        store.save.assert_awaited_once()
+        self.assertEqual(store.save.call_args.args[1]['quotedOutput'], '100')
 
     async def test_ordinary_refinement_failure_preserves_and_saves_ready_quote(self):
         ready = asyncio.Event()
@@ -401,6 +420,7 @@ class ProgressiveTests(ProgressiveFixture):
         service = self.service(script, store=store)
         with self.assertRaises(QuoteFailure) as failure:
             await service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=ready.set()))
+        await self.persisted(service)
         self.assertEqual(failure.exception.code, 'rpc-rate-limit')
         store.save.assert_awaited_once()
         self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')

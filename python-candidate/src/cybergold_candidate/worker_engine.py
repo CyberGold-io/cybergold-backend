@@ -18,6 +18,7 @@ from .safe_collector import SafeIndexer, EVENTS
 from .reconciliation_receipt import RpcCounter
 from .uniswap_state import PoolRegistry, UniswapStore
 from .market_swap import DailyRecipientCache
+from .quoter.core_state import CoreQuoteState
 
 
 def indexer_config(settings):
@@ -59,8 +60,9 @@ class WorkerEngine:
         self.uniswap_registry = None
         self.market_recipient = None
         self.protocol_configuration = None
+        self.core_quote_state = None
 
-    async def collect_uniswap(self, force=False):
+    def initialize_quote_state(self):
         if self.uniswap_registry is None:
             store = UniswapStore(self.database, self.config['chainId'], self.config['coreAddress'])
             self.uniswap_registry = PoolRegistry(self.settings, store=store)
@@ -68,6 +70,25 @@ class WorkerEngine:
             from .protocol_config import ProtocolConfiguration
             configuration_store = UniswapStore(self.database, self.config['chainId'], self.config['coreAddress'])
             self.protocol_configuration = ProtocolConfiguration(self.settings, configuration_store)
+        if self.core_quote_state is None:
+            self.core_quote_state = CoreQuoteState(self.settings, self.uniswap_registry, publisher=True)
+
+    async def invalidate_quote_state(self, block_number):
+        try:
+            self.initialize_quote_state()
+            await self.core_quote_state.load()
+            await self.core_quote_state.invalidate_from(block_number)
+        except Exception:
+            pass  # Optional quotation state cannot reject a journal rewind.
+
+    async def collect_quote_state(self):
+        self.initialize_quote_state()
+        await self.core_quote_state.observe_generation(self.uniswap_registry.generation)
+        self.uniswap_registry.get_rpc().before_request = self.indexing_pacer.acquire
+        await self.core_quote_state.apply_journal(self.database)
+
+    async def collect_uniswap(self, force=False):
+        self.initialize_quote_state()
         registry = self.uniswap_registry
         if self.config['chainId'] == 31338:
             async with self.database.connection() as connection:
@@ -77,6 +98,7 @@ class WorkerEngine:
                 await registry.observe_generation(generation)
                 self.market_recipient.reset()
             await self.protocol_configuration.observe_generation(generation)
+            await self.core_quote_state.observe_generation(generation)
         rpc = registry.get_rpc()
         rpc.before_request = self.indexing_pacer.acquire
         block = await rpc.block(None)
@@ -98,8 +120,12 @@ class WorkerEngine:
         rpc.before_request = raw.before_request = self.indexing_pacer.acquire
         before = self.indexing_pacer.attempts
         try:
+            async def rewind(block_number):
+                if self.protocol_configuration:
+                    await self.protocol_configuration.invalidate_from(block_number)
+                await self.invalidate_quote_state(block_number)
             self.helpers_progress = await HelpersCollector(self.database, self.collection_config, address,
-                on_rewind=self.protocol_configuration.invalidate_from if self.protocol_configuration else None).reconcile(
+                on_rewind=rewind).reconcile(
                 ContractClient(rpc), raw, anchor=anchor)
             if self.protocol_configuration:
                 try:
@@ -130,7 +156,8 @@ class WorkerEngine:
             addresses, lookback = safe_history_profile(self.settings)
             safe = SafeIndexer(self.database, self.settings)
             profile = {'safeAddresses': addresses, 'lookbackBlocks': lookback, 'eventSelectors': [topic for _name, topic in EVENTS]}
-            collector = CoreCollector(self.database, self.collection_config, profile)
+            collector = CoreCollector(self.database, self.collection_config, profile,
+                                      on_rewind=self.invalidate_quote_state)
             rpc = self.rpc_factory()
             raw = self.rpc_factory(True) if self.config['addressScopedRawLogs'] else rpc
             rpc.before_request = raw.before_request = self.indexing_pacer.acquire
@@ -218,6 +245,10 @@ class WorkerEngine:
                     self.helpers_progress = {'error': True}
                     logging.getLogger('cybergold.candidate').error(json.dumps({
                         'context': 'helpers-indexer', 'errorClassification': 'collection-failed'}))
+                try:
+                    await self.collect_quote_state()
+                except Exception:
+                    pass  # Core/Safe readiness and ordinary quotes stay independent.
             return {'status': 'deferred-cadence' if outcome is None else 'reconciled' if outcome['completed'] else 'incomplete',
                 'dashboardHistoryProgress': outcome['dashboardHistoryProgress'] if outcome else None}
 
@@ -241,6 +272,8 @@ class WorkerEngine:
             await asyncio.gather(self.runtime['reconcilePromise'], return_exceptions=True)
         if self.product_metrics is not None:
             await self.product_metrics.close()
+        if self.core_quote_state:
+            await self.core_quote_state.close()
         if self.uniswap_registry:
             await self.uniswap_registry.close()
         if self.market_recipient:

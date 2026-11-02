@@ -277,7 +277,12 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
             release_load.set()
             await registry.load_task
             await asyncio.sleep(0)
-            self.assertEqual(session.revision, 1)
+            # No query had consumed the old graph. The first query must see
+            # the persisted route immediately, without waiting for connectors.
+            offers = list(q.amm.nominations(WETH, CORE, 10000, BLOCK,
+                                           market=True, linear_only=True))
+            self.assertTrue(any(hop['pool']['id'] == connector['id']
+                for branches, _ in offers for branch in branches for hop in branch['hops'] if 'pool' in hop))
             self.assertFalse(task.done())
             release_connectors.set()
             await task
@@ -531,18 +536,21 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(provider.cancelled, 0)
         self.assertTrue(provider.closed)
 
-    async def test_disproof_and_caller_cancellation_drain_provider_work(self):
+    async def test_nomination_disproof_is_isolated_and_caller_cancellation_drains_provider(self):
         for disproof in (False, True):
             q, request, provider = self.fixture(failure=SnapshotChanged('selected state changed') if disproof else None)
             task = asyncio.create_task(q.get(request))
             await provider.started.wait()
             if disproof:
                 provider.release.set()
+                result = await task
+                discovery = result['metrics']['routeDiscovery']
+                self.assertGreater(int(result['quotedOutput']), 0)
             else:
                 task.cancel()
-            with self.assertRaises(SnapshotChanged if disproof else asyncio.CancelledError) as raised:
-                await task
-            discovery = raised.exception.quoter_metrics['routeDiscovery']
+                with self.assertRaises(asyncio.CancelledError) as raised:
+                    await task
+                discovery = raised.exception.quoter_metrics['routeDiscovery']
             self.assertIn('controlled-topology', discovery['providers'])
             self.assertIn('physicalRpc', discovery)
             self.assertTrue(provider.closed)

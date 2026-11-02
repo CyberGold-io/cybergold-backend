@@ -24,7 +24,7 @@ from cybergold_candidate.uniswap_state import PoolRegistry
 from cybergold_candidate.uniswap_v4 import POOL_MANAGER, STATE_VIEW
 from cybergold_candidate.routing_encoding import ZERO
 from quoter_fixture import synthetic_pool
-from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings
+from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixture_plan_simulator
 
 
 @dataclass(frozen=True)
@@ -287,6 +287,7 @@ class MatrixService:
         self.registry.seed = deepcopy(identities[-1])
         self.catalog_expanded = not bool(case.catalog_delay_ms)
         self.catalog_expansions = self.discovery_calls = 0
+        self.catalog_loading = None
         self.catalog_events = []
         self.started = time.perf_counter()
         self.registry.loaded = True
@@ -307,25 +308,38 @@ class MatrixService:
             return {'netCygldOut': str(matched*3), 'amountsInExact': [str(matched)]*2,
                 'orderedCoreAssets': [PAXG, OTHER],
                 'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        async def simulate(request, selected, **kwargs):
+            # Synthetic SDK component benchmark, never a Helpers execution oracle.
+            return await fixture_plan_simulator(self.quoter, request, selected,
+                basis_reader=basis, **kwargs)
         self.quoter = Quoter(self.settings, self.engine, preview=preview,
-                             basis_reader=basis, exploration_seed=42)
+                             basis_reader=basis, exploration_seed=42, plan_simulator=simulate)
+        async def exploration_block():
+            return deepcopy(BLOCK)  # Known synthetic SDK construction data, no header RPC.
+        self.quoter.exploration_block = exploration_block
         self.quoter.seed_routes = lambda *_: None
+        async def expand_catalog():
+            # One registry-owned catalog publication may have independent
+            # Market/Core subscribers. Getter observations remain uninjected.
+            started = time.perf_counter()
+            await asyncio.sleep(case.catalog_delay_ms / 1000)
+            self.registry.inventory.update(deepcopy(self.catalog_identities))
+            self.catalog_expanded = True
+            self.catalog_expansions += 1
+            self.catalog_events.append({'kind': 'controlled-catalog-publication',
+                'clock': 'harness-session',
+                'arrivalMs': round((time.perf_counter()-self.started)*1000, 3),
+                'delayElapsedMs': round((time.perf_counter()-started)*1000, 3),
+                'inventoryPools': len(self.registry.inventory)})
         async def discover(*_):
             self.discovery_calls += 1
             if not self.catalog_expanded:
                 # The server already owns every immutable pool observation.
                 # Only ordinary topology publication is delayed; state still
                 # comes from production HTTP getter/bitmap/tick acquisition.
-                started = time.perf_counter()
-                await asyncio.sleep(case.catalog_delay_ms / 1000)
-                self.registry.inventory.update(deepcopy(self.catalog_identities))
-                self.catalog_expanded = True
-                self.catalog_expansions += 1
-                self.catalog_events.append({'kind': 'controlled-catalog-publication',
-                    'clock': 'harness-session',
-                    'arrivalMs': round((time.perf_counter()-self.started)*1000, 3),
-                    'delayElapsedMs': round((time.perf_counter()-started)*1000, 3),
-                    'inventoryPools': len(self.registry.inventory)})
+                if self.catalog_loading is None:
+                    self.catalog_loading = asyncio.create_task(expand_catalog())
+                await asyncio.shield(self.catalog_loading)
         self.quoter.discover = discover
         candidate = self.quoter.candidate
         async def observed_candidate(*args, **kwargs):
@@ -343,5 +357,8 @@ class MatrixService:
                 sort_keys=True, separators=(',', ':')).encode()).hexdigest()}
 
     async def close(self):
+        if self.catalog_loading is not None:
+            self.catalog_loading.cancel()
+            await asyncio.gather(self.catalog_loading, return_exceptions=True)
         await self.engine.close()
         await self.registry.close()

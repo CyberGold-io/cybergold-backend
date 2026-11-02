@@ -115,6 +115,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
         document = {'routing': 'CLASSIC', 'quote': {'route': [[standard_pool('v3', A, B, fee=3000)]],
             'routeCandidates': [{'routeString': 'NEVER PARSE THIS', 'quoteAmount': str(2**255)}]}}
         provider, _, transport, _ = make_provider(document, uniroute=True)
+        self.addAsyncCleanup(provider.close)
         candidates = await provider.discover(A, B, 101, BLOCK)
         self.assertEqual(provider.name, 'uniroute-api')
         self.assertIsInstance(candidates, HostedCandidates)
@@ -132,6 +133,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
         for metadata in ({}, {'routeCandidates': []}):
             document = {'quote': {'route': [[standard_pool('v2', A, B)]], **metadata}}
             provider, _, _, _ = make_provider(document, uniroute=True)
+            self.addAsyncCleanup(provider.close)
             result = await provider.discover(A, B, 101, BLOCK)
             self.assertTrue(result)
             self.assertEqual(result.engine_attribution, {'engine': 'unverified', 'evidence': 'not-disclosed'})
@@ -143,6 +145,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             {'type': 'V3_SWAP_EXACT_IN', 'amountIn': str(2**255),
              'path': packed([A, B], [500]), 'amountOutMin': str(2**255)}]}}
         provider, _, _, _ = make_provider(document, uniroute=True)
+        self.addAsyncCleanup(provider.close)
         result = await provider.discover(A, B, 101, BLOCK)
         self.assertEqual(provider.name, 'uniroute-api')
         self.assertTrue(result)
@@ -154,6 +157,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             {'type': 'V2_SWAP_EXACT_IN', 'path': [A, B]}],
             'routeCandidates': [{'routeString': 'DO NOT PARSE', 'quoteAmount': '999999'}]}}
         provider, _, _, _ = make_provider(document, uniroute=True)
+        self.addAsyncCleanup(provider.close)
         result = await provider.discover(A, B, 101, BLOCK)
         self.assertTrue(result)
         self.assertEqual(result.engine_attribution, {'engine': 'unverified', 'evidence': 'ambiguous'})
@@ -167,28 +171,32 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={'quote': quote})
         provider = UniRouteApiProvider(SimpleNamespace(registry=Registry()), settings(),
             client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(response), timeout=None))
+        self.addAsyncCleanup(provider.close)
         first, second = await asyncio.gather(provider.discover(A, B, 101, BLOCK),
                                              provider.discover(A, B, 202, BLOCK))
         self.assertEqual(first.engine_attribution['engine'], 'uniroute')
         self.assertEqual(second.engine_attribution['engine'], 'unverified')
         self.assertEqual([first[0][0]['amountIn'], second[0][0]['amountIn']], ['101', '202'])
 
-    async def test_standard_mixed_topology_resolves_factory_and_v4_key_at_selected_block(self):
+    async def test_standard_mixed_topology_is_immediate_semantic_identity_without_getter_dependencies(self):
         document = {'routing': 'CLASSIC', 'quote': {'output': {'amount': str(2**255)}, 'route': [[
             standard_pool('v2', A, B), standard_pool('v3', B, C, fee='3000'),
             standard_pool('v4', C, D, fee='500', tickSpacing=10, hooks=ZERO)]],
             'routeCandidates': [{'routeString': 'DO NOT PARSE', 'quoteAmount': str(2**255)}]}}
         provider, registry, transport, clients = make_provider(document)
+        self.addAsyncCleanup(provider.close)
         candidates = await provider.discover(A, D, AMOUNT, BLOCK)
         self.assertEqual(len(candidates), 1)
         branch, = candidates[0]
         self.assertEqual(branch['amountIn'], str(AMOUNT))
         pools = [hop['pool'] for hop in branch['hops']]
         self.assertEqual([pool['protocol'] for pool in pools], ['v2', 'v3', 'v4'])
-        self.assertEqual([pool['address'].lower() for pool in pools[:2]], [CANONICAL_V2, CANONICAL_V3])
+        self.assertTrue(all('address' not in pool for pool in pools[:2]))
         self.assertEqual(pools[2]['poolManager'], MANAGER)
         self.assertEqual(pools[2]['id'], v4_pool_id((C, D, 500, 10, ZERO)))
-        self.assertTrue(all(pool['token0']['decimals'] == 6 for pool in pools))
+        self.assertTrue(all('decimals' not in pool['token0'] for pool in pools))
+        self.assertFalse(registry.calls)
+        self.assertFalse(registry.metadata_calls)
         self.assertFalse(any(name in pool for pool in pools for name in ('liquidity', 'sqrtRatioX96', 'amountOut')))
         self.assertTrue(all(call[3] == BLOCK for call in registry.calls))
         self.assertTrue(all(call[0].lower() != FAKE for call in registry.calls))
@@ -201,8 +209,9 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload['includeRouteCandidates'])
         self.assertEqual(payload['swapper'], HELPERS)
         self.assertNotIn('x-api-experimental', request.headers)
-        self.assertTrue(clients[0].is_closed and transport.closed)
+        self.assertFalse(clients[0].is_closed)
         await provider.close()
+        self.assertTrue(clients[0].is_closed and transport.closed)
 
     async def test_guidestar_empty_route_native_and_balance_sentinel_are_topology_only(self):
         document = {'routing': 'CLASSIC', 'quote': {'route': [], 'routeString': 'NOT PARSED',
@@ -211,6 +220,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
                 {'type': 'V3_SWAP_EXACT_IN', 'recipient': FAKE, 'amountIn': str(2**255),
                  'amountOutMin': str(2**255), 'path': packed([WETH, B], [500])}]}}
         provider, _, transport, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
         candidates = await provider.discover(ZERO, B, AMOUNT, BLOCK)
         branch, = candidates[0]
         self.assertEqual(branch['amountIn'], str(AMOUNT))
@@ -233,6 +243,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
                 {'action': 'SETTLE', 'currency': A, 'amount': str(2**255), 'payerIsUser': True},
                 {'action': 'TAKE', 'currency': D, 'recipient': FAKE, 'amount': '0'}]}]}}
         provider, _, _, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
         candidates = await provider.discover(A, D, 101, BLOCK)
         branch, = candidates[0]
         self.assertEqual(branch['amountIn'], '101')
@@ -244,50 +255,46 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             {'type': 'V2_SWAP_EXACT_IN', 'path': [A, B, C], 'amountIn': str(2**255)},
             {'type': 'V2_SWAP_EXACT_IN', 'path': [C, B, A], 'amountIn': '1'}]}}
         provider, registry, _, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
         candidates = await provider.discover(A, C, 100, BLOCK)
         self.assertEqual(len(candidates), 1)
         self.assertEqual(len(candidates[0][0]['hops']), 2)
-        self.assertEqual(sum(call[1] == 'getPair(address,address)' for call in registry.calls), 2)
+        self.assertFalse(registry.calls)
 
     async def test_missing_key_is_unavailable_without_http_or_rpc(self):
         provider, registry, transport, clients = make_provider({},
             config=settings(CYBERGOLD_UNISWAP_API_KEY=None))
+        self.addAsyncCleanup(provider.close)
         with self.assertRaises(ProviderUnavailable):
             await provider.discover(A, B, 100, BLOCK)
         self.assertEqual((clients, transport.requests, registry.calls), ([], [], []))
 
-    async def test_metadata_context_disproof_is_not_optional_display_fallback(self):
+    async def test_optional_metadata_does_not_delay_or_disprove_semantic_nomination(self):
         registry = Registry()
-        entered, retired = asyncio.Event(), asyncio.Event()
-        async def changed(address, *args, **kwargs):
-            if address.lower() == A.lower():
-                await entered.wait()
-                raise SnapshotChanged('Metadata read disproved the selected context')
-            entered.set()
-            try:
-                await asyncio.Event().wait()
-            finally:
-                retired.set()
+        async def changed(*_args, **_kwargs):
+            raise SnapshotChanged('Optional metadata is not needed for route construction')
         registry.token_metadata = changed
-        provider, _, _, _ = make_provider({'quote': {'route': [[standard_pool('v2', A, B)]]}},
-                                         registry=registry)
-        with self.assertRaises(SnapshotChanged):
-            await provider.discover(A, B, 100, BLOCK)
-        self.assertTrue(retired.is_set())
+        provider, _, _, _ = make_provider({'quote': {'route': [[standard_pool('v2', A, B)]]}}, registry=registry)
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(A, B, 100, BLOCK)
+        self.assertTrue(candidates)
+        self.assertFalse(registry.calls)
+        self.assertFalse(registry.metadata_calls)
         self.assertEqual(registry.inventory, {})
 
-    async def test_http_error_is_safe_and_unsupported_chain_is_not_relabelled_or_retried(self):
+    async def test_http_error_is_independent_while_fork_nomination_uses_explicit_parent_chain(self):
         registry = Registry()
         registry.chain = 31338
         provider, _, transport, _ = make_provider({'error': 'secret supplier detail'},
             guidestar=True, registry=registry, status=400)
+        self.addAsyncCleanup(provider.close)
         with self.assertRaises(HostedRouteError) as failure:
             await provider.discover(A, B, 100, BLOCK)
         self.assertEqual(str(failure.exception), 'Uniswap route provider returned HTTP 400')
         self.assertNotIn('secret', str(failure.exception))
         self.assertEqual(len(transport.requests), 1)
         payload = json.loads(transport.requests[0].content)
-        self.assertEqual((payload['tokenInChainId'], payload['tokenOutChainId']), (31338, 31338))
+        self.assertEqual((payload['tokenInChainId'], payload['tokenOutChainId']), (1, 1))
         self.assertEqual(registry.calls, [])
 
     async def test_http_cancellation_closes_owned_client_without_retry(self):
@@ -299,49 +306,134 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             finally:
                 retired.set()
         provider, _, transport, clients = make_provider({}, handler=blocked)
+        self.addAsyncCleanup(provider.close)
         task = asyncio.create_task(provider.discover(A, B, 100, BLOCK))
         await entered.wait()
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertTrue(retired.is_set())
+        self.assertFalse(clients[0].is_closed)
+        await provider.close()
         self.assertTrue(transport.closed and clients[0].is_closed)
         self.assertEqual(provider.clients, set())
         self.assertEqual(len(transport.requests), 1)
         await provider.close()
 
-    async def test_resolver_context_disproof_propagates_and_drains_sibling(self):
-        second_started, retired = asyncio.Event(), asyncio.Event()
+    async def test_optional_resolver_is_not_a_prerequisite_for_known_structured_paths(self):
         class Resolver:
             async def resolve(self, identifier, block):
-                if identifier['tokenA'].lower() == A:
-                    await second_started.wait()
-                    raise SnapshotChanged('Canonical block changed')
-                second_started.set()
-                try:
-                    await asyncio.Event().wait()
-                finally:
-                    retired.set()
+                raise AssertionError('Semantic nomination must not await resolver')
         document = {'quote': {'route': [[standard_pool('v2', A, B), standard_pool('v2', B, C)]]}}
-        provider, _, _, _ = make_provider(document, resolver=Resolver())
-        with self.assertRaises(SnapshotChanged):
-            await provider.discover(A, C, 100, BLOCK)
-        self.assertTrue(retired.is_set())
+        provider, registry, _, _ = make_provider(document, resolver=Resolver())
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(A, C, 100, BLOCK)
+        self.assertTrue(candidates)
+        self.assertFalse(registry.calls)
 
     async def test_malformed_structured_route_is_not_recovered_from_debug_strings(self):
         document = {'quote': {'route': [], 'routeString': 'A -> B',
             'swapSteps': [{'type': 'V3_SWAP_EXACT_IN', 'path': '0x1234'}],
             'routeCandidates': [{'routeString': 'A -> B', 'quoteAmount': str(2**255)}]}}
         provider, registry, transport, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
         with self.assertRaises(ValueError):
             await provider.discover(A, B, 100, BLOCK)
         self.assertEqual(registry.calls, [])
+        await provider.close()
         self.assertTrue(transport.closed)
         with self.assertRaises(ValueError):
             topology_identifiers(document)
         without_steps = deepcopy(document)
         without_steps['quote'].pop('swapSteps')
         self.assertEqual(topology_identifiers(without_steps), [])
+
+
+class HostedForkAndSplitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fork_market_segment_uses_parent_nomination_and_local_anchor_both_directions(self):
+        for sale in (False, True):
+            with self.subTest(sale=sale):
+                registry = Registry()
+                registry.chain, registry.core = 31338, D
+                registry.seed = {'id': v4_pool_id((B, D, 100, 1, ZERO)), 'protocol': 'v4',
+                    'token0': {'address': B, 'chainId': 31338}, 'token1': {'address': D, 'chainId': 31338},
+                    'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO, 'poolManager': MANAGER}
+                source, target = (B, A) if sale else (A, B)
+                document = {'quote': {'route': [[standard_pool('v3', source, target, fee=500)]]}}
+                provider, _, transport, _ = make_provider(document, registry=registry, uniroute=True)
+                self.addAsyncCleanup(provider.close)
+                candidates = await provider.discover(D if sale else A, A if sale else D, 101, BLOCK)
+                payload = json.loads(transport.requests[0].content)
+                self.assertEqual((payload['tokenInChainId'], payload['tokenOutChainId']), (1, 1))
+                self.assertEqual((payload['tokenIn'].lower(), payload['tokenOut'].lower()), (source, target))
+                self.assertNotIn(D, (payload['tokenIn'].lower(), payload['tokenOut'].lower()))
+                hops = candidates[0][0]['hops']
+                self.assertEqual([hop['pool']['protocol'] for hop in hops], ['v4', 'v3'] if sale else ['v3', 'v4'])
+                self.assertEqual(hops[0 if sale else -1]['pool']['id'], registry.seed['id'])
+                self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for hop in hops for token in ('token0', 'token1')))
+                self.assertFalse(registry.calls)
+                self.assertFalse(registry.metadata_calls)
+
+    async def test_standard_proposed_split_weights_survive_alongside_graph_alternatives(self):
+        routes = [[{**standard_pool('v3', A, B, fee=fee), 'amountIn': str(weight)}]
+                  for fee, weight in ((500, 35), (3000, 65))]
+        provider, registry, _, _ = make_provider({'quote': {'route': routes}}, uniroute=True)
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(A, B, AMOUNT, BLOCK)
+        proposed = candidates[0]
+        self.assertEqual([branch['amountIn'] for branch in proposed], ['350000', '650000'])
+        self.assertEqual([branch['hops'][0]['pool']['feePips'] for branch in proposed], [500, 3000])
+        self.assertTrue(any(len(candidate) == 1 for candidate in candidates))
+        self.assertNotIn(str(2**255), repr(candidates))
+        self.assertFalse(registry.calls)
+
+    async def test_guidestar_proposed_v3_splits_preserve_weights_and_native_transition(self):
+        document = {'quote': {'route': [], 'swapSteps': [
+            {'type': 'V3_SWAP_EXACT_IN', 'path': packed([WETH, B], [fee]), 'amountIn': str(weight)}
+            for fee, weight in ((500, 35), (3000, 65))]}}
+        provider, _, _, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(ZERO, B, 101, BLOCK)
+        self.assertEqual([branch['amountIn'] for branch in candidates[0]], ['350000', '650000'])
+        self.assertTrue(all(branch['hops'][0]['kind'] == 'wrap' for branch in candidates[0]))
+
+    async def test_guidestar_v4_structured_split_weights_do_not_use_settlement_commands(self):
+        document = {'quote': {'route': [], 'swapSteps': [{'type': 'V4_SWAP', 'v4Actions': [
+            {'action': 'SWAP_EXACT_IN_SINGLE', 'poolKey': {'currency0': A, 'currency1': B,
+                'fee': fee, 'tickSpacing': spacing, 'hooks': ZERO}, 'zeroForOne': True, 'amountIn': str(weight)}
+            for fee, spacing, weight in ((500, 10, 35), (3000, 60, 65))]}]}}
+        provider, registry, _, _ = make_provider(document, guidestar=True)
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(A, B, 101, BLOCK)
+        self.assertEqual([branch['amountIn'] for branch in candidates[0]], ['350000', '650000'])
+        self.assertEqual([branch['hops'][0]['pool']['tickSpacing'] for branch in candidates[0]], [10, 60])
+        self.assertFalse(registry.calls)
+
+    async def test_concurrent_queries_reuse_one_owned_client_and_cancel_independently(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def handler(request):
+            if json.loads(request.content)['amount'] == '101':
+                entered.set()
+                await release.wait()
+        provider, _, transport, clients = make_provider({'quote': {'route': [[standard_pool('v3', A, B, fee=500)]]}}, handler=handler)
+        self.addAsyncCleanup(provider.close)
+        first = asyncio.create_task(provider.discover(A, B, 101, BLOCK))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            second = await asyncio.wait_for(provider.discover(A, B, 202, BLOCK), 1)
+            self.assertTrue(second)
+            first.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first
+            self.assertEqual(len(clients), 1)
+            self.assertFalse(clients[0].is_closed)
+            self.assertFalse(transport.closed)
+        finally:
+            release.set()
+            first.cancel()
+            await asyncio.gather(first, return_exceptions=True)
+        await provider.close()
+        self.assertTrue(clients[0].is_closed and transport.closed)
 
 
 if __name__ == '__main__':

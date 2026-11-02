@@ -5,7 +5,7 @@ import unittest
 from cybergold_candidate.preview_errors import KnownPreviewError
 from cybergold_candidate.quote_errors import QuoteFailure, public_quote_error
 from cybergold_candidate.recovery_rpc import SnapshotChanged
-from test_quote_intent import service, request, retained_plan
+from test_quote_intent import service, request, retained_plan, pinned_get
 from test_trade_quote import Engines, request as trade_request
 
 
@@ -55,7 +55,7 @@ class ExhaustedIssuanceTests(unittest.IsolatedAsyncioTestCase):
         wire.capacity_values = {'totalSupply': 100, 'maxTotalSupply': 100}
         provider.reorg = True
         with self.assertRaises(SnapshotChanged):
-            await intent.get(request('issue-exact-in'), lambda f: asyncio.sleep(0))
+            await pinned_get(intent, request('issue-exact-in'), lambda f: asyncio.sleep(0))
         self.assertEqual(wire.batches, [])
 
     async def test_redemption_is_not_blocked_by_full_issuance_cap(self):

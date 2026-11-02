@@ -17,6 +17,7 @@ from web3 import AsyncWeb3, Web3
 from .pool_cache import Pair
 from .recovery_rpc import RecoveryRpc, SnapshotChanged, abi_value, ZERO
 from .rpc_transport import rpc_provider
+from .rpc_block_context import rpc_block_parameter
 from .supplier_dispatch import dispatch
 from .quote_errors import public_quote_error
 
@@ -119,7 +120,7 @@ class PoolRpc(RecoveryRpc):
         data = self.pool_contracts[group].encode_abi(name, args=[abi_value(value, parameter)
             for value, parameter in zip(args, function['inputs'], strict=True)])
         response = await self.w3.provider.make_request('eth_call', [
-            {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
+            {'to': address, 'data': data}, rpc_block_parameter(block)])
         if 'error' in response:
             raise ValueError('Pool contract read failed')
         values = self.w3.codec.decode([collapse_if_tuple(output) for output in function['outputs']],

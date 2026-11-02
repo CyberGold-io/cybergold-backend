@@ -2,7 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.discovery import market_plan
@@ -31,7 +31,7 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(replay_base_bound, output - quoted_fee(output, 1000))
 
     async def test_exhaustive_sdk_catalog_bound_proofs_and_pruning(self):
-        # Exhaustive proof allowance deliberately differs from the runtime 16.
+        # Exhaustive component proof; runtime exploration uses its clock/slots.
         for name, count in [('buy500', 39), ('buy100', 39), ('sale1', 34)]:
             q, case = historical_service(self, name)
             block = historical_data()['anchor']; best = pruned_best = None; skipped = 0
@@ -62,7 +62,6 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
             value = await Quoter.get(q, request(), seed=seed)
             self.assertGreater(int(value['quotedOutput']), 0)
             self.assertGreater(value['metrics']['optionalSearch']['starts'], 0)
-            self.assertLessEqual(value['metrics']['optionalSearch']['starts'], 16)
 
     async def test_seed_replay_error_releases_optional_work(self):
         q = Quotes(Engine()); seed = await Quoter.get(q, request())
@@ -76,27 +75,47 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(int(value['quotedOutput']), 0)
         self.assertGreater(value['metrics']['optionalSearch']['starts'], 0)
 
-    async def test_post_selection_cancellation_and_disproof_remain_fatal(self):
-        import cybergold_candidate.quoter.search as search
+    async def test_changed_funding_work_is_owned_and_optional_disproof_keeps_the_measured_quote(self):
+        from test_quoter_plan_simulation import fixture, encoded, measured, stage, market
+        from test_universal_quote import WETH, CORE
         for disproof in [False, True]:
-            q = Quotes(Engine()); entered = asyncio.Event()
-            async def held(*_):
-                entered.set()
-                if disproof:
-                    raise SnapshotChanged('reconstruction context changed')
-                await asyncio.Event().wait()
-            with patch.object(search, 'reconstruct', held):
-                task = asyncio.create_task(Quoter.get(q, request()))
-                await entered.wait()
-                if disproof:
-                    with self.assertRaises(SnapshotChanged):
-                        await task
-                else:
+            economic, selected = market()
+            _, q, rpc, provider = fixture(encoded(measured(100000,
+                stages=[stage(0, WETH, CORE, 10000, 100000, consumed=7000, returned=3000)],
+                retained=[(0, 0, WETH, 3000)])))
+            q.basis_reader = AsyncMock(side_effect=OSError('Optional Core construction unavailable'))
+            q.discover, q.seed_routes = AsyncMock(), lambda *_: None
+            entered, drained = asyncio.Event(), asyncio.Event()
+            original = provider.make_request
+            async def held(method, params):
+                if provider.calls:
+                    entered.set()
+                    try:
+                        if disproof:
+                            raise SnapshotChanged('optional exploratory reconstruction changed')
+                        await asyncio.Event().wait()
+                    finally:
+                        drained.set()
+                return await original(method, params)
+            provider.make_request = held
+            task = asyncio.create_task(q.quote(economic, seed={'inputs': economic['inputs'], 'plan': selected}))
+            try:
+                async with asyncio.timeout(2):
+                    await entered.wait()
+                    if disproof:
+                        value = await task
+                        self.assertEqual(value['quotedOutput'], '99900')
+                    else:
+                        task.cancel()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await task
+            finally:
+                if not task.done():
                     task.cancel()
-                    with self.assertRaises(asyncio.CancelledError):
-                        await task
+                await asyncio.gather(task, return_exceptions=True)
+            self.assertTrue(drained.is_set())
             self.assertEqual(q.engine.semaphore._value, 8)
-            self.assertFalse(any(row[0] == 'canonical' for row in q.engine.calls))
+            self.assertEqual((rpc.heads, rpc.verifications), ([], []))
 
     async def test_concurrent_sessions_and_cancellation_do_not_share_events(self):
         q = Quotes(Engine())
@@ -104,11 +123,12 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(one['metrics']['optionalSearch']['randomSeed'])
         self.assertIsNone(two['metrics']['optionalSearch']['randomSeed'])
         self.assertNotIn('session', vars(q))
-        async def changed(_):
-            raise SnapshotChanged('final context changed')
-        q.engine.assert_canonical = changed
-        with self.assertRaises(SnapshotChanged):
-            await Quoter.get(q, request(), seed={})
+        q.engine.assert_canonical = AsyncMock(side_effect=AssertionError('Quote lookup cannot verify a block'))
+        result = await Quoter.get(q, request(), seed={})
+        self.assertGreater(int(result['quotedOutput']), 0)
+        self.assertIsNotNone(result['metrics']['optionalSearch']['randomSeed'])
+        q.engine.assert_canonical.assert_not_awaited()
+        self.assertNotIn('session', vars(q))
 
 
 if __name__ == '__main__':

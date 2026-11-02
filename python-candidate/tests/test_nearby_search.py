@@ -2,7 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.search import alongside_bootstrap
@@ -143,41 +143,50 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['metrics']['nearbySearch']['starts'], 0)
         self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_cache_failure_is_optional_and_disproof_is_not(self):
+    async def test_optional_cache_failure_or_sdk_disproof_leaves_completed_helpers_alternatives(self):
         for disproof in [False, True]:
             q = Quotes(Engine())
             async def unavailable():
                 if disproof:
                     raise SnapshotChanged('captured context changed')
                 raise OSError('optional database unavailable')
-            if disproof:
-                with self.assertRaises(SnapshotChanged):
-                    await q.quote(request(), neighbors=unavailable)
-            else:
-                value = await q.quote(request(), neighbors=unavailable)
-                self.assertGreater(int(value['quotedOutput']), 0)
+            value = await q.quote(request(), neighbors=unavailable)
+            self.assertGreater(int(value['quotedOutput']), 0)
             self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_lookup_overlaps_head_and_cancellation_drains_it(self):
-        q = Quotes(Engine()); lookup, head, drained = (asyncio.Event() for _ in range(3))
+    async def test_lookup_overlaps_sdk_preparation_and_cancellation_drains_both(self):
+        q = Quotes(Engine())
+        lookup, preparing, lookup_drained, preparation_drained = (asyncio.Event() for _ in range(4))
         async def read(_):
-            head.set()
-            await lookup.wait()
-            await asyncio.Event().wait()
-        async def neighbors():
-            lookup.set()
-            await head.wait()
+            preparing.set()
             try:
+                await lookup.wait()
                 await asyncio.Event().wait()
             finally:
-                drained.set()
-        q.engine.block = read
+                preparation_drained.set()
+        async def neighbors():
+            lookup.set()
+            try:
+                await preparing.wait()
+                await asyncio.Event().wait()
+            finally:
+                lookup_drained.set()
+        q.basis_reader = read
+        q.engine.block = AsyncMock(side_effect=AssertionError('Quote lookup cannot acquire a header'))
         task = asyncio.create_task(q.quote(request(), neighbors=neighbors))
-        await head.wait(); await lookup.wait()
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-        self.assertTrue(drained.is_set())
+        try:
+            async with asyncio.timeout(2):
+                await asyncio.gather(preparing.wait(), lookup.wait())
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(lookup_drained.is_set())
+        self.assertTrue(preparation_drained.is_set())
+        q.engine.block.assert_not_awaited()
         self.assertFalse(any(row[0] == 'canonical' for row in q.engine.calls))
 
     async def test_upper_and_lower_are_fresh_full_candidates_plus_fitting_funding(self):
@@ -218,9 +227,11 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(int(row['amountIn']) for row in value['plan']['allocations']),
                          int(value['inputs'][0]['amount']))
         metrics = value['metrics']['nearbySearch']
-        self.assertEqual(metrics['starts'], 2)  # Identical proposals deduplicate across neighbors.
-        self.assertEqual(metrics['completed'], 2)
-        self.assertLessEqual(value['metrics']['optionalSearch']['starts'], 16)
+        # Both optional offers remain observable, including retry opportunity
+        # after a failure. The real Helpers simulator owns physical coalescing.
+        self.assertEqual(metrics['starts'], 4)
+        self.assertEqual(metrics['completed'], 4)
+        self.assertEqual({row['side'] for row in metrics['sources']}, {'upper', 'lower'})
         self.assertIsNone(value['metrics']['optionalSearch']['randomSeed'])
         self.assertTrue(all('elapsedMs' in row for source in metrics['sources'] for row in source['attempts']))
 

@@ -35,7 +35,7 @@ async def check(fixture):
             class Rpc:
                 async def close(self):pass
             class Collector:
-                def __init__(self,*args):pass
+                def __init__(self,*args,**kwargs):pass
                 async def reconcile(self,counter,*args,**kwargs):
                     calls.append('collect');counter.plan('core-address')
                     if mode=='failed':raise ValueError('fixture collection failure')
@@ -55,6 +55,7 @@ async def check(fixture):
             except Exception as failure:error=str(failure)
             actual={'result':result,'error':error,'calls':calls,'lastReconciledAtMs':engine.runtime['lastReconciledAtMs'],
                 'lastRpcRequestCounts':engine.runtime['lastRpcRequestCounts'],'promiseCleared':engine.runtime['reconcilePromise'] is None}
+            await engine.close()
             assert actual==case['expected'],(mode,actual,case['expected'])
     finally:worker_engine.CoreCollector=original
     print(f"PASS: {len(fixture['configCases'])} actual worker configurations and {len(fixture['runs'])} retained run/cadence/lock/accounting paths")

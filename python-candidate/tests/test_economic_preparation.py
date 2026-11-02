@@ -17,7 +17,7 @@ from cybergold_candidate.quoter.reuse_routes import extract_blueprint, resize_bl
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from cybergold_candidate.uniswap_routes import pool_identity
 from test_universal_quote import (Engine, Quotes, settings, request as legacy_request,
-                                  BLOCK, CORE, PAXG, OTHER, USER, WETH)
+                                  BLOCK, CORE, PAXG, OTHER, USER, WETH, fixture_plan_simulator)
 
 
 def economic_request(intent=0):
@@ -32,10 +32,20 @@ def economic_request(intent=0):
 def quoter():
     engine = Engine()
     fixture = Quotes(engine)
+    async def simulate(request, selected, **kwargs):
+        return await fixture_plan_simulator(service, request, selected, basis_reader=service.basis, **kwargs)
     service = Quoter(settings(), engine, preview=fixture.preview_call,
-                     basis_reader=fixture.basis_call, now=lambda: '2026-10-26T12:00:00.000Z')
+                     basis_reader=fixture.basis_call, now=lambda: '2026-10-26T12:00:00.000Z',
+                     plan_simulator=simulate)
+    service.exploration_block = fixture.exploration_block
     service.seed_routes = fixture.seed_routes
     service.discover = fixture.discover
+    # Explicit construction identities for this component oracle. Its test
+    # recovery token/id differ from the deployed Core's attached-asset formula.
+    service.core_outputs = fixture.core_outputs
+    service.core_state_cache.update({'assets': [PAXG, OTHER], 'weights': [500000, 500000],
+        'conversions': [10**18, 10**18], 'recoveryAssets': ['0x'+'0'*39+'7'],
+        'issueFee': 0, 'redeemFee': 0, 'helperFee': 0, 'supply': engine.supply})
     return service
 
 
@@ -237,7 +247,7 @@ class EconomicPreparationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(repeated[key], value[key])
         service.discover.assert_not_called()
         service.conversion.assert_not_called()
-        self.assertEqual(service.engine.calls[-1], ('canonical', BLOCK))
+        self.assertNotIn(('canonical', BLOCK), service.engine.calls)
 
     async def test_original_100_minimum_99_cannot_be_relaxed_after_replay_returns_90(self):
         service = quoter()
@@ -355,9 +365,9 @@ class EconomicPreparationTests(unittest.IsolatedAsyncioTestCase):
         value['context']['observedAt'] = '2000-01-01T00:00:00.000Z'
         clock = 2000
         replay = service.evaluate_selected
-        async def elapsed_during_replay(*args):
+        async def elapsed_during_replay(*args, **kwargs):
             nonlocal clock
-            result = await replay(*args)
+            result = await replay(*args, **kwargs)
             clock = 5000
             return result
         service.evaluate_selected = elapsed_during_replay

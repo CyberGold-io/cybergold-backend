@@ -12,6 +12,7 @@ from web3.providers import AsyncBaseProvider
 from cybergold_candidate.app import create_app
 from cybergold_candidate.route_search import RouteSearch, WETH, candidates
 from cybergold_candidate.uniswap_routes import v3_path
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 from route_engine_fixture import install_fixture_engine
 
 HASH = '0x' + 'a' * 64
@@ -136,6 +137,38 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(row['params'][1] == {'blockHash': HASH, 'requireCanonical': True}
                             for row in wire.batches[0]))
 
+    async def test_latest_pool_reads_are_not_completed_mainnet_observations(self):
+        search, provider, wire = service()
+        self.addAsyncCleanup(search.close)
+        calldata = search.rpc.pools.pool_contracts['factory'].encode_abi('getPool',
+            args=[ASSET_A, ASSET_B, 3000])
+        calls = [(search.rpc.pools.factory, calldata)]
+        for _ in range(2):
+            counts = {}
+            await search.rpc.pool_batch(calls, LATEST_BLOCK, counts)
+            self.assertEqual((counts['issued'], counts['reused']), (1, 0))
+        self.assertEqual(len(wire.batches), 2)
+        self.assertEqual(search.rpc.pool_reads.completed, {})
+        self.assertTrue(all(row['params'][1] == 'latest' for batch in wire.batches for row in batch))
+        for expected in ((1, 0), (0, 1)):
+            counts = {}
+            await search.rpc.pool_batch(calls, {'number': 101, 'hash': HASH}, counts)
+            self.assertEqual((counts['issued'], counts['reused']), expected)
+        self.assertEqual(len(wire.batches), 3)
+        self.assertEqual(provider.calls, [])
+
+    async def test_explicit_pinned_search_keeps_the_supplied_context_and_wire_parameter(self):
+        search, provider, wire = service()
+        self.addAsyncCleanup(search.close)
+        value = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]},
+                                 block={'number': 101, 'hash': HASH})
+        self.assertEqual(value['context']['blockNumber'], '101')
+        self.assertEqual(value['context']['blockHash'], HASH)
+        self.assertNotIn('blockTag', value['context'])
+        self.assertTrue(all(row['params'][1] == {'blockHash': HASH, 'requireCanonical': True}
+                            for batch in wire.batches for row in batch))
+        self.assertEqual(provider.calls, [])
+
     async def test_common_engine_covers_original_paths_for_all_targets_at_one_context(self):
         search, provider, wire = service()
         self.addAsyncCleanup(search.close)
@@ -150,8 +183,11 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row['attempted'] for row in result['results']], [13, 13])
         self.assertTrue(all(int(row['best']['quote']) > 2**200 for row in result['results']))
         self.assertTrue(all(self.plan_path(row) in expected for row in result['results']))
-        self.assertEqual([method for method, _ in provider.calls],
-                         ['eth_chainId', 'eth_getBlockByNumber', 'eth_getBlockByNumber'])
+        self.assertEqual(provider.calls, [])
+        self.assertTrue(all(row['params'][1] == 'latest' for batch in wire.batches for row in batch))
+        self.assertEqual(result['context'], {'chainId': 1, 'blockNumber': None, 'blockHash': None,
+                                            'blockTag': 'latest', 'observedAt': result['context']['observedAt']})
+        self.assertEqual(result['metrics']['rpcReads'], 0)
 
     async def test_exact_output_keeps_forward_plan_and_reversed_native_calldata(self):
         search, _, wire = service()
@@ -348,9 +384,10 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
                 operation.cancel()
                 await asyncio.gather(operation, return_exceptions=True)
 
-    async def test_stream_errors_are_terminal_redacted_and_reorg_never_completes(self):
+    async def test_stream_supplier_errors_are_terminal_redacted_without_header_reads(self):
         for provider in (Provider(reorg=True), Provider(chain='0x2')):
-            search, _, _ = service(provider)
+            search, _, wire = service(provider)
+            wire.failure = True
             app = create_app(route_search=search)
             async with app.router.lifespan_context(app), httpx.AsyncClient(
                     transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
@@ -365,13 +402,15 @@ class RouteSearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(any(event['type'] == 'complete' for event in events))
                 self.assertIn('correlationId', events[-1])
                 self.assertNotIn('credential', response.text)
+                self.assertEqual(provider.calls, [])
 
-    async def test_wrong_chain_reorg_and_cancellation_never_publish_stale_quote(self):
+    async def test_latest_search_omits_header_reads_and_preserves_cancellation(self):
         for provider in (Provider(chain='0x2'), Provider(reorg=True)):
             search, _, _ = service(provider)
             self.addAsyncCleanup(search.close)
-            with self.assertRaises(Exception):
-                await search.get({'mode': 'exact-in', 'targets': [target()]})
+            value = await search.get({'mode': 'exact-in', 'targets': [target()]})
+            self.assertEqual(value['context']['blockTag'], 'latest')
+            self.assertEqual(provider.calls, [])
         search, _, wire = service()
         self.addAsyncCleanup(search.close)
         wire.blocked = True

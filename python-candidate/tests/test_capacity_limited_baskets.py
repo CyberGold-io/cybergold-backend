@@ -69,8 +69,16 @@ def service(current=None, *, markets=False):
     value.preview = preview
     value.engine.read_function = read
     value.engine.registry.ensure_loaded = AsyncMock()
+    # The component fixture provides the same already-observed construction
+    # facts as the journal/cache producer. Core's recovery id is the integer
+    # value of the attached asset address; no amount preview/getter is needed
+    # just to encode that identity.
+    value.core_state_cache.update({**current, 'recoveryAssets': ['0x'+'0'*39+'7']})
     if not markets:
         value.engine.registry.inventory = {}
+        async def snapshot(_pool, _block):
+            raise QuoteFailure('quote-no-route')
+        value.engine.registry.snapshot = snapshot
     return value, previews, reads
 
 
@@ -111,7 +119,7 @@ class CapacityLimitedBasketTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row['amount'] for row in quote['estimatedRecipientOutputs']], ['118562', '296406', '247'])
         self.assertEqual(quote['estimatedRecipientOutputs'][-1], {'kind': 1, 'token': CORE, 'id': '7', 'amount': '247'})
         self.assertEqual(quote['estimatedRetainedInputCharges'], [])
-        self.assertEqual(reads, [(CORE, 'totalSupply()', [], [], ['uint256'], BLOCK)])
+        self.assertEqual(reads, [])
         self.assertIn(('redeem-exact-in', {'grossCygldIn': '1000000'}, BLOCK), previews)
         prepared = await TransactionPreparation(quoter).prepare(preparation(quote))
         self.assertEqual(prepared['plan']['inputs'], quote['inputs'])
@@ -148,10 +156,16 @@ class CapacityLimitedBasketTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(cached['observation']['source'], 'stored')
                 quoter.engine.block.assert_not_called()
                 quoter.engine.block = head
-                # Only saved-plan replay can produce the reduced quote here:
-                # ordinary full-budget issuance has no continuation route, and
-                # full-budget redemption exceeds the same supply.
+                # Isolate saved-plan replay. Cached supply is now also a
+                # construction hint for ordinary redemption, so identical
+                # economics alone cannot identify which producer qualified.
                 quoter.direct_basket_funding = AsyncMock(return_value=None)
+                candidate = quoter.candidate
+                async def saved_only(*args, **kwargs):
+                    if kwargs.get('selected') is None:
+                        raise QuoteFailure('quote-no-route')
+                    return await candidate(*args, **kwargs)
+                quoter.candidate = saved_only
                 refreshed = await quotes.get(budget, refresh=True)
                 self.assertEqual(refreshed['inputs'], first['inputs'])
                 self.assertEqual(refreshed['request'], budget)
@@ -167,14 +181,16 @@ class CapacityLimitedBasketTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(quote['inputs'], smaller['inputs'])
         self.assertNotEqual(quote['searchCoverage']['selectedPhase'], 'saved-plan')
 
-    async def test_redemption_capacity_read_failure_retains_its_ordinary_rpc_error(self):
+    async def test_cached_redemption_capacity_does_not_issue_a_redundant_supply_read(self):
         quoter, _, _ = service()
         quoter.engine.read_function = AsyncMock(side_effect=QuoteFailure('rpc-unavailable'))
         budget = request(3)
         budget['inputs'][0]['amount'] = '500000'
-        with self.assertRaises(QuoteFailure) as failed:
-            await quoter.quote(budget)
-        self.assertEqual(failed.exception.code, 'rpc-unavailable')
+        quote = await quoter.quote(budget)
+        self.assertEqual(quote['inputs'], budget['inputs'])
+        expected = BasketArithmetic(state()).redeem_in(500000)['projectedCoreOutputs']
+        self.assertEqual(quote['estimatedRecipientOutputs'], [{**row, 'amount': str(row['amount'])} for row in expected])
+        quoter.engine.read_function.assert_not_awaited()
 
     async def test_helpers_fee_cannot_make_funding_above_the_entire_supply_win(self):
         quoter, previews, _ = service()
@@ -193,6 +209,7 @@ class CapacityLimitedBasketTests(unittest.IsolatedAsyncioTestCase):
         budget = request(3)
         previous = await quoter.quote(budget)
         current['supply'] = 500000
+        quoter.core_state_cache.update({'supply': current['supply']})
         updates = []
         async def update(frame):
             updates.append(deepcopy(frame['value']))

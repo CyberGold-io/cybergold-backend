@@ -454,7 +454,7 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
         names = Counter(name for name, _ in self.rpc.calls)
         self.assertEqual(names['getPool(address,address,uint24)'], 2)
         self.assertEqual(names['tickSpacing()'], 2)
-        self.assertEqual(names['decimals()'], 2)
+        self.assertEqual(names['decimals()'], 0)
         self.assertEqual(names['slot0()'], 2)
         self.assertEqual(names['liquidity()'], 2)
         self.assertGreater(names['tickBitmap(int16)'], 0)
@@ -484,7 +484,7 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.registry.lookups[('v3', (A, B), 100)])
         self.assertEqual(sum(name.startswith('getPool') for name, _ in self.rpc.calls), 2)
 
-    async def test_concurrent_minimal_seed_state_and_token_metadata_reads_are_shared(self):
+    async def test_concurrent_minimal_seed_state_is_shared_without_display_metadata_reads(self):
         self.registry.inventory.clear()
         entered, release = asyncio.Event(), asyncio.Event()
         original = self.rpc.read_function
@@ -511,7 +511,7 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(names['tickSpacing()'], 1)
         self.assertEqual(names['slot0()'], 1)
         self.assertEqual(names['liquidity()'], 1)
-        self.assertEqual(names['decimals()'], 2)
+        self.assertEqual(names['decimals()'], 0)
 
     async def test_unknown_display_decimals_do_not_gate_raw_sdk_arithmetic(self):
         self.registry.inventory.clear()
@@ -532,25 +532,17 @@ class RichV3Pricing(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(pool['token1']['decimalsKnown'])
         self.assertEqual(value['amountIn'], '1000')
 
-    async def test_metadata_snapshot_disproof_is_preserved_and_sibling_read_drained(self):
+    async def test_unrequested_display_metadata_cannot_disprove_sdk_state(self):
         self.registry.inventory.clear()
-        held, drained = asyncio.Event(), asyncio.Event()
         original = self.rpc.read_function
         async def state(address, signature, types, args, outputs, block):
-            if signature == 'decimals()' and address == A:
-                held.set()
-                try:
-                    await asyncio.Event().wait()
-                finally:
-                    drained.set()
-            if signature == 'decimals()' and address == B:
-                await held.wait()
-                raise SnapshotChanged('metadata context changed')
+            if signature == 'decimals()':
+                raise SnapshotChanged('optional display metadata context changed')
             return await original(address, signature, types, args, outputs, block)
         self.rpc.read_function = state
-        with self.assertRaisesRegex(SnapshotChanged, 'metadata context changed'):
-            await asyncio.wait_for(self.engine.quote_branches(self.branches, 'exactIn', 1000, BLOCK), 2)
-        self.assertTrue(drained.is_set())
+        result = await self.engine.quote_branches(self.branches, 'exactIn', 1000, BLOCK)
+        self.assertTrue(result['settled'])
+        self.assertFalse(any(signature == 'decimals()' for signature, _ in self.rpc.calls))
 
     async def test_slot_snapshot_disproof_is_preserved_and_sibling_read_drained(self):
         held, drained = asyncio.Event(), asyncio.Event()

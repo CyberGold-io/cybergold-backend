@@ -306,6 +306,28 @@ class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(*tuple(session._tasks))
                 await asyncio.sleep(0)
 
+    async def test_initial_catalog_change_is_consumed_by_first_query_without_reevaluation(self):
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        calls = []
+        class Local(RouteTool):
+            name, catalog_dependent = 'static-local', True
+            def discover(_self, query):
+                calls.append(tuple(catalog.inventory))
+                return CandidateFeed(available=[candidate(query.amount+len(catalog.inventory))])
+        session = RouteBootstrap([Local()], catalog=catalog)
+        catalog.inventory['two'] = self.catalog_pool('other')
+        self.assertTrue(session.refresh_catalog())
+        self.assertFalse(session.refresh_catalog())
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(102)])
+        async def unnecessary():
+            self.fail('Initial graph preparation must not start a whole-plan reevaluation')
+        await session.run(ordinary(), unnecessary, quick=unnecessary)
+        self.assertEqual(calls, [('one', 'two')])
+        self.assertEqual(session.metrics['queries'], 1)
+        self.assertEqual(session.metrics['reevaluations'], 0)
+        self.assertEqual(session.metrics['quickReevaluations'], 0)
+
     async def test_changed_catalog_coalesces_inflight_local_inputs_and_preserves_offers(self):
         catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
         entered, release, calls, hosted_calls = asyncio.Event(), asyncio.Event(), [], []
@@ -698,6 +720,68 @@ class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SnapshotChanged):
             await asyncio.wait_for(session.run(ordinary(), reevaluate), 1)
         self.assertCountEqual(drained, ['provider', 'ordinary'])
+
+    async def test_latest_supplier_disproof_keeps_early_hints_and_independent_result(self):
+        ready, release, reevaluated = asyncio.Event(), asyncio.Event(), []
+        class Source:
+            name = 'optional-sdk'
+            async def discover_batches(_self, *_):
+                yield [candidate(101)]
+                ready.set()
+                await release.wait()
+                raise SnapshotChanged('optional SDK observation changed')
+        session = RouteBootstrap([PendingRouteTool(Source())], nomination_only=True)
+        async def ordinary():
+            session.candidates('source', 'target', 100, BLOCK)
+            await ready.wait()
+            release.set()
+            return 'independent Helpers result'
+        async def reevaluate():
+            reevaluated.extend(session.candidates('source', 'target', 100, BLOCK))
+        self.assertEqual(await asyncio.wait_for(session.run(ordinary(), reevaluate), 1),
+                         'independent Helpers result')
+        self.assertEqual(reevaluated, [candidate(101)])
+        self.assertEqual(session.metrics['providers']['optional-sdk']['invalidated'], 1)
+        self.assertEqual(session.metrics['providers']['optional-sdk']['pending'], 0)
+
+    async def test_latest_supplier_cleanup_disproof_does_not_replace_ordinary_error(self):
+        started, drained = asyncio.Event(), []
+        async def discover(*_):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained.append('provider')
+                raise SnapshotChanged('optional SDK disproved while draining')
+        session = RouteBootstrap({'optional-sdk': discover}, nomination_only=True)
+        async def ordinary():
+            session.candidates('source', 'target', 100, BLOCK)
+            await started.wait()
+            raise ValueError('ordinary Helpers failure')
+        async def reevaluate():
+            self.fail('No candidate was produced')
+        with self.assertRaisesRegex(ValueError, 'ordinary Helpers failure'):
+            await asyncio.wait_for(session.run(ordinary(), reevaluate), 1)
+        self.assertEqual(drained, ['provider'])
+        self.assertEqual(session.metrics['providers']['optional-sdk']['pending'], 0)
+        self.assertEqual(session.metrics['closeErrors'], 0)
+
+    async def test_latest_supplier_close_disproof_is_observed_without_revoking_result(self):
+        class Source:
+            name = 'optional-sdk'
+            async def discover(_self, *_):
+                return []
+            async def close(_self):
+                raise SnapshotChanged('optional cache context changed at close')
+        session = RouteBootstrap([PendingRouteTool(Source())], nomination_only=True)
+        async def ordinary():
+            session.candidates('source', 'target', 100, BLOCK)
+            return 'independent Helpers result'
+        async def reevaluate():
+            self.fail('No candidate was produced')
+        self.assertEqual(await asyncio.wait_for(session.run(ordinary(), reevaluate), 1),
+                         'independent Helpers result')
+        self.assertEqual(session.metrics['closeErrors'], 1)
 
     async def test_caller_cancellation_and_existing_budget_stop_drain_all_work(self):
         for stop in ('caller', 'budget'):

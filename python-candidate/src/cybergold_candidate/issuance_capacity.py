@@ -1,4 +1,4 @@
-"""Core's unclipped issuance calculation from the quoted basket at one block."""
+"""Core's unclipped issuance calculation from freshly read supply and basket values."""
 import asyncio
 
 from web3 import Web3
@@ -8,6 +8,7 @@ from .basket_arithmetic import gross_for_net
 from .capacity_cache import core_capacity_facts
 from .preview_errors import KnownPreviewError
 from .shared_reads import discard_pool_observation
+from .rpc_block_context import rpc_block_parameter
 
 PPM, FP = 1_000_000, 10**18
 CORE_READS = [('basketTargetsPpm', 'uint256[]'), ('basketCygldPerUnitFp18', 'uint256[]'),
@@ -61,7 +62,7 @@ async def _read_values(rpc, settings, block, reads, metrics=None, *, shared=Fals
             rows = await rpc.call_batch(calls, block)
         else:
             tasks = [asyncio.create_task(rpc.w3.provider.make_request('eth_call', [
-                {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}]))
+                {'to': address, 'data': data}, rpc_block_parameter(block)]))
                 for address, data in calls]
             try:
                 rows = await asyncio.gather(*tasks)
@@ -83,7 +84,7 @@ async def _read_values(rpc, settings, block, reads, metrics=None, *, shared=Fals
 
 
 async def read_supply_capacity(rpc, settings, block, metrics=None, *, shared=False):
-    """The three authoritative supply limits, from the request's pinned block."""
+    """The three authoritative supply limits at the request's read parameter."""
     return tuple(await _read_values(rpc, settings, block, SUPPLY_READS, metrics, shared=shared))
 
 

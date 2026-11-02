@@ -32,13 +32,16 @@ def hop(source, target, index=4, protocol='v2'):
         'token0': {'address': a, 'decimals': 18, 'chainId': 31338},
         'token1': {'address': b, 'decimals': 18, 'chainId': 31338},
         'reserve0': 'canonical-only', 'sqrtRatioX96': 'canonical-only',
-        'ticks': [{'private': 'coverage'}], 'context': BLOCK, 'lpFee': 3000}}
+        'ticks': [{'index': 0, 'liquidityGross': '1', 'liquidityNet': '1'}], 'context': BLOCK, 'lpFee': 3000}}
 
 
 class Engine:
     def __init__(self):
         self.semaphore = PricingSlots(8)
         self.calls, self.values, self.holds, self.errors = [], {}, {}, {}
+        async def snapshot(pool, _block):
+            return {**deepcopy(pool), 'reserve0': 'canonical-read'}
+        self.registry = SimpleNamespace(inventory={}, snapshot=snapshot)
 
     async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate, canonical):
         pool = branches[0]['hops'][0]['pool']

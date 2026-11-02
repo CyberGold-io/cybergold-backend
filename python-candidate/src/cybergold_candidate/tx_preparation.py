@@ -115,7 +115,8 @@ class TransactionPreparation:
             if int(actual['amount']) > int(maximum['amount']):
                 raise InvalidPreview('Accepted input maximum cannot be met.')
         economic_request = {**selected['request'], 'inputs': deepcopy(selected['inputs'])}
-        value = await self.quoter.evaluate_selected(economic_request, selected['plan'])
+        value = await self.quoter.evaluate_selected(economic_request, selected['plan'],
+            recipient=request['recipient'], minimum=int(minimum), accepted_core=expected)
         result = compile_execution(value, recipient=request['recipient'], deadline=int(self.now()) + 600,
                                    slippage=request['slippageBps'], minimum=minimum, accepted_core=expected)
         result['economicQuote'] = value

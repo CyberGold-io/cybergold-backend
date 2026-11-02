@@ -2,6 +2,7 @@
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import { createAlphaRouter } from "./alpha-provider.ts";
+import { createCalculationSession } from "./calculation-session.ts";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -38,9 +39,32 @@ export function forwardHops(router: any, pools: any[], source: string, target: s
   return hops;
 }
 
-export async function routeRequest(request: Request, quote: (value: any) => Promise<any>) {
+export async function routeRequest(request: Request, quote: (value: any) => Promise<any>,
+                                   publish: (candidates: any[]) => void = () => {}) {
+  const offered = new Set<string>();
   let adapter: ReturnType<typeof createAlphaRouter>;
+  const nominate = (routes: any[]) => {
+    const nominees: any[] = [];
+    try {
+      for (const route of routes) {
+        const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
+        const identity = JSON.stringify(hops.map(hop => hop.pool
+          ? [hop.pool.protocol, hop.pool.token0.address, hop.pool.token1.address,
+            hop.pool.feePips, hop.pool.tickSpacing, hop.pool.hooks, hop.zeroForOne]
+          : [hop.kind, hop.currencyOut]));
+        if (!offered.has(identity)) {
+          offered.add(identity);
+          // Actual Alpha topology is useful before its percentage observations.
+          // Helpers still prices any complete plan that consumes this hint.
+          nominees.push([{ amountIn: request.amount, hops }]);
+        }
+      }
+    } finally {
+      if (nominees.length) publish(nominees);
+    }
+  };
   adapter = createAlphaRouter({ chainId: request.chainId, blockNumber: request.blockNumber, pools: request.pools,
+    nominateRoutes: nominate,
     quoteRoute: async ({ route, amount, mode }) => {
       const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
       const result = await quote({ mode, amount: amount.quotient.toString(),
@@ -65,34 +89,17 @@ export async function routeRequest(request: Request, quote: (value: any) => Prom
 
 function main() {
   const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  const pending = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
-  let sequence = 0;
   const reply = (value: any) => process.stdout.write(JSON.stringify(value) + "\n");
+  const session = createCalculationSession(routeRequest, reply,
+    error => error instanceof Error ? error.message : "AlphaRouter unavailable");
   input.on("line", line => {
     try {
-      const frame = JSON.parse(line);
-      if (frame.operation === "quoteResult") {
-        const operation = pending.get(frame.quoteId);
-        if (!operation) throw new Error("AlphaRouter callback unavailable");
-        pending.delete(frame.quoteId);
-        operation.resolve(frame.result);
-        return;
-      }
-      const request = frame as Request;
-      const quote = (value: any): Promise<any> => new Promise((resolve, reject) => {
-        const quoteId = `${request.id}:${++sequence}`;
-        pending.set(quoteId, { resolve, reject });
-        reply({ id: request.id, operation: "quote", quoteId, ...value });
-      });
-      void routeRequest(request, quote).then(candidates => reply({ id: request.id, candidates }),
-        error => reply({ id: request.id, error: error instanceof Error ? error.message : "AlphaRouter unavailable" }));
+      if (!session.receive(JSON.parse(line))) throw new Error("AlphaRouter callback unavailable");
     } catch (_error) {
       reply({ error: "Invalid AlphaRouter frame" });
     }
   });
-  input.on("close", () => {
-    for (const operation of pending.values()) operation.reject(new Error("AlphaRouter input closed"));
-  });
+  input.on("close", () => session.close());
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

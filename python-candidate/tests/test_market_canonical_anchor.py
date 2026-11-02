@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 from web3 import Web3
 
@@ -21,6 +22,7 @@ from cybergold_candidate.uniswap_routes import (candidate_branches, initial_mark
     market_routes, pool_identity, supported_route, v4_pool_id)
 from cybergold_candidate.uniswap_state import PoolRegistry, ZERO
 from cybergold_candidate.wallet_balances import TOKENS
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK, is_latest
 
 CORE = '0x'+'6'*40
 PAXG = dict(TOKENS)['paxg']
@@ -136,18 +138,18 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
         for side in ('sell', 'buy'):
             request = {'side': side, 'mode': 'exact-out', 'counterToken': COUNTER, 'amount': '1000000',
                 'adapter': ADAPTER, 'recipient': COUNTER, 'deadline': '2000000000', 'slippageBps': 100}
-            result = await quotes.get(request)
+            result = await quotes._get(request, block=BLOCK)
             self.assertEqual(result['qualification'], 'sdk')
             self.assertTrue(any(hop['pool']['id'] == tail['id'] for hop in result['plan']['route']['branches'][0]['hops']))
             self.assertIn(tail['id'], registry.inventory)
             self.assertEqual(registry.inventory[tail['id']]['acquisition'], {'blockNumber': '123', 'blockHash': BLOCK['hash']})
-            retained = await quotes.get({**request, 'retainedPlan': result['plan']})
+            retained = await quotes._get({**request, 'retainedPlan': result['plan']}, block=BLOCK)
             self.assertEqual(retained['params']['bound'], result['params']['bound'])
         self.assertEqual(set(registry.inventory), {registry.seed['id'], tail['id']})
         probed = {args[0].hex() for signature, args in rpc.calls if signature == 'getSlot0(bytes32)'}
         self.assertGreater(len(probed), 2, 'Uninitialized candidate keys must be observed, not fabricated as pools')
 
-    async def fixture(self, tail_protocol):
+    async def fixture(self, tail_protocol, at=BLOCK):
         class Rpc:
             chain_id = 31338
             async def block(self, _):
@@ -165,12 +167,16 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
             pass
         registry.ensure_loaded = ensure_loaded
         async def acquire(row, block):
-            self.assertEqual(block, BLOCK)
+            self.assertEqual(block, at)
             known = next((known for known in registry.inventory.values() if pool_identity(known) == pool_identity(row)), None)
             if known is None:
                 raise ValueError('Fixture has no pool at this execution identity')
             value = snapshot(known)
-            registry.observed[known['id']] = deepcopy(value)
+            if is_latest(at):
+                value['context'] = {'chainId': 31338, 'blockNumber': None,
+                                    'blockHash': None, 'blockTag': 'latest'}
+            else:
+                registry.observed[known['id']] = deepcopy(value)
             return value
         registry.snapshot = acquire
         sdk = SdkWorker([os.environ.get('CYBERGOLD_TEST_NODE', 'node'), str(Path('src/uniswap-sdk/worker.ts').resolve())])
@@ -183,6 +189,23 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(registry.close)
         return quotes, registry
 
+    async def test_latest_market_search_uses_no_header_and_keeps_observation_unbound(self):
+        quotes, registry = await self.fixture('v4', at=LATEST_BLOCK)
+        rpc = registry.get_rpc()
+        rpc.block = AsyncMock(side_effect=AssertionError('Latest quotation must not acquire a header'))
+        rpc.assert_canonical = AsyncMock(side_effect=AssertionError('Latest quotation has no pinned header'))
+        request = {'side': 'sell', 'mode': 'exact-out', 'counterToken': COUNTER, 'amount': '1000000',
+            'adapter': ADAPTER, 'recipient': COUNTER, 'deadline': '2000000000', 'slippageBps': 100}
+        value = await quotes.get(request)
+        self.assertGreater(int(value['totalInput']), 0)
+        self.assertEqual(value['context'], {'chainId': 31338, 'blockNumber': None, 'blockHash': None,
+            'blockTag': 'latest', 'observedAt': value['context']['observedAt']})
+        rpc.block.assert_not_awaited()
+        rpc.assert_canonical.assert_not_awaited()
+        self.assertEqual(registry.observed, {})
+        self.assertEqual(quotes.fill_capacity.completed, {})
+        self.assertTrue(all(not route['points'] for packet in quotes.models.values() for route in packet['routes']))
+
     async def test_real_sdk_mixed_input_and_homogeneous_v4_output_both_directions(self):
         for tail_protocol, mode in (('v3', 'exact-in'), ('v4', 'exact-out')):
             quotes, registry = await self.fixture(tail_protocol)
@@ -190,7 +213,7 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(tail=tail_protocol, mode=mode, side=side):
                     request = {'side': side, 'mode': mode, 'counterToken': COUNTER, 'amount': '1000000',
                         'adapter': ADAPTER, 'recipient': COUNTER, 'deadline': '2000000000', 'slippageBps': 100}
-                    result = await quotes.get(request)
+                    result = await quotes._get(request, block=BLOCK)
                     route = result['plan']['route']
                     self.assertEqual(result['qualification'], 'sdk')
                     self.assertEqual(result['adapterData'], encode_route(route, ADAPTER))
@@ -207,7 +230,7 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
                         else [1, 2] if tail_protocol == 'v3' else [2, 2])
                     self.assertEqual(result['searchCoverage']['canonicalPosition'], 'first' if side == 'sell' else 'last')
                     self.assertEqual(bool(quotes.connector_calls), mode == 'exact-in')
-                    retained = await quotes.get({**request, 'retainedPlan': result['plan']})
+                    retained = await quotes._get({**request, 'retainedPlan': result['plan']}, block=BLOCK)
                     self.assertEqual(retained['params']['bound'], result['params']['bound'])
 
     async def test_only_mixed_output_routes_remain_unavailable_and_never_become_adapter_payloads(self):
@@ -216,7 +239,7 @@ class CanonicalMarketSdkTests(unittest.IsolatedAsyncioTestCase):
             request = {'side': side, 'mode': 'exact-out', 'counterToken': COUNTER, 'amount': '1000000',
                 'adapter': ADAPTER, 'recipient': COUNTER, 'deadline': '2000000000', 'slippageBps': 100}
             with self.assertRaises(QuoteFailure) as failure:
-                await quotes.get(request)
+                await quotes._get(request, block=BLOCK)
             self.assertEqual(failure.exception.code, 'quote-no-route')
 
     async def test_retained_unanchored_pool_cannot_bypass_market_route_intent(self):

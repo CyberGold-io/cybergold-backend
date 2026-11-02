@@ -21,16 +21,46 @@ type PoolSnapshot = { id: string; address?: string; protocol: "v2" | "v3" | "v4"
   sqrtRatioX96?: string; sqrtPriceX96?: string; liquidity?: string; tick?: number; tvlETH?: number; tvlUSD?: number };
 type QuoteRequest = { route: any; amount: any; mode: "exactIn" | "exactOut"; pools: PoolSnapshot[]; blockNumber: number };
 type QuoteObservation = { quote: string | null; sqrtPriceX96AfterList?: string[]; initializedTicksCrossedList?: number[]; gasEstimate?: string };
-type AlphaOptions = { chainId: number; blockNumber: number; pools: PoolSnapshot[]; quoteRoute: (request: QuoteRequest) => Promise<QuoteObservation>; gasSupportPools?: PoolSnapshot[] };
+type AlphaOptions = { chainId: number; blockNumber: number; pools: PoolSnapshot[];
+  nominateRoutes?: (routes: any[]) => void;
+  quoteRoute: (request: QuoteRequest) => Promise<QuoteObservation>; gasSupportPools?: PoolSnapshot[] };
+// The product Sandbox inherits these Mainnet deployments. Register the
+// dependency addresses/currencies under its real ID; no quote/callback is
+// labelled Mainnet and this offline router never owns a chain transport.
+let sandboxRegistered = false;
+function registerSandboxDependencies(chainId: number) {
+  if (chainId !== 31338 || sandboxRegistered) return;
+  const chains = sorRequire('@uniswap/smart-order-router/build/main/util/chains');
+  const addresses = sorRequire('@uniswap/smart-order-router/build/main/util/addresses');
+  const tokenAt = (token: any) => new Token(chainId, token.address, token.decimals, token.symbol, token.name);
+  addresses.UNISWAP_MULTICALL_ADDRESSES[chainId] = addresses.UNISWAP_MULTICALL_ADDRESSES[1];
+  chains.WRAPPED_NATIVE_CURRENCY[chainId] = tokenAt(chains.WRAPPED_NATIVE_CURRENCY[1]);
+  sor.usdGasTokensByChain[chainId] = sor.usdGasTokensByChain[1].map(tokenAt);
+  const pools = sorRequire('@uniswap/smart-order-router/build/main/util/pool');
+  pools.V4_ETH_WETH_FAKE_POOL[chainId] = new sdk.v4.Pool(sandboxEther,
+    chains.WRAPPED_NATIVE_CURRENCY[chainId], 0, 0, ZERO, '79228162514264337593543950336', '0', 0);
+  const chainEnum = chains.ID_TO_CHAIN_ID, networkName = chains.ID_TO_NETWORK_NAME;
+  chains.ID_TO_CHAIN_ID = (id: number) => id === chainId ? chainId : chainEnum(id);
+  chains.ID_TO_NETWORK_NAME = (id: number) => id === chainId ? 'ethereum-mainnet-fork' : networkName(id);
+  sandboxRegistered = true;
+}
+class SandboxEther extends Ether {
+  constructor() { super(31338); }
+  get wrapped() { return sor.WRAPPED_NATIVE_CURRENCY[31338]; }
+}
+const sandboxEther = new SandboxEther();
+
 export function createAlphaRouter(options: AlphaOptions) {
   const { chainId, blockNumber } = options;
+  registerSandboxDependencies(chainId);
   const counts: Record<string, number> = {};
   const record = (stage: string, details: any = {}) => {
     counts[stage] = (counts[stage] ?? 0) + 1;
   };
   const tokens = new Map<string, any>();
   const currency = (row: TokenSnapshot) => {
-    if (row.isNative || lower(row.address) === ZERO) return Ether.onChain(row.chainId ?? chainId);
+    if (row.isNative || lower(row.address) === ZERO) return (row.chainId ?? chainId) === 31338
+      ? sandboxEther : Ether.onChain(row.chainId ?? chainId);
     const key = lower(row.address);
     if (!tokens.has(key)) tokens.set(key, new Token(row.chainId ?? chainId, row.address,
       row.decimals ?? 18, row.symbol, row.name));
@@ -177,6 +207,7 @@ export function createAlphaRouter(options: AlphaOptions) {
     hasTokenByAddress: async () => false, getTokenByAddress: async () => undefined };
   const quoteMany = async (amounts: any[], routes: any[], mode: 'exactIn' | 'exactOut') => {
     record('quote.'+mode, { routes: routes.length, amounts: amounts.map(amount => amount.quotient.toString()) });
+    options.nominateRoutes?.(routes);
     const routesWithQuotes = [];
     for (const route of routes) {
       const pools = (route.pools ?? route.pairs).map((pool: any) => snapshotBySdkPool.get(pool));
@@ -213,6 +244,7 @@ export function createAlphaRouter(options: AlphaOptions) {
   const AlphaRouterClass = sor.AlphaRouter;
   const router = new AlphaRouterClass({ chainId, provider: new OfflineProvider(),
 
+    ...(chainId === 31338 ? { v2Supported: [chainId], v4Supported: [chainId], mixedSupported: [chainId] } : {}),
     v4PoolParams: routeRows.filter(row => row.protocol === 'v4').map(row => [row.lpFee ?? row.feePips, row.tickSpacing, row.hooks ?? ZERO]),
     v2SubgraphProvider: subgraph('v2'), v3SubgraphProvider: subgraph('v3'), v4SubgraphProvider: subgraph('v4'),
     v2PoolProvider, v3PoolProvider, v4PoolProvider, tokenProvider, tokenPropertiesProvider,

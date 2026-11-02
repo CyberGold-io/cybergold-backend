@@ -1,10 +1,12 @@
 """Executable universal quotes: actual ordered pool arithmetic, wire and HTTP."""
 import asyncio
 from copy import deepcopy
+from contextvars import ContextVar
 import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 import httpx
 from web3 import Web3
@@ -22,6 +24,7 @@ from cybergold_candidate.uniswap_routes import pool_identity
 CORE, HELPERS, OTHER, USER = ['0x'+part*40 for part in '1235']
 ADAPTER = '0x'+'a1'*20
 BLOCK={'number':21,'hash':'0x'+'ab'*32}
+_oracle_observations = ContextVar('fixture_oracle_observations', default=None)
 
 def settings(configured=True):
     return SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
@@ -43,10 +46,12 @@ class Engine:
               pool(OTHER,PAXG,'0x'+'88'*20),pool(PAXG,CORE,'0x'+'99'*20,True)]
         self.registry=SimpleNamespace(inventory={row['id']:row for row in rows},chain=1,core=CORE,seed=rows[-1])
         self.registry.get_rpc=lambda:self
+        self.registry.snapshot=self.snapshot
         self.calls=[]
         self.semaphore=asyncio.Semaphore(8)
         self.cap=None
         self.supply=10**24
+    async def snapshot(self,pool,_block): return deepcopy(pool)
     async def block(self,_): return deepcopy(BLOCK)
     async def assert_canonical(self,block): self.calls.append(('canonical',block))
     async def read_function(self,target,signature,types,arguments,outputs,block):
@@ -66,11 +71,34 @@ class Engine:
         return {'amountIn':str(used),'amountOut':str(received)}
 
 
+async def fixture_plan_simulator(quoter, request, selected, *, basis_reader, candidate=None,
+                                 block=None, pricing=True, **_):
+    """Component oracle only: preserve legacy SDK replay, never emulate Helpers."""
+    from quoter_sdk_oracle import evaluate_candidate
+    at = deepcopy(BLOCK if block is None else block)
+    market = request['intent'] < 2 and all(row['kind'] == 1 for row in selected['allocations'])
+    assets, weights = ([], []) if market else await basis_reader(at)
+    # This oracle models an execution leaf, including after selection stops.
+    value = await evaluate_candidate(quoter, request, 100, 'core-first', at, assets, weights,
+                                     selected=selected, selection=False, observations=_oracle_observations.get())
+    value['context'] = {**value['context'], 'blockNumber': None, 'blockHash': None,
+                        'blockTag': 'latest', 'verification': 'fixture-sdk-oracle'}
+    return value
+
+
 class Quotes(UniversalQuotes):
     def __init__(self,engine,configured=True):
         self.previews=[]; self.evaluated=[]; self.selected_evaluated=[]
-        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call)
+        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call,
+                         plan_simulator=self.simulate_plan)
+    async def exploration_block(self): return deepcopy(BLOCK)
+    async def simulate_plan(self,request,selected,**options):
+        return await fixture_plan_simulator(self,request,selected,basis_reader=self.basis_reader,**options)
     async def basis_call(self,block): return [PAXG,OTHER],[500000,500000]
+    async def core_outputs(self,block):
+        return [{'kind':0,'token':PAXG,'id':'0','amount':'1'},
+                {'kind':1,'token':OTHER,'id':'7','amount':'1'},
+                {'kind':0,'token':OTHER,'id':'0','amount':'1'}]
     def seed_routes(self,*_): pass
     async def discover(self,*_): pass
     async def preview_call(self,mode,value,block):
@@ -88,7 +116,11 @@ class Quotes(UniversalQuotes):
     async def candidate(self,request,share,order,*args,**kwargs):
         self.evaluated.append((share,order))
         self.selected_evaluated.append(kwargs.get('selected') is not None)
-        return await super().candidate(request,share,order,*args,**kwargs)
+        token = _oracle_observations.set(kwargs.get('observations'))
+        try:
+            return await super().candidate(request,share,order,*args,**kwargs)
+        finally:
+            _oracle_observations.reset(token)
 
 
 def request(intent=0):
@@ -195,7 +227,7 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(int(value['quotedOutput']),int(value['outputMinimum']))
         self.assertEqual(compile_plan(value['plan'],value['planDescription'],int(value['outputMinimum'])),value['plan'])
         self.assertEqual(value['retentionDisclosure']['custodian'],HELPERS)
-        self.assertEqual(service.engine.calls[-1],('canonical',BLOCK))
+        self.assertNotIn(('canonical',BLOCK),service.engine.calls)
         for mode,args in service.previews:
             self.assertEqual(mode,'issue-exact-in');self.assertEqual(len(args['maximumAmountsIn']),2)
 
@@ -215,13 +247,13 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         usdc,xaut=[dict(TOKENS)[name] for name in ('usdc','xaut')]
         async def loaded(): pass
         async def connectors(*_): pass
-        async def metadata(currency,block):
-            if currency.lower()==OTHER.lower(): raise OSError('optional metadata unavailable')
-            return registry.token(currency,6 if currency.lower() in (usdc.lower(),xaut.lower()) else 18)
-        registry.ensure_loaded=loaded;registry.token_metadata=metadata
+        registry.ensure_loaded=loaded
+        registry.token_metadata=AsyncMock(side_effect=AssertionError('Discovery must not wait for display metadata'))
         registry.token=lambda address,decimals:{'address':Web3.to_checksum_address(address),'decimals':decimals,'chainId':1}
+        registry.metadata={address.lower():registry.token(address,6) for address in (usdc,xaut)}
         service.engine.connector_inventory=connectors
         await UniversalQuotes.discover(service,request(),[usdc,xaut,OTHER],BLOCK)
+        registry.token_metadata.assert_not_awaited()
         for address in (usdc,xaut):
             row=next(pool for pool in registry.inventory.values() if {pool['token0']['address'].lower(),
                 pool['token1']['address'].lower()}=={ZERO,address.lower()})

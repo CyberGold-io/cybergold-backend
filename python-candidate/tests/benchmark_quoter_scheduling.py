@@ -49,6 +49,7 @@ async def run(args):
     report = {'schemaVersion': 1,
         'scope': 'actual-serving-Quoter; synthetic immutable chain/Core; hosted HTTPX response fixtures',
         'interpretation': ['Measures CPU, scheduling and real loopback HTTP state acquisition; no live API or Core performance.',
+            'Selected-plan pricing uses an explicit synthetic SDK component oracle, not Helpers execution.',
             'Finite fixture delays are identical across source cuts and strategies, not production deadlines.',
             'First whole-plan latency does not imply equal first-output quality; updates retain economics.',
             'Independent reference is replayed after search and never injected into production candidates.',

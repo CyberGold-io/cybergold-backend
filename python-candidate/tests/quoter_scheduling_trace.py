@@ -2,7 +2,8 @@
 
 The ordinary factory, graph discovery, optional work, eight pricing permits,
 5/15-second producer budget, SDK pricing and whole-plan comparison are intact.
-Only chain replies/Core preview and hosted HTTP responses are fixture data.
+Chain replies/Core preview, selected-plan SDK component pricing and hosted
+HTTP responses are explicit fixture data; this does not emulate Helpers execution.
 No private environment file, live RPC or real Uniswap account is consumed.
 """
 import asyncio
@@ -37,6 +38,7 @@ from benchmark_parallel_matrix import ROOT, selected_request, selected_topology
 from benchmark_parallel_matrix import canonical_cache, difference, source_bindings
 from cybergold_candidate.routing_encoding import weighted_routes
 from quoter_fixture import synthetic_pool
+from test_universal_quote import fixture_plan_simulator
 
 
 STRATEGIES = ('custom-only', 'all-local', 'hosted-failure', 'parallel')
@@ -402,6 +404,12 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
     async def basis(_):
         return [PAXG], [1_000_000]
     q.basis_reader=basis
+    async def simulate(request, selected, **kwargs):
+        # MatrixService's generic oracle captures its original two-asset basis.
+        # This scheduling case owns a one-asset Core: bind every selected replay
+        # to the same basis as ordinary search, using an explicit component oracle.
+        return await fixture_plan_simulator(q, request, selected, basis_reader=q.basis, **kwargs)
+    q.plan_simulator=simulate
     async def preview(mode, value, block):
         if not core_preview or mode!='issue-exact-in':
             raise QuoteFailure('quote-no-route')
@@ -456,9 +464,10 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
     server_before=transport.counts()
     result={'case':case.name,'status':'pending','scope':'synthetic-Core-and-chain/hosted-HTTP-fixtures/actual-serving-Quoter',
         'pin':BLOCK,'chainState':'synthetic-immutable-ABI-responses',
+        'pricingOracle':'explicit-selected-plan-SDK-component; not Helpers execution',
         'request':{'inputAsset':'WETH','inputRaw':'10000','outputAsset':'synthetic-CYGLD'},'updates':[],
         'strategy':strategy,'cacheMode':cache_mode,'primer':primer,
-        'configuration':{'optionalLimit':q.optional_limit,'engineSlots':q.engine.semaphore._value},
+        'configuration':{'optionalLimit':None,'engineSlots':q.engine.semaphore._value},
         'hostedFixtureMode':{'custom-only':'not-used','all-local':'unconfigured',
             'hosted-failure':'http-503-fixture','parallel':'success-fixture'}[strategy],
         'candidateInstrumentation':'owned-instance-method; whole-plan start/priced/exit spans recorded',
@@ -495,7 +504,7 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         result['independentReference']={'output':reference['quotedOutput'],'funding':[
             {'asset':asset(i['currency']),'amount':i['amount']} for i in reference['inputs']],
             'fees':reference['fees'],'kinds':[b['kind'] for b in reference['plan']['body']['branches']],
-            'qualification':'separate-selected-plan-canonical-replay-after-search',
+            'qualification':'separate-selected-plan-synthetic-SDK-replay-after-search',
             'serverRpc':difference(transport.counts(),reference_before)}
     except Exception as error:
         result.update(status='failed',failureType=type(error).__name__,failurePhase=trace.phase)

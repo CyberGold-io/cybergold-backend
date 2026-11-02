@@ -37,6 +37,11 @@ def service(store):
     return quoter, EconomicQuotes(quoter, store)
 
 
+async def persisted(service):
+    """Tests that inspect SQL await its owner, not the public quote response."""
+    await asyncio.gather(*tuple(service.background))
+
+
 class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_better_fitting_cached_tuple_beats_poor_exact_hit_without_rpc_or_mutation(self):
         store = SharedStore()
@@ -128,6 +133,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                     'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
         quoter.preview = preview
         historical = await quoter.candidate(value, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        historical['plan']['_fixture_saved_seed'] = True
         historical['plan']['conversions'] = {key: row for key, row in historical['plan']['conversions'].items()
                                            if ':residual:' not in key}
         for row, asset in zip(historical['plan']['body']['branches'][0]['data']['continuations'], (PAXG, OTHER)):
@@ -137,7 +143,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         seed_offered = asyncio.Event()
         candidate = quoter.candidate
         async def hold_ordinary(*args, **kwargs):
-            if kwargs.get('selected') is None:
+            if not (kwargs.get('selected') or {}).get('_fixture_saved_seed'):
                 await seed_offered.wait()
             return await candidate(*args, **kwargs)
         quoter.candidate = hold_ordinary
@@ -207,6 +213,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         before = len(quoter.evaluated)
         generation['value'] = 'two'
         replacement = await quotes.get(value)
+        await persisted(quotes)
         self.assertEqual(replacement['observation']['source'], 'search')
         self.assertGreater(len(quoter.evaluated), before)
         self.assertEqual({key.namespace for key in store.rows},
@@ -240,23 +247,33 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         quoter, quotes = service(store)
         value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
         observed = await quotes.get(value)
+        await persisted(quotes)
         recorded = deepcopy(store.rows)
         quote = quoter.quote
         seeds = []
         async def measured(req, **kwargs):
-            seeds.append(kwargs.get('seed'))
+            lookup = kwargs.get('seed_lookup')
+            async def observed_lookup():
+                seed = await lookup()
+                seeds.append(seed)
+                return seed
+            kwargs['seed_lookup'] = observed_lookup
             return await quote(req, **kwargs)
         quoter.quote = measured
         refreshed = await quotes.get(value, refresh=True)
         self.assertEqual(refreshed['observation'], {'source': 'search', 'refresh': True})
         self.assertEqual(seeds[0]['plan'], observed['plan'])
+        await persisted(quotes)
         saved = deepcopy(store.rows)
         quoter.quote = AsyncMock(side_effect=QuoteFailure('quote-no-route'))
         with self.assertRaises(QuoteFailure):
             await quotes.get(value, refresh=True)
         self.assertEqual(store.rows, saved)
         retained = await quotes.get(value)
-        self.assertEqual(retained['quotedOutput'], observed['quotedOutput'])
+        # A successful refresh may improve the original quote. A later failure
+        # must retain that latest successful economic tuple.
+        for field in ('quotedOutput', 'inputs', 'plan', 'context', 'fees', 'routeOrigins'):
+            self.assertEqual(retained.get(field), refreshed.get(field))
         self.assertEqual(len(recorded), 1)
 
     async def test_economic_api_does_not_require_or_emit_execution_terms(self):

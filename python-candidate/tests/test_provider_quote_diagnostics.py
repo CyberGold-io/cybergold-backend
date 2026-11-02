@@ -22,7 +22,7 @@ from cybergold_candidate.route_scheduler import schedule_routes
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.basket_preview import InvalidPreview
-from test_quote_intent import service, request, retained_plan
+from test_quote_intent import service, request, retained_plan, pinned_get
 import test_uniswap_market as market_fixture
 POOL, BLOCK = market_fixture.POOL, market_fixture.BLOCK
 
@@ -139,9 +139,9 @@ class CoreDiscoveryEvidence(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(routes.close)
         intent.retain_plans = True
         value = request('redeem-exact-in')
-        first = await intent.get(value, lambda _row: asyncio.sleep(0))
+        first = await pinned_get(intent, value, lambda _row: asyncio.sleep(0))
         retained = {**value, 'retainedPlan': retained_plan(first)}
-        result = await intent.get(retained, lambda _row: asyncio.sleep(0))
+        result = await pinned_get(intent, retained, lambda _row: asyncio.sleep(0))
         self.assertTrue(result['quoteDiagnostics']['qualified'])
         rows = result['quoteDiagnostics']['providerQualifications']['rows']
         self.assertEqual(len(rows), 2)  # Retained revalidation, existing final canonical validation.
@@ -150,7 +150,7 @@ class CoreDiscoveryEvidence(unittest.IsolatedAsyncioTestCase):
             raise QuoteFailure('rpc-timeout')
         routes.engine.quote_branches = unavailable
         with self.assertRaises(QuoteFailure) as caught:
-            await intent.get(retained, lambda _row: asyncio.sleep(0))
+            await pinned_get(intent, retained, lambda _row: asyncio.sleep(0))
         evidence = quote_error_diagnostics(caught.exception)['providerQualifications']
         self.assertEqual((evidence['attempts'], evidence['rejected']), (1, 1))
         self.assertEqual(evidence['rows'][0]['code'], 'rpc-timeout')
@@ -506,6 +506,8 @@ class MarketDiscoveryEvidence(unittest.IsolatedAsyncioTestCase):
 
     async def test_final_canonicality_failure_is_explicit_and_keeps_pricing_evidence(self):
         self.selected_ids = [1]
+        # Canonical faults require an explicitly pinned fixture producer.
+        self.quotes.sharing.head = lambda: asyncio.sleep(0, result=deepcopy(BLOCK))
         reads = 0
         async def canonical(_block):
             nonlocal reads

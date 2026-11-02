@@ -22,8 +22,9 @@ from .sdk_worker import SdkWorker, MissingPoolState
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
     pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
     market_anchor, LEGACY_V3_ADAPTERS)
-from .uniswap_state import ZERO, same_observed_pool
+from .uniswap_state import ZERO, same_observed_pool, search_pool_state
 from .uniswap_v4 import tick_prefetch_scope
+from .rpc_block_context import is_latest
 from .wallet_balances import TOKENS
 
 _quote_snapshots = ContextVar('route_quote_snapshots', default=None)
@@ -80,15 +81,28 @@ class RouteQuoteEngine:
             fee = protocol+lp-protocol*lp//1_000_000
         return PoolBaseline.v3(int(state['sqrtRatioX96']), int(state['liquidity']), fee, zero_for_one)
 
-    async def route_baseline(self, plan, block):
+    async def route_baseline(self, plan, block, states=None):
         """Indicative marginal/impact metadata; exact swap arithmetic is SDK-owned."""
         plan = {**plan, 'branches': RouteQuoteEngine.enrich_branches(self, plan['branches'])}
-        states = {}
+        states = dict(states or {})
+        pools = {}
         for branch in plan['branches']:
             for hop in branch['hops']:
                 identity = pool_identity(hop['pool'])
-                if identity not in states:
-                    states[identity] = await self.registry.snapshot(hop['pool'], block)
+                pools.setdefault(identity, hop['pool'])
+                if identity not in states and is_latest(block) and (state := search_pool_state(self.registry.chain, hop['pool'])) is not None:
+                    states[identity] = state
+        reads = {identity: asyncio.create_task(self.registry.snapshot(pool, block))
+                 for identity, pool in pools.items() if identity not in states}
+        try:
+            for identity, task in reads.items():
+                async with required_state_wait():
+                    states[identity] = await task
+        finally:
+            for task in reads.values():
+                if not task.done():
+                    task.cancel()
+            raise_snapshot_disproof(await asyncio.gather(*reads.values(), return_exceptions=True))
         return self.baseline_from_states(plan, states)
 
     def baseline_from_states(self, plan, states):
@@ -133,6 +147,10 @@ class RouteQuoteEngine:
         known = {(pool['protocol'], tuple(sorted((pool['token0']['address'].lower(),
             pool['token1']['address'].lower()))), int(pool['feePips'])): pool
             for pool in self.registry.inventory.values() if pool.get('address')}
+        def token(address):
+            known = self.registry.metadata.get(address.lower())
+            return deepcopy(known) if known is not None else {
+                **self.registry.token(address, 18), 'decimalsKnown': address.lower() == ZERO}
         async def v2(pair):
             key = ('v2', pair, 3000)
             if key in known or key in self.registry.lookups:
@@ -143,7 +161,7 @@ class RouteQuoteEngine:
                 if address.lower() == ZERO:
                     self.registry.lookups[key] = None
                     return
-                a, b = await asyncio.gather(*(self.registry.token_metadata(token, block) for token in pair))
+                a, b = map(token, pair)
                 pool = {'id': address.lower(), 'protocol': 'v2', 'address': address,
                     'token0': a, 'token1': b, 'feePips': 3000}
                 self.registry.inventory[pool['id']] = pool
@@ -164,10 +182,9 @@ class RouteQuoteEngine:
                 if address.lower() == ZERO:
                     self.registry.lookups[key] = None
                     return
-                a, b = await asyncio.gather(*(self.registry.token_metadata(token, block) for token in pair))
-                spacing, = await rpc.read_function(address, 'tickSpacing()', [], [], ['int24'], block)
+                a, b = map(token, pair)
                 pool = {'id': address.lower(), 'protocol': 'v3', 'address': address,
-                    'token0': a, 'token1': b, 'feePips': fee, 'tickSpacing': spacing}
+                    'token0': a, 'token1': b, 'feePips': fee}
                 self.registry.inventory[pool['id']] = pool
                 self.registry.lookups[key] = pool
                 self.registry.persist('inventory', pool['id'], pool)
@@ -176,10 +193,9 @@ class RouteQuoteEngine:
             except Exception:
                 # Discovery failure is unknown, not canonical absence. Keep
                 # its execution identity for the SDK's on-demand acquisition.
-                a, b = (self.registry.token(token, 18) for token in pair)
+                a, b = map(token, pair)
                 pool = {'id': 'v3:'+':'.join((*pair, str(fee))), 'protocol': 'v3',
                     'token0': a, 'token1': b, 'feePips': fee,
-                    'tickSpacing': {100: 1, 500: 10, 3000: 60, 10000: 200}[fee],
                     **({'address': address} if address else {})}
                 self.registry.inventory[pool['id']] = pool
         pending = set()
@@ -312,10 +328,13 @@ class RouteQuoteEngine:
                     'zeroForOne': hop['zeroForOne']} for hop in branch['hops']]} for branch in branches]}}
         async def acquire(requests):
             observations = []
-            for identity, snapshot in list(snapshots.items()):
-                needed = [row for row in requests if row.get('poolId', row.get('id')) == identity]
-                if needed:
-                    observed = await self.registry.extend_ticks(canonical[identity], needed, block)
+            reads = {identity: asyncio.create_task(self.registry.extend_ticks(canonical[identity], needed, block))
+                for identity in snapshots
+                if (needed := [row for row in requests if row.get('poolId', row.get('id')) == identity])}
+            try:
+                for identity, task in reads.items():
+                    snapshot = snapshots[identity]
+                    observed = await task
                     canonical[identity] = observed
                     for alias, state in list(canonical.items()):
                         if alias != identity and same_observed_pool(state, observed):
@@ -323,7 +342,12 @@ class RouteQuoteEngine:
                                 'bitmapWords': deepcopy(observed['bitmapWords'])}
                     snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
                     observations.append({'id': identity, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']})
-            return observations
+                return observations
+            finally:
+                for task in reads.values():
+                    if not task.done():
+                        task.cancel()
+                raise_snapshot_disproof(await asyncio.gather(*reads.values(), return_exceptions=True))
         # The SDK pauses at its exact missing observation instead of replaying
         # completed swaps. The existing producer budget still owns every fill.
         while True:

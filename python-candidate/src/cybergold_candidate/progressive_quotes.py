@@ -1,18 +1,15 @@
-"""Subscription-owned canonical publication beside the unchanged Quoter.
+"""Subscription-owned publication of completed Helpers quote observations.
 
-The producer callback only snapshots/enqueues. Canonical reads and delivery run
-in a separate owned consumer, never inside the producer's selection budget.
+The producer callback snapshots/enqueues. Delivery and execution preparation
+use latest simulation observations without additional block verification.
 """
 import asyncio
 from copy import deepcopy
-import json
-import logging
 
 from .quoter.ranking import prefer_completed
 from .quoter.provenance import merge_origins
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.types import EconomicRequest
-from .quote_errors import public_quote_error
 from .recovery_rpc import SnapshotChanged
 from .telemetry import observe
 
@@ -54,24 +51,6 @@ class CanonicalPublication:
                 continue
             if self.closed or not self.preferred(value):
                 continue
-            if kind == 'candidate':
-                context = value['context']
-                try:
-                    await self.quoter.engine.registry.get_rpc().assert_canonical({
-                        'number': int(context['blockNumber']), 'hash': context['blockHash']})
-                except SnapshotChanged as error:
-                    self.context = deepcopy(context)
-                    self.disproof = error
-                    raise
-                except Exception as error:
-                    # A failed read leaves this candidate unconfirmed. The
-                    # producer and its terminal canonical assertion continue.
-                    observe(lambda: logging.getLogger('cybergold.candidate').info(json.dumps({
-                        'event': 'economic_quote_refinement', 'phase': 'canonical-publication',
-                        'code': public_quote_error(error)['code']})))
-                    continue
-            if self.closed or not self.preferred(value):
-                continue
             self.best = {**attach_reuse_sample(value),
                          'observation': {'source': 'search', 'refresh': self.refresh}}
             await self.publish({'type': 'qualified', 'value': deepcopy(self.best)})
@@ -79,69 +58,56 @@ class CanonicalPublication:
 
 async def progressive_quote(service, request, publish, *, refresh=False):
     request = EconomicRequest.model_validate(request).model_dump()
-    if service.observe_scope is not None:
-        await service.observe_scope()
-    await service.quoter.engine.registry.ensure_loaded()
-    scope = service.store.capture_scope(request)
-    previous = await service.store.lookup(request, scope=scope)
-    if previous is not None and not refresh:
-        value = await service.cached_offer(request, previous, scope)
-        await publish({'type': 'qualified', 'value': deepcopy(value)})
-        return value
-
-    publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
-    neighbors = ((lambda: service.store.neighbors(request, scope=scope))
-                 if request['intent'] in (0, 1) else None)
-    producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
-                                                       seed=previous, neighbors=neighbors))
-    consumer = asyncio.create_task(publication.run())
-    tasks = (producer, consumer)
-    terminal = None
+    cache = service.cache_feed(request)
     try:
-        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        if consumer in done:
-            # A detached publisher's disproof must reach/cancel its owning
-            # producer instead of being lost in an unobserved task exception.
+        previous = await cache.lookup() if not refresh else None
+        if previous is not None:
+            value = await service.cached_offer(request, previous, await cache.scope())
+            await publish({'type': 'qualified', 'value': deepcopy(value)})
+            return value
+
+        publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
+        producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
+            seed=previous, seed_lookup=cache.lookup if refresh else None,
+            neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
+        consumer = asyncio.create_task(publication.run())
+        tasks = (producer, consumer)
+        terminal = None
+        try:
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            if consumer in done:
+                # Publisher errors remain owned by this request and cancel
+                # pricing; optional storage cannot conceal a transport failure.
+                await consumer
+            terminal = await producer
+            # The returned winner completed its Helpers execution simulation.
+            publication.queue.put_nowait(('terminal', deepcopy(terminal)))
+            publication.queue.put_nowait(None)
             await consumer
-        terminal = await producer
-        # The returned producer winner has already passed its canonical check.
-        publication.queue.put_nowait(('terminal', deepcopy(terminal)))
-        publication.queue.put_nowait(None)
-        await consumer
+        finally:
+            publication.closed = True
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+            disproof = publication.disproof or next((error for error in outcomes
+                                                     if isinstance(error, SnapshotChanged)), None)
+            if disproof is not None:
+                if publication.context is not None:
+                    disproof.economic_context = deepcopy(publication.context)
+                raise disproof
+            if publication.best is not None:
+                if terminal is not None:
+                    # A terminal tie can carry additional nomination origins.
+                    merge_origins(publication.best, terminal)
+                if terminal is not None and terminal.get('metrics') is not None:
+                    publication.best['metrics'] = deepcopy(terminal['metrics'])
+                # The service owns the optional write after all producer and
+                # publication outcomes were drained. Delivery never waits SQL.
+                cache.save(publication.best)
+        return deepcopy(publication.best)
     finally:
-        publication.closed = True
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
-        disproof = publication.disproof or next((error for error in outcomes
-                                                 if isinstance(error, SnapshotChanged)), None)
-        if disproof is not None:
-            if publication.context is not None:
-                disproof.economic_context = deepcopy(publication.context)
-            raise disproof
-        if publication.best is not None:
-            if terminal is not None:
-                # An economic tie can acquire additional nomination origins
-                # after its first publication. Preserve that diagnostic fact
-                # without replacing the accepted economic tuple or bounds.
-                merge_origins(publication.best, terminal)
-            if terminal is not None and terminal.get('metrics') is not None:
-                # Session clocks are passive metadata; retain the exact
-                # published plan/fees/funding if a terminal tie differs.
-                publication.best['metrics'] = deepcopy(terminal['metrics'])
-            # One optional write, only after all search/publication outcomes
-            # have been drained and inspected. No shielded orphan survives stop.
-            saving = asyncio.create_task(service.store.save(request, deepcopy(publication.best), scope=scope))
-            try:
-                await saving
-            except Exception:
-                pass
-            finally:
-                if not saving.done():
-                    saving.cancel()
-                await asyncio.gather(saving, return_exceptions=True)
-    return deepcopy(publication.best)
+        await cache.close()
 
 
 class OwnedStreamingResponse:

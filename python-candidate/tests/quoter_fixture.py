@@ -10,7 +10,7 @@ from cybergold_candidate.sdk_worker import SdkWorker
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_routes import pool_identity
 from cybergold_candidate.uniswap_v4 import v4_pool_id, POOL_MANAGER
-from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings
+from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixture_plan_simulator
 
 
 def synthetic_pool(a, b, number, protocol, liquidity=10**6):
@@ -84,7 +84,15 @@ def service(test, pools, **options):
     engine = RouteQuoteEngine(settings(), registry, sdk=SdkWorker())
     test.addAsyncCleanup(engine.close)
     test.addAsyncCleanup(registry.pending.close)
-    return Quoter(settings(), engine, basis_reader=basis, **options)
+    async def simulate(request, selected, **kwargs):
+        kwargs.setdefault('block', registry.at)
+        return await fixture_plan_simulator(q, request, selected, basis_reader=q.basis, **kwargs)
+    options.setdefault('plan_simulator', simulate)
+    q = Quoter(settings(), engine, basis_reader=basis, **options)
+    async def head():
+        return deepcopy(registry.at)
+    q.exploration_block = head
+    return q
 
 
 @lru_cache
@@ -120,7 +128,14 @@ def historical_service(test, name='buy500', **options):
     async def preview(mode, value, block):
         assert mode == 'issue-exact-in'
         return deepcopy(data['corePreviews'][','.join(value['maximumAmountsIn'])])
+    async def simulate(request, selected, **kwargs):
+        kwargs.setdefault('block', registry.at)
+        return await fixture_plan_simulator(q, request, selected, basis_reader=q.basis, **kwargs)
+    options.setdefault('plan_simulator', simulate)
     q = Quoter(config, engine, basis_reader=basis_reader, preview=preview, **options)
+    async def head():
+        return deepcopy(registry.at)
+    q.exploration_block = head
     q.seed_routes = lambda *_: None
     async def discover(*_):
         pass

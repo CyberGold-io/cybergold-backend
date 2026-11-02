@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field, TypeAdapter
 from web3 import Web3
 
 from .basket_preview import InvalidPreview, handle_basket_preview
+from .rpc_block_context import LATEST_BLOCK, is_latest
+from .search_observations import search_observation_scope
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .market_fee import get_market_fee_rate, gross_buy_target, quoted_fee, routed_sell_budget
 from .quote_errors import public_quote_error, QuoteFailure
@@ -63,6 +65,12 @@ MODEL_REQUEST = TypeAdapter(MarketModelRequest)
 def market_family(request, chain, core):
     return json.dumps(['market', request['side'], request['mode'], request['counterToken'].lower(),
         request['adapter'].lower()], separators=(',', ':'))
+
+
+def market_context(chain, block, observed_at):
+    return {'chainId': chain, 'blockNumber': None if is_latest(block) else str(block['number']),
+            'blockHash': None if is_latest(block) else block['hash'], 'observedAt': observed_at,
+            **({'blockTag': 'latest'} if is_latest(block) else {})}
 
 
 def market_route_observation_identity(route):
@@ -216,7 +224,7 @@ class MarketQuotes(RouteQuoteEngine):
             def key():
                 return capacity_key('market-fill', chain=self.registry.chain, block=block, identity=identity,
                     facts={name: pool_capacity_facts(value) for name, value in snapshots.items()})
-            cached = self.fill_capacity.get(key()) if snapshots else None
+            cached = self.fill_capacity.get(key()) if snapshots and not is_latest(block) else None
             async def probe(funding):
                 allocated = resize_branches(branches, funding)
                 try:
@@ -229,13 +237,12 @@ class MarketQuotes(RouteQuoteEngine):
                 cached=int(cached['maximumInput']) if cached else None)
             if not funding or raw is None or int(raw['amountOut']) <= quoted_fee(int(raw['amountOut']), rate):
                 raise QuoteFailure('quote-insufficient-liquidity')
-            if snapshots:
+            if snapshots and not is_latest(block):
                 self.fill_capacity.remember(key(), {'maximumInput': str(funding)})
             return resize_branches(branches, funding), raw
 
     async def head(self):
-        rpc = self.registry.get_rpc()
-        return await self.registry.pending.one(('head', self.registry.chain), lambda: rpc.block(None))
+        return deepcopy(LATEST_BLOCK)
 
     async def close(self):
         await self.shared.close()
@@ -315,6 +322,7 @@ class MarketQuotes(RouteQuoteEngine):
                 raise InvalidPreview('Retained Market route does not use the canonical CYGLD pool.')
         return result
 
+    @search_observation_scope()
     async def get_model(self, request, *, block=None):
         if self.request_resolver:
             request = await self.request_resolver(request)
@@ -355,8 +363,7 @@ class MarketQuotes(RouteQuoteEngine):
             return self.packet(request)
         if routes:
             packet['routes'] = routes
-            packet['context'] = {'chainId': self.registry.chain, 'blockNumber': str(block['number']),
-                'blockHash': block['hash'], 'observedAt': self.now()}
+            packet['context'] = market_context(self.registry.chain, block, self.now())
             self.models[packet['family']] = deepcopy(packet)
         return packet
 
@@ -405,7 +412,7 @@ class MarketQuotes(RouteQuoteEngine):
         Universal whole-plan candidates do not enter this writer. Each point
         retains the state and fee/request scope of the completed calculation.
         """
-        if generation != self.generation:
+        if generation != self.generation or not result.get('context', {}).get('blockHash'):
             return
         family = market_family(request, self.registry.chain, self.registry.core)
         identity = market_route_observation_identity(result['plan']['route'])
@@ -492,8 +499,7 @@ class MarketQuotes(RouteQuoteEngine):
             'amountIn': str(amount_in), 'amountOut': str(amount_out), 'totalInput': str(total), 'netOutput': str(net),
             'grossOutput': str(notional if side == 'buy' and not exact_in else amount_out), 'routedAmountIn': str(amount_in), 'fee': fee_facts, 'inputMaximum': str(input_maximum),
             'outputMinimum': str(output_minimum), 'refundDust': str(dust), 'params': params, 'adapterData': data, 'plan': plan,
-            'qualification': 'sdk', 'context': {'chainId': self.registry.chain, 'blockNumber': str(block['number']),
-                'blockHash': block['hash'], 'observedAt': self.now()}}
+            'qualification': 'sdk', 'context': market_context(self.registry.chain, block, self.now())}
         if not exact_in:
             quote['outputRefundEstimate'] = str(max(0, amount_out-(notional if side == 'buy' else net)))
         if len(branches) == 1 and amount_in > 0:
@@ -561,7 +567,7 @@ class MarketQuotes(RouteQuoteEngine):
         await budget.prepare(self.registry.ensure_loaded()) if budget is not None else await self.registry.ensure_loaded()
         rpc = self.registry.get_rpc()
         async with asyncio.timeout(45):
-            block = block or (await budget.prepare(rpc.block(None)) if budget is not None else await rpc.block(None))
+            block = block or deepcopy(LATEST_BLOCK)
             side, exact_in = request['side'], request['mode'] == 'exact-in'
             token_in, token_out = (request['counterToken'], self.registry.core) if side == 'buy' else (
                 self.registry.core, request['counterToken'])
@@ -617,9 +623,11 @@ class MarketQuotes(RouteQuoteEngine):
                             result = await self.qualify_quote(request, branches, raw, retained['fee']['ratePpm'], block, target, emit, retained=retained)
                             terms(result, branches)
                             provider_qualification_stage('canonicality')
-                            await rpc.assert_canonical(block)
+                            if not is_latest(block):
+                                await rpc.assert_canonical(block)
                             if budget is not None:
-                                budget.canonical_done()
+                                if not is_latest(block):
+                                    budget.canonical_done()
                                 budget.cleanup_done()
                             provider_qualification_stage('selection')
                             if budget is not None and not budget.qualified():
@@ -700,7 +708,8 @@ class MarketQuotes(RouteQuoteEngine):
                                 if best is None or (score, tie) > best[0]:
                                     if budget is not None:
                                         provider_qualification_stage('canonicality')
-                                        await rpc.assert_canonical(block)
+                                        if not is_latest(block):
+                                            await rpc.assert_canonical(block)
                                         provider_qualification_stage('selection')
                                         if not budget.qualified():
                                             provider_qualification_finish(probe, 'cancelled')
@@ -779,7 +788,8 @@ class MarketQuotes(RouteQuoteEngine):
             final_validation = provider_qualification_begin('canonicality', provider='market')
             with provider_qualification_scope(final_validation):
                 try:
-                    await rpc.assert_canonical(block)
+                    if not is_latest(block):
+                        await rpc.assert_canonical(block)
                     provider_qualification_finish(final_validation, 'qualified')
                 except asyncio.CancelledError:
                     provider_qualification_finish(final_validation, 'cancelled')
@@ -789,7 +799,7 @@ class MarketQuotes(RouteQuoteEngine):
                     if isinstance(error, SnapshotChanged):
                         quote_qualified(False)
                     raise
-            if budget is not None:
+            if budget is not None and not is_latest(block):
                 budget.canonical_done()
             result = best[1]
             result['metrics'] = {'candidateCalls': completed, 'totalMs': round((time.perf_counter()-started)*1000, 3)}
