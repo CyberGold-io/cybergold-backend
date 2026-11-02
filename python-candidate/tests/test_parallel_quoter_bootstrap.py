@@ -277,7 +277,12 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
             release_load.set()
             await registry.load_task
             await asyncio.sleep(0)
-            self.assertEqual(session.revision, 1)
+            # No query had consumed the old graph. The first query must see
+            # the persisted route immediately, without waiting for connectors.
+            offers = list(q.amm.nominations(WETH, CORE, 10000, BLOCK,
+                                           market=True, linear_only=True))
+            self.assertTrue(any(hop['pool']['id'] == connector['id']
+                for branches, _ in offers for branch in branches for hop in branch['hops'] if 'pool' in hop))
             self.assertFalse(task.done())
             release_connectors.set()
             await task
