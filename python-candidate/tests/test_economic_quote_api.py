@@ -256,7 +256,10 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
             await quotes.get(value, refresh=True)
         self.assertEqual(store.rows, saved)
         retained = await quotes.get(value)
-        self.assertEqual(retained['quotedOutput'], observed['quotedOutput'])
+        # A successful refresh may improve the original quote. A later failure
+        # must retain that latest successful economic tuple.
+        for field in ('quotedOutput', 'inputs', 'plan', 'context', 'fees', 'routeOrigins'):
+            self.assertEqual(retained.get(field), refreshed.get(field))
         self.assertEqual(len(recorded), 1)
 
     async def test_economic_api_does_not_require_or_emit_execution_terms(self):
