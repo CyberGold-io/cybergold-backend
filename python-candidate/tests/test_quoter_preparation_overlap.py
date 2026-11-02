@@ -287,3 +287,7 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(q.selected_calls, [([], [], BLOCK)])
         self.assertFalse(q.previews)
         self.assertEqual((q.rpc.heads, q.rpc.verifications), (1, 1))
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -110,7 +110,9 @@ class ProgressiveTests(ProgressiveFixture):
                 async def proposals_neighbors():
                     return {side: {'identity': side, 'quote': {'side': side}} for side in ['upper', 'lower']}
                 def proposals(quote, *_):
-                    return [{'plan': {'_side': quote['side']}, 'inputs': economic_request()['inputs']}]
+                    plan = deepcopy(self.base['plan'])
+                    plan['_side'] = quote['side']
+                    return [{'plan': plan, 'inputs': economic_request()['inputs']}]
                 async def publish(frame):
                     frames.append(deepcopy(frame))
                     if frame['type'] == 'qualified':
