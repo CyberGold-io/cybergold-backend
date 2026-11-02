@@ -306,6 +306,28 @@ class ParallelRouteDiscoveryTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(*tuple(session._tasks))
                 await asyncio.sleep(0)
 
+    async def test_initial_catalog_change_is_consumed_by_first_query_without_reevaluation(self):
+        catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
+        calls = []
+        class Local(RouteTool):
+            name, catalog_dependent = 'static-local', True
+            def discover(_self, query):
+                calls.append(tuple(catalog.inventory))
+                return CandidateFeed(available=[candidate(query.amount+len(catalog.inventory))])
+        session = RouteBootstrap([Local()], catalog=catalog)
+        catalog.inventory['two'] = self.catalog_pool('other')
+        self.assertTrue(session.refresh_catalog())
+        self.assertFalse(session.refresh_catalog())
+        async def ordinary():
+            self.assertEqual(session.candidates('source', 'target', 100, BLOCK), [candidate(102)])
+        async def unnecessary():
+            self.fail('Initial graph preparation must not start a whole-plan reevaluation')
+        await session.run(ordinary(), unnecessary, quick=unnecessary)
+        self.assertEqual(calls, [('one', 'two')])
+        self.assertEqual(session.metrics['queries'], 1)
+        self.assertEqual(session.metrics['reevaluations'], 0)
+        self.assertEqual(session.metrics['quickReevaluations'], 0)
+
     async def test_changed_catalog_coalesces_inflight_local_inputs_and_preserves_offers(self):
         catalog = SimpleNamespace(inventory={'one': self.catalog_pool()}, load_task=None)
         entered, release, calls, hosted_calls = asyncio.Event(), asyncio.Event(), [], []

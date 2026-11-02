@@ -116,10 +116,12 @@ class RouteBootstrap:
                     task = entry.get('task')
                     if task is None or (task.done() and not task.cancelled() and task.exception() is None):
                         self._start_entry(entry)
-        # Lazy custom feeds also need a new whole-plan pass when a persisted
-        # catalog load completes after the ordinary discovery snapshot.
-        self.revision += 1
-        self._changed.set()
+        # Existing lazy/custom queries need to revisit their older graph.
+        # Before the first query there is no consumed choice to reevaluate;
+        # its initial calculation will already receive this latest catalog.
+        if self._queries:
+            self.revision += 1
+            self._changed.set()
         return True
 
     def _elapsed_ms(self):
