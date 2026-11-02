@@ -39,6 +39,9 @@ class Engine:
     def __init__(self):
         self.semaphore = PricingSlots(8)
         self.calls, self.values, self.holds, self.errors = [], {}, {}, {}
+        async def snapshot(pool, _block):
+            return {**deepcopy(pool), 'reserve0': 'canonical-read'}
+        self.registry = SimpleNamespace(inventory={}, snapshot=snapshot)
 
     async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate, canonical):
         pool = branches[0]['hops'][0]['pool']

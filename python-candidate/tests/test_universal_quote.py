@@ -43,10 +43,12 @@ class Engine:
               pool(OTHER,PAXG,'0x'+'88'*20),pool(PAXG,CORE,'0x'+'99'*20,True)]
         self.registry=SimpleNamespace(inventory={row['id']:row for row in rows},chain=1,core=CORE,seed=rows[-1])
         self.registry.get_rpc=lambda:self
+        self.registry.snapshot=self.snapshot
         self.calls=[]
         self.semaphore=asyncio.Semaphore(8)
         self.cap=None
         self.supply=10**24
+    async def snapshot(self,pool,_block): return deepcopy(pool)
     async def block(self,_): return deepcopy(BLOCK)
     async def assert_canonical(self,block): self.calls.append(('canonical',block))
     async def read_function(self,target,signature,types,arguments,outputs,block):

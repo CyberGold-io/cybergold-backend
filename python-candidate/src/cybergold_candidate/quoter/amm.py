@@ -1,9 +1,14 @@
 """Ordered exact SDK path replay with optional private reconstruction traces."""
+import asyncio
+from contextlib import asynccontextmanager
 from copy import deepcopy
 
 from ..basket_preview import InvalidPreview
-from ..route_work_slots import engine_work
+from ..route_quote_engine import RouteQuoteEngine
+from ..route_scheduler import raise_snapshot_disproof
+from ..route_work_slots import engine_work, required_state_wait
 from ..uniswap_routes import pool_identity
+from ..uniswap_state import same_observed_pool
 from .contracts import HopTrace, new_path_trace, current_nomination
 from .bootstrap import current_bootstrap
 from .route_tools import RouteQuery
@@ -22,6 +27,44 @@ def pool_state(bank, pool):
                  if state.get('protocol') and pool_identity(state) == identity), None)
 
 
+@asynccontextmanager
+async def initial_snapshots(engine, route, block, canonical):
+    """Start immutable path reads together; consume their results in hop order."""
+    physical = [hop for hop in route if 'pool' in hop]
+    enriched = RouteQuoteEngine.enrich_branches(engine, [{'hops': physical}])[0]['hops'] if physical else []
+    pools = {id(original['pool']): resolved['pool']
+             for original, resolved in zip(physical, enriched, strict=True)}
+
+    def observed(pool):
+        direct = canonical.get(pool['id'])
+        return direct if direct is not None else next((state for state in canonical.values()
+            if same_observed_pool(state, pool)), None)
+
+    reads = []
+    async def acquire(pool):
+        pool = pools[id(pool)]
+        if observed(pool) is None:
+            read = next(task for previous, task in reads if same_observed_pool(pool, previous))
+            async with required_state_wait():
+                state = await read
+            # A sibling may have filled canonical coverage while this read was
+            # pending. Never replace that chosen observation with older coverage.
+            if observed(pool) is None:
+                canonical[pool['id']] = {**state, 'id': pool['id']}
+
+    try:
+        for pool in pools.values():
+            if observed(pool) is None and not any(same_observed_pool(pool, previous) for previous, _ in reads):
+                reads.append((pool, asyncio.create_task(engine.registry.snapshot(pool, block))))
+        yield acquire
+    finally:
+        for _, task in reads:
+            if not task.done():
+                task.cancel()
+        outcomes = await asyncio.gather(*(task for _, task in reads), return_exceptions=True)
+        raise_snapshot_disproof(outcomes)
+
+
 async def price_path(engine, route, amount, block, bank, canonical):
     trace = new_path_trace(route, amount)
     session = current_bootstrap()
@@ -38,41 +81,43 @@ async def price_path(engine, route, amount, block, bank, canonical):
             native = paths([], source, physical_source)
             leading = native[0] if native and 'pool' in route[0] else []
     current, used = amount, amount
-    for index, hop in enumerate(route):
-        if not current:
-            break
-        if 'kind' in hop:
-            continue
-        before = deepcopy(pool_state(bank, hop['pool'])) if trace is not None else None
-        async with engine_work(engine.semaphore):
-            value = await engine.quote_sdk_branches([{'amountIn': str(current), 'hops': [hop]}],
-                'exactIn', current, block, candidate=bank, canonical=canonical)
-        debit, output = int(value['amountIn']), int(value['amountOut'])
-        if trace is not None:
-            # The SDK engine fills canonical observations before simulation.
-            # Prefer a preceding operation's actual private state when present.
-            observed = pool_state(canonical, hop['pool'])
-            if before is None:
-                before = deepcopy(observed)
-            elif observed is not None:
-                # Missing-state continuation may have filled more immutable
-                # coverage during this hop. Keep private pre-swap scalars.
-                for field in ('ticks', 'bitmapWords'):
-                    if field in observed:
-                        before[field] = deepcopy(observed[field])
-            trace.hops.append(HopTrace(deepcopy(hop), current, debit, output, before))
-        if index == 0:
-            used = debit
-        elif debit < current:
+    async with initial_snapshots(engine, route if current else [], block, canonical) as acquire:
+        for index, hop in enumerate(route):
+            if not current:
+                break
+            if 'kind' in hop:
+                continue
+            await acquire(hop['pool'])
+            before = deepcopy(pool_state(bank, hop['pool'])) if trace is not None else None
+            async with engine_work(engine.semaphore):
+                value = await engine.quote_sdk_branches([{'amountIn': str(current), 'hops': [hop]}],
+                    'exactIn', current, block, candidate=bank, canonical=canonical)
+            debit, output = int(value['amountIn']), int(value['amountOut'])
             if trace is not None:
-                trace.consumed, trace.output = used, output
-                raise PartialPath(trace)
-            raise InvalidPreview('Unsettled current-operation intermediate currency.')
-        if session is not None:
-            target = hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
-            session.publish_completed(RouteQuery(source, target, amount, block),
-                                      leading + route[:index+1], origins)
-        current = output
+                # The SDK engine fills canonical observations before simulation.
+                # Prefer a preceding operation's actual private state when present.
+                observed = pool_state(canonical, hop['pool'])
+                if before is None:
+                    before = deepcopy(observed)
+                elif observed is not None:
+                    # Missing-state continuation may have filled more immutable
+                    # coverage during this hop. Keep private pre-swap scalars.
+                    for field in ('ticks', 'bitmapWords'):
+                        if field in observed:
+                            before[field] = deepcopy(observed[field])
+                trace.hops.append(HopTrace(deepcopy(hop), current, debit, output, before))
+            if index == 0:
+                used = debit
+            elif debit < current:
+                if trace is not None:
+                    trace.consumed, trace.output = used, output
+                    raise PartialPath(trace)
+                raise InvalidPreview('Unsettled current-operation intermediate currency.')
+            if session is not None:
+                target = hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
+                session.publish_completed(RouteQuery(source, target, amount, block),
+                                          leading + route[:index+1], origins)
+            current = output
     if trace is not None:
         trace.consumed, trace.output = used, current
     return used, current
