@@ -255,7 +255,7 @@ class RpcTransportDiagnostics(unittest.IsolatedAsyncioTestCase):
         client = httpx.AsyncClient(transport=httpx.MockTransport(unexpected_routes))
         rpc = RouteSearchRpc(settings, AsyncWeb3(provider), client)
         service = SimpleNamespace(routes=SimpleNamespace(rpc=rpc), get=AsyncMock())
-        sharing = IntentSharing(service)
+        sharing = IntentSharing(service, head=lambda: rpc.block(None))
         try:
             with rpc_diagnostic_scope('head-acquisition'):
                 with self.assertRaises(RpcTimeout) as raised:

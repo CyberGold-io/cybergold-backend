@@ -78,8 +78,9 @@ async def fixture_plan_simulator(quoter, request, selected, *, basis_reader, can
         at = deepcopy(BLOCK if block is None else block)
         market = request['intent'] < 2 and all(row['kind'] == 1 for row in selected['allocations'])
         assets, weights = ([], []) if market else await basis_reader(at)
+        # This oracle models an execution leaf, including after selection stops.
         value = await evaluate_candidate(quoter, request, 100, 'core-first', at, assets, weights,
-                                         selected=selected, selection=pricing)
+                                         selected=selected, selection=False)
     value['context'] = {**value['context'], 'blockNumber': None, 'blockHash': None,
                         'blockTag': 'latest', 'verification': 'fixture-sdk-oracle'}
     return value

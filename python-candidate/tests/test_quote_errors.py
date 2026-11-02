@@ -85,12 +85,13 @@ class QuoteErrorDelivery(unittest.IsolatedAsyncioTestCase):
             routes = SimpleNamespace(rpc=Rpc())
             async def get(self, *args, **kwargs):
                 raise AssertionError('A timed-out head cannot start a quote producer')
-        service = IntentSharing(Service())
+        producer = Service()
+        service = IntentSharing(producer, head=lambda: producer.routes.rpc.block(None))
         app = create_app(quote_intent=service)
         deadline = asyncio.timeout
         async with app.router.lifespan_context(app), httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
-            with patch('cybergold_candidate.quote_cache.asyncio.timeout', side_effect=lambda _: deadline(.01)):
+            with patch('cybergold_candidate.quote_cache.asyncio.timeout_at', side_effect=lambda _: deadline(.01)):
                 response = await client.post('/api/quotes/intent/stream', json={'mode':'issue-exact-in',
                     'token':'0x'+'1'*40, 'quoteToken':'0x'+'1'*40, 'native':False,
                     'amount':'100000', 'adapter':'0x'+'2'*40, 'deadline':'1000', 'orderedAssets':[]})

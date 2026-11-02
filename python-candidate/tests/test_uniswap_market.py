@@ -498,7 +498,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.rpc.owner_reads, 0)
 
     async def test_changed_fee_hook_reprices_cached_model_without_losing_amm_points(self):
-        initial = await self.quotes.get(self.request)
+        initial = await self.quotes._get(self.request, block=BLOCK)
         previous = self.quotes.packet(self.request)
         self.assertTrue(previous['routes'][0]['points'])
         with patch('cybergold_candidate.market_swap.get_market_fee_rate', return_value=2500):
@@ -515,43 +515,54 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(previous['feeRatePpm'], 1000)
         self.assertEqual(self.rpc.owner_reads, 0)
 
-    async def test_market_only_overlapping_heads_share_and_cancel_independently(self):
+    async def test_market_latest_producer_shares_and_cancels_independently_without_heads(self):
         started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
-        async def head(_hash):
-            self.rpc.head_reads += 1
-            started.set()
-            try:
-                await release.wait()
-                return deepcopy(BLOCK)
-            except asyncio.CancelledError:
-                cancelled.set()
-                raise
-        self.rpc.block = head
+        read = self.rpc.read_function
+        async def held_read(address, signature, inputs, args, outputs, block):
+            if signature == 'getReserves()':
+                started.set()
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = held_read
         first = asyncio.create_task(self.quotes.get(self.request))
         second = asyncio.create_task(self.quotes.get(self.request))
-        await started.wait()
-        # Wait for both subscribers to the same pending context read; no time
-        # cache is involved, and cancelling one must not cancel the other.
-        while self.registry.pending.pending[('head',1)].users != 2:
-            await asyncio.sleep(0)
-        first.cancel()
-        await asyncio.gather(first,return_exceptions=True)
-        self.assertFalse(cancelled.is_set())
-        release.set()
-        result = await second
-        self.assertEqual(result['netOutput'],'1974')
-        self.assertEqual(self.rpc.head_reads,1)
-        self.assertEqual(self.quotes.sharing.started,1)
-        # No completed head retention: a later caller reads again; its last
-        # disconnect cancels that read promptly through the shared primitive.
-        started.clear()
-        release.clear()
-        last = asyncio.create_task(self.quotes.get(self.request))
-        await started.wait()
-        last.cancel()
-        await asyncio.gather(last,return_exceptions=True)
-        await asyncio.wait_for(cancelled.wait(),1)
-        self.assertEqual(self.rpc.head_reads,2)
+        tasks = [first, second]
+        try:
+            async with asyncio.timeout(self.sdk.timeout):
+                await started.wait()
+                # Two subscribers share the pending quote. Cancelling one
+                # leaves the other subscriber's state acquisition running.
+                while not self.quotes.sharing.pending or len(next(iter(self.quotes.sharing.pending.values()))['clients']) != 2:
+                    await asyncio.sleep(0)
+                first.cancel()
+                await asyncio.gather(first, return_exceptions=True)
+                self.assertFalse(cancelled.is_set())
+                release.set()
+                result = await second
+                self.assertEqual(result['netOutput'], '1974')
+                self.assertEqual(self.rpc.head_reads, 0)
+                self.assertEqual(self.quotes.sharing.started, 1)
+                # A later caller starts fresh latest work. Its last disconnect
+                # cancels that work through the existing shared primitive.
+                started.clear()
+                release.clear()
+                last = asyncio.create_task(self.quotes.get(self.request))
+                tasks.append(last)
+                await started.wait()
+                last.cancel()
+                await asyncio.gather(last, return_exceptions=True)
+                await cancelled.wait()
+                self.assertEqual(self.rpc.head_reads, 0)
+        finally:
+            release.set()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def test_cold_model_needs_no_amount_or_prior_quote_and_bank_is_tagged(self):
         request = {name: self.request[name] for name in ('side', 'mode', 'counterToken', 'adapter')}
@@ -1267,7 +1278,8 @@ for line in sys.stdin:
                         qualified.set()
                 self.quotes.quote_branches, self.quotes.compose_core_rows = delayed, ordered
                 value = {**request('redeem-exact-in'), 'amount': '100000', 'orderedAssets': [ASSET_B, ASSET_A]}
-                operation = asyncio.create_task(intent.get(value, update))
+                operation = asyncio.create_task(intent.get(value, update,
+                    block={'number': 101, 'hash': HASH}))
                 try:
                     await asyncio.wait_for(replayed.wait(), self.sdk.timeout)
                     self.assertFalse(operation.done())
@@ -1292,7 +1304,7 @@ for line in sys.stdin:
                         self.assertTrue(all(leg.get('routePlan') for leg in first['quotes']))
                         self.assertEqual([leg['minimumAmountOut'] for leg in first['quotes']],
                             [str(int(row['best']['quote'])*99//100) for row in after])
-                        self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 2)
+                        self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 1)
                         release.set()
                         final = await operation
                         self.assertEqual(final['context']['blockHash'], HASH)

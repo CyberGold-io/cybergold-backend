@@ -19,7 +19,7 @@ from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.sdk_worker import SdkWorker
 from cybergold_candidate.uniswap_routes import candidate_branches
 from cybergold_candidate.uniswap_state import PoolRegistry, UniswapRpc, ZERO
-from test_quote_intent import service, request, CORE
+from test_quote_intent import service, request, CORE, pinned_get
 from test_route_search import ASSET_A, ASSET_B, WETH, HASH
 
 BLOCK = {'number': 101, 'hash': HASH}
@@ -206,7 +206,9 @@ class Overlap(unittest.IsolatedAsyncioTestCase):
         value = request(mode)
         if mode == 'redeem-exact-in':
             value['amount'] = '100000'
-        operation = asyncio.create_task(intent.get(value, update))
+        # This overlap/reorg experiment deliberately retains a real historical
+        # pin; production/default-latest coverage lives in test_core_quote_latest.
+        operation = asyncio.create_task(pinned_get(intent, value, update))
         try:
             await asyncio.wait_for(self.provider.discovery_started.wait(), 2)
             try:

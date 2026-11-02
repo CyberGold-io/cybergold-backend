@@ -23,7 +23,7 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
         async def publish(frame):
             frames.append(deepcopy(frame))
         with budget_context(budget):
-            return await intent.get(value, publish)
+            return await core_fixture.pinned_get(intent, value, publish)
 
     def tracked_fixture(self):
         intent, provider, routes, control = self.fixture()
@@ -169,7 +169,7 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def run():
             with budget_context(budget):
-                return await intent.get(value, publish)
+                return await core_fixture.pinned_get(intent, value, publish)
         operation = asyncio.create_task(run())
         try:
             await self.ready(started)
@@ -188,7 +188,7 @@ class CoreBudgetProviders(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def run():
             with budget_context(budget):
-                return await intent.get(value, publish)
+                return await core_fixture.pinned_get(intent, value, publish)
         operation = asyncio.create_task(run())
         try:
             await self.ready(started)

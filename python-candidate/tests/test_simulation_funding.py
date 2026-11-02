@@ -81,6 +81,10 @@ class SimulationFundingTests(unittest.TestCase):
             funding_overrides([{'currency': UNKNOWN, 'amount': '1'}], HELPERS, CORE)
         self.assertEqual(caught.exception.code, 'unsupported-simulation-funding')
         self.assertEqual(caught.exception.currency, Web3.to_checksum_address(UNKNOWN))
+        from cybergold_candidate.quote_errors import public_quote_error
+        self.assertEqual(public_quote_error(caught.exception), {
+            'code': 'unsupported-simulation-funding',
+            'error': f'Quote simulation funding is not supported for input currency {Web3.to_checksum_address(UNKNOWN)}.'})
 
     def test_computation_has_no_network_or_account_reads(self):
         with patch.object(socket, 'socket', side_effect=AssertionError('Unexpected network access')):

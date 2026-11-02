@@ -2,7 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.discovery import market_plan
@@ -104,11 +104,12 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(one['metrics']['optionalSearch']['randomSeed'])
         self.assertIsNone(two['metrics']['optionalSearch']['randomSeed'])
         self.assertNotIn('session', vars(q))
-        async def changed(_):
-            raise SnapshotChanged('final context changed')
-        q.engine.assert_canonical = changed
-        with self.assertRaises(SnapshotChanged):
-            await Quoter.get(q, request(), seed={})
+        q.engine.assert_canonical = AsyncMock(side_effect=AssertionError('Quote lookup cannot verify a block'))
+        result = await Quoter.get(q, request(), seed={})
+        self.assertGreater(int(result['quotedOutput']), 0)
+        self.assertIsNotNone(result['metrics']['optionalSearch']['randomSeed'])
+        q.engine.assert_canonical.assert_not_awaited()
+        self.assertNotIn('session', vars(q))
 
 
 if __name__ == '__main__':

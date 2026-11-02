@@ -1,7 +1,7 @@
 """Subscription-owned publication of completed Helpers quote observations.
 
-The producer callback snapshots/enqueues. Block verification belongs to
-execution preparation, not to delivery of a quote observation.
+The producer callback snapshots/enqueues. Delivery and execution preparation
+use latest simulation observations without additional block verification.
 """
 import asyncio
 from copy import deepcopy

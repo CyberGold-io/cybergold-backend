@@ -32,6 +32,7 @@ _PROVIDER_STAGES = {'composition', 'basket-preview', 'initial-preview', 'executi
 _PROVIDER_OUTCOMES = {'running', 'qualified', 'rejected', 'not-improved', 'cancelled', 'superseded'}
 _QUOTE_CODES = {'rpc-rate-limit', 'rpc-timeout', 'rpc-unavailable', 'rpc-access-denied',
                 'quote-timeout', 'quote-no-route', 'quote-insufficient-liquidity', 'quote-contract-reverted', 'quote-unavailable',
+                'unsupported-simulation-funding',
                 'insufficient-protocol-supply', 'issuance-cap-exceeded',
                 'redemption-supply-exceeded', 'redemption-capacity-exceeded',
                 'insufficient-reserve-balance', 'insufficient-recovery-shares'}

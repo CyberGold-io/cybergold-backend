@@ -10,7 +10,7 @@ from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.sdk_worker import SdkWorkerError
 from cybergold_candidate.uniswap_routes import candidate_branches
 from cybergold_candidate.uniswap_state import PoolRegistry
-from test_quote_intent import service, request, ASSET_A, ASSET_B, ASSET_C, WETH
+from test_quote_intent import service, request, ASSET_A, ASSET_B, ASSET_C, WETH, pinned_get
 from test_unified_route_pipeline import (PipelineFixtureRpc, ProgrammablePipelineSdk,
     install_programmable_sdk_snapshot, SETTINGS)
 
@@ -163,7 +163,7 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
         state.budget = QuoteBudget()
         async def run():
             with budget_context(state.budget):
-                return await state.budget.produce(intent.get(request('redeem-exact-out', native), publish))
+                return await state.budget.produce(pinned_get(intent, request('redeem-exact-out', native), publish))
         state.task = asyncio.create_task(run())
         async def cleanup():
             state.task.cancel()
@@ -388,7 +388,7 @@ class ActualSdkColdSeedQualification(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def run():
             with budget_context(budget):
-                return await budget.produce(intent.get(request('redeem-exact-out'), publish))
+                return await budget.produce(pinned_get(intent, request('redeem-exact-out'), publish))
         task = asyncio.create_task(run())
         try:
             await asyncio.wait_for(qualified.wait(), sdk.timeout)

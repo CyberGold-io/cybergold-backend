@@ -947,8 +947,8 @@ class QuoteIntent:
                 result = deepcopy(qualified)
             if budget is not None:
                 await drain()
-            final_stage = 'final-validation' if latest else 'canonicality'
-            quote_phase(final_stage)
+            final_stage = 'tolerance' if latest else 'canonicality'
+            quote_phase('final-preview' if latest else 'canonicality')
             final_validation = provider_qualification_begin(final_stage)
             with provider_qualification_scope(final_validation):
                 try:

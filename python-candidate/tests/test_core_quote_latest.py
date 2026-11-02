@@ -63,6 +63,58 @@ class CoreLatestTests(unittest.IsolatedAsyncioTestCase):
                     finally:
                         await routes.close()
 
+    async def test_latest_business_final_probe_is_completed_and_does_not_claim_canonicality(self):
+        for mode in ('issue-exact-in', 'issue-exact-out', 'redeem-exact-in', 'redeem-exact-out'):
+            with self.subTest(mode=mode):
+                intent, provider, routes, wire = service()
+                self.addAsyncCleanup(routes.close)
+                shared = IntentSharing(intent)
+                self.addAsyncCleanup(shared.close)
+                result = await asyncio.wait_for(shared.get(request(mode), discard), 2)
+                diagnostics = result['quoteDiagnostics']
+                evidence = diagnostics['providerQualifications']
+                final = next(row for row in evidence['rows'] if row['attempt'] == evidence['selectedAttempt'])
+                self.assertEqual((diagnostics['phase'], final['stage'], final['outcome']),
+                                 ('final-preview', 'tolerance', 'qualified'))
+                self.assertEqual(final['executionAmount'], result['executionAmount'])
+                self.assertGreaterEqual(final['completedMs'], final['startedMs'])
+                self.assertEqual(evidence['pending'], 0)
+                self.assertFalse(any(row['outcome'] == 'running' for row in evidence['rows']))
+                self.assertFalse(any(row['stage'] == 'canonicality' for row in evidence['rows']))
+                self.assert_latest_context(result['context'])
+                self.assert_latest_wire(provider, wire)
+
+    async def test_latest_stopped_business_quote_drains_pending_probe_before_final_evidence(self):
+        from test_issue_candidate_updates import IssueCandidateUpdates
+        from cybergold_candidate.quote_budget import QuoteBudget, budget_context
+        intent, routes, control, trace = IssueCandidateUpdates.prepare(self, hold_later=True)
+        provider = routes.rpc.w3.provider
+        budget = QuoteBudget()
+        async def run():
+            with budget_context(budget):
+                return await budget.produce(intent.get(request('issue-exact-in'), trace.emit))
+        operation = asyncio.create_task(run())
+        try:
+            await asyncio.wait_for(trace.later_started.wait(), 2)
+            self.assertTrue(trace.first.is_set())
+            budget.finish_selection('best-initial')
+            result = await asyncio.wait_for(operation, 2)
+        finally:
+            control.release.set()
+            trace.release_later.set()
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+        self.assertEqual(result['executionAmount'], '200')
+        evidence = result['quoteDiagnostics']['providerQualifications']
+        self.assertEqual(evidence['pending'], 0)
+        self.assertEqual(evidence['cancelled'], 1)
+        self.assertFalse(any(row['outcome'] == 'running' for row in evidence['rows']))
+        final = next(row for row in evidence['rows'] if row['attempt'] == evidence['selectedAttempt'])
+        self.assertEqual((final['stage'], final['outcome']), ('tolerance', 'qualified'))
+        self.assert_latest_context(result['context'])
+        self.assertTrue(all(method == 'eth_call' and params[1] == 'latest' for method, params in provider.calls))
+        self.assertEqual(routes.engine.semaphore._value, 8)
+
     async def test_latest_sharing_has_no_context_prerequisite_and_no_completed_quote_reuse(self):
         intent, provider, routes, wire = service()
         self.addAsyncCleanup(routes.close)

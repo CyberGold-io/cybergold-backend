@@ -10,6 +10,7 @@ from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.route_encoding import ADAPTER_TYPE, encode_adapter, encode_route
 from cybergold_candidate.uniswap_quote import UniswapQuote
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 from cybergold_candidate.uniswap_routes import (RoutePlan, pool_identity, route_identity,
                                                 initial_v3_branches, v3_branches, v3_path, v3_plan)
 
@@ -192,9 +193,11 @@ class DirectEngineTests(unittest.IsolatedAsyncioTestCase):
             branches, canonical_mode, raw, block = self.engine.calls[-1]
             self.assertEqual(v3_path(branches[0]['hops']), PATH)
             self.assertEqual(canonical_mode, 'exactIn' if mode == 'exact-in' else 'exactOut')
-            self.assertEqual((raw, block), (123, BLOCK))
-            self.assertEqual(value['context']['blockHash'], BLOCK['hash'])
-        self.assertEqual((self.rpc.heads, self.rpc.checks), (2, 2))
+            self.assertEqual((raw, block), (123, LATEST_BLOCK))
+            self.assertIsNone(value['context']['blockHash'])
+            self.assertIsNone(value['context']['blockNumber'])
+            self.assertEqual(value['context']['blockTag'], 'latest')
+        self.assertEqual((self.rpc.heads, self.rpc.checks), (0, 0))
 
     async def test_invalid_uint_and_packed_path_fail_before_head_or_engine(self):
         for amount, path in (('-1', PATH), (str(2**256), PATH), ('1', '0x12'), ('1', PATH+'ff')):
@@ -202,11 +205,13 @@ class DirectEngineTests(unittest.IsolatedAsyncioTestCase):
                 await self.service.get({'mode': 'exact-in', 'path': path, 'amount': amount})
         self.assertEqual((self.rpc.heads, self.engine.calls), (0, []))
 
-    async def test_reorg_is_not_a_success_and_cancellation_drains_direct_engine_await(self):
+    async def test_latest_does_not_reread_headers_and_cancellation_drains_direct_engine_await(self):
         self.rpc.reorg = True
-        with self.assertRaises(SnapshotChanged):
-            await self.service.get({'mode': 'exact-in', 'path': PATH, 'amount': '123'})
+        value = await self.service.get({'mode': 'exact-in', 'path': PATH, 'amount': '123'})
+        self.assertEqual(value['result']['amount'], '567')
+        self.assertEqual((self.rpc.heads, self.rpc.checks), (0, 0))
         self.rpc.reorg = False
+        self.engine.started.clear()
         self.engine.blocked = True
         task = asyncio.create_task(self.service.get({'mode': 'exact-in', 'path': PATH, 'amount': '123'}))
         await self.engine.started.wait()

@@ -2,7 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.search import alongside_bootstrap
@@ -158,26 +158,39 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertGreater(int(value['quotedOutput']), 0)
             self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_lookup_overlaps_head_and_cancellation_drains_it(self):
-        q = Quotes(Engine()); lookup, head, drained = (asyncio.Event() for _ in range(3))
+    async def test_lookup_overlaps_sdk_preparation_and_cancellation_drains_both(self):
+        q = Quotes(Engine())
+        lookup, preparing, lookup_drained, preparation_drained = (asyncio.Event() for _ in range(4))
         async def read(_):
-            head.set()
-            await lookup.wait()
-            await asyncio.Event().wait()
-        async def neighbors():
-            lookup.set()
-            await head.wait()
+            preparing.set()
             try:
+                await lookup.wait()
                 await asyncio.Event().wait()
             finally:
-                drained.set()
-        q.engine.block = read
+                preparation_drained.set()
+        async def neighbors():
+            lookup.set()
+            try:
+                await preparing.wait()
+                await asyncio.Event().wait()
+            finally:
+                lookup_drained.set()
+        q.basis_reader = read
+        q.engine.block = AsyncMock(side_effect=AssertionError('Quote lookup cannot acquire a header'))
         task = asyncio.create_task(q.quote(request(), neighbors=neighbors))
-        await head.wait(); await lookup.wait()
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-        self.assertTrue(drained.is_set())
+        try:
+            async with asyncio.timeout(2):
+                await asyncio.gather(preparing.wait(), lookup.wait())
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(lookup_drained.is_set())
+        self.assertTrue(preparation_drained.is_set())
+        q.engine.block.assert_not_awaited()
         self.assertFalse(any(row[0] == 'canonical' for row in q.engine.calls))
 
     async def test_upper_and_lower_are_fresh_full_candidates_plus_fitting_funding(self):

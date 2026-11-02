@@ -478,7 +478,8 @@ export type QuoteErrorCode = "insufficient-protocol-supply" | "issuance-cap-exce
   | "redemption-supply-exceeded" | "redemption-capacity-exceeded"
   | "insufficient-reserve-balance" | "insufficient-recovery-shares"
   | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "rpc-access-denied" | "quote-timeout"
-  | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable";
+  | "quote-no-route" | "quote-insufficient-liquidity" | "quote-contract-reverted" | "quote-unavailable"
+  | "unsupported-simulation-funding";
 
 /**
  * Bounded observation count; never an execution eligibility predicate.

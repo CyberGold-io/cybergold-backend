@@ -136,7 +136,8 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
                         pass
                     q.discover = discovered
                     refreshed = await q.get(request, seed=original_quote)
-                    self.assertEqual(refreshed['context']['blockHash'], pool['context']['blockHash'])
+                    self.assertIsNone(refreshed['context']['blockHash'])
+                    self.assertEqual(refreshed['context']['blockTag'], 'latest')
                     self.assertLess(int(refreshed['quotedOutput']), int(original_quote['quotedOutput']))
 
 

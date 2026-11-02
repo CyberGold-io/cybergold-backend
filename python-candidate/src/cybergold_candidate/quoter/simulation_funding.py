@@ -9,6 +9,7 @@ from web3 import Web3
 
 from ..app_tokens import TOKENS
 from ..routing_encoding import ZERO
+from ..quote_errors import QuoteFailure
 
 
 SIMULATION_SENDER = Web3.to_checksum_address('0x000000000000000000000000000000000000c0de')
@@ -23,12 +24,13 @@ _ROOTS = {dict(TOKENS)[name].lower(): roots for name, roots in (
 )}
 
 
-class UnsupportedSimulationFunding(ValueError):
+class UnsupportedSimulationFunding(QuoteFailure):
     code = 'unsupported-simulation-funding'
 
     def __init__(self, currency):
         self.currency = currency
-        super().__init__(f'Quote simulation funding is not supported for input currency {currency}.')
+        super().__init__(self.code)
+        self.args = (f'Quote simulation funding is not supported for input currency {currency}.',)
 
 
 def _word(value):
