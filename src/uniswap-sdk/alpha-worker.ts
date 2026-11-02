@@ -45,20 +45,23 @@ export async function routeRequest(request: Request, quote: (value: any) => Prom
   let adapter: ReturnType<typeof createAlphaRouter>;
   const nominate = (routes: any[]) => {
     const nominees: any[] = [];
-    for (const route of routes) {
-      const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
-      const identity = JSON.stringify(hops.map(hop => hop.pool
-        ? [hop.pool.protocol, hop.pool.token0.address, hop.pool.token1.address,
-          hop.pool.feePips, hop.pool.tickSpacing, hop.pool.hooks, hop.zeroForOne]
-        : [hop.kind, hop.currencyOut]));
-      if (!offered.has(identity)) {
-        offered.add(identity);
-        // Actual Alpha topology is useful before its percentage observations.
-        // Helpers still prices any complete plan that consumes this hint.
-        nominees.push([{ amountIn: request.amount, hops }]);
+    try {
+      for (const route of routes) {
+        const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
+        const identity = JSON.stringify(hops.map(hop => hop.pool
+          ? [hop.pool.protocol, hop.pool.token0.address, hop.pool.token1.address,
+            hop.pool.feePips, hop.pool.tickSpacing, hop.pool.hooks, hop.zeroForOne]
+          : [hop.kind, hop.currencyOut]));
+        if (!offered.has(identity)) {
+          offered.add(identity);
+          // Actual Alpha topology is useful before its percentage observations.
+          // Helpers still prices any complete plan that consumes this hint.
+          nominees.push([{ amountIn: request.amount, hops }]);
+        }
       }
+    } finally {
+      if (nominees.length) publish(nominees);
     }
-    if (nominees.length) publish(nominees);
   };
   adapter = createAlphaRouter({ chainId: request.chainId, blockNumber: request.blockNumber, pools: request.pools,
     nominateRoutes: nominate,
