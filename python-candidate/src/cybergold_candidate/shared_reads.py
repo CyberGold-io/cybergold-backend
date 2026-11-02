@@ -39,7 +39,7 @@ class SharedReads:
         except asyncio.CancelledError:
             for _, entry in entries:
                 entry.future.cancel()
-        except Exception as error:
+        except BaseException as error:
             for _, entry in entries:
                 if not entry.future.done():
                     entry.future.set_exception(error)

@@ -49,7 +49,12 @@ class ProgressiveFixture(unittest.IsolatedAsyncioTestCase):
         return {**deepcopy(self.base), 'quotedOutput': str(output), **changes}
 
     def service(self, script, canonical=None, store=None):
-        return EconomicQuotes(ScriptedQuoter(script, canonical), store or SharedStore())
+        service = EconomicQuotes(ScriptedQuoter(script, canonical), store or SharedStore())
+        self.addAsyncCleanup(service.close)
+        return service
+
+    async def persisted(self, service):
+        await asyncio.gather(*tuple(service.background))
 
 
 class ProgressiveTests(ProgressiveFixture):
@@ -71,6 +76,7 @@ class ProgressiveTests(ProgressiveFixture):
             frames.append(deepcopy(frame))
         service = self.service(script)
         result = await service.progressive(economic_request(), publish)
+        await self.persisted(service)
         self.assertEqual(result['routeOrigins']['discoveryProviders'],
                          ['cybergold-custom', 'uniswap-alpharouter'])
         self.assertEqual(result['quotedOutput'], first['quotedOutput'])
@@ -325,6 +331,7 @@ class ProgressiveTests(ProgressiveFixture):
         await asyncio.wait_for(ready.wait(), 1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError): await task
+        await self.persisted(service)
         store.save.assert_awaited_once()
         self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
@@ -366,7 +373,7 @@ class ProgressiveTests(ProgressiveFixture):
         with self.assertRaises(SnapshotChanged): await task
         store.save.assert_not_called()
 
-    async def test_cancel_during_optional_save_drains_that_write_without_retry(self):
+    async def test_service_close_drains_optional_write_after_quote_returned(self):
         saving, drained = asyncio.Event(), asyncio.Event()
         async def script(*_, **__): return self.value(100)
         async def save(*_, **__):
@@ -375,9 +382,13 @@ class ProgressiveTests(ProgressiveFixture):
             finally:
                 drained.set()
         store = SharedStore(); store.save = AsyncMock(side_effect=save)
-        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(), AsyncMock()))
-        await saving.wait(); task.cancel()
-        with self.assertRaises(asyncio.CancelledError): await task
+        service = self.service(script, store=store)
+        task = asyncio.create_task(service.progressive(economic_request(), AsyncMock()))
+        await asyncio.wait_for(saving.wait(), 1)
+        result = await asyncio.wait_for(task, 1)
+        self.assertEqual(result['quotedOutput'], '100')
+        self.assertFalse(drained.is_set())
+        await service.close()
         self.assertTrue(drained.is_set()); store.save.assert_awaited_once()
 
     async def test_stop_during_delivery_drains_transport_and_retains_valid_observation(self):
@@ -409,6 +420,7 @@ class ProgressiveTests(ProgressiveFixture):
         service = self.service(script, store=store)
         with self.assertRaises(QuoteFailure) as failure:
             await service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=ready.set()))
+        await self.persisted(service)
         self.assertEqual(failure.exception.code, 'rpc-rate-limit')
         store.save.assert_awaited_once()
         self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')

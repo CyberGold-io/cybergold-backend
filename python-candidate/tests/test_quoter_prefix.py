@@ -1,6 +1,9 @@
 """Actual SDK inverse/forward agreement and unsigned execution preparation."""
 from copy import deepcopy
+import asyncio
+from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 from cybergold_candidate.quoter.amm import PartialPath
 from cybergold_candidate.quoter.contracts import capture_paths
@@ -12,6 +15,30 @@ from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, USER
 
 
 class PrefixTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_prefix_amount_is_proposed_without_sdk_fill_certification(self):
+        from cybergold_candidate.exact_input_plan import compile_plan
+        from cybergold_candidate.quoter.contracts import PathTrace, HopTrace
+        from cybergold_candidate.quoter.plan_simulation import executable_body
+        from cybergold_candidate.routing_encoding import ZERO
+        pools = [synthetic_pool(WETH, PAXG, 501, 'v2'), synthetic_pool(PAXG, CORE, 502, 'v2')]
+        hops = [{'pool': pool, 'zeroForOne': source.lower() == pool['token0']['address'].lower()}
+                for source, pool in zip([WETH, PAXG], pools)]
+        trace = PathTrace(hops, 1000, '0:market', 0, 0, [
+            HopTrace(hops[0], 1000, 1000, 100, deepcopy(pools[0])),
+            HopTrace(hops[1], 100, 80, 10, deepcopy(pools[1]))])
+        sdk = SimpleNamespace(request=AsyncMock(return_value={
+            'amountIn': '40', 'amountOut': '81', 'fullyFilled': False}))
+        q = SimpleNamespace(engine=SimpleNamespace(sdk=sdk, semaphore=asyncio.Semaphore(8),
+                                                   registry=SimpleNamespace(chain=1)))
+        request = {'intent': 0, 'inputs': [{'currency': ZERO, 'amount': '1000'}], 'outputCurrency': CORE}
+        funding, plan = await repair_prefix(q, request, trace, BLOCK)
+        self.assertEqual(funding[0]['amount'], '40')
+        self.assertEqual(plan['body']['branches'][0]['data']['route']['inputCurrency'].lower(), WETH.lower())
+        compiled = compile_plan({**request, 'inputs': funding, 'recipient': USER, 'deadline': '0'},
+                                executable_body(plan['body']), 1)
+        self.assertTrue(compiled['body'].startswith('0x'))
+        sdk.request.assert_awaited_once()
+
     async def test_twelve_actual_sdk_repairs_and_rounding_neighbors(self):
         for shape in ['two-last', 'three-last', 'three-middle']:
             for v4 in [False, True]:

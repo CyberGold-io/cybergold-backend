@@ -64,6 +64,9 @@ class RouteBootstrap:
         self.revision, self.reevaluations = 0, 0
         self.quick_reevaluations = 0
         self._catalog = catalog
+        self.catalog_revision = 0
+        if catalog is not None:
+            self.topology.catalog_changed(catalog.inventory.values())
         # A Helpers-priced consumer treats supplier snapshots as exploratory
         # inputs. Their disproof cannot invalidate independent execution results.
         self.nomination_only = nomination_only
@@ -114,6 +117,9 @@ class RouteBootstrap:
         if current == self._catalog_input:
             return False
         self._catalog_input = current
+        self.catalog_revision += 1
+        if self._catalog is not None:
+            self.topology.catalog_changed(self._catalog.inventory.values())
         for entries in self._queries.values():
             for entry in entries:
                 if entry['catalog_dependent']:
@@ -193,7 +199,8 @@ class RouteBootstrap:
                 # Each provider is request-owned. Copy aggregate counters once;
                 # overlapping query-attempt snapshots must not be summed.
                 result[name].update({key: diagnostics[key] for key in (
-                    'workerQueries', 'quoteCallbacks', 'quoteCallbackFailures', 'quoteCallbackMs')
+                    'workerQueries', 'quoteCallbacks', 'quoteCallbackFailures', 'quoteCallbackMs',
+                    'nominationChainId', 'executionChainId')
                     if type(diagnostics.get(key)) in (int, float)})
         finished = self._finished_ms if self._finished_ms is not None else self._elapsed_ms()
         return {'queries': len(self._queries), 'revision': self.revision,
@@ -217,8 +224,9 @@ class RouteBootstrap:
                 elif task.exception() is not None:
                     failures.append(task.exception())
         disproof = next((error for error in failures if isinstance(error, SnapshotChanged)), None)
-        if disproof is not None:
+        if disproof is not None and not self.nomination_only:
             raise disproof
+        failures = [error for error in failures if not (self.nomination_only and isinstance(error, SnapshotChanged))]
         if failures:
             raise failures[0]
 
@@ -509,7 +517,7 @@ class RouteBootstrap:
             except SnapshotChanged as error:
                 outcomes.append(error)
             disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
-            if disproof is not None:
+            if disproof is not None and not self.nomination_only:
                 raise disproof
 
     async def _close(self):

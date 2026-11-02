@@ -1,7 +1,8 @@
-"""Full AlphaRouter nomination with canonical Python SDK quote callbacks.
+"""Request-owned calculation children; concurrent queries share framed transport.
 
-The child owns topology selection and percentage/split optimization. It has no
-RPC transport or authority over observed prices, economic ranking or execution.
+Each calculation owns its quote callbacks/private candidate banks. One reader
+routes replies by request identity, so raw finder hints need not wait for an
+older calculation's slow SDK callback. Children have no chain RPC transport.
 """
 import asyncio
 from copy import deepcopy
@@ -14,7 +15,7 @@ from .bootstrap import ProviderUnavailable
 
 
 class AlphaRouteError(RuntimeError):
-    """An ordinary isolated AlphaRouter supplier/protocol failure."""
+    """An ordinary isolated calculation supplier/protocol failure."""
 
 
 class AlphaRoutes:
@@ -30,6 +31,10 @@ class AlphaRoutes:
         self.closed = False
         self.quote_callbacks = self.quote_callback_failures = 0
         self.quote_callback_ms = 0.0
+        self.requests = {}
+        self.reader = None
+        self.reader_process = None
+        self.retired = set()
 
     @property
     def diagnostics(self):
@@ -37,20 +42,102 @@ class AlphaRoutes:
                 'quoteCallbackFailures': self.quote_callback_failures,
                 'quoteCallbackMs': round(self.quote_callback_ms, 3)}
 
-    async def _stop(self, process=None):
+    async def _stop(self, process=None, error=None):
         process = self.process if process is None else process
         if process is self.process:
             self.process = None
+        current = asyncio.current_task()
+        reader = self.reader if self.reader_process is process else None
+        if reader is not None and reader is not current:
+            reader.cancel()
         if process is not None and process.returncode is None:
             try:
                 process.kill()
             except ProcessLookupError:
                 pass
             await process.wait()
+        if reader is not None and reader is not current:
+            await asyncio.gather(reader, return_exceptions=True)
+        if reader is not None and self.reader is reader:
+            self.reader = None
+            self.reader_process = None
+        entries = [entry for entry in tuple(self.requests.values()) if entry['process'] is process]
+        callbacks = [task for entry in entries for task in tuple(entry['callbacks'])]
+        for task in callbacks:
+            task.cancel()
+        await asyncio.gather(*callbacks, return_exceptions=True)
+        for entry in entries:
+            entry['queue'].put_nowait(error or AlphaRouteError('Calculation worker stopped'))
 
     async def close(self):
         self.closed = True
         await self._stop()
+
+    async def _start(self):
+        # This lock owns only construction and writes, never a calculation.
+        if self.closed:
+            raise ProviderUnavailable('Calculation session is closed')
+        if self.process is None or self.process.returncode is not None:
+            starting = asyncio.create_task(asyncio.create_subprocess_exec(*self.command,
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024))
+            try:
+                self.process = await asyncio.shield(starting)
+            except asyncio.CancelledError:
+                try:
+                    await self._stop(await starting)
+                except BaseException:
+                    pass
+                raise
+            self.retired.clear()
+            self.reader_process = self.process
+            self.reader = asyncio.create_task(self._read(self.process))
+        return self.process
+
+    async def _read(self, process):
+        try:
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    raise AlphaRouteError('Calculation worker exited')
+                response = json.loads(line)
+                if response.get('id') in self.retired:
+                    continue  # Late frames from an explicitly cancelled calculation.
+                entry = self.requests.get(response.get('id'))
+                if entry is None or entry['process'] is not process:
+                    raise AlphaRouteError('Calculation response differs from request')
+                if response.get('operation') == 'quote':
+                    task = asyncio.create_task(self._answer(response, entry))
+                    entry['callbacks'].add(task)
+                    task.add_done_callback(entry['callbacks'].discard)
+                elif response.get('operation') == 'candidates':
+                    entry['queue'].put_nowait(response)
+                elif 'candidates' in response or 'error' in response:
+                    entry['terminal'] = True
+                    entry['queue'].put_nowait(response)
+                else:
+                    raise AlphaRouteError('Calculation response is unavailable')
+        except asyncio.CancelledError:
+            raise
+        except BaseException as error:
+            await self._stop(process, error)
+
+    async def _answer(self, response, entry):
+        self.quote_callbacks += 1
+        started = time.perf_counter()
+        try:
+            result = await self._quote(response, entry['block'], entry['canonical'])
+            self.quote_callback_failures += result.get('quote') is None
+            async with self.lock:
+                if not entry['terminal'] and self.requests.get(response['id']) is entry:
+                    await self._write(entry['process'], {'id': response['id'], 'operation': 'quoteResult',
+                        'quoteId': response['quoteId'], 'result': result})
+        except asyncio.CancelledError:
+            raise
+        except BaseException as error:
+            entry['queue'].put_nowait(error)
+        finally:
+            self.quote_callback_ms += (time.perf_counter() - started) * 1000
 
     async def discover(self, source, target, amount, block):
         candidates = []
@@ -59,74 +146,52 @@ class AlphaRoutes:
         return candidates
 
     async def discover_batches(self, source, target, amount, block):
-        async with self.lock:
-            if self.closed:
-                raise ProviderUnavailable('AlphaRouter session is closed')
-            if self.process is None or self.process.returncode is not None:
-                starting = asyncio.create_task(asyncio.create_subprocess_exec(*self.command,
-                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024))
-                try:
-                    self.process = await asyncio.shield(starting)
-                except asyncio.CancelledError:
-                    try:
-                        process = await starting
-                        await self._stop(process)
-                    except BaseException:
-                        pass
-                    raise
-            process = self.process
-            self.sequence += 1
-            identity = str(self.sequence)
-            # These are topology references only. Supplied observations, ticks,
-            # amounts and display scale never become a child quote oracle.
-            fields = ('id', 'protocol', 'token0', 'token1', 'feePips', 'lpFee',
-                      'tickSpacing', 'hooks', 'poolManager', 'address')
-            pools = [{key: deepcopy(value) for key, value in pool.items() if key in fields}
-                     for pool in list(self.engine.registry.inventory.values())]
-            outgoing = {'id': identity, 'chainId': int(self.engine.registry.chain),
-                        'blockNumber': int(block['number']), 'source': source,
-                        'target': target, 'amount': str(amount), 'pools': pools}
-            canonical = {}
-            terminal_error = False
-            try:
-                await self._write(process, outgoing)
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        raise AlphaRouteError('AlphaRouter worker exited')
-                    response = json.loads(line)
-                    if response.get('id') != identity:
-                        raise AlphaRouteError('AlphaRouter response differs from request')
-                    if response.get('operation') == 'quote':
-                        self.quote_callbacks += 1
-                        started = time.perf_counter()
+        entry, identity = None, None
+        try:
+            async with self.lock:
+                process = await self._start()
+                self.sequence += 1
+                identity = str(self.sequence)
+                entry = {'process': process, 'queue': asyncio.Queue(), 'callbacks': set(),
+                         'canonical': {}, 'block': block, 'terminal': False}
+                self.requests[identity] = entry
+                fields = ('id', 'protocol', 'token0', 'token1', 'feePips', 'lpFee',
+                          'tickSpacing', 'hooks', 'poolManager', 'address')
+                pools = [{key: deepcopy(value) for key, value in pool.items() if key in fields}
+                         for pool in list(self.engine.registry.inventory.values())]
+                await self._write(process, {'id': identity, 'chainId': int(self.engine.registry.chain),
+                    'blockNumber': int(block['number']), 'source': source, 'target': target,
+                    'amount': str(amount), 'pools': pools})
+            while True:
+                response = await entry['queue'].get()
+                if isinstance(response, BaseException):
+                    raise response
+                if 'error' in response:
+                    raise AlphaRouteError('Calculation candidate discovery unavailable')
+                yield response['candidates']
+                if response.get('operation') != 'candidates':
+                    return
+        finally:
+            if entry is not None:
+                self.requests.pop(identity, None)
+                self.retired.add(identity)
+                callbacks = tuple(entry['callbacks'])
+                for task in callbacks:
+                    task.cancel()
+                await asyncio.gather(*callbacks, return_exceptions=True)
+                if not entry['terminal'] and self.process is entry['process']:
+                    if self.requests:
+                        # The child retires this calculation's pending callbacks;
+                        # independently subscribed queries keep their process.
                         try:
-                            result = await self._quote(response, block, canonical)
-                            self.quote_callback_failures += result.get('quote') is None
-                        finally:
-                            self.quote_callback_ms += (time.perf_counter() - started) * 1000
-                        await self._write(process, {'id': identity, 'operation': 'quoteResult',
-                            'quoteId': response['quoteId'], 'result': result})
-                    elif response.get('operation') == 'candidates':
-                        yield response['candidates']
-                    elif 'candidates' in response:
-                        yield response['candidates']
-                        return
-                    elif 'error' in response:
-                        # A matched terminal error retires this request in the
-                        # worker. Its healthy calculation process is reusable.
-                        terminal_error = True
-                        raise AlphaRouteError('AlphaRouter candidate discovery unavailable')
+                            async with self.lock:
+                                await self._write(entry['process'], {'id': identity, 'operation': 'cancel'})
+                        except Exception as error:
+                            # A broken shared transport retires its subscribers;
+                            # it does not replace the closing query's own outcome.
+                            await self._stop(entry['process'], error)
                     else:
-                        # Do not expose arbitrary child text, URLs or inputs.
-                        raise AlphaRouteError('AlphaRouter candidate discovery unavailable')
-            except BaseException:
-                # Cancellation, disproof and broken framing/transport still
-                # retire the child and all calculation work it owns.
-                if not terminal_error:
-                    await self._stop(process)
-                raise
+                        await self._stop(entry['process'])
 
     async def _quote(self, request, block, canonical):
         amount, mode = int(request['amount']), request['mode']
@@ -145,9 +210,6 @@ class AlphaRoutes:
         except SnapshotChanged:
             raise
         except Exception:
-            # One failed route/percentage leaves other AlphaRouter candidates
-            # and every ordinary custom candidate available. SearchStopped and
-            # cancellation are BaseExceptions and retain their owner effects.
             return {'quote': None}
 
     @staticmethod

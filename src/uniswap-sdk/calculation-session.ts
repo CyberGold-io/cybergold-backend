@@ -14,6 +14,11 @@ export function createCalculationSession(calculate: Calculation, reply: (value: 
   };
   return {
     receive(frame: any) {
+      if (frame.operation === 'cancel') {
+        const request = requests.get(frame.id);
+        if (request) retire(request);
+        return true;
+      }
       if (frame.operation === 'quoteResult') {
         const request = requests.get(frame.id);
         // A retired request may already have sent callbacks before its terminal

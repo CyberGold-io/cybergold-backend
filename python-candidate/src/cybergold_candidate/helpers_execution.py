@@ -1,4 +1,4 @@
-"""Simulate and estimate the Helpers Swap operations used by the Apps."""
+"""Estimate gas for the concrete Helpers Swap operations used by the Apps."""
 import asyncio
 from datetime import datetime, timezone
 import json
@@ -8,7 +8,6 @@ import re
 from types import SimpleNamespace
 from typing import Any, Literal
 
-from eth_utils.abi import collapse_if_tuple
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from web3 import Web3
@@ -96,10 +95,8 @@ class HelpersExecutionRpc(NonceRpc):
         transaction = {'from': Web3.to_checksum_address(payload.owner), 'to': Web3.to_checksum_address(helpers), 'data': data}
         if payload.value is not None:
             transaction['value'] = hex(int(payload.value))
-        # The existing fee hint first simulates, then estimates latest state.
-        # Native reverts and ABI decoding errors retain that ordering.
-        result = await self.execution_read('eth_call', [transaction, 'latest'], 'helpers-simulation')
-        self.w3.codec.decode([collapse_if_tuple(output) for output in method['outputs']], bytes.fromhex(result['result'][2:]))
+        # The hint needs gas only. Preparation separately simulates accepted
+        # terms; estimation itself returns ordinary execution/revert failures.
         result = await self.execution_read('eth_estimateGas', [transaction], 'helpers-gas-estimation')
         return int(result['result'], 16)
 
@@ -133,4 +130,4 @@ async def handle_helpers_execution(request, service):
                             headers={'Cache-Control': 'no-store'})
     bound = SimpleNamespace(get=lambda: service.get(payload)) if service else None
     return await handle_protocol_facts(request, bound, 'helpers-execution',
-                                       'Swap execution fee simulation is temporarily unavailable.')
+                                       'Swap execution fee estimate is temporarily unavailable.')

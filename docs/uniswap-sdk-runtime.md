@@ -3,9 +3,11 @@
 Complete CyberGold economic plans are priced by the existing Helpers
 `executeExactInput` function through one `eth_call` at `latest`. This applies to
 pure Market paths, ordered Core/Market branches and direct basket intents.
-Known saved plans skip SDK replay. SDK arithmetic chooses new paths, splits and
-funding shapes; a completed proposal receives its economic output from Helpers
-before publication. A reverted optional whole path can still use SDK traversal
+Known saved plans skip SDK replay. Candidate construction does not issue an
+amount-dependent Core preview: topology and cached configuration are enough to
+encode the complete plan, and its single Helpers call supplies Core lots, fees,
+residuals and economic output. SDK arithmetic explores new paths, splits and
+funding shapes. A reverted optional whole path can still use SDK traversal
 to construct a backward-prefix repair; that changed plan is simulated again.
 
 Quotes and execution preparation do not fetch a header or chain ID, nor reread
@@ -40,8 +42,21 @@ owning search, preserving its original observation time and live nomination
 origins. Preparation always executes afresh. Changed funding reconstruction
 reuses measured conversion debits and only simulates a genuinely changed plan.
 Graph walks and normalized topology are also reused within the existing
-bootstrap scope; amounts, split rounding, origins and mutable pool state are
-never cached as topology. Later catalog and provider arrivals remain visible.
+bootstrap scope. A nearby saved quote retains its complete body and execution
+identities; changed allocations are encoded and priced through Helpers.
+Successful pool reads and acquired tick coverage are shared within one search,
+including custom and external suppliers; candidate post-state stays private.
+Later catalog and provider arrivals remain visible.
+
+Core configuration warms at component startup, independently per field. Basket
+assets, weights, conversions, recovery identities and fees are kept in memory;
+the existing Core/Helpers journal worker applies configuration events and
+publishes changes through the existing JSONB store and PostgreSQL notifications.
+API processes listen rather than write competing snapshots. Existing protocol
+facts/model observations supply optional capacity hints without another Core
+read. Cache failures do not reject quotations. Complete saved paths and pure
+Market proposals do not wait for Core configuration; direct basket input
+identities come from the request. A fresh Helpers execution remains decisive.
 
 Python owns RPC, inventory, event reconciliation and cached observations.
 The managed Node 26.10.0 JSONL worker receives raw-unit snapshots, quotes or
@@ -64,8 +79,14 @@ suppresses later candidate or quote frames from its calculation. This keeps an
 ordinary discovery error from repeatedly paying Node/module startup cost.
 Cancellation, canonical-state disproof and broken framing or transport still
 retire and reap the child. Supplier errors retain their existing public outcome;
-worker reuse does not change chain support, the selection clock, pricing slots
-or economic ranking.
+worker reuse does not change the selection clock, pricing slots or economic
+ranking. AlphaRouter receives the existing chain-31338 fork dependencies while
+keeping the actual execution-chain identity. Hosted tools nominate shared
+Mainnet market segments for this fork, then compose the local Core anchor;
+they are not asked to quote the fork-only CYGLD contract on Mainnet. Logs retain
+both execution and nomination chain identities. Raw AlphaRouter topologies are
+published before deep quote callbacks finish, and independent UniRoute-local
+queries can proceed while another query awaits pricing.
 
 New ordered AMM explorations acquire their missing initial pool snapshots
 concurrently. Replay consumes those observations in hop order and preserves the
@@ -74,13 +95,20 @@ word starts after its snapshot, concurrently with sibling pools. Later bitmap
 words and initialized tick rows still follow exact SDK demand. Ordinary
 prefetch errors fall back to required reads; subscriptions are owned and drained.
 Unbound latest state and tick coverage stay outside persistent canonical banks,
-event advancement and completed cross-request getter caches. Exploratory state
+event advancement and completed cross-request getter caches. Token display
+metadata does not block raw-unit pricing; required concentrated-pool spacing is
+read only when SDK exploration needs it. Exploratory state
 disproof affects its own construction/provider, not independently completed
 Helpers observations. SDK-head bounds no longer reject latest-priced candidates.
 
 Saved complete plans start while ordinary Core basket/path preparation runs
-independently. Both changes retain the existing selection clock, pricing
-capacity, comparator and parallel discovery suppliers. The structured SDK
+independently. Exact/nearby SQL lookups, catalog preparation, custom discovery
+and external suppliers start independently; an optional slow lookup does not
+extend the selection window. Cache writes belong to the component and do not
+delay the response. Optional-path errors do not suppress a later retry or an
+independent successful candidate, and there is no sixteen-attempt ceiling.
+These changes retain the existing selection clock, pricing capacity and
+comparator. The structured SDK
 engine and completion-driven scheduler remain shared by V2, V3, V4, mixed and
 split exploration, retained-route construction and caller-selected V3 paths.
 Python extends concentrated-liquidity coverage as needed within the producer

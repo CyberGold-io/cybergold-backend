@@ -51,9 +51,9 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         provider = self.provider(engine)
         try:
             candidates = await provider.discover(A, C, 1000000000000000007, BLOCK)
-            self.assertEqual(len(candidates), 1)
-            self.assertEqual(len(candidates[0]), 1)
-            self.assertEqual(len(candidates[0][0]['hops']), 2)
+            self.assertGreaterEqual(len(candidates), 2)
+            self.assertEqual(len(candidates[-1]), 1)
+            self.assertEqual(len(candidates[-1][0]['hops']), 2)
             self.assertGreater(len(engine.calls), 1)
             self.assertTrue(all(call[4] == {} for call in engine.calls))
             self.assertEqual(len({id(call[4]) for call in engine.calls}), len(engine.calls))
@@ -78,14 +78,16 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await provider.close()
 
-    async def test_ordinary_quote_failure_preserves_empty_outcome(self):
+    async def test_ordinary_quote_failure_keeps_alphas_unpriced_topology_available(self):
         engine = Engine()
         async def unavailable(*_args, **_kwargs):
             raise RuntimeError('ordinary missing or unfillable pool')
         engine.quote_sdk_branches = unavailable
         provider = self.provider(engine)
         try:
-            self.assertEqual(await provider.discover(A, C, 1000, BLOCK), [])
+            hints = await provider.discover(A, C, 1000, BLOCK)
+            self.assertTrue(hints)
+            self.assertTrue(all('quote' not in branch for hint in hints for branch in hint))
         finally:
             await provider.close()
 
@@ -101,7 +103,7 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         await provider.close()
 
     async def test_actual_unsupported_chain_returns_ordinary_provider_error(self):
-        provider = self.provider(Engine(chain=31338))
+        provider = self.provider(Engine(chain=31337))
         try:
             with self.assertRaises(AlphaRouteError):
                 await provider.discover(A, C, 1000, BLOCK)
@@ -115,6 +117,19 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await provider.close()
         self.assertIsNotNone(child.returncode)
+
+    async def test_mainnet_backed_fork_uses_real_chain_dependencies_and_quote_callbacks(self):
+        engine = Engine([pool(), pool(A, B, 500), pool(B, C)], chain=31338)
+        provider = self.provider(engine)
+        self.addAsyncCleanup(provider.close)
+        candidates = await asyncio.wait_for(provider.discover(A, C, 10**18+7, BLOCK), 3)
+        self.assertTrue(candidates)
+        self.assertGreater(len(engine.calls), 1)
+        self.assertTrue(all(call[3] is BLOCK for call in engine.calls))
+        self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for candidate in candidates
+            for branch in candidate for hop in branch['hops'] if 'pool' in hop for token in ('token0', 'token1')))
+        self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for call in engine.calls
+            for branch in call[0] for hop in branch['hops'] for token in ('token0', 'token1')))
 
     async def test_terminal_error_after_quote_callback_reuses_child_for_next_request(self):
         script = '''import json, sys
@@ -183,6 +198,33 @@ for line in sys.stdin:
         self.assertIsNotNone(child.returncode)
         self.assertIsNone(provider.process)
         await provider.close()
+
+    async def test_close_drains_callback_even_when_hint_subscriber_has_not_resumed(self):
+        engine, entered, drained = Engine(), asyncio.Event(), asyncio.Event()
+        async def blocked(*_args, **_kwargs):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+        engine.quote_sdk_branches = blocked
+        provider = self.provider(engine)
+        stream = provider.discover_batches(A, C, 1000, BLOCK)
+        try:
+            self.assertTrue(await asyncio.wait_for(anext(stream), 3))
+            await asyncio.wait_for(entered.wait(), 1)
+            child = provider.process
+            await asyncio.wait_for(provider.close(), 1)
+            self.assertTrue(drained.is_set())
+            self.assertIsNotNone(child.returncode)
+            self.assertIsNone(provider.process)
+            self.assertEqual(engine.semaphore._value, 8)
+            self.assertTrue(all(not entry['callbacks'] for entry in provider.requests.values()))
+            with self.assertRaises(AlphaRouteError):
+                await anext(stream)
+        finally:
+            await stream.aclose()
+            await provider.close()
 
     async def test_cancellation_while_spawn_handle_is_pending_reaps_exact_child(self):
         provider = self.provider(Engine())

@@ -79,8 +79,14 @@ python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_sto
 python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_plan_simulation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_candidate_bodies.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quote_pipeline_parallel.py
+python-candidate/.venv/bin/python python-candidate/tests/test_core_quote_state.py
+python-candidate/.venv/bin/python python-candidate/tests/test_search_observations.py
+python-candidate/.venv/bin/python python-candidate/tests/test_search_read_fanout.py
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
+python-candidate/.venv/bin/python python-candidate/tests/test_economic_cache_parallel.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_sample_observations.py

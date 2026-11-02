@@ -2,7 +2,6 @@
 from copy import deepcopy
 import unittest
 
-from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.quoter.discovery import market_plan
 from cybergold_candidate.quoter.provenance import attach_origins
 from cybergold_candidate.quoter.reuse_routes import (
@@ -42,6 +41,11 @@ def topology(test):
             {'kind': 0, 'token': current_assets[1], 'id': '0', 'amount': str(gross-first)}],
             'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
     q.preview, q.basis_reader = preview, basis
+    async def descriptors(_):
+        return [{'kind': 0, 'token': current_assets[0], 'id': '0', 'amount': '1'},
+                {'kind': 1, 'token': OTHER, 'id': '7', 'amount': '1'},
+                {'kind': 0, 'token': current_assets[1], 'id': '0', 'amount': '1'}]
+    q.core_outputs = descriptors
     return q, current_assets
 
 
@@ -54,6 +58,11 @@ class ReuseRouteTests(unittest.IsolatedAsyncioTestCase):
         q, assets = topology(self)
         old = await q.candidate(scalar(100000), 100, 'core-first', BLOCK,
                                 *await q.basis(BLOCK), first=True)
+        # First construction now nominates complete dormant topology directly.
+        # Retain an explicit adapter attribution to exercise its reuse contract.
+        residual = next(chosen for operation, chosen in old['plan']['conversions'].items()
+                        if ':residual:' in operation)
+        residual['topologyOrigin'] = 'cybergold-adapter'
         adapter = {operation for operation, chosen in old['plan']['conversions'].items()
                    if chosen.get('topologyOrigin') == 'cybergold-adapter'}
         self.assertTrue(adapter)
@@ -159,8 +168,9 @@ class ReuseRouteTests(unittest.IsolatedAsyncioTestCase):
         old['plan']['body']['branches'][0]['data']['acquisitions'][1]['amountIn'] = '100000'
         resized = resize_blueprint(extract_blueprint(old), 999, assets)
         self.assertEqual([row['amountIn'] for row in resized['body']['branches'][0]['data']['acquisitions']], ['0', '999'])
-        with self.assertRaisesRegex(InvalidPreview, 'asset set changed'):
-            resize_blueprint(extract_blueprint(old), 999, [PAXG, WETH])
+        retained = resize_blueprint(extract_blueprint(old), 999, [PAXG, WETH])
+        self.assertEqual(retained['body']['branches'][0]['data']['basketAssets'], assets)
+        self.assertEqual([row['amountIn'] for row in retained['body']['branches'][0]['data']['acquisitions']], ['0', '999'])
 
     async def test_core_sale_addresses_survive_interleaved_share_and_order_changes(self):
         q, assets = topology(self)

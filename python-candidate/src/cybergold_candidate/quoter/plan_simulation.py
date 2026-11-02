@@ -12,7 +12,6 @@ import json
 from eth_utils.abi import collapse_if_tuple
 from web3 import Web3
 
-from ..basket_preview import InvalidPreview
 from ..exact_input_plan import compile_plan
 from ..helpers_execution import ABI, argument
 from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
@@ -159,16 +158,86 @@ def project_buy_fees(request, body, stages, chain, core):
     return total, projection.observations, continued
 
 
-def sell_observations(request, body, stages):
-    """A pure Market sale has one known original-input conversion."""
-    if request['intent'] != 1 or any(row['kind'] != 1 for row in body['branches']):
-        return []
-    projection = StageProjection(stages)
-    for index, branch in enumerate(body['branches']):
-        routed = int(branch['amountIn']) - int(branch['data']['feeCygld'])
-        projection.conversion(request['inputs'][0]['currency'], request['outputCurrency'], routed,
-                              branch['data']['route'], f'{index}:market')
-    return projection.observations
+def project_sell_results(request, body, measured):
+    """Replace descriptive Core amounts only with identifiable receipt amounts.
+
+    Conversion stages carry their branch and original funded amount. Recovery
+    shares are positive-only and retain output/branch order, but have no branch
+    tag. Ambiguous repeated identities remain descriptive rather than acquiring
+    an invented per-branch quantity. None of this controls quote eligibility.
+    """
+    if request['intent'] != 1:
+        return [], []
+    observations, recorded, identities, shares = [], [], [], []
+    known_output, complete = 0, True
+    target = request['outputCurrency']
+
+    def record(row, branch, index, amount, source):
+        row['amount'] = str(amount)
+        recorded.append({'branch': branch, 'index': index,
+            **{key: row[key] for key in ('kind', 'token', 'id', 'amount')}, 'source': source})
+
+    for branch_index, branch in enumerate(body['branches']):
+        if not int(branch['amountIn']):
+            continue
+        stages = [row for row in measured['stages'] if int(row['branch']) == branch_index]
+        projection = StageProjection(stages)
+        data = branch['data']
+        if branch['kind'] == 1:
+            routed = int(branch['amountIn']) - int(data['feeCygld'])
+            known_output += projection.conversion(request['inputs'][0]['currency'], target, routed,
+                                                  data['route'], f'{branch_index}:market')
+        else:
+            outputs = data['expectedOutputs']
+            currencies = [row['token'].lower() for row in outputs if int(row['kind']) == 0]
+            unique = len(set(currencies)) == len(currencies)
+            for index, row in enumerate(outputs):
+                if int(row['kind']) != 0:
+                    shares.append((branch_index, index, row))
+                    continue
+                if not unique:
+                    # Zero outputs do not append a stage. Repeated currency
+                    # descriptors therefore cannot always be assigned a stage.
+                    complete = False
+                    continue
+                source = row['token']
+                if source.lower() == target.lower():
+                    identities.append((branch_index, index, row))
+                    continue
+                stage = stages[projection.cursor] if projection.cursor < len(stages) else None
+                funded = int(stage['fundedInput']) if stage is not None and stage['inputCurrency'].lower() == source.lower() else 0
+                record(row, branch_index, index, funded, 'conversion-funding' if funded else 'no-conversion-stage')
+                known_output += projection.conversion(source, target, funded, data['conversions'][index],
+                                                       f'{branch_index}:redeem:{index}')
+        observations.extend(projection.observations)
+
+    # Identity conversions append no stage. The aggregate receipt proves their
+    # amount only when exactly one unknown scalar contribution remains.
+    if complete and len(identities) == 1:
+        remainder = int(measured['recipientOutputs'][0]['amount']) - known_output
+        if remainder >= 0:
+            branch, index, row = identities[0]
+            record(row, branch, index, remainder, 'scalar-remainder')
+
+    def identity(row):
+        return int(row['kind']), row['token'].lower(), int(row['id'])
+
+    groups = {}
+    for branch, index, row in shares:
+        groups.setdefault(identity(row), []).append((branch, index, row))
+    returned = {}
+    for row in measured['recoveryShares']:
+        returned.setdefault(identity(row), []).append(int(row['amount']))
+    for key, rows in groups.items():
+        amounts = returned.get(key, [])
+        if not amounts:
+            amounts = [0] * len(rows)
+        elif len(rows) == 1:
+            amounts = [sum(amounts)]
+        if len(amounts) == len(rows):
+            for (branch, index, row), amount in zip(rows, amounts, strict=True):
+                record(row, branch, index, amount, 'recovery-shares')
+    return observations, recorded
 
 
 class HelpersPlanSimulation:
@@ -181,9 +250,6 @@ class HelpersPlanSimulation:
     async def __call__(self, request, selected, *, block=None, pricing=True, minimum=None,
                        accepted_core=None, recipient=None, candidate=None):
         plan = deepcopy(selected)
-        total = sum(int(row['amountIn']) for row in plan['allocations'])
-        if request['intent'] < 2 and total != int(request['inputs'][0]['amount']):
-            raise InvalidPreview('Selected allocations do not match declared funding.')
         if pricing:
             neutralize_buy_fees(request, plan['body'], self.registry.chain)
         if minimum is None:
@@ -229,13 +295,15 @@ class HelpersPlanSimulation:
         decoded = rpc.w3.codec.decode([collapse_if_tuple(output)], bytes.fromhex(response['result'][2:]))[0]
         measured = abi_value(decoded, output)
         # ABI integer fields are normalized at the economic wire boundary below.
+        core_amounts = []
         if request['intent'] in (0, 2):
             extra_fee, observations, continued = project_buy_fees(request,
                 plan['body'] if pricing else deepcopy(plan['body']), measured['stages'], self.registry.chain, self.core)
             if not pricing:
                 extra_fee = 0
         else:
-            extra_fee, observations, continued = 0, sell_observations(request, plan['body'], measured['stages']), False
+            observations, core_amounts = project_sell_results(request, plan['body'], measured)
+            extra_fee, continued = 0, False
         recipients = [{**row, 'kind': int(row['kind']), 'id': str(row['id']), 'amount': str(row['amount'])}
                       for row in measured['recipientOutputs']]
         if request['intent'] == 3:
@@ -247,8 +315,6 @@ class HelpersPlanSimulation:
         scalar = int(recipients[0]['amount']) if request['intent'] != 3 else 0
         recovery = [{**row, 'kind': int(row['kind']), 'id': str(row['id']), 'amount': str(row['amount'])}
                     for row in measured['recoveryShares']]
-        if request['intent'] != 3 and scalar <= 0 and not recovery:
-            raise InvalidPreview('This scalar trade has no final output or recovery shares.')
         kinds = {row['kind'] for row in plan['allocations'] if int(row['amountIn'])}
         family = 'mixed' if len(kinds) > 1 or continued else 'market' if kinds == {1} else 'core'
         value = deepcopy(candidate) if candidate is not None else {}
@@ -272,6 +338,7 @@ class HelpersPlanSimulation:
             pricingEvidence={'engine': 'helpers-execution', 'rpcCalls': counts['issued'],
                 'coalesced': counts['coalesced'], 'reused': counts['reused'], 'funding': 'ephemeral-overrides',
                 'feeTreatment': 'policy-output-arithmetic' if pricing and request['intent'] in (0, 2) else 'plan-fees',
+                **({'coreOutputAmounts': core_amounts} if core_amounts else {}),
                 'rawTradeResult': wire(measured),
                 'stages': [{key: str(item) if isinstance(item, int) else item for key, item in row.items()}
                            for row in measured['stages']]})

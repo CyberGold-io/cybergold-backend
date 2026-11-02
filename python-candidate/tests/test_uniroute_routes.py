@@ -78,5 +78,50 @@ class LocalUniRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(child.returncode)
 
 
+class ConcurrentLocalFinderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_later_query_publishes_raw_hints_while_first_deep_callback_is_held(self):
+        value = engine(chain=31338)
+        value.semaphore = asyncio.Semaphore(8)
+        entered, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def pricing(*_args, **_kwargs):
+            entered.set()
+            try:
+                await release.wait()
+                return {'amountIn': '1', 'amountOut': '1', 'fullyFilled': True, 'settled': True}
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+        value.quote_sdk_branches = pricing
+        provider = UnirouteLocal(value, command=['node', str(ROOT/'src/uniswap-sdk/uniroute-worker.ts')])
+        one = provider.discover_batches(A, C, 1000, BLOCK)
+        two = provider.discover_batches(C, A, 2000, BLOCK)
+        pending = None
+        try:
+            self.assertTrue(await asyncio.wait_for(anext(one), 3))
+            pending = asyncio.create_task(anext(one))
+            await asyncio.wait_for(entered.wait(), 1)
+            # No additional clock or worker: another calculation's finder can run.
+            self.assertTrue(await asyncio.wait_for(anext(two), 1))
+            self.assertEqual(provider.sequence, 2)
+            self.assertFalse(release.is_set())
+            self.assertFalse(pending.done())
+            child = provider.process
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+            self.assertTrue(cancelled.is_set())
+            self.assertIs(provider.process, child)
+            self.assertIsNone(child.returncode)
+        finally:
+            if pending is not None:
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            await one.aclose()
+            await two.aclose()
+            release.set()
+            await provider.close()
+        self.assertFalse(provider.requests)
+        self.assertEqual(value.semaphore._value, 8)
+
+
 if __name__ == '__main__':
     unittest.main()

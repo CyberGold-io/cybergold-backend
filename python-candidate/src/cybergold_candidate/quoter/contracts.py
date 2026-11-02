@@ -29,21 +29,19 @@ class PathTrace:
 
 @dataclass
 class SearchSession:
-    limit: int
     random_seed: int | None
     seed_done: asyncio.Event = field(default_factory=asyncio.Event)
     discovery_done: asyncio.Event = field(default_factory=asyncio.Event)
     started: set = field(default_factory=set)
     resolved: set = field(default_factory=set)
+    pending: set = field(default_factory=set)
     starts: int = 0
     pruned: int = 0
     repairs: int = 0
 
     def claim(self):
-        # Called on the owning event loop without yielding. This allowance
-        # bounds optional work only; ordinary candidates use no credits.
-        if self.starts >= self.limit:
-            return False
+        # Passive work count. The producer clock and pricing slots already
+        # bound work; failed attempts do not exclude later useful proposals.
         self.starts += 1
         return True
 

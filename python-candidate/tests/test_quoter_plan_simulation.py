@@ -9,7 +9,7 @@ from web3 import Web3
 
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.economic_quotes import EconomicQuotes
-from cybergold_candidate.exact_input_plan import CORE_BUY, MARKET, SCALAR_BODY, CORE_OUTPUT, CONTINUATION
+from cybergold_candidate.exact_input_plan import CORE_BUY, CORE_SELL, MARKET, SCALAR_BODY, CORE_OUTPUT, CONTINUATION
 from cybergold_candidate.helpers_execution import ABI
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, simulation_scope
@@ -139,6 +139,99 @@ def branches(values):
 
 
 class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_core_sale_projects_actual_amounts_and_preparation_binds_actual_recovery(self):
+        request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '10000'}], 'outputCurrency': WETH}
+        outputs = [{'kind': 0, 'token': PAXG, 'id': '0', 'amount': '1'},
+                   {'kind': 1, 'token': OTHER, 'id': '7', 'amount': '1'},
+                   {'kind': 0, 'token': WETH, 'id': '0', 'amount': '999'}]
+        plan = {'allocations': [{'kind': 0, 'amountIn': '10000'}], 'conversions': {},
+                'body': {'branches': [{'kind': 0, 'amountIn': '10000', 'data': {
+                    'expectedOutputs': outputs,
+                    'conversions': [route(PAXG, WETH), route(OTHER, OTHER), route(WETH, WETH)]}}]}}
+        saved = deepcopy(plan)
+        raw = encoded(measured(200, currency=WETH, stages=[stage(0, PAXG, WETH, 321, 123)],
+                               recovery=[(1, OTHER, 7, 45)], fees=(3, 4, 0)))
+        simulation, q, rpc, provider = fixture(raw, raw)
+        quote = await simulation(request, plan)
+        actual = quote['plan']['body']['branches'][0]['data']['expectedOutputs']
+        self.assertEqual([row['amount'] for row in actual], ['321', '45', '77'])
+        self.assertEqual([row['source'] for row in quote['pricingEvidence']['coreOutputAmounts']],
+                         ['conversion-funding', 'scalar-remainder', 'recovery-shares'])
+        self.assertEqual(quote['conversionObservations'][0]['fundedInput'], '321')
+        self.assertEqual(len(provider.calls), 1)
+        prepared = await TransactionPreparation(q).prepare({'quote': quote, 'sender': USER, 'recipient': USER})
+        self.assertEqual(prepared['economicQuote']['recoveryShares'][0]['amount'], '45')
+        encoded_core = CODEC.decode([CORE_SELL], branches(decode(provider, 1)[-1])[0][2])[0]
+        self.assertEqual([row[3] for row in encoded_core[0]], [317, 44, 76])
+        self.assertEqual(len(provider.calls), 2)  # One quote, one fresh preparation.
+        self.assertEqual((rpc.heads, rpc.verifications), ([], []))
+        self.assertEqual(plan, saved)
+
+    async def test_mixed_native_sale_uses_branch_and_wrapper_stages_for_core_amounts(self):
+        request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '10000'}], 'outputCurrency': ZERO}
+        plan = {'allocations': [{'kind': 1, 'amountIn': '4000'}, {'kind': 0, 'amountIn': '6000'}],
+            'conversions': {}, 'body': {'branches': [
+                {'kind': 1, 'amountIn': '4000', 'data': {'route': route(CORE, WETH), 'feeCygld': '4'}},
+                {'kind': 0, 'amountIn': '6000', 'data': {'expectedOutputs': [
+                    {'kind': 0, 'token': PAXG, 'id': '0', 'amount': '1'},
+                    {'kind': 1, 'token': OTHER, 'id': '7', 'amount': '1'},
+                    {'kind': 0, 'token': WETH, 'id': '0', 'amount': '1'}],
+                    'conversions': [route(PAXG, WETH), route(OTHER, OTHER), route(WETH, WETH)]}}]}}
+        stages = [stage(0, CORE, WETH, 3996, 50), stage(1, WETH, ZERO, 50, 50),
+                  stage(2, PAXG, WETH, 100, 200, branch=1), stage(3, WETH, ZERO, 200, 200, branch=1),
+                  stage(4, WETH, ZERO, 70, 70, branch=1)]
+        simulation, _, _, provider = fixture(encoded(measured(320, currency=ZERO, stages=stages,
+                                                            recovery=[(1, OTHER, 7, 9)], fees=(3, 4, 4))))
+        quote = await simulation(request, plan)
+        actual = quote['plan']['body']['branches'][1]['data']['expectedOutputs']
+        self.assertEqual([row['amount'] for row in actual], ['100', '9', '70'])
+        self.assertEqual([row['operation'] for row in quote['conversionObservations']],
+                         ['0:market', '1:redeem:0', '1:redeem:2'])
+        self.assertEqual(quote['quotedOutput'], '320')
+        self.assertEqual(len(provider.calls), 1)
+
+    async def test_repeated_recovery_identity_is_projected_only_when_branch_order_is_known(self):
+        request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '10000'}], 'outputCurrency': PAXG}
+        plan = {'allocations': [{'kind': 0, 'amountIn': '4000'}, {'kind': 0, 'amountIn': '6000'}],
+            'conversions': {}, 'body': {'branches': [{'kind': 0, 'amountIn': str(amount), 'data': {
+                'expectedOutputs': [{'kind': 1, 'token': OTHER, 'id': '7', 'amount': str(nominal)}],
+                'conversions': [route(OTHER, OTHER)]}} for amount, nominal in [(4000, 5), (6000, 9)]]}}
+        for recovery, expected in [([(1, OTHER, 7, 10), (1, OTHER, 7, 20)], ['10', '20']),
+                                   ([], ['0', '0']), ([(1, OTHER, 7, 20)], ['5', '9'])]:
+            with self.subTest(recovery=recovery):
+                simulation, _, _, provider = fixture(encoded(measured(0, currency=PAXG, recovery=recovery)))
+                quote = await simulation(request, plan)
+                self.assertEqual([branch['data']['expectedOutputs'][0]['amount']
+                                  for branch in quote['plan']['body']['branches']], expected)
+                if len(recovery) == 1:
+                    self.assertNotIn('coreOutputAmounts', quote['pricingEvidence'])
+                self.assertEqual(len(provider.calls), 1)
+
+    async def test_scalar_funding_remainder_is_reported_by_helpers_without_local_equality_gate(self):
+        request, plan = market()
+        plan['allocations'][0]['amountIn'] = plan['body']['branches'][0]['amountIn'] = '2000'
+        simulation, _, _, provider = fixture(encoded(measured(100000,
+            stages=[stage(0, WETH, CORE, 2000, 100000)], retained=[(1, 1, WETH, 8000)])))
+        value = await simulation(request, plan)
+        self.assertEqual(value['inputs'][0]['amount'], '10000')
+        self.assertEqual(value['estimatedRetainedInputCharges'][0]['amount'], '8000')
+        self.assertEqual(value['quotedOutput'], '99900')
+        self.assertEqual(branches(decode(provider)[-1])[0][1], 2000)
+        self.assertEqual(len(provider.calls), 1)
+
+    async def test_successful_zero_scalar_receipt_is_not_rejected_after_contract_execution(self):
+        request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '10000'}], 'outputCurrency': PAXG}
+        plan = {'allocations': [{'kind': 0, 'amountIn': '10000'}], 'conversions': {},
+            'body': {'branches': [{'kind': 0, 'amountIn': '10000', 'data': {
+                'expectedOutputs': [{'kind': 0, 'token': PAXG, 'id': '0', 'amount': '0'}],
+                'conversions': [route(PAXG, PAXG)]}}]}}
+        simulation, _, _, provider = fixture(encoded(measured(0, currency=PAXG)))
+        quote = await simulation(request, plan)
+        self.assertEqual(quote['quotedOutput'], '0')
+        self.assertEqual(quote['recoveryShares'], [])
+        self.assertEqual(decode(provider)[-1]['plan']['minimumOutput'], 0)
+        self.assertEqual(len(provider.calls), 1)
+
     async def test_market_buy_is_one_latest_helpers_call_and_projects_output_fee_only(self):
         request, plan = market()
         saved = deepcopy(plan)

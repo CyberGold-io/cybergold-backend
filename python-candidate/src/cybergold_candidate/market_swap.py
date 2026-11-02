@@ -20,6 +20,7 @@ from web3 import Web3
 
 from .basket_preview import InvalidPreview, handle_basket_preview
 from .rpc_block_context import LATEST_BLOCK, is_latest
+from .search_observations import search_observation_scope
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor, ceil
 from .market_fee import get_market_fee_rate, gross_buy_target, quoted_fee, routed_sell_budget
 from .quote_errors import public_quote_error, QuoteFailure
@@ -321,6 +322,7 @@ class MarketQuotes(RouteQuoteEngine):
                 raise InvalidPreview('Retained Market route does not use the canonical CYGLD pool.')
         return result
 
+    @search_observation_scope()
     async def get_model(self, request, *, block=None):
         if self.request_resolver:
             request = await self.request_resolver(request)

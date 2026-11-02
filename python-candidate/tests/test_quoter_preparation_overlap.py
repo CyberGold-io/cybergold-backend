@@ -7,6 +7,7 @@ import unittest
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.discovery import market_plan
 from cybergold_candidate.quoter.bootstrap import current_bootstrap
+from cybergold_candidate.quoter.custom_routes import CustomRoutes
 from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
@@ -16,9 +17,17 @@ from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixtu
 REQUEST = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
 ASSETS, WEIGHTS = [PAXG, OTHER], [500000, 500000]
 POOL = {'id': '0x'+'17'*20, 'address': '0x'+'17'*20, 'protocol': 'v2', 'feePips': 3000,
-        'token0': {'address': WETH, 'decimals': 18, 'chainId': 1},
-        'token1': {'address': CORE, 'decimals': 18, 'chainId': 1}}
-HOPS = [{'pool': POOL, 'zeroForOne': True}]
+        'token0': {'address': CORE, 'decimals': 18, 'chainId': 1},
+        'token1': {'address': WETH, 'decimals': 18, 'chainId': 1}}
+HOPS = [{'pool': POOL, 'zeroForOne': False}]
+
+
+def fixture_pool(a, b, index):
+    a, b = sorted((a.lower(), b.lower()))
+    return {'id': '0x'+f'{index:02x}'*20, 'address': '0x'+f'{index:02x}'*20,
+        'protocol': 'v2', 'feePips': 3000,
+        'token0': {'address': a, 'decimals': 18, 'chainId': 1},
+        'token1': {'address': b, 'decimals': 18, 'chainId': 1}}
 
 
 class Rpc:
@@ -37,15 +46,21 @@ class Rpc:
 class Fixture(Quoter):
     def __init__(self):
         self.rpc = Rpc()
-        registry = SimpleNamespace(chain=1, core=CORE, inventory={POOL['id']: deepcopy(POOL)}, seed=None)
+        # Explicit semantic connectivity replaces the old conversion override,
+        # which invented a WETH/Core hop even for unrelated basket currencies.
+        rows = [deepcopy(POOL), *(fixture_pool(a, b, index) for index, (a, b) in enumerate(
+            ((WETH, PAXG), (WETH, OTHER), (PAXG, CORE), (OTHER, CORE)), 40))]
+        registry = SimpleNamespace(chain=1, core=CORE, inventory={row['id']: row for row in rows}, seed=rows[-2])
         registry.get_rpc = lambda: self.rpc
         engine = SimpleNamespace(registry=registry)
         super().__init__(settings(), engine, basis_reader=self.read_basis, preview=self.preview_core,
                          plan_simulator=self.simulate_plan)
         self.selected_calls, self.ordinary_calls, self.previews = [], [], []
+        self.seed_calls, self.core_calls, self.market_calls = [], [], []
         self.seeded_assets, self.discovered_assets = [], []
         self.path_started = asyncio.Event()
         self.core_completed = asyncio.Event()
+        self.seed_completed = asyncio.Event()
         self.simulated_calls = []
 
     async def exploration_block(self):
@@ -68,14 +83,6 @@ class Fixture(Quoter):
         self.path_started.set()
         return amount, amount*2
 
-    async def conversion(self, source, target, amount, block, bank, canonical, **options):
-        bootstrap = current_bootstrap()
-        if bootstrap is not None:
-            bootstrap.offer_feeds(source, target, amount, block)
-        chosen = market_plan(source, target, HOPS, amount)['conversions']['0:market']
-        options.get('capture', {}).update(deepcopy(chosen))
-        return deepcopy(chosen['template']), amount*2, []
-
     async def preview_core(self, mode, value, block):
         self.previews.append((mode, deepcopy(value)))
         acquired = list(map(int, value['maximumAmountsIn']))
@@ -85,16 +92,27 @@ class Fixture(Quoter):
 
     async def candidate(self, request, share, order, block, assets, weights, **options):
         row = (list(assets), list(weights), block)
-        (self.selected_calls if options.get('selected') is not None else self.ordinary_calls).append(row)
+        selected = options.get('selected')
+        saved = bool(selected and selected.get('_fixture_saved_seed'))
+        if selected is not None:
+            self.selected_calls.append(row)
+        (self.seed_calls if saved else self.ordinary_calls).append(row)
+        core = (any(item.get('kind') == 0 for item in selected.get('allocations', []))
+                if selected is not None else share != 0)
+        if not saved:
+            (self.core_calls if core else self.market_calls).append(row)
         value = await super().candidate(request, share, order, block, assets, weights, **options)
-        if options.get('selected') is None and share == 100:
+        if saved:
+            self.seed_completed.set()
+        elif core:
             self.core_completed.set()
         return value
 
 
 def seed():
-    return {'inputs': deepcopy(REQUEST['inputs']),
-            'plan': market_plan(WETH, CORE, HOPS, int(REQUEST['inputs'][0]['amount']))}
+    plan = market_plan(WETH, CORE, HOPS, int(REQUEST['inputs'][0]['amount']))
+    plan['_fixture_saved_seed'] = True
+    return {'inputs': deepcopy(REQUEST['inputs']), 'plan': plan}
 
 
 class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
@@ -110,22 +128,24 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def update(frame):
             self.assertTrue(entered.is_set())
-            self.assertEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
+            self.assertEqual(frame['value']['routeFamily'], 'market')
             self.assertFalse(drained.is_set())
+            await q.seed_completed.wait()
             budget.finish_selection('best-initial')
         with budget_context(budget):
             async with asyncio.timeout(1):
                 value = await q.get(REQUEST, update, seed=seed())
         self.assertEqual(value['quotedInput'], '10000')
         self.assertGreater(int(value['quotedOutput']), 0)
-        self.assertEqual(len(q.selected_calls), 1)
-        self.assertEqual(q.selected_calls[0][:2], ([], []))
-        self.assertFalse(q.ordinary_calls)
+        self.assertEqual(len(q.seed_calls), 1)
+        self.assertEqual(q.seed_calls[0][:2], ([], []))
+        self.assertTrue(all(row[:2] == ([], []) for row in q.market_calls))
+        self.assertFalse(q.core_calls)
         self.assertFalse(q.previews)
         self.assertTrue(drained.is_set())
         self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
 
-    async def test_ordinary_core_grid_and_every_supplier_receive_real_preparation(self):
+    async def test_market_and_suppliers_start_early_while_core_grid_receives_real_weights(self):
         q, release = Fixture(), asyncio.Event()
         async def basis(_):
             await release.wait()
@@ -136,20 +156,19 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self, name):
                 self.name, self.called, self.closed = name, asyncio.Event(), False
             async def discover(self, *_):
-                self.assert_prepared()
                 self.called.set()
                 return []
-            def assert_prepared(self):
-                assert release.is_set()
             async def close(self):
                 self.closed = True
-        for name in ('custom', 'alpha', 'uniroute-local', 'uniroute-api', 'guidestar'):
+        for name in ('alpha', 'uniroute-local', 'uniroute-api', 'guidestar'):
             suppliers.append(Supplier(name))
-        q.route_provider_factory = lambda: [PendingRouteTool(supplier) for supplier in suppliers]
+        q.route_provider_factory = lambda: [CustomRoutes(q.engine.registry),
+            *(PendingRouteTool(supplier) for supplier in suppliers)]
         budget = QuoteBudget()
         async def update(frame):
-            if frame['value']['searchCoverage']['selectedPhase'] == 'saved-plan':
+            if not release.is_set():
                 self.assertFalse(release.is_set())
+                self.assertEqual(frame['value']['routeFamily'], 'market')
                 release.set()
         with budget_context(budget):
             async with asyncio.timeout(1):
@@ -158,8 +177,10 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
                 budget.finish_selection('best-initial')
                 value = await task
         self.assertTrue(q.ordinary_calls)
-        self.assertTrue(all(row == (ASSETS, WEIGHTS, BLOCK) for row in q.ordinary_calls))
-        self.assertEqual(q.seeded_assets, [ASSETS])
+        self.assertTrue(q.market_calls)
+        self.assertTrue(q.core_calls)
+        self.assertTrue(all(row == (ASSETS, WEIGHTS, BLOCK) for row in q.core_calls))
+        self.assertEqual(q.seeded_assets, [[], ASSETS])
         self.assertTrue(q.discovered_assets)
         self.assertTrue(all(supplier.closed for supplier in suppliers))
         self.assertGreater(int(value['quotedOutput']), 0)
@@ -169,8 +190,11 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(share=share):
                 q = Fixture()
                 original = await q.candidate(REQUEST, share, 'core-first', BLOCK, ASSETS, WEIGHTS, first=True)
+                original['plan']['_fixture_saved_seed'] = True
                 q.selected_calls.clear()
                 q.ordinary_calls.clear()
+                q.core_calls.clear()
+                q.market_calls.clear()
                 entered, drained = asyncio.Event(), asyncio.Event()
                 async def basis(_):
                     entered.set()
@@ -181,17 +205,17 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
                 q.basis_reader = basis
                 budget = QuoteBudget()
                 async def update(frame):
-                    self.assertEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
                     self.assertFalse(drained.is_set())
-                    budget.finish_selection('best-initial')
+                    if q.seed_completed.is_set():
+                        budget.finish_selection('best-initial')
                 with budget_context(budget):
                     async with asyncio.timeout(1):
                         task = asyncio.create_task(q.get(REQUEST, update, seed=original))
                         await entered.wait()
                         value = await task
-                self.assertEqual(value['quotedOutput'], original['quotedOutput'])
-                self.assertEqual(len(q.selected_calls), 1)
-                self.assertFalse(q.ordinary_calls)
+                self.assertGreaterEqual(int(value['quotedOutput']), int(original['quotedOutput']))
+                self.assertEqual(len(q.seed_calls), 1)
+                self.assertFalse(q.core_calls)
                 self.assertTrue(drained.is_set())
 
     async def test_sdk_basis_disproof_during_drain_does_not_retract_helpers_qualification(self):
@@ -331,20 +355,22 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         async with asyncio.timeout(1):
             value = await q.get(REQUEST, seed=seed())
         self.assertEqual(value['routeFamily'], 'market')
-        self.assertEqual(len(q.selected_calls), 1)
-        self.assertFalse(q.ordinary_calls)
+        self.assertEqual(len(q.seed_calls), 1)
+        self.assertFalse(q.core_calls)
 
     async def test_basis_error_without_independent_plan_preserves_original_error(self):
         q = Fixture()
         async def basis(_):
             raise OSError('Core basket unavailable')
         q.basis_reader = basis
+        q.engine.registry.inventory.clear()
         with self.assertRaisesRegex(OSError, 'Core basket unavailable'):
             await q.get(REQUEST)
 
     async def test_malformed_optional_seed_leaves_ordinary_search_available(self):
         q, budget = Fixture(), QuoteBudget()
-        malformed = {'inputs': deepcopy(REQUEST['inputs']), 'plan': {'allocations': [{}]}}
+        malformed = {'inputs': deepcopy(REQUEST['inputs']), 'plan': {
+            'allocations': [{}], '_fixture_saved_seed': True}}
         async def update(frame):
             self.assertNotEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
             budget.finish_selection('best-initial')
@@ -352,7 +378,7 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
             async with asyncio.timeout(1):
                 value = await q.get(REQUEST, update, seed=malformed)
         self.assertTrue(q.ordinary_calls)
-        self.assertEqual(len(q.selected_calls), 1)
+        self.assertEqual(len(q.seed_calls), 1)
         self.assertGreater(int(value['quotedOutput']), 0)
 
     async def test_selected_market_replay_omits_unused_basis(self):
@@ -365,6 +391,24 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(q.selected_calls, [])
         self.assertEqual([(block, pricing) for _, block, pricing in q.simulated_calls], [(None, False)])
         self.assertFalse(q.previews)
+        self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
+
+    async def test_direct_basket_uses_request_identities_without_exploratory_basis(self):
+        q, budget = Fixture(), QuoteBudget()
+        async def unnecessary(_):
+            raise AssertionError('Direct basket identities already belong to the request')
+        q.basis_reader = unnecessary
+        request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '100'},
+            {'currency': OTHER, 'amount': '200'}], 'outputCurrency': CORE}
+        async def update(_frame):
+            budget.finish_selection('best-initial')
+        with budget_context(budget):
+            async with asyncio.timeout(1):
+                value = await q.get(request, update)
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertTrue(q.ordinary_calls)
+        self.assertTrue(all(row[:2] == (ASSETS, []) for row in q.ordinary_calls))
+        self.assertEqual(len(value['plan']['body']['continuations']), len(request['inputs']))
         self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
 
 

@@ -40,6 +40,12 @@ def quoter():
     service.exploration_block = fixture.exploration_block
     service.seed_routes = fixture.seed_routes
     service.discover = fixture.discover
+    # Explicit construction identities for this component oracle. Its test
+    # recovery token/id differ from the deployed Core's attached-asset formula.
+    service.core_outputs = fixture.core_outputs
+    service.core_state_cache.update({'assets': [PAXG, OTHER], 'weights': [500000, 500000],
+        'conversions': [10**18, 10**18], 'recoveryAssets': ['0x'+'0'*39+'7'],
+        'issueFee': 0, 'redeemFee': 0, 'helperFee': 0, 'supply': engine.supply})
     return service
 
 

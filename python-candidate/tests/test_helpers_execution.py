@@ -1,4 +1,4 @@
-"""Concrete Swap simulation/gas calldata versus independent Viem encoding."""
+"""One gas estimation preserves concrete Swap calldata and ordinary errors."""
 import asyncio
 import json
 from pathlib import Path
@@ -73,7 +73,7 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             result = await service(provider).get(HelpersExecutionRequest.model_validate(row['payload']))
             self.assertEqual(result['gas'], row['gas'])
             self.assertEqual(result['blockTag'], 'latest')
-            self.assertEqual(provider.calls, row['calls'])
+            self.assertEqual(provider.calls, [call for call in row['calls'] if call['method'] == 'eth_estimateGas'])
             self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': None, 'blockHash': None,
                 'blockTimestamp': None, 'blockTag': 'latest', 'observedAt': result['context']['observedAt']})
 
@@ -89,7 +89,7 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(inputs[1]['permit']['value'], inputs[1]['maximumInputAmount'])
             self.assertEqual(permit2['permit']['permitted'], [
                 {'token': inputs[2]['token'], 'amount': inputs[2]['maximumInputAmount']}])
-            self.assertEqual([call for call in provider.calls if call['method'] in ('eth_call', 'eth_estimateGas')], row['calls'])
+            self.assertEqual(provider.calls, [call for call in row['calls'] if call['method'] == 'eth_estimateGas'])
 
     async def test_concurrent_signed_intents_are_isolated_and_uncached(self):
         provider = Provider()
@@ -103,9 +103,9 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
         for provider in (Provider(chain='0x1'), Provider(reorg=True)):
             value = await service(provider).get(HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
             self.assertEqual(value['context']['blockTag'], 'latest')
-            self.assertEqual(provider.calls, ROWS[0]['calls'])
+            self.assertEqual(provider.calls, [call for call in ROWS[0]['calls'] if call['method'] == 'eth_estimateGas'])
 
-    async def test_cancellation_stops_simulation_before_estimation(self):
+    async def test_cancellation_stops_the_single_estimation(self):
         provider = Provider(blocked=True)
         task = asyncio.create_task(service(provider).get(HelpersExecutionRequest.model_validate(ROWS[0]['payload'])))
         await provider.started.wait()
@@ -113,10 +113,10 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertTrue(provider.cancelled)
-        self.assertFalse(any(call['method'] == 'eth_estimateGas' for call in provider.calls))
+        self.assertEqual([call['method'] for call in provider.calls], ['eth_estimateGas'])
 
-    async def test_simulation_decode_and_estimation_failures_are_redacted(self):
-        for failure in ('eth_call', 'decode', 'eth_estimateGas'):
+    async def test_estimation_failures_are_redacted(self):
+        for failure in ('eth_estimateGas',):
             provider = Provider(failure=failure)
             app = create_app(helpers_execution=service(provider))
             async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
@@ -125,8 +125,6 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.headers['cache-control'], 'no-store')
                 self.assertNotIn('password', result.text)
                 self.assertNotIn('gas', result.json())
-            if failure != 'eth_estimateGas':
-                self.assertFalse(any(call['method'] == 'eth_estimateGas' for call in provider.calls))
 
     async def test_fixed_operation_shape_and_native_abi_errors(self):
         provider = Provider()
@@ -139,9 +137,9 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.json()['helpers'], ROWS[0]['helpers'])
             result = await client.post('/api/transaction/helpers-execution', json={**ROWS[0]['payload'], 'args': []})
             self.assertEqual(result.status_code, 503)
-        self.assertTrue(all(call['method'] in ('eth_call', 'eth_estimateGas') for call in provider.calls))
+        self.assertTrue(all(call['method'] == 'eth_estimateGas' for call in provider.calls))
 
-    async def test_simulation_and_estimation_preserve_rpc_stage_and_known_revert_identity(self):
+    async def test_estimation_preserves_rpc_stage_and_known_revert_identity(self):
         for signature, types, values, code in (
                 ('NativeValueMismatch(uint256,uint256)', ['uint256','uint256'], [100, 99], 'quote-contract-reverted'),
                 ('InsufficientCygldSupply()', [], [], 'redemption-supply-exceeded'),
@@ -149,7 +147,7 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
                 ('InsufficientRecoveryShares()', [], [], 'insufficient-recovery-shares')):
             selector = AsyncWeb3.to_hex(AsyncWeb3.keccak(text=signature))[:10]
             data = selector+AsyncWeb3().codec.encode(types, values).hex()
-            for method, stage in [('eth_call','helpers-simulation'), ('eth_estimateGas','helpers-gas-estimation')]:
+            for method, stage in [('eth_estimateGas','helpers-gas-estimation')]:
                 with self.subTest(method=method, signature=signature):
                     provider = Provider(failure=method)
                     provider.error_override = {'code': 3, 'message': 'execution reverted https://password@private.invalid', 'data': data}
@@ -168,8 +166,6 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(diagnostic['errorSelector'], selector)
                     self.assertEqual(diagnostic['errorName'], signature.split('(')[0])
                     self.assertEqual(sum(row['method'] == method for row in provider.calls), 1)
-                    if method == 'eth_call':
-                        self.assertFalse(any(row['method'] == 'eth_estimateGas' for row in provider.calls))
                     record = json.loads(logs.records[-1].getMessage())
                     self.assertEqual(record['diagnostics'], diagnostic)
                     self.assertEqual(record['requestId'], result.headers['X-CyberGold-Request-Id'])
@@ -179,7 +175,7 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
                         self.assertNotIn(data, result.text+record.__repr__())
                     self.assertNotIn('password', result.text+record.__repr__())
 
-    async def test_backend_deadline_retains_the_simulation_stage_without_inventing_provider_error(self):
+    async def test_backend_deadline_retains_the_estimation_stage_without_inventing_provider_error(self):
         provider = Provider(blocked=True)
         observer = service(provider)
         with rpc_diagnostic_scope():
@@ -189,15 +185,15 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             except TimeoutError as error:
                 diagnostics = error_diagnostics(error)
             else:
-                self.fail('Blocked simulation should reach the existing caller deadline')
-        self.assertEqual(diagnostics['rpcMethod'],'eth_call')
-        self.assertEqual(diagnostics['stage'],'helpers-simulation')
+                self.fail('Blocked estimate should reach the existing caller deadline')
+        self.assertEqual(diagnostics['rpcMethod'],'eth_estimateGas')
+        self.assertEqual(diagnostics['stage'],'helpers-gas-estimation')
         self.assertEqual(diagnostics['failureType'],'backend-deadline')
         self.assertGreater(diagnostics['elapsedMs'],0)
         self.assertNotIn('providerMessage',diagnostics)
         self.assertNotIn('upstreamErrorCode',diagnostics)
         self.assertTrue(provider.cancelled)
-        self.assertFalse(any(row['method']=='eth_estimateGas' for row in provider.calls))
+        self.assertEqual([row['method'] for row in provider.calls], ['eth_estimateGas'])
 
 
 if __name__ == '__main__':

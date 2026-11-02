@@ -143,19 +143,15 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['metrics']['nearbySearch']['starts'], 0)
         self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_cache_failure_is_optional_and_disproof_is_not(self):
+    async def test_optional_cache_failure_or_sdk_disproof_leaves_completed_helpers_alternatives(self):
         for disproof in [False, True]:
             q = Quotes(Engine())
             async def unavailable():
                 if disproof:
                     raise SnapshotChanged('captured context changed')
                 raise OSError('optional database unavailable')
-            if disproof:
-                with self.assertRaises(SnapshotChanged):
-                    await q.quote(request(), neighbors=unavailable)
-            else:
-                value = await q.quote(request(), neighbors=unavailable)
-                self.assertGreater(int(value['quotedOutput']), 0)
+            value = await q.quote(request(), neighbors=unavailable)
+            self.assertGreater(int(value['quotedOutput']), 0)
             self.assertEqual(q.engine.semaphore._value, 8)
 
     async def test_lookup_overlaps_sdk_preparation_and_cancellation_drains_both(self):
@@ -231,9 +227,11 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(int(row['amountIn']) for row in value['plan']['allocations']),
                          int(value['inputs'][0]['amount']))
         metrics = value['metrics']['nearbySearch']
-        self.assertEqual(metrics['starts'], 2)  # Identical proposals deduplicate across neighbors.
-        self.assertEqual(metrics['completed'], 2)
-        self.assertLessEqual(value['metrics']['optionalSearch']['starts'], 16)
+        # Both optional offers remain observable, including retry opportunity
+        # after a failure. The real Helpers simulator owns physical coalescing.
+        self.assertEqual(metrics['starts'], 4)
+        self.assertEqual(metrics['completed'], 4)
+        self.assertEqual({row['side'] for row in metrics['sources']}, {'upper', 'lower'})
         self.assertIsNone(value['metrics']['optionalSearch']['randomSeed'])
         self.assertTrue(all('elapsedMs' in row for source in metrics['sources'] for row in source['attempts']))
 

@@ -39,9 +39,27 @@ export function forwardHops(router: any, pools: any[], source: string, target: s
   return hops;
 }
 
-export async function routeRequest(request: Request, quote: (value: any) => Promise<any>) {
+export async function routeRequest(request: Request, quote: (value: any) => Promise<any>,
+                                   publish: (candidates: any[]) => void = () => {}) {
+  const offered = new Set<string>();
   let adapter: ReturnType<typeof createAlphaRouter>;
+  const nominate = (routes: any[]) => {
+    for (const route of routes) {
+      const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
+      const identity = JSON.stringify(hops.map(hop => hop.pool
+        ? [hop.pool.protocol, hop.pool.token0.address, hop.pool.token1.address,
+          hop.pool.feePips, hop.pool.tickSpacing, hop.pool.hooks, hop.zeroForOne]
+        : [hop.kind, hop.currencyOut]));
+      if (!offered.has(identity)) {
+        offered.add(identity);
+        // Actual Alpha topology is useful before its percentage observations.
+        // Helpers still prices any complete plan that consumes this hint.
+        publish([[{ amountIn: request.amount, hops }]]);
+      }
+    }
+  };
   adapter = createAlphaRouter({ chainId: request.chainId, blockNumber: request.blockNumber, pools: request.pools,
+    nominateRoutes: nominate,
     quoteRoute: async ({ route, amount, mode }) => {
       const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
       const result = await quote({ mode, amount: amount.quotient.toString(),

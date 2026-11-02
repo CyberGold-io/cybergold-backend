@@ -60,10 +60,94 @@ async def observed_json(request, intent, execute, *, kind, source, phase, invali
         return JSONResponse(result, headers={'Cache-Control': 'no-store'})
 
 
+class CacheFeed:
+    """Optional request inputs with one shared deployment-scope observation.
+
+    Feed cancellation does not cancel a sibling's scope observation. The
+    request owns preparation until a completed quote transfers it to the
+    service's background writer; shutdown drains both kinds of work.
+    """
+    def __init__(self, service, request):
+        self.service, self.request = service, request
+        self.preparing = service._own(service._capture_scope(request))
+        self.transferred = False
+
+    async def scope(self):
+        return await asyncio.shield(self.preparing)
+
+    async def lookup(self):
+        try:
+            scope = await self.scope()
+            return await self.service.store.lookup(self.request, scope=scope) if scope is not None else None
+        except Exception:
+            return None
+
+    async def neighbors(self):
+        try:
+            scope = await self.scope()
+            return (await self.service.store.neighbors(self.request, scope=scope)
+                    if scope is not None else {'lower': None, 'upper': None})
+        except Exception:
+            return {'lower': None, 'upper': None}
+
+    def save(self, value):
+        self.transferred = True
+        self.service._own(self._save(deepcopy(value)))
+
+    async def _save(self, value):
+        try:
+            scope = await self.scope()
+            if scope is not None:
+                await self.service.store.save(self.request, value, scope=scope)
+        except Exception:
+            pass  # Optional storage cannot revoke a completed Helpers result.
+        finally:
+            await self._close_scope()
+
+    async def _close_scope(self):
+        if not self.preparing.done():
+            self.preparing.cancel()
+        await asyncio.gather(self.preparing, return_exceptions=True)
+
+    async def close(self):
+        if not self.transferred:
+            await self._close_scope()
+
+
 class EconomicQuotes:
     def __init__(self, quoter, store, *, observe_scope=None):
         self.quoter, self.store = quoter, store
         self.observe_scope = observe_scope
+        self.background = set()
+
+    def _own(self, operation):
+        task = asyncio.create_task(operation)
+        self.background.add(task)
+        def finished(done):
+            self.background.discard(done)
+            if not done.cancelled():
+                done.exception()
+        task.add_done_callback(finished)
+        return task
+
+    async def _capture_scope(self, request):
+        try:
+            # Existing deployment/generation/fee scope, never a quote head.
+            if self.observe_scope is not None:
+                await self.observe_scope()
+            await self.quoter.engine.registry.ensure_loaded()
+            return self.store.capture_scope(request)
+        except Exception:
+            return None
+
+    def cache_feed(self, request):
+        return CacheFeed(self, request)
+
+    async def close(self):
+        tasks = tuple(self.background)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def cached_offer(self, request, previous, scope):
         """Offer the better complete stored tuple, preserving its observation.
@@ -85,21 +169,20 @@ class EconomicQuotes:
 
     async def get(self, request, *, refresh=False):
         request = EconomicRequest.model_validate(request).model_dump()
-        # This captures existing deployment/generation/fee scope, not the head.
-        if self.observe_scope is not None:
-            await self.observe_scope()
-        await self.quoter.engine.registry.ensure_loaded()
-        scope = self.store.capture_scope(request)
-        previous = await self.store.lookup(request, scope=scope)
-        if previous is not None and not refresh:
-            return await self.cached_offer(request, previous, scope)
-        # The Quoter owns this optional feed alongside ordinary acquisition;
-        # a slow/missing cache cannot delay starting or completing search.
-        neighbors = ((lambda: self.store.neighbors(request, scope=scope))
-                     if request['intent'] in (0, 1) else None)
-        value = attach_reuse_sample(await self.quoter.quote(request, seed=previous, neighbors=neighbors))
-        await self.store.save(request, value, scope=scope)
-        return {**value, 'observation': {'source': 'search', 'refresh': refresh}}
+        cache = self.cache_feed(request)
+        try:
+            # Ordinary lookup retains the DB-only cache-hit product behavior.
+            # Explicit refresh starts pricing before any optional cache await.
+            previous = await cache.lookup() if not refresh else None
+            if previous is not None:
+                return await self.cached_offer(request, previous, await cache.scope())
+            value = attach_reuse_sample(await self.quoter.quote(request, seed=previous,
+                seed_lookup=cache.lookup if refresh else None,
+                neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
+            cache.save(value)
+            return {**value, 'observation': {'source': 'search', 'refresh': refresh}}
+        finally:
+            await cache.close()
 
     async def progressive(self, request, publish, *, refresh=False):
         from .progressive_quotes import progressive_quote

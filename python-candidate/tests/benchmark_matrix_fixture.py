@@ -287,6 +287,7 @@ class MatrixService:
         self.registry.seed = deepcopy(identities[-1])
         self.catalog_expanded = not bool(case.catalog_delay_ms)
         self.catalog_expansions = self.discovery_calls = 0
+        self.catalog_loading = None
         self.catalog_events = []
         self.started = time.perf_counter()
         self.registry.loaded = True
@@ -317,22 +318,28 @@ class MatrixService:
             return deepcopy(BLOCK)  # Known synthetic SDK construction data, no header RPC.
         self.quoter.exploration_block = exploration_block
         self.quoter.seed_routes = lambda *_: None
+        async def expand_catalog():
+            # One registry-owned catalog publication may have independent
+            # Market/Core subscribers. Getter observations remain uninjected.
+            started = time.perf_counter()
+            await asyncio.sleep(case.catalog_delay_ms / 1000)
+            self.registry.inventory.update(deepcopy(self.catalog_identities))
+            self.catalog_expanded = True
+            self.catalog_expansions += 1
+            self.catalog_events.append({'kind': 'controlled-catalog-publication',
+                'clock': 'harness-session',
+                'arrivalMs': round((time.perf_counter()-self.started)*1000, 3),
+                'delayElapsedMs': round((time.perf_counter()-started)*1000, 3),
+                'inventoryPools': len(self.registry.inventory)})
         async def discover(*_):
             self.discovery_calls += 1
             if not self.catalog_expanded:
                 # The server already owns every immutable pool observation.
                 # Only ordinary topology publication is delayed; state still
                 # comes from production HTTP getter/bitmap/tick acquisition.
-                started = time.perf_counter()
-                await asyncio.sleep(case.catalog_delay_ms / 1000)
-                self.registry.inventory.update(deepcopy(self.catalog_identities))
-                self.catalog_expanded = True
-                self.catalog_expansions += 1
-                self.catalog_events.append({'kind': 'controlled-catalog-publication',
-                    'clock': 'harness-session',
-                    'arrivalMs': round((time.perf_counter()-self.started)*1000, 3),
-                    'delayElapsedMs': round((time.perf_counter()-started)*1000, 3),
-                    'inventoryPools': len(self.registry.inventory)})
+                if self.catalog_loading is None:
+                    self.catalog_loading = asyncio.create_task(expand_catalog())
+                await asyncio.shield(self.catalog_loading)
         self.quoter.discover = discover
         candidate = self.quoter.candidate
         async def observed_candidate(*args, **kwargs):
@@ -350,5 +357,8 @@ class MatrixService:
                 sort_keys=True, separators=(',', ':')).encode()).hexdigest()}
 
     async def close(self):
+        if self.catalog_loading is not None:
+            self.catalog_loading.cancel()
+            await asyncio.gather(self.catalog_loading, return_exceptions=True)
         await self.engine.close()
         await self.registry.close()

@@ -728,30 +728,42 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observed['context']['blockHash'], next_block['hash'])
         self.assertEqual(self.rpc.state_reads, reads_before)
 
-    async def test_v3_connector_fallback_spacing_crosses_real_initialized_boundary(self):
+    async def test_v3_connector_defers_actual_nondefault_spacing_and_crosses_initialized_boundary(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
+        reads = []
         async def read(address, signature, inputs, args, outputs, block):
+            reads.append(signature)
             if signature == 'getPair(address,address)':
                 return (ZERO,)
             if signature == 'getPool(address,address,uint24)':
-                return (C if args[-1] == 500 else ZERO,)
+                # A factory cannot return one physical address for every pair.
+                return (C if set(args[:2]) == {A.lower(), B.lower()} and args[-1] == 500 else ZERO,)
             if signature == 'tickSpacing()':
-                raise ValueError('Transient optional metadata read failure')
-            if signature == 'decimals()':
-                return (18,)
+                return (20,)  # Deliberately differs from fee500's common spacing10.
+            if signature == 'slot0()':
+                return (1 << 96, 0, 0, 0, 0, 0, True)
+            if signature == 'liquidity()':
+                return (1000000,)
             raise AssertionError(signature)
         self.rpc.read_function = read
         await MarketQuotes.connector_inventory(self.quotes, A, B, BLOCK)
         pool = next(pool for pool in self.registry.inventory.values() if pool['protocol'] == 'v3'
             and pool['token0']['address'].lower() == A.lower() and pool['token1']['address'].lower() == B.lower())
-        self.assertEqual(pool['tickSpacing'], 10)
-        state = {**pool, 'sqrtRatioX96': str(1 << 96), 'tick': 0, 'liquidity': '1000000',
-            'ticks': [{'index': -1000, 'liquidityGross': '1500000', 'liquidityNet': '1500000'},
-                {'index': -10, 'liquidityGross': '500000', 'liquidityNet': '-500000'},
-                {'index': 1000, 'liquidityGross': '1000000', 'liquidityNet': '-1000000'}],
+        self.assertNotIn('tickSpacing', pool)
+        self.assertNotIn('tickSpacing()', reads)
+        self.assertNotIn('decimals()', reads)
+        # Semantic topology is usable immediately; only SDK exploration obtains
+        # actual spacing, never an observed-looking fee-tier guess.
+        observed = await self.registry.snapshot(pool, BLOCK)
+        self.assertEqual(observed['tickSpacing'], 20)
+        self.assertEqual(reads.count('tickSpacing()'), 1)
+        state = {**observed,
+            'ticks': [{'index': -2000, 'liquidityGross': '1500000', 'liquidityNet': '1500000'},
+                {'index': -20, 'liquidityGross': '500000', 'liquidityNet': '-500000'},
+                {'index': 2000, 'liquidityGross': '1000000', 'liquidityNet': '-1000000'}],
             'bitmapWords': [{'wordPosition': -1, 'bitmap': str((1 << 255)+(1 << 156))},
                 {'wordPosition': 0, 'bitmap': str(1 << 100)}]}
-        result = await self.sdk.request({'operation': 'quote', 'mode': 'exactIn', 'amount': '1000',
+        result = await self.sdk.request({'operation': 'quote', 'mode': 'exactIn', 'amount': '2000',
             'pools': [state], 'poolId': pool['id'], 'zeroForOne': True})
         self.assertTrue(result['fullyFilled'])
         self.assertEqual(result['postState']['liquidity'], '1500000')
@@ -837,7 +849,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1]['type'], 'complete')
         self.assertEqual(events[-1]['value']['netOutput'], '1974')
 
-    async def test_amount_edits_across_blocks_reuse_factory_identity_and_decimals(self):
+    async def test_amount_edits_across_blocks_reuse_factory_identity_without_display_reads(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
         reads = []
         old_read = self.rpc.read_function
@@ -863,8 +875,10 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         first = await self.quotes._get(request, block=BLOCK)
         static = {name: reads.count(name) for name in ('getPair(address,address)',
             'getPool(address,address,uint24)', 'decimals()')}
+        reserve_reads = reads.count('getReserves()')
+        self.assertGreaterEqual(reserve_reads, 2)  # Canonical edge and the connector.
         self.assertGreater(static['getPair(address,address)'], 0)
-        self.assertEqual(static['decimals()'], 2)
+        self.assertEqual(static['decimals()'], 0)
         second = await self.quotes._get({**request, 'amount': '2002'}, block={
             'number': 124, 'hash': '0x'+'cd'*32})
         self.assertNotEqual(first['netOutput'], second['netOutput'])
@@ -875,7 +889,10 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         # at the new block instead of inheriting an old absence as a veto.
         self.assertEqual(reads.count('getPool(address,address,uint24)'),
                          static['getPool(address,address,uint24)']+4+2*9)
-        self.assertEqual(reads.count('getReserves()'), 2)
+        # The retained observations advance without fresh scalar reads. This
+        # fake records logical getters, not UniswapRpc's physical-read memo;
+        # first-request advisory/quote overlap need not imply one physical RPC.
+        self.assertEqual(reads.count('getReserves()'), reserve_reads)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
         self.rpc.v2_factory, self.rpc.factory, self.rpc.pool_manager = A, B, C

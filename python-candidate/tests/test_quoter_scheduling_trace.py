@@ -19,7 +19,7 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row['funding'], row['independentReference']['funding'])
         self.assertEqual(row['selectedKinds'], [0 if core_preview else 1])
         self.assertTrue(row['replaySameOutput'])
-        self.assertEqual(row['configuration']['optionalLimit'], 16)
+        self.assertIsNone(row['configuration']['optionalLimit'])
         self.assertEqual(row['configuration']['engineSlots'], 8)
         self.assertEqual(row['budgetConfiguration'], {'initialMs':5000.0,'deadlineMs':15000.0})
         suppliers = row['metrics']['routeDiscovery']['providers']

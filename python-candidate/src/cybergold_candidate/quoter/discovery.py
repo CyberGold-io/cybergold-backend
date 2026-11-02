@@ -71,20 +71,42 @@ class TopologyCache:
     def __init__(self):
         self.walks, self.validated = {}, {}
         self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
+        self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
 
-    def clear(self):
-        self.walks.clear()
-        self.validated.clear()
+    def catalog_changed(self, pools):
+        """Reuse the catalog owner's graph key between its existing changes."""
+        pools = list(pools)
+        self._catalog_objects = frozenset(map(id, pools))
+        self._catalog_unique = self._unique(pools)
+        self._catalog_graph = self._graph(self._catalog_unique)
 
-    def paths(self, pools, source, target, weth, max_hops):
+    @staticmethod
+    def _unique(pools):
         unique = {}
         for pool in pools:
             identity = pool_identity(pool)
             if identity not in unique or pool.get('address'):
                 unique[identity] = pool
-        graph = tuple(sorted(((identity, pool['token0']['address'].lower(),
+        return unique
+
+    @staticmethod
+    def _graph(unique):
+        return tuple(sorted(((identity, pool['token0']['address'].lower(),
             pool['token1']['address'].lower(), pool.get('hooks', ZERO).lower())
             for identity, pool in unique.items()), key=repr))
+
+    def clear(self):
+        self.walks.clear()
+        self.validated.clear()
+        self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
+
+    def paths(self, pools, source, target, weth, max_hops):
+        pools = list(pools)
+        if len(pools) == len(self._catalog_objects) and self._catalog_objects == frozenset(map(id, pools)):
+            unique, graph = self._catalog_unique, self._catalog_graph
+        else:
+            unique = self._unique(pools)
+            graph = self._graph(unique)
         key = source.lower(), target.lower(), weth.lower(), max_hops, graph
         if key not in self.walks:
             routes = _enumerate_paths(list(unique.values()), source, target, weth, max_hops)

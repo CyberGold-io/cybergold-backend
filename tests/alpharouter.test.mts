@@ -111,11 +111,11 @@ for (const fixture of cases) test('actual AlphaRouter canonical callback: '+fixt
 
 test('AlphaRouter keeps actual unsupported chain instead of relabelling it', async () => {
   const fixture = cases[0];
-  await assert.rejects(routeRequest({ id: '31338', chainId: 31338, blockNumber: BLOCK,
+  await assert.rejects(routeRequest({ id: '31337', chainId: 31337, blockNumber: BLOCK,
     source: fixture.tokenIn.address, target: fixture.tokenOut.address, amount: fixture.amount,
-    pools: fixture.pools.map(pool => ({ ...pool, token0: { ...pool.token0, chainId: 31338 },
-      token1: { ...pool.token1, chainId: 31338 } })) }, async () => { throw new Error('unexpected callback'); }),
-    /31338/);
+    pools: fixture.pools.map(pool => ({ ...pool, token0: { ...pool.token0, chainId: 31337 },
+      token1: { ...pool.token1, chainId: 31337 } })) }, async () => { throw new Error('unexpected callback'); }),
+    /31337/);
 });
 
 // An existing canonical reference takes precedence over the gas lookup seed.
@@ -137,4 +137,78 @@ test('zero-gas lookup reference cannot bootstrap a USD/WETH route absent from ca
   });
   assert.deepEqual(candidates, []);
   assert.deepEqual(callbacks, []);
+});
+
+
+test('explicit Sandbox fork dependencies retain 31338 through actual Alpha and SDK callbacks', async () => {
+  const fixture = cases.find(value => !value.expectedNull && !value.nativeOutput)!;
+  const pools = fixture.pools.map(pool => ({ ...pool,
+    token0: { ...pool.token0, chainId: 31338 }, token1: { ...pool.token1, chainId: 31338 } }));
+  let callbacks = 0;
+  const selected = await routeRequest({ id: 'fork-real-id', chainId: 31338, blockNumber: BLOCK,
+    source: fixture.tokenIn.address, target: fixture.tokenOut.address, amount: fixture.amount, pools }, async request => {
+    callbacks++;
+    assert.ok(request.branches.every((branch: any) => branch.hops.every((hop: any) =>
+      !hop.pool || (hop.pool.token0.chainId === 31338 && hop.pool.token1.chainId === 31338))));
+    const value = await runRequest({ id: 'fork-real-id', operation: 'simulateRoute', mode: request.mode,
+      amount: request.amount, pools: pools as any[], route: { branches: request.branches.map((branch: any) => ({
+        amountIn: branch.amountIn, hops: branch.hops.filter((hop: any) => hop.pool)
+          .map((hop: any) => ({ poolId: hop.pool.id, zeroForOne: hop.zeroForOne })) })) } });
+    return { quote: value.fullyFilled && ('settled' in value && value.settled)
+      ? value[request.mode === 'exactIn' ? 'amountOut' : 'amountIn'] : null };
+  });
+  assert.ok(callbacks > 0);
+  assert.ok(selected.length > 0);
+  assert.ok(selected[0].every((branch: any) => branch.hops.every((hop: any) => !hop.pool || hop.pool.token0.chainId === 31338)));
+});
+
+test('Alpha publishes each proposed topology before awaiting its SDK price', async () => {
+  const fixture = cases.find(value => value.id === 'split-exact-in')!;
+  const published: any[] = [];
+  const selected = await routeRequest({ id: 'early-alpha', chainId: 1, blockNumber: BLOCK,
+    source: fixture.tokenIn.address, target: fixture.tokenOut.address,
+    amount: fixture.amount, pools: fixture.pools }, async request => {
+    assert.ok(published.length >= 2, 'all proposed sibling paths precede the first deep price callback');
+    return { quote: null };
+  }, batch => { published.push(batch); });
+  assert.ok(published.length > 0);
+  assert.deepEqual(selected, []);
+  assert.ok(published.every(batch => batch.every((candidate: any[]) => candidate.every(branch => !('quote' in branch)))));
+});
+
+test('one cancelled calculation retires its callbacks without suppressing a sibling finder', async () => {
+  const frames: any[] = [];
+  let retired = false;
+  const session = createCalculationSession(async (request, quote, publish) => {
+    publish([[request.id]]);
+    if (request.id === 'held') {
+      try { await quote({ amount: '100' }); } catch { retired = true; }
+    }
+    return [[request.id]];
+  }, frame => { frames.push(frame); }, () => 'ordinary failure');
+  session.receive({ id: 'held' });
+  session.receive({ id: 'sibling' });
+  session.receive({ id: 'held', operation: 'cancel' });
+  await setImmediate();
+  assert.equal(retired, true);
+  assert.ok(frames.some(frame => frame.id === 'sibling' && frame.operation === 'candidates'));
+  assert.ok(frames.some(frame => frame.id === 'sibling' && !frame.operation && frame.candidates));
+  assert.ok(!frames.some(frame => frame.id === 'held' && !frame.operation));
+  session.close();
+});
+
+
+test('Sandbox native output uses the fork wrapper dependency without changing chain', async () => {
+  const fixture = cases.find(value => value.nativeOutput)!;
+  const pools = fixture.pools.map(pool => ({ ...pool,
+    token0: { ...pool.token0, chainId: 31338 }, token1: { ...pool.token1, chainId: 31338 } }));
+  let callbacks = 0;
+  const selected = await routeRequest({ id: 'fork-native-output', chainId: 31338, blockNumber: BLOCK,
+    source: fixture.tokenIn.address, target: ZERO, amount: fixture.amount, pools }, async () => {
+    callbacks++; return { quote: '1000' };
+  });
+  assert.ok(callbacks > 0);
+  assert.ok(selected.length > 0);
+  assert.equal(selected[0][0].hops.at(-1).kind, 'unwrap');
+  assert.ok(selected[0][0].hops.filter((hop: any) => hop.pool).every((hop: any) => hop.pool.token0.chainId === 31338));
 });

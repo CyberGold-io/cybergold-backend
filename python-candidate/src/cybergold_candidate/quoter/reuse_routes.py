@@ -1,7 +1,7 @@
 """Immutable neighboring route blueprints and integer funding reconstruction.
 
-These values only nominate exact candidates. They contain no historical pool
-state, output/fee promise, transaction guard or executable calldata.
+These values nominate complete semantic execution bodies. They contain no
+historical pool state, price promise, transaction guard or executable calldata.
 """
 from copy import deepcopy
 
@@ -43,6 +43,19 @@ def _conversion(value):
     return result
 
 
+def _body_template(value):
+    """Keep execution fields while dropping guards and historical fee amounts."""
+    if isinstance(value, list):
+        return [_body_template(row) for row in value]
+    if not isinstance(value, dict):
+        return deepcopy(value)
+    result = {key: _body_template(row) for key, row in value.items()
+              if key not in ('minimumOutput', 'minimumAmount')}
+    if 'feeCygld' in result:
+        result['feeCygld'] = '0'
+    return result
+
+
 def extract_blueprint(quote):
     """Extract scalar topology and allocation ratios from a completed quote."""
     request, plan = quote['request'], quote['plan']
@@ -53,6 +66,7 @@ def extract_blueprint(quote):
     for index, (allocation, body) in enumerate(zip(plan['allocations'], plan['body']['branches'], strict=True)):
         prefix = f'{index}:'
         branch = {'kind': allocation['kind'], 'weight': int(allocation['amountIn']),
+            'data': _body_template(body['data']),
             'conversions': {operation[len(prefix):]: _conversion(chosen)
                 for operation, chosen in plan['conversions'].items() if operation.startswith(prefix)}}
         if allocation['kind'] == 0 and request['intent'] == 0:
@@ -89,17 +103,22 @@ def resize_blueprint(blueprint, amount, assets):
             continue
         index = len(plan['allocations'])
         conversions = deepcopy(old_branch['conversions'])
-        data = {}
+        data = deepcopy(old_branch['data'])
         if old_branch['kind'] == 0 and blueprint['intent'] == 0:
             previous = old_branch['assets']
-            if {asset.lower() for asset in previous} != {asset.lower() for asset in assets}:
-                raise InvalidPreview('Neighbor Core basket asset set changed.')
+            # A retained complete body does not depend on a fresh basket read.
+            # When supplied, an equal current vector may reorder its templates;
+            # changed membership remains the retained contract's ordinary error.
+            same_assets = {asset.lower() for asset in previous} == {asset.lower() for asset in assets}
+            ordered = list(assets) if same_assets else previous
             old_indices = {asset.lower(): position for position, asset in enumerate(previous)}
-            positions = [old_indices[asset.lower()] for asset in assets]
+            positions = [old_indices[asset.lower()] for asset in ordered]
             weights = [old_branch['acquisitionWeights'][position] for position in positions]
             acquisitions = _amounts(lot, weights)
-            data = {'basketAssets': list(assets),
-                'acquisitions': [{'amountIn': str(value)} for value in acquisitions]}
+            data = {'basketAssets': list(ordered),
+                'acquisitions': [{**deepcopy(old_branch['data']['acquisitions'][position]), 'amountIn': str(value)}
+                                 for position, value in zip(positions, acquisitions, strict=True)],
+                'continuations': [deepcopy(old_branch['data']['continuations'][position]) for position in positions]}
             conversions = {operation: chosen for operation, chosen in conversions.items()
                            if not operation.startswith(('acquire:', 'residual:'))}
             for role in ('acquire', 'residual'):
@@ -111,8 +130,6 @@ def resize_blueprint(blueprint, amount, assets):
             # Rebuilt Core sales always resolve by currency, so an output with
             # no prior route remains optional-unavailable instead of binding
             # accidentally to another asset's historical numeric key.
-            conversions = {operation: chosen for operation, chosen in conversions.items()
-                           if not operation.startswith('redeem:')}
             plan['assetConversions'][str(index)] = deepcopy(old_branch['redeemByAsset'])
         plan['allocations'].append({'kind': old_branch['kind'], 'amountIn': str(lot)})
         plan['body']['branches'].append({'kind': old_branch['kind'], 'amountIn': str(lot), 'data': data})

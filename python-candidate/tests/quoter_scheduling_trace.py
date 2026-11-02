@@ -467,7 +467,7 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
         'pricingOracle':'explicit-selected-plan-SDK-component; not Helpers execution',
         'request':{'inputAsset':'WETH','inputRaw':'10000','outputAsset':'synthetic-CYGLD'},'updates':[],
         'strategy':strategy,'cacheMode':cache_mode,'primer':primer,
-        'configuration':{'optionalLimit':q.optional_limit,'engineSlots':q.engine.semaphore._value},
+        'configuration':{'optionalLimit':None,'engineSlots':q.engine.semaphore._value},
         'hostedFixtureMode':{'custom-only':'not-used','all-local':'unconfigured',
             'hosted-failure':'http-503-fixture','parallel':'success-fixture'}[strategy],
         'candidateInstrumentation':'owned-instance-method; whole-plan start/priced/exit spans recorded',

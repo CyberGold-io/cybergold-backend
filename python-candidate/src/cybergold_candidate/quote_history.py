@@ -83,6 +83,7 @@ class QuoteHistory:
         self.revision = 0
         self.reads = self.envelopes = 0
         self.predictions = self.retired = 0
+        self.state_observer = None
 
     async def observe_generation(self, generation):
         """Retire optional display history at the existing accepted fork reset."""
@@ -207,6 +208,11 @@ class QuoteHistory:
                  'descriptors': [{'kind': 0, 'token': a, 'id': '0'} for a in assets] + [
                      {'kind': 1, 'token': core, 'id': str(int(a, 16))} for a in recovery]}
         self.states[block_key(block)] = {'context': {**deepcopy(context), 'observedAt': datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}, 'state': wire(state), '_acquiredAt': time.monotonic()}
+        if self.state_observer is not None:
+            try:
+                self.state_observer(deepcopy(self.states[block_key(block)]))
+            except Exception:
+                pass  # An optional construction-hint observer cannot veto the model.
         self.states.move_to_end(block_key(block))
         self.trim(self.states)
         self.revision += 1
