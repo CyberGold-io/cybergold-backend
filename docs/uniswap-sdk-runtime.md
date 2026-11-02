@@ -120,6 +120,39 @@ execution terms. Native Core wrapping, adapter encoding, Helpers validation and
 the existing five-second search/fifteen-second maximum selection window retain
 their established behavior.
 
+Hosted UniRoute API and Guidestar requests share a dedicated
+`UniswapApiQueue` owned by the runtime's quote engine. It persists across
+searches and paces HTTP starts in FIFO order, releasing its lock before network
+work so responses can overlap. It is separate from the chain RPC broker. The
+default is six starts/second, matching the documented Uniswap default; optional
+`CYBERGOLD_UNISWAP_API_RPS` selects the quota assigned to the configured key.
+See the official [rate limits](https://developers.uniswap.org/docs/trading/swapping-api/common-errors#rate-limits).
+
+HTTP 429 pauses the shared queue using `Retry-After` seconds or an HTTP date
+(one second when absent/invalid), then retries through the same queue. Other
+HTTP errors return normally. Waiting and retries use the existing quote task's
+deadline and cancellation; local route tools continue independently. There is
+no extra quote gate, retry-count cap or time budget. Cancellation removes
+queued work without counting it as an HTTP attempt. Runtime shutdown cancels
+waiting tasks; closing an individual search provider leaves the shared queue
+intact.
+
+`metrics.routeDiscovery.apiRequests` records aggregate and per-provider
+`httpStatuses`, `queueEntries`, `queueCancelled`, `summedQueueWaitMs` and
+`retries`, alongside existing HTTP attempt/completion/error/cancellation times.
+Queue entries include immediate admissions and retries; `retries` counts only
+retry HTTP attempts that actually start. A 429 is an error attempt even if its
+retry succeeds. Transport failures have no invented HTTP status. Status counts
+describe HTTP responses, independently of later topology parsing. Queue time is
+separate from HTTP elapsed time. These fields survive the existing economic
+log projection and stored-quote evidence; cached counters describe the original
+search. Credentials, headers, response bodies and exception text are excluded.
+
+This is one process's configured-key budget. Multiple processes, blue/green
+instances or other applications sharing the key need to share the assigned
+quota between their configured rates; this queue does not coordinate across
+hosts. A shared-key external consumer may still cause 429, handled as above.
+
 The existing registry worker also retains pool activity in the existing
 `cybergold_uniswap_state` JSONB store. Normal monitoring reuses the canonical
 logs and header checks already acquired for state maintenance; quote/model

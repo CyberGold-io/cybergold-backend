@@ -10,6 +10,7 @@ from aiohttp import ClientResponseError, web
 import httpx
 
 from cybergold_candidate.quoter.hosted_routes import HostedRouteError, UniswapApiProvider
+from cybergold_candidate.uniswap_api_queue import UniswapApiQueue
 from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
 from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.route_observations import (
@@ -173,7 +174,7 @@ class ObservationProjectionTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(404, json={'error': 'private API detail'})
         config = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1', NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'1'*40,
             CYBERGOLD_UNISWAP_API_KEY='private-api-credential')
-        engine = SimpleNamespace(registry=SimpleNamespace(chain=1))
+        engine = SimpleNamespace(registry=SimpleNamespace(chain=1), uniswap_api_queue=UniswapApiQueue())
         provider = UniswapApiProvider(engine, config, guidestar=True,
             client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(respond), timeout=None))
         recorder = RouteObservations()
@@ -182,6 +183,7 @@ class ObservationProjectionTests(unittest.IsolatedAsyncioTestCase):
                 await provider.discover('0x'+'1'*40, '0x'+'2'*40, 100, {'number': 1, 'hash': HASH})
         self.assertEqual(recorder.metrics['requests'], 0)
         self.assertEqual((recorder.api_metrics['requests'], recorder.api_metrics['errors']), (1, 1))
+        self.assertEqual(recorder.api_metrics['httpStatuses'], {'404': 1})
         self.assertEqual(set(recorder.api_metrics['origins']), {'uniswap-guidestar'})
         self.assertEqual(len(requests), 1)
         self.assertNotIn('private', json.dumps(recorder.api_metrics))

@@ -235,6 +235,11 @@
     "required": false
   },
   {
+    "name": "CYBERGOLD_UNISWAP_API_RPS",
+    "kind": "positiveInteger",
+    "required": false
+  },
+  {
     "name": "CYBERGOLD_UNISWAP_API_SWAPPER",
     "kind": "address",
     "required": false

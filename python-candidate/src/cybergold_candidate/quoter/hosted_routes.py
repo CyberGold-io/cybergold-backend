@@ -15,7 +15,8 @@ import httpx
 
 from ..pool_producer import PoolIdentifier, PoolProducer
 from ..protocol_config import configured_address
-from ..route_observations import api_exchange, origin_scope
+from ..route_observations import api_exchange, origin_scope, record_api_status, record_api_retry
+from ..uniswap_api_queue import retry_after_seconds
 from ..uniswap_routes import pool_identity, v3_branches, v4_pool_id
 from ..uniswap_state import POOL_MANAGER
 from ..route_search import WETH
@@ -264,6 +265,7 @@ class UniswapApiProvider:
         self.resolver = resolver or PoolProducer(settings, registry=engine.registry)
         self.clients = set()
         self.client = None
+        self.queue = engine.uniswap_api_queue
 
     @property
     def diagnostics(self):
@@ -294,10 +296,25 @@ class UniswapApiProvider:
         if self.client is None:
             self.client = self.client_factory()
             self.clients.add(self.client)
-        with origin_scope(self.name), api_exchange():
-            response = await self.client.post(QUOTE_URL, headers=headers, json=payload)
-            if response.status_code >= 400:
-                raise HostedRouteError(f'Uniswap route provider returned HTTP {response.status_code}')
+        with origin_scope(self.name):
+            retry = False
+            while True:
+                await self.queue.wait()
+                try:
+                    with api_exchange():
+                        if retry:
+                            record_api_retry()
+                        response = await self.client.post(QUOTE_URL, headers=headers, json=payload)
+                        record_api_status(response.status_code)
+                        if response.status_code >= 400:
+                            raise HostedRouteError(f'Uniswap route provider returned HTTP {response.status_code}')
+                except HostedRouteError:
+                    if response.status_code != 429:
+                        raise
+                    self.queue.pause(retry_after_seconds(response.headers.get('Retry-After')))
+                    retry = True
+                else:
+                    break
         document = response.json()
         identifiers = topology_identifiers(document, guidestar=self.guidestar)
         pools = {pool_identity(pool): pool for pool in (semantic_pool(identifier, registry) for identifier in identifiers)}

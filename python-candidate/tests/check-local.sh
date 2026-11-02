@@ -60,6 +60,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
 python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_api_queue.py
 python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniroute_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_observations.py

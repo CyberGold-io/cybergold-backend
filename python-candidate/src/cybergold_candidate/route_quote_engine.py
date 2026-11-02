@@ -26,6 +26,7 @@ from .uniswap_state import ZERO, same_observed_pool, search_pool_state
 from .uniswap_v4 import tick_prefetch_scope
 from .rpc_block_context import is_latest
 from .wallet_balances import TOKENS
+from .uniswap_api_queue import UniswapApiQueue
 
 _quote_snapshots = ContextVar('route_quote_snapshots', default=None)
 
@@ -47,8 +48,11 @@ class RouteQuoteEngine:
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
         self.semaphore = PricingSlots(8)
+        self.uniswap_api_queue = UniswapApiQueue(
+            int(getattr(settings, 'CYBERGOLD_UNISWAP_API_RPS', None) or 6))
 
     async def close(self):
+        self.uniswap_api_queue.close()
         await self.shared.close()
         await self.sdk.close()
 
