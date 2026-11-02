@@ -9,6 +9,7 @@ import re
 from .diagnostics import project
 from .quote_errors import public_quote_error
 from .rpc_diagnostics import quote_failure_context
+from .route_observations import project_route_discovery, project_route_origins
 from .telemetry import observe
 
 
@@ -45,8 +46,11 @@ def economic_evidence(value, evidence):
         if isinstance(estimate, dict) and raw(estimate.get('amount')):
             result['estimatedAmount'] = estimate['amount']
         phase = value.get('searchCoverage', {}).get('selectedPhase')
-        if phase in ('saved-plan', 'first-result', 'detailed'):
+        if phase in ('saved-plan', 'first-result', 'detailed', 'provider-arrival', 'provider-arrival-quick'):
             result['routePhase'] = phase
+        origins = project_route_origins(value.get('routeOrigins'))
+        if origins:
+            result['routeOrigins'] = origins
         metrics = value.get('metrics') or evidence.get('producerMetrics') or {}
         safe = {}
         for key in ('timeToFirstWholePlanMs', 'searchMs', 'totalMs', 'finalizationMs'):
@@ -55,6 +59,10 @@ def economic_evidence(value, evidence):
                 safe[key] = number
         if metrics.get('selectionReason') in ('complete', 'best-initial', 'first-extension', 'timeout'):
             safe['selectionReason'] = metrics['selectionReason']
+        discovery = project_route_discovery(metrics.get('routeDiscovery') or
+            (evidence.get('producerMetrics') or {}).get('routeDiscovery'))
+        if discovery:
+            safe['routeDiscovery'] = discovery
         if safe:
             result['observedQuoteMetrics' if result.get('resultSource') == 'stored-quote' else 'producerMetrics'] = safe
     rpc = evidence.get('rpc', {})

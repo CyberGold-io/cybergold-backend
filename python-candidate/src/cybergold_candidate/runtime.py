@@ -124,7 +124,9 @@ def create_configured_app(settings=None, database=None, client=None):
     routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
-    universal_quotes = UniversalQuotes(settings, market_quotes)
+    from .quoter.providers import route_providers
+    universal_quotes = UniversalQuotes(settings, market_quotes,
+        route_provider_factory=lambda: route_providers(settings, market_quotes))
     observe_quote_scope = configuration.load if chain == 31338 and settings.DATABASE_URL else None
     transaction_preparation = TransactionPreparation(universal_quotes, observe_scope=observe_quote_scope)
     # Per-block Core fee observations belong to the saved quote's original

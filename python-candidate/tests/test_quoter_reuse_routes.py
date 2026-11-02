@@ -4,6 +4,7 @@ import unittest
 
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.quoter.discovery import market_plan
+from cybergold_candidate.quoter.provenance import attach_origins
 from cybergold_candidate.quoter.reuse_routes import (
     extract_blueprint, neighbor_proposals, resize_blueprint, selected_conversion)
 from cybergold_candidate.routing_encoding import ZERO, weighted_routes
@@ -49,6 +50,30 @@ async def evaluate(q, request, plan):
 
 
 class ReuseRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_neighbor_replay_preserves_nominators_and_adapter_topology(self):
+        q, assets = topology(self)
+        old = await q.candidate(scalar(100000), 100, 'core-first', BLOCK,
+                                *await q.basis(BLOCK), first=True)
+        adapter = {operation for operation, chosen in old['plan']['conversions'].items()
+                   if chosen.get('topologyOrigin') == 'cybergold-adapter'}
+        self.assertTrue(adapter)
+        for operation, chosen in old['plan']['conversions'].items():
+            if operation not in adapter:
+                chosen['discoveryOrigins'] = ['uniroute-local', None, 'uniswap-alpharouter', 'uniroute-local']
+        proposal = neighbor_proposals(old, 90000, assets)[0]
+        for operation, chosen in proposal['plan']['conversions'].items():
+            if operation in adapter:
+                self.assertEqual(chosen['topologyOrigin'], 'cybergold-adapter')
+            else:
+                self.assertEqual(chosen['discoveryOrigins'], ['uniroute-local', 'uniswap-alpharouter'])
+        result = attach_origins(await evaluate(q, scalar(90000), proposal['plan']))
+        self.assertGreater(int(result['quotedOutput']), 0)
+        self.assertEqual(result['routeOrigins']['discoveryProviders'], ['uniroute-local', 'uniswap-alpharouter'])
+        self.assertEqual(result['routeOrigins']['adapterConversions'], sorted(adapter))
+        prepared = await TransactionPreparation(q).prepare({'quote': result, 'sender': USER, 'recipient': USER})
+        self.assertEqual(prepared['economicQuote']['routeOrigins'], result['routeOrigins'])
+        self.assertEqual(prepared['plan']['inputs'], proposal['inputs'])
+
     async def test_actual_sdk_protocols_native_wrap_and_fresh_preparation(self):
         for protocol in ('v2', 'v3', 'v4'):
             for native in (False, True):

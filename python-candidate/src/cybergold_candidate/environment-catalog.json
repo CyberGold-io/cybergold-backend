@@ -228,5 +228,15 @@
     "name": "CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS",
     "kind": "address",
     "required": false
+  },
+  {
+    "name": "CYBERGOLD_UNISWAP_API_KEY",
+    "kind": "text",
+    "required": false
+  },
+  {
+    "name": "CYBERGOLD_UNISWAP_API_SWAPPER",
+    "kind": "address",
+    "required": false
   }
 ]

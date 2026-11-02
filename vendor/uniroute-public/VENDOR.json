@@ -1,0 +1,78 @@
+{
+  "repository": "Uniswap/uniroute-public",
+  "commit": "9f04cb6874a7767fbc0bf51cdfacf9e6c1637999",
+  "component": "src/core/route/RouteFinder.ts",
+  "gitBlob": "4f4692ca845b018eb831718e4df5663b4b4577ce",
+  "sourceSha256": "efe814f8d9b9f7040c154cb847698cb5df4ff194c122877cab0c71d9d7c1d744",
+  "upstreamLicenseStatement": "README.md: MIT License. No standalone LICENSE file exists in the inspected public tree.",
+  "compiler": {
+    "package": "typescript",
+    "version": "5.9.3",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "sourceMap": true,
+    "inlineSources": true,
+    "sourceRoot": "relative to each generated artifact directory, targeting its exact upstream source directory",
+    "generatedJavaScriptNormalization": "strip trailing horizontal whitespace per line; source bytes and compiler source maps preserved"
+  },
+  "generatedArtifacts": {
+    "runtime/core/route/RouteFinder.js": "927f65788e27fab43747751b88f51c00542f658b4f31ac1d57524502e994b378",
+    "runtime/core/route/RouteFinder.js.map": "7d2524336136073d0b0a1173dc154acb2f6a7655585e1f981a7a9d2563807087",
+    "runtime/core/strategy/BaseQuoteStrategy.js": "f28a46e1c14bfce244b7be9a9d1370702ff8f7d8d866c26e920ef7da62b8e9ab",
+    "runtime/core/strategy/BaseQuoteStrategy.js.map": "b33d4e1892b266831c2940e95f56e12dbffda0e6b4513b5097ccb1d74a5db8db",
+    "runtime/core/strategy/DeepQuoteStrategy.js": "c93e838197c7bd710cfeb8e84a979289b102f8c9398df9724d3bfddc702ed77c",
+    "runtime/core/strategy/DeepQuoteStrategy.js.map": "3d62e9c188dfaecf62dea70df65dc859d5ead3f8b381697cc59a5fa4bd6243f0",
+    "runtime/core/quote/QuoteBestSplitFinder.js": "85cd4bfda9d0b9feaa14e92d740af65192c93582747ebd25968f7a9afc848a09",
+    "runtime/core/quote/QuoteBestSplitFinder.js.map": "6c3d8f4e33b9d2b30b815a7d9e60c4ffe5fe27d47f45e0e55272c12f9e535f8d",
+    "runtime/core/route/RouteQuoteAllocator.js": "97436ee38174dba5da799b63184ce80ff27fe88777b6046ed24901b3235c7b34",
+    "runtime/core/route/RouteQuoteAllocator.js.map": "3eb87dd83374dc0e2705d05e6ed0553d2cbc2811a1b463b1352fb5c765da2f4d",
+    "runtime/core/quote/selector/SimpleQuoteSelector.js": "1a40dd99b62691c3fff59e353ae73b4c22dd8d7808d2a46072e8bbf0d1280c43",
+    "runtime/core/quote/selector/SimpleQuoteSelector.js.map": "ee349854bd87085e95bdd7bf8e36557a774acdcd2f1475e4c305dd3654cc8bb8"
+  },
+  "wiring": "CyberGold missing model/configuration, canonical quote callback, zero-gas and no-op private telemetry wiring; published finder/quote/split/selector source unchanged. All raw finder hints publish before deeper work.",
+  "productionRouteFinderConfig": {
+    "MaxHops": 3,
+    "MaxHopsExtended": 3,
+    "MinRoutesThreshold": 0,
+    "MaxExtendedRoutes": 0
+  },
+  "components": [
+    {
+      "component": "src/core/route/RouteFinder.ts",
+      "gitBlob": "4f4692ca845b018eb831718e4df5663b4b4577ce",
+      "sourceSha256": "efe814f8d9b9f7040c154cb847698cb5df4ff194c122877cab0c71d9d7c1d744"
+    },
+    {
+      "component": "src/core/strategy/BaseQuoteStrategy.ts",
+      "gitBlob": "9f11335a4c474d348c4b168abc2946a1895e9eae",
+      "sourceSha256": "f092b6cb0716b81e0184dc97af45609737c8131f8f0ea2f4bb35d249a3db7eb5"
+    },
+    {
+      "component": "src/core/strategy/DeepQuoteStrategy.ts",
+      "gitBlob": "ef92135f56293a926561b1e65e5dcf27a1344b71",
+      "sourceSha256": "95720b9da2bf2ab0c8e7fac453ce54c00574411397a7b91530720e700b837e76"
+    },
+    {
+      "component": "src/core/quote/QuoteBestSplitFinder.ts",
+      "gitBlob": "0618e415fa09124a0f71513b9e6e5d32d1e41baf",
+      "sourceSha256": "832c989cbeb12fdd4bd514f36c94291bd2639573d9a8485e8bc437e44850d7bc"
+    },
+    {
+      "component": "src/core/route/RouteQuoteAllocator.ts",
+      "gitBlob": "e426f0a0d1f440331dd965aa27adb38dfcde0859",
+      "sourceSha256": "b8e81b6c26ffa7f6f48da4b358cbff2fde1859d1ac43fdfcc542a4ae5b324cc1"
+    },
+    {
+      "component": "src/core/quote/selector/SimpleQuoteSelector.ts",
+      "gitBlob": "c05a544cd769798a58b18e1ea6a83392b69baf80",
+      "sourceSha256": "f51dcd02fd31e200c93716c5c6d51187f97489172632a4b350ef36e0f3f03d78"
+    }
+  ],
+  "nominationConfig": {
+    "percentageStep": 5,
+    "maxSplits": 2,
+    "gas": "zero nomination gas",
+    "resultQuota": null,
+    "splitTimeout": "Infinity; Python QuoteBudget owns selection and cancellation"
+  }
+}

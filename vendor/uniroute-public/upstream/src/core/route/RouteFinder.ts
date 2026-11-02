@@ -1,0 +1,258 @@
+import {RouteBasic} from '../../models/route/RouteBasic';
+import {Address} from '../../models/address/Address';
+import {buildMetricKey, IUniRouteServiceConfig} from '../../lib/config';
+import {FAKE_TICK_SPACING, getV4EthWethFakePool} from '../../lib/poolUtils';
+import {ChainId} from '../../lib/config';
+import {V4Pool} from '../../models/pool/V4Pool';
+import {Context as UniContext} from '@uniswap/lib-uni/context';
+import {Pool} from '../../models/pool/Pool';
+import {Protocol} from '../../models/pool/Protocol';
+import {CanonicalPools, identifyPoolModel} from '../../lib/CanonicalPools';
+import {RoutingBlockList} from '../../lib/RoutingBlockList';
+
+const METRIC_NON_CANONICAL_POOL = buildMetricKey(
+  'RouteFinder.NonCanonicalPool'
+);
+const METRIC_BLOCKED_ROUTING_TOKEN_POOL = buildMetricKey(
+  'RouteFinder.BlockedRoutingTokenPool'
+);
+
+export interface IRouteFinder<TPool extends Pool> {
+  generateRoutes(
+    chainId: ChainId,
+    pools: TPool[],
+    tokenIn: Address,
+    tokenOut: Address,
+    allowMixedPools: boolean,
+    ctx?: UniContext
+  ): Promise<RouteBasic<TPool>[]>;
+}
+
+export class RouteFinder<TPool extends Pool> implements IRouteFinder<TPool> {
+  constructor(private readonly serviceConfig: IUniRouteServiceConfig) {}
+
+  // TODO: https://linear.app/uniswap/issue/ROUTE-410/ (modify for V4 - Support ETH+WETH pools)
+  public async generateRoutes(
+    chainId: ChainId,
+    candidatePools: TPool[],
+    tokenIn: Address,
+    tokenOut: Address,
+    allowMixedPools: boolean,
+    ctx?: UniContext
+  ): Promise<RouteBasic<TPool>[]> {
+    const routes: RouteBasic<TPool>[] = [];
+
+    // Every non-cached route is built here, from whatever pool sources the
+    // repositories assembled (selector output, cache hits, cross-liquidity
+    // and registry appends, on-chain probes), so this is where the
+    // canonical-pools rule and the every-hop routing block list are
+    // enforced for correctness. Upstream filters only save slots and probes.
+    // Copied so the fake ETH/WETH push below never mutates the caller's
+    // array.
+    const pools = [
+      ...CanonicalPools.dropNonCanonicalPools(
+        RoutingBlockList.dropPoolsThroughBlockedRoutingTokens(
+          candidatePools,
+          chainId,
+          identifyPoolModel,
+          ctx,
+          METRIC_BLOCKED_ROUTING_TOKEN_POOL
+        ),
+        chainId,
+        identifyPoolModel,
+        ctx,
+        METRIC_NON_CANONICAL_POOL
+      ),
+    ];
+
+    // If mixed pools are allowed and we have V4 pools, add a fake pool for ETH/WETH to allow connectivity.
+    if (allowMixedPools && pools.some(pool => pool.protocol === Protocol.V4)) {
+      const fakePool = getV4EthWethFakePool(chainId);
+      if (fakePool) {
+        pools.push(fakePool as unknown as TPool);
+      }
+    }
+
+    const findAllPathsStartTime = Date.now();
+
+    // First pass: find routes with standard MaxHops
+    this.findAllPaths(
+      pools,
+      tokenIn,
+      tokenOut,
+      [],
+      new Set(),
+      routes,
+      allowMixedPools,
+      false // useExtendedHops = false
+    );
+
+    const normalRoutesCount = routes.length;
+
+    // Extended search: if we found fewer routes than threshold or all routes are 1-hop only (direct pair), consider more hops
+    const {MinRoutesThreshold, MaxHopsExtended, MaxExtendedRoutes, MaxHops} =
+      this.serviceConfig.RouteFinder;
+
+    const allRoutesAreSingleHop =
+      routes.length > 0 && routes.every(route => route.path.length === 1);
+
+    let extendedRoutesCount = 0;
+    let extendedSearchTriggered = false;
+
+    if (
+      (routes.length < MinRoutesThreshold || allRoutesAreSingleHop) &&
+      MaxHopsExtended > MaxHops &&
+      MaxExtendedRoutes > 0
+    ) {
+      extendedSearchTriggered = true;
+      const extendedRoutes: RouteBasic<TPool>[] = [];
+
+      this.findAllPaths(
+        pools,
+        tokenIn,
+        tokenOut,
+        [],
+        new Set(),
+        extendedRoutes,
+        allowMixedPools,
+        true // useExtendedHops = true
+      );
+
+      // Filter to only include routes with more hops than MaxHops (avoid duplicates)
+      // and cap at MaxExtendedRoutes
+      const newRoutes = extendedRoutes
+        .filter(route => route.path.length > MaxHops)
+        .slice(0, MaxExtendedRoutes);
+
+      extendedRoutesCount = newRoutes.length;
+      routes.push(...newRoutes);
+    }
+
+    // Emit metrics if context is available
+    if (ctx) {
+      const metricTags = [`chain:${ChainId[chainId]}`];
+      const findAllPathsElapsed = Date.now() - findAllPathsStartTime;
+      ctx.logger.debug(
+        `[Latency] RouteFinder.findAllPaths took ${findAllPathsElapsed}ms`
+      );
+      await ctx.metrics.dist(
+        buildMetricKey('RouteFinder.findAllPaths.Latency.dist'),
+        findAllPathsElapsed,
+        {tags: metricTags}
+      );
+      await ctx.metrics.count(
+        buildMetricKey('RouteFinder.NormalRoutesCount'),
+        normalRoutesCount,
+        {tags: metricTags}
+      );
+      await ctx.metrics.count(
+        buildMetricKey('RouteFinder.ExtendedSearchTriggered'),
+        extendedSearchTriggered ? 1 : 0,
+        {tags: metricTags}
+      );
+      if (extendedSearchTriggered) {
+        await ctx.metrics.count(
+          buildMetricKey('RouteFinder.ExtendedRoutesCount'),
+          extendedRoutesCount,
+          {tags: metricTags}
+        );
+      }
+    }
+
+    return routes;
+  }
+
+  private findAllPaths(
+    pools: TPool[],
+    currentToken: Address,
+    tokenOut: Address,
+    currentPath: TPool[],
+    visitedTokens: Set<string>,
+    routes: RouteBasic<TPool>[],
+    allowMixedPools: boolean,
+    useExtendedHops: boolean
+  ): void {
+    // Special case for routes that contain the fake eth/weth pool, add an extra hop
+    const currentRouteContainsFakeV4Pool = currentPath.some(
+      pool =>
+        pool.protocol === Protocol.V4 &&
+        (pool as unknown as V4Pool).tickSpacing === FAKE_TICK_SPACING
+    );
+    const baseMaxHops = useExtendedHops
+      ? this.serviceConfig.RouteFinder.MaxHopsExtended
+      : this.serviceConfig.RouteFinder.MaxHops;
+    const maxHops = currentRouteContainsFakeV4Pool
+      ? baseMaxHops + 1
+      : baseMaxHops;
+
+    // Stop if we've exceeded max hops
+    if (currentPath.length >= maxHops) {
+      return;
+    }
+
+    // Mark current token as visited to prevent cycles
+    visitedTokens.add(currentToken.lowerCased);
+
+    // Find all pools that have currentToken as one of their tokens
+    const validPools = pools.filter(pool => {
+      const hasToken =
+        (pool.token0.lowerCased === currentToken.lowerCased ||
+          pool.token1.lowerCased === currentToken.lowerCased) &&
+        !currentPath.includes(pool);
+
+      // If not allowing mixed pools and we have a current path,
+      // check if the pool's protocol matches the protocol of the first pool in the path
+      if (!allowMixedPools && currentPath.length > 0) {
+        return hasToken && pool.protocol === currentPath[0].protocol;
+      }
+
+      return hasToken;
+    });
+
+    for (const pool of validPools) {
+      // Determine the other token in the pool
+      const otherToken =
+        pool.token0.lowerCased === currentToken.lowerCased
+          ? pool.token1
+          : pool.token0;
+
+      // Skip if we've already visited this token
+      if (visitedTokens.has(otherToken.lowerCased)) {
+        continue;
+      }
+
+      // Add this pool to our current path
+      currentPath.push(pool);
+
+      // If we've found the target token, create a new route
+      if (otherToken.lowerCased === tokenOut.lowerCased) {
+        // Create a copy of the current path
+        const pathCopy = [...currentPath];
+
+        // Check if we have mixed protocols in the path
+        const protocols = new Set(pathCopy.map(pool => pool.protocol));
+        const protocol = protocols.size > 1 ? Protocol.MIXED : pool.protocol;
+
+        routes.push(new RouteBasic(protocol, pathCopy));
+      } else {
+        // Otherwise, continue searching from this new token
+        this.findAllPaths(
+          pools,
+          otherToken,
+          tokenOut,
+          currentPath,
+          visitedTokens,
+          routes,
+          allowMixedPools,
+          useExtendedHops
+        );
+      }
+
+      // Backtrack
+      currentPath.pop();
+    }
+
+    // Remove the current token from visited set when backtracking
+    visitedTokens.delete(currentToken.lowerCased);
+  }
+}

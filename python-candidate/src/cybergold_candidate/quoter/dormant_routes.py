@@ -46,5 +46,6 @@ def with_dormant_routes(value, seed=None):
                         'routes': weighted_routes([{'amountIn': '1', 'hops': hops}])}
             plan['conversions'][operation] = _conversion({'inputCurrency': asset, 'outputCurrency': core,
                 'branches': [{'hops': hops}], 'template': template})
+            plan['conversions'][operation]['topologyOrigin'] = 'cybergold-adapter'
             continuation['route'] = deepcopy(template)
     return value

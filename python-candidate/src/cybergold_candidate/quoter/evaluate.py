@@ -6,7 +6,7 @@ from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
 from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
 from ..routing_encoding import ROUTING_ENCODING, split_runtime
-from .contracts import path_operation
+from .contracts import path_operation, path_nomination
 from .reuse_routes import selected_conversion
 
 CORE_SHARES = (0, 25, 50, 75, 100)
@@ -25,7 +25,8 @@ async def replay_conversion(self, chosen, source, target, amount, block, bank, c
     routes = chosen['template']['routes']
     output, consumed, retained = 0, 0, []
     for selected, funded in zip(chosen['branches'], split_runtime(amount, routes), strict=True):
-        used, received = await self.price_path(selected['hops'], funded, block, bank, canonical)
+        with path_nomination(source, chosen.get('discoveryOrigins', ())):
+            used, received = await self.price_path(selected['hops'], funded, block, bank, canonical)
         output += received
         consumed += used
         if used < funded:

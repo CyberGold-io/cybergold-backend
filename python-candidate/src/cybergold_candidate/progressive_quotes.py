@@ -9,6 +9,7 @@ import json
 import logging
 
 from .quoter.ranking import prefer_completed
+from .quoter.provenance import merge_origins
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.types import EconomicRequest
 from .quote_errors import public_quote_error
@@ -120,6 +121,11 @@ async def progressive_quote(service, request, publish, *, refresh=False):
                 disproof.economic_context = deepcopy(publication.context)
             raise disproof
         if publication.best is not None:
+            if terminal is not None:
+                # An economic tie can acquire additional nomination origins
+                # after its first publication. Preserve that diagnostic fact
+                # without replacing the accepted economic tuple or bounds.
+                merge_origins(publication.best, terminal)
             if terminal is not None and terminal.get('metrics') is not None:
                 # Session clocks are passive metadata; retain the exact
                 # published plan/fees/funding if a terminal tie differs.

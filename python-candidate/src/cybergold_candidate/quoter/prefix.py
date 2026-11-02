@@ -8,7 +8,7 @@ from ..uniswap_routes import pool_identity
 from .discovery import market_plan
 
 
-async def repair_prefix(quoter, request, trace, block):
+async def repair_prefix(quoter, request, trace, block, *, origins=None):
     route = trace.route
     # Leading Helpers wrapping has already been removed from physical traces.
     # This constructor does not rebuild that separate native funding stage.
@@ -43,4 +43,4 @@ async def repair_prefix(quoter, request, trace, block):
         target += quoted_fee(target, get_market_fee_rate(quoter.engine.registry.chain, source, output, 'exact-in'))
     if not 0 < target < int(request['inputs'][0]['amount']):
         return None
-    return [{**request['inputs'][0], 'amount': str(target)}], market_plan(source, output, route, target)
+    return [{**request['inputs'][0], 'amount': str(target)}], market_plan(source, output, route, target, origins=origins)

@@ -4,7 +4,7 @@ doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-01
 canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
@@ -98,13 +98,116 @@ copies can retain that previous observation while showing the error.
 
 ## Search and selected-plan preparation
 
+Production fresh searches use one `RouteQuery` / `CandidateFeed` API for
+`CustomRoutes`, AlphaRouter, `uniroute-local`, `uniroute-api` and Guidestar.
+Immediate custom candidates remain lazy; pending sources start together when
+the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
+available nominations fairly and returns independently. New hints wake a
+separate detailed whole-plan pass and optional family/prefix work using the
+same search session. Each observed publication revision also starts an owned
+quick whole-plan pass, trying already available nominations in latest-publication
+order before the regular lazy feeds. An older detailed pass can continue while
+new hints qualify. Every regular feed remains available; quick passes do not
+prove exhaustive selection within a batch. Neither first-result nor detailed
+custom improvements wait for a provider tail. Feeds can publish incremental
+batches; each batch uses those same arrival and ownership rules. The original
+5/15-second search clock, eight pricing slots and whole-plan comparator still
+bound this work. Initial canonical pool observations release owned pricing
+permits while waiting, just like later SDK state requests, and reacquire them
+before SDK arithmetic. Shared read subscriptions retain their existing owners.
+
+Completed path prefixes also join the shared feed. Ordered SDK replay publishes
+their topology with the original source, actual branch funding and inherited
+discovery origins, including prefixes of optional selected Market routes. This
+can bootstrap a Core acquisition while another route still awaits state. The
+receiving plan normalizes and reprices that topology against its own private
+bank; no quote output, fee or simulated post-state is shared. Request-local
+semantic deduplication prevents replay/arrival feedback, and merging origins
+alone starts no economic work. All completed hints remain stored; arrivals wake
+reevaluation for existing query dependencies, while a future query reads its
+stored hints immediately. Internal publication order is separate from that
+notification revision. The ordinary feeds remain available. Publication uses
+the existing search owner and stops with it; preparation outside that scope
+starts no discovery.
+
+Local graph-dependent tools also invalidate their nomination cache when the
+canonical physical catalog changes. The session observes existing connector
+and persisted-catalog completion signals, retains old offers, and coalesces a
+follow-up behind in-flight work. It never waits for or cancels the shared
+database load. The optional dependency marker affects cache invalidation only;
+hosted API requests do not repeat for local catalog growth. Display/scalar
+changes and physical aliases do not change the graph identity. Refresh work
+uses the same selection clock, and detached callbacks start no work after
+selection stops or the owner closes.
+
+Both pure-Market and Market+Core plans call that AMM adapter. Tools search only
+the AMM segments: they receive no Core preview, basket, fee or economic intent
+work. The Quoter composes their canonically replayed segments with Core
+issuance/redemption and compares complete economic plans. Market anchoring,
+quick-pass seed preference, native funding and split rounding belong to the
+adapter. Its raw-path projection runs before custom split construction, without
+changing query sharing or the generic provider's independent path coverage.
+
+Hints are reconstructed through the existing connected-path producer, including
+native/WETH transitions, and replayed against each candidate's private pool bank.
+Remote amounts, prices, recipient, minimum and calldata never become execution
+terms. AlphaRouter's percentage/split selection uses canonical Python SDK quote
+callbacks with zero gas for nomination; whole-plan fees and ranking remain here.
+Selected-plan preparation starts no supplier discovery. All supplier tasks,
+HTTP clients and calculation children are owned and drained by their search.
+
+The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
+`CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
+ordinary API/AlphaRouter failures leave local discovery available. Actual chain
+IDs are retained: the upstream AlphaRouter configuration and Guidestar beta
+do not support Sandbox 31338 as Mainnet. The wired local UniRoute components retain
+actual chain 31338 and the existing three-physical-hop/native transition rules.
+The unchanged published RouteFinder emits raw hints before DeepQuoteStrategy,
+BaseQuoteStrategy, QuoteBestSplitFinder, RouteQuoteAllocator and
+SimpleQuoteSelector produce deeper split batches through canonical callbacks.
+Local model/service wiring, zero-gas nomination and source pins are documented
+in `vendor/uniroute-public`. The default 5% grid searches two-branch splits;
+all stitched nominations reach whole-plan evaluation under the original clock.
+Upstream shared-pool restrictions do not exclude raw/custom alternatives.
+These are published components with local wiring, not the private full UniRoute
+service. `uniroute-api` uses the
+standard Trading API path; no documented engine selector exists. Response
+evidence records UniRoute/Guidestar/unverified backend attribution separately
+from that integration-source name, without requiring it to use a candidate.
+Internal `metrics.routeDiscovery` records provider outcomes, nomination and
+completion/cancellation timing, incremental batches, worker queries, canonical
+callback counts/failures/elapsed time, reevaluation, physical RPC HTTP attempts and
+hosted API requests separately. Physical counts sit below coalescing: one
+shared POST is charged once to its first issuing owner; a JSON-RPC batch records
+one envelope and its members. A Multicall `eth_call` remains one member, without
+claiming a count of its inner functions. Elapsed transport times can overlap;
+their sum is not the producer's wall time. No credential, URL, parameters or
+supplier error text is recorded.
+Common replay/Core/canonicality RPC belongs to `cybergold-quoter`; the pure
+custom graph enumerator is not falsely charged for those reads. Explicit
+supplier callbacks and API identity acquisition retain their own issuer tags.
+
+Selected conversions retain `discoveryOrigins`; `routeOrigins` summarizes the
+whole quote's nominators separately from its canonical CyberGold evaluator.
+Equivalent later nominations can enrich origin metadata without replacing an
+economic tie. The existing whole-JSON cache retains those origins and the
+original measured performance. Stored responses/logs label those measurements
+historical, rather than fresh work. Progressive publication preserves later
+equivalent origins through its final returned/cached quote. Prefix repair and
+neighboring-amount topology reuse preserve their input route's optional source
+metadata. Dormant zero-residual Core bindings record adapter composition
+separately, without inventing an AMM nominator. Missing or malformed
+origin metadata never prevents selected-plan replay, changes a cache key or
+affects ranking. These sources nominate routes; they do not change which
+economic plan wins.
+
 The first-result and detailed passes, eight scalar allocation/order choices,
 Core previews and private ordered pool replay remain. The comparison window
 is five seconds. Only if no usable whole plan exists can search continue for
 up to ten more seconds; its first usable result then ends selection. A
 zero-output conversion tries its existing alternatives, while an all-zero
 conversion retains its ordinary outcome. Optional full-budget scalar Market
-routes are interleaved by currency/protocol family through the existing route
+routes from the same tool feeds are interleaved by currency/protocol family through the existing route
 scheduler. Ordinary quick/detailed/Core/mixed/split jobs remain concurrent.
 Added work has 16 route starts per search and the scheduler's eight pricing
 slots; failed optional work leaves ordinary candidates available. There is no
@@ -198,7 +301,10 @@ and shared-read subscriber cancellation remain in force.
 
 ## Internal component ownership
 
-`quoter.discovery` owns physical graph/family enumeration; `quoter.amm` owns
+`quoter.route_tools` owns the shared query/feed API; `quoter.custom_routes`
+packages generic custom graph/split enumeration from `quoter.discovery`.
+`quoter.amm_adapter` owns CyberGold path policy and candidate selection;
+`quoter.amm` owns
 exact path replay; `quoter.evaluate` owns ordered whole-plan/Core/fee economics;
 `quoter.ranking` compares only completed plans. `quoter.funding` and
 `quoter.prefix` propose smaller funding, `quoter.policy` supplies optional

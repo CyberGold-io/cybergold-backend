@@ -36,6 +36,11 @@ from .contracts import SearchSession
 from .exploration import explore
 from .funding import reconstruct
 from .reuse_routes import neighbor_proposals
+from .bootstrap import RouteBootstrap, bootstrap_scope, current_bootstrap
+from .amm_adapter import CyberGoldAmmAdapter
+from .custom_routes import CustomRoutes
+from .provenance import attach_origins, merge_origins
+from ..route_observations import RouteObservations, current_route_observations, route_observation_scope
 
 PAXG = dict(TOKENS)['paxg']
 CORE_SHARES = (0, 25, 50, 75, 100)
@@ -73,12 +78,14 @@ def identity_template(currency):
 
 class Quoter:
     def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
-                 exploration_seed=None, optional_limit=16):
+                 exploration_seed=None, optional_limit=16, route_provider_factory=None):
         self.settings, self.engine = settings, engine
         self.exploration_seed, self.optional_limit = exploration_seed, optional_limit
+        self.route_provider_factory = route_provider_factory
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
         self.helpers = configured_address(settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS')
         self.core = configured_address(settings, 'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS')
+        self.amm = CyberGoldAmmAdapter(engine, self.core)
         self.preview = preview
         self.basis_reader = basis_reader
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
@@ -150,6 +157,9 @@ class Quoter:
     async def discover(self, request, assets, block):
         registry = self.engine.registry
         await registry.ensure_loaded()
+        bootstrap = current_bootstrap()
+        if bootstrap is not None:
+            bootstrap.watch_catalog_load()
         payment = request['inputs'][0]['currency'] if request['intent'] == 0 else request['outputCurrency']
         if payment.lower() == ZERO:
             payment = WETH
@@ -188,80 +198,9 @@ class Quoter:
     async def price_path(self, route, amount, block, bank, canonical):
         return await price_path(self.engine, route, amount, block, bank, canonical)
 
-    async def conversion(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0, capture=None):
-        if not amount or source.lower() == target.lower():
-            if capture is not None:
-                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
-                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
-                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
-            return identity_template(source), amount, []
-        registry = self.engine.registry
-        selected = paths(list(registry.inventory.values()), source, target)
-        if market:
-            anchor = pool_identity(registry.seed)
-            selected = [route for route in selected if pool_identity(
-                next(hop for hop in (route if source.lower() == self.core.lower() else reversed(route))
-                     if 'pool' in hop)['pool']) == anchor]
-        if first:
-            # Keep the V3 seed ahead of newly discovered V2 and noncanonical V4
-            # paths, including after their addresses become known. A thin V2
-            # acquisition must not displace the prompt Core candidate. Refinement
-            # still compares every selected protocol/path and split allocation.
-            canonical_edge = pool_identity(registry.seed)
-            selected.sort(key=lambda route: (sum(hop['pool']['protocol'] != 'v3' and
-                pool_identity(hop['pool']) != canonical_edge for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and not hop['pool'].get('address') for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and hop['pool']['feePips'] != 3000 for hop in route if 'pool' in hop), len(route)))
-        best, rpc_error = None, None
-        for branches in route_candidates(selected, amount):
-            # A common leading wrap belongs to Helpers funding, not to the
-            # adapter's whole-conversion intermediate set.
-            leading = [row['hops'][0].get('kind') for row in branches]
-            normalized = deepcopy(branches)
-            physical_source = source
-            if leading and leading[0] in ('wrap', 'unwrap') and all(value == leading[0] for value in leading):
-                physical_source = normalized[0]['hops'][0]['currencyOut']
-                for row in normalized:
-                    row['hops'] = row['hops'][1:]
-            routes = weighted_routes(normalized)
-            for row, funded in zip(normalized, split_runtime(amount, routes), strict=True):
-                row['amountIn'] = str(funded)
-            trial = deepcopy(bank)
-            output, consumed, retained = 0, 0, []
-            try:
-                for row in normalized:
-                    funded = int(row['amountIn'])
-                    used, received = await self.price_path(row['hops'], funded, block, trial, canonical)
-                    output += received
-                    consumed += used
-                    if used < funded:
-                        retained.append({'branch': branch, 'stage': stage + (physical_source.lower() != source.lower()), 'currency': physical_source,
-                                         'amount': str(funded - used)})
-            except SnapshotChanged:
-                raise
-            except Exception as error:
-                if public_quote_error(error).get('code', '').startswith('rpc-'):
-                    rpc_error = error
-                continue
-            if retained:
-                retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
-            if best is None or output > best[0]:
-                template = {'inputCurrency': physical_source, 'outputCurrency': target,
-                            'routes': routes}
-                best = output, template, retained, trial, deepcopy(normalized), consumed
-                if first and output > 0:
-                    break
-            await asyncio.sleep(0)
-        if best is None:
-            raise rpc_error or QuoteFailure('quote-no-route')
-        if capture is not None:
-            capture.update(inputCurrency=source, outputCurrency=target, branches=[{'hops': row['hops']} for row in best[4]], template=deepcopy(best[1]),
-                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(amount),
-                                         'consumedInput': str(best[5]), 'outputCurrency': target, 'output': str(best[0])})
-        bank.clear()
-        bank.update(best[3])
-        return best[1], best[0], best[2]
+    async def conversion(self, source, target, amount, block, bank, canonical, **options):
+        return await self.amm.convert(source, target, amount, block, bank, canonical,
+                                      price_path=self.price_path, **options)
 
     async def candidate(self, request, share, order, block, assets, weights, *, first=False,
                         observations=None, selected=None, selection=True):
@@ -275,6 +214,22 @@ class Quoter:
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None):
+        observations = RouteObservations()
+        with route_observation_scope(observations):
+            try:
+                result = await self._produce(request, on_update, core_only=core_only,
+                                             seed=seed, neighbors=neighbors)
+            except (Exception, asyncio.CancelledError) as error:
+                error.quoter_metrics = {**self.producer_metrics(current_budget()),
+                    **getattr(error, 'quoter_metrics', {}),
+                    'routeDiscovery': {**observations.discovery, 'physicalRpc': observations.metrics,
+                                       'apiRequests': observations.api_metrics}}
+                raise
+        result.setdefault('metrics', {}).setdefault('routeDiscovery', {}).update(
+            physicalRpc=observations.metrics, apiRequests=observations.api_metrics)
+        return attach_origins(result)
+
+    async def _produce(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None):
         budget = current_budget()
         # The SQL feed starts alongside head/basis acquisition. Its caller
         # captures the existing scope; this task never owns a second search.
@@ -376,6 +331,7 @@ class Quoter:
         # identified rejection; zero funding must not become a successful quote.
         default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
         best, failures, observations = None, [], {}
+        route_bootstrap = None
         session = SearchSession(self.optional_limit,
             self.exploration_seed if self.exploration_seed is not None else randbits(64))
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
@@ -394,12 +350,19 @@ class Quoter:
                     from .dormant_routes import with_dormant_routes
                     value = with_dormant_routes(value, getattr(registry, 'seed', None))
                 value['request'] = deepcopy(request)
+                attach_origins(value)
+                merge_origins(best, value)
                 if prefer_completed(value, best, scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2):
                     if not budget.qualified():
                         return
                     value['searchCoverage']['selectedPhase'] = phase or ('saved-plan' if selected is not None
                         else 'capacity-limited' if funding is not None and funding != request['inputs']
                         else 'first-result' if first else 'detailed')
+                    measured = current_route_observations()
+                    discovery_metrics = route_bootstrap.metrics if route_bootstrap is not None else {}
+                    if measured is not None:
+                        discovery_metrics.update(physicalRpc=measured.metrics, apiRequests=measured.api_metrics)
+                    value.setdefault('metrics', {})['routeDiscovery'] = discovery_metrics
                     best = value
                     if on_update: await on_update({'type': 'qualified', 'value': value})
                 return value
@@ -418,6 +381,7 @@ class Quoter:
             try:
                 if request['intent'] != 3:
                     await budget.discovery(self.discover(request, assets, block))
+                    route_bootstrap.refresh_catalog()
                 session.discovery_done.set()
                 await owned_reads(*(evaluate(share, order, False) for share, order in grid))
             except SnapshotChanged:
@@ -519,15 +483,45 @@ class Quoter:
                 # Each neighbor proceeds independently. Neither awaits the
                 # other's acquisition, nor changes E17's exact-seed event.
                 await owned_reads(replay_neighbor('upper'), replay_neighbor('lower'))
-            ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
-                observations=observations, seeded=seed is not None, core_only=core_only), seeded(), limited(),
-                owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
-            if neighbor_task is None:
-                await ordinary
-            else:
-                await alongside_bootstrap(ordinary, nearby())
+            async def ordinary_search():
+                ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                    observations=observations, seeded=seed is not None, core_only=core_only), seeded(), limited(),
+                    owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+                if neighbor_task is None:
+                    await ordinary
+                else:
+                    await alongside_bootstrap(ordinary, nearby())
+
+            async def provider_arrival():
+                # Late AMM nominations receive the same optional family and
+                # partial-prefix work as the initial/catalog snapshots. Reuse
+                # the existing starts/resolved allowance and selection clock;
+                # ordinary whole-plan improvements publish independently.
+                await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                    observations=observations, seeded=seed is not None, core_only=core_only),
+                    owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
+                                  for share, order in grid)))
+
+            async def provider_quick():
+                # Ready nominations can qualify while an older detailed pass
+                # still owns slow state reads. These remain complete economic
+                # candidates under the same comparator and selection budget.
+                await owned_reads(*(evaluate(share, order, True, phase='provider-arrival-quick')
+                                    for share, order in grid))
+
+            tools = (self.route_provider_factory() if self.route_provider_factory is not None
+                     else [CustomRoutes(registry)])
+            route_bootstrap = RouteBootstrap(tools, catalog=registry)
+            with bootstrap_scope(route_bootstrap):
+                await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
         except SearchStopped:
             pass
+        finally:
+            measured = current_route_observations()
+            if measured is not None and route_bootstrap is not None:
+                # The session has drained before exposing its terminal outcome,
+                # including no-route, context disproof and caller cancellation.
+                measured.discovery = route_bootstrap.metrics
         budget.cleanup_done()
         if best is not None and not budget.stop.is_set():
             budget.finish_selection('complete')
@@ -544,6 +538,9 @@ class Quoter:
                 'starts': session.starts, 'pruned': session.pruned, 'repairs': session.repairs}}
             if neighbor_task is not None:
                 best['metrics']['nearbySearch'] = neighbor_metrics
+            if route_bootstrap is not None:
+                best['metrics']['routeDiscovery'] = route_bootstrap.metrics
+                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder-and-quote-split-components', 'uniroute-api': 'trading-api-observed-engine'}
         await rpc.assert_canonical(block)
         budget.canonical_done()
         if best is None:
@@ -572,5 +569,5 @@ class Quoter:
             budget.cleanup_done()
             await rpc.assert_canonical(block)
             budget.canonical_done()
-            return value
+            return attach_origins(value)
         return await budget.produce(replay())

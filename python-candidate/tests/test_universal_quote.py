@@ -185,7 +185,10 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         expected={(0,'core-first'),(100,'core-first'),*( (share,order) for share in (25,50,75) for order in ('core-first','market-first'))}
         self.assertEqual(set(service.evaluated),expected)
         ordinary = [config for config, selected in zip(service.evaluated, service.selected_evaluated, strict=True) if not selected]
-        self.assertEqual(len(ordinary), 16)
+        # Initial and detailed work retain every grid point; completed hints
+        # can add further arrival-driven passes through that same grid.
+        for config in expected:
+            self.assertGreaterEqual(ordinary.count(config), 2)
         self.assertEqual(set(ordinary), expected)
         self.assertTrue(any(service.selected_evaluated))
         self.assertEqual(value['plan']['inputs'],request()['inputs'])

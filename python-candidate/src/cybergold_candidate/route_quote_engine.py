@@ -4,7 +4,7 @@ Core, Market and direct Uniswap consumers share one runtime instance. Protocol
 pricing methods are implementation details of a canonical forward route.
 """
 import asyncio
-from .route_work_slots import engine_work, PricingSlots
+from .route_work_slots import engine_work, PricingSlots, required_state_wait
 from copy import deepcopy
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -287,8 +287,15 @@ class RouteQuoteEngine:
             for identity, pool in pools.items():
                 if identity not in canonical:
                     previous = bank_state(canonical, pool)
-                    canonical[identity] = ({**deepcopy(previous), 'id': identity} if previous is not None
-                        else await reads[identity] if reads else await self.registry.snapshot(pool, block))
+                    if previous is not None:
+                        canonical[identity] = {**deepcopy(previous), 'id': identity}
+                    else:
+                        # Initial observations suspend arithmetic just like
+                        # later SDK tick requests. Keep their subscriptions
+                        # owned, and reacquire before entering the SDK.
+                        async with required_state_wait():
+                            canonical[identity] = (await reads[identity] if reads
+                                else await self.registry.snapshot(pool, block))
                 private = bank_state(candidate, pool)
                 snapshots[identity] = {**deepcopy(private if private is not None else canonical[identity]), 'id': identity}
         finally:

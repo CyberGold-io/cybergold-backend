@@ -6,7 +6,7 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_scheduler import schedule_routes
 from .amm import PartialPath
 from .contracts import capture_paths
-from .discovery import families, market_plan, route_identity
+from .discovery import market_plan, route_identity
 from .policy import dominated, output_upper_bound
 from .prefix import repair_prefix
 
@@ -21,23 +21,23 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         await session.seed_done.wait()
 
     def feeds(expanded):
-        groups = families(quoter.engine.registry, source, target, quoter.core)
+        groups = quoter.amm.family_offers(source, target, amount, block)
         if seeded:
             rng = random.Random(session.random_seed)
             for _, routes in groups:
                 rng.shuffle(routes)
             rng.shuffle(groups)
         async def feed(routes):
-            for route in routes:
+            for route, origins in routes:
                 if session.starts >= session.limit:
                     break
                 identity = route_identity(route)
                 if identity not in session.resolved:
-                    yield identity, route
+                    yield identity, route, origins
         return [feed(routes) for _, routes in groups]
 
     async def one(_index, item):
-        identity, route = item
+        identity, route, origins = item
         if identity in session.resolved:
             return
         session.resolved.add(identity)
@@ -50,13 +50,13 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         session.started.add(identity)
         try:
             with capture_paths():
-                await evaluate(0, 'core-first', False, selected=market_plan(source, target, route, amount),
+                await evaluate(0, 'core-first', False, selected=market_plan(source, target, route, amount, origins=origins),
                     phase='route-family-exploration' if seeded else 'route-family', partial=True)
         except PartialPath as error:
             # Inline in the parent lease: no nested scheduler permit wait.
             if not session.claim():
                 return
-            proposal = await repair_prefix(quoter, request, error.trace, block)
+            proposal = await repair_prefix(quoter, request, error.trace, block, origins=origins)
             if proposal is not None:
                 funding, plan = proposal
                 session.repairs += 1

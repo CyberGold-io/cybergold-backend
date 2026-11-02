@@ -85,7 +85,7 @@ def families(registry, source, target, core):
     return result
 
 
-def market_plan(source, target, route, amount):
+def market_plan(source, target, route, amount, *, origins=None):
     hops = deepcopy(route)
     physical_source = source
     if hops and hops[0].get('kind') in ('wrap', 'unwrap'):
@@ -94,6 +94,7 @@ def market_plan(source, target, route, amount):
                 'routes': weighted_routes([{'amountIn': str(amount), 'hops': hops}])}
     return {'allocations': [{'kind': 1, 'amountIn': str(amount)}],
             'conversions': {'0:market': {'inputCurrency': source, 'outputCurrency': target,
-                'branches': [{'hops': hops}], 'template': deepcopy(template)}},
+                'branches': [{'hops': hops}], 'template': deepcopy(template),
+                **({'discoveryOrigins': sorted(set(origins))} if origins is not None else {})}},
             'body': {'branches': [{'kind': 1, 'amountIn': str(amount),
                 'data': {'route': template, 'feeCygld': '0'}}]}}

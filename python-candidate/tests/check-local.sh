@@ -50,6 +50,18 @@ node --import tsx python-candidate/tests/node-worker-engine-reference.ts > "$can
 export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_universal_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_discovery.py
+python-candidate/.venv/bin/python python-candidate/tests/test_completed_route_hints.py
+python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
+python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_scheduling_trace.py
+python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
+python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
+python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
+python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_uniroute_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_route_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_directional_bitmap_acquisition.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_families.py
@@ -73,6 +85,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_scheduler.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.py
+python-candidate/.venv/bin/python python-candidate/tests/test_initial_snapshot_scheduling.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py

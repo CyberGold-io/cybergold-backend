@@ -200,6 +200,16 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
 
     async def test_cold_qualification_uses_completed_slots_before_more_than_eight_held_tails(self):
         state = self.fixture(saturated=True, hold_seed=True)
+        active_sdk = 0
+        sdk_request = state.engine.sdk.request
+        async def observed_sdk(*args, **kwargs):
+            nonlocal active_sdk
+            active_sdk += 1
+            try:
+                return await sdk_request(*args, **kwargs)
+            finally:
+                active_sdk -= 1
+        state.engine.sdk.request = observed_sdk
         await self.ready(state.seed)
         # A real Helpers read can still be pending after complete seed quotes.
         # The scheduler must retain that completion's free pricing slots for
@@ -214,17 +224,22 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 list(state.registry.inventory.values()), asset, WETH, 'exactOut', 100)])
         self.assertGreater(6+graph_count, 8)
         # Qualification used the completed slots first. Continuing exploration
-        # may now fill them with these held SDK/typed candidates.
+        # holds SDK jobs and initial state reads; parked reads do not consume
+        # pricing capacity. Count the actual held work, rather than requiring
+        # those RPC waits to fill all eight arithmetic permits.
         await self.ready(state.rpc.typed)
         await self.ready(state.rpc.tail)
         async with asyncio.timeout(2):
-            while state.engine.semaphore._value:
+            while active_sdk + len(state.registry.pending.pending) <= 8:
                 await asyncio.sleep(0)
+        self.assertLessEqual(active_sdk, 8)
+        self.assertFalse(state.task.done())
         self.assertTrue(state.budget.ready)
         self.assertEqual(state.modes, ['exact-out'])
         state.budget.finish_selection('best-initial')
         result = await asyncio.wait_for(state.task, 2)
         self.assertEqual(result['preview']['minimumAmountOut'], '200')
+        self.assertEqual(active_sdk, 0)
         self.assertEqual(state.engine.semaphore._value, 8)
         self.assertEqual(state.registry.pending.pending, {})
 
