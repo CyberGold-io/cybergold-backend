@@ -23,7 +23,13 @@ def pool(a, b, number):
 
 
 def state(pool):
-    return {**deepcopy(pool), 'reserve0': '1000', 'reserve1': '1000', 'ticks': [], 'bitmapWords': []}
+    return {**deepcopy(pool), 'reserve0': '1000', 'reserve1': '1000', 'tick': pool.get('tick', 0),
+            'ticks': [], 'bitmapWords': []}
+
+
+def concentrated(a, b, number, protocol='v3', tick=0, spacing=60):
+    return {**pool(a, b, number), 'protocol': protocol, 'tick': tick, 'tickSpacing': spacing,
+            'feePips': 3000, 'hooks': '0x'+'00'*20, 'poolManager': D}
 
 
 class Registry:
@@ -50,7 +56,13 @@ class Registry:
 
     async def extend_ticks(self, snapshot, requests, block):
         self.extended.append(deepcopy(requests))
-        return {**snapshot, 'ticks': [{'index': 120}], 'bitmapWords': [{'wordPosition': 7, 'bitmap': '1'}]}
+        ticks = {int(row['index']): row for row in snapshot.get('ticks', [])}
+        words = {int(row['wordPosition']): row for row in snapshot.get('bitmapWords', [])}
+        for request in requests:
+            ticks.update({int(index): {'index': int(index)} for index in request.get('ticks', [])})
+            words.update({int(word): {'wordPosition': int(word), 'bitmap': '1'}
+                          for word in request.get('wordPositions', [])})
+        return {**snapshot, 'ticks': list(ticks.values()), 'bitmapWords': list(words.values())}
 
 
 class SDK:
@@ -237,6 +249,163 @@ class OrderedPathSnapshots(unittest.IsolatedAsyncioTestCase):
         await price_path(engine, route, 10, BLOCK, {}, {})
         self.assertEqual(sdk.calls[0]['pools'][0]['ticks'], [])
         self.assertEqual(registry.extended, [sdk.missing])
+
+    async def test_first_bitmap_words_follow_sdk_floor_and_direction_for_v3_and_v4(self):
+        for protocol in ('v3', 'v4'):
+            for tick, direction, expected in [(-1, True, -1), (-1, False, 0),
+                                               (15300, True, 0), (15300, False, 1)]:
+                with self.subTest(protocol=protocol, tick=tick, direction=direction):
+                    current = concentrated(A, B, 10, protocol, tick)
+                    engine, registry, sdk, route = self.setup_path([current])
+                    route[0]['zeroForOne'] = direction
+                    registry.release[pool_identity(current)].set()
+                    await price_path(engine, route, 10, BLOCK, {}, {})
+                    self.assertEqual(registry.extended, [[{
+                        'poolId': current['id'], 'wordPositions': [expected], 'ticks': []}]])
+                    self.assertEqual(sdk.calls[0]['pools'][0]['bitmapWords'],
+                                     [{'wordPosition': expected, 'bitmap': '1'}])
+
+    async def test_each_later_pool_first_word_starts_before_first_word_finishes(self):
+        pools = [concentrated(A, B, 10), concentrated(B, C, 11, 'v4')]
+        engine, registry, sdk, route = self.setup_path(pools)
+        entered = {row['id']: asyncio.Event() for row in pools}
+        release = {row['id']: asyncio.Event() for row in pools}
+        extend = registry.extend_ticks
+        async def blocked(snapshot, requests, block):
+            entered[snapshot['id']].set()
+            await release[snapshot['id']].wait()
+            return await extend(snapshot, requests, block)
+        registry.extend_ticks = blocked
+        for event in registry.release.values():
+            event.set()
+        task = asyncio.create_task(price_path(engine, route, 10, BLOCK, {}, {}))
+        try:
+            await asyncio.wait_for(asyncio.gather(*(event.wait() for event in entered.values())), 1)
+            self.assertEqual(sdk.calls, [])
+            release[pools[0]['id']].set()
+            await asyncio.wait_for(sdk.entered.wait(), 1)
+            self.assertEqual(len(sdk.calls), 1)
+            release[pools[1]['id']].set()
+            self.assertEqual(await task, (10, 40))
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_repeated_alias_preserves_private_tick_and_demands_later_word_exactly(self):
+        current = concentrated(A, B, 10, tick=15300)
+        engine, registry, sdk, _ = self.setup_path([current])
+        alias = {**deepcopy(current), 'id': 'other-alias'}
+        route = [{'pool': current, 'zeroForOne': True}, {'pool': alias, 'zeroForOne': False}]
+        original = sdk.request
+        async def request(payload, on_state=None):
+            if sdk.calls:
+                self.assertEqual(payload['pools'][0]['tick'], 15360)
+                self.assertEqual(payload['pools'][0]['bitmapWords'], [{'wordPosition': 0, 'bitmap': '1'}])
+                await on_state([{'poolId': current['id'], 'wordPositions': [1], 'ticks': [15420]}])
+            value = await original(payload, on_state)
+            value['postState'][0]['tick'] = 15360
+            return value
+        sdk.request = request
+        registry.release[pool_identity(current)].set()
+        bank, canonical = {}, {}
+        self.assertEqual(await price_path(engine, route, 10, BLOCK, bank, canonical), (10, 40))
+        self.assertEqual(registry.calls, [current['id']])
+        self.assertEqual([rows[0]['wordPositions'] for rows in registry.extended], [[0], [1]])
+        self.assertEqual(bank[current['id']]['tick'], 15360)
+        self.assertEqual(canonical[current['id']]['tick'], 15300)
+
+    async def test_prefetched_coverage_fills_existing_private_state_without_replacing_scalars(self):
+        current = concentrated(A, B, 10, tick=0)
+        engine, registry, sdk, route = self.setup_path([current])
+        registry.release[pool_identity(current)].set()
+        private = {**state(current), 'tick': 15360, 'reserve0': '700'}
+        bank = {current['id']: private}
+        await price_path(engine, route, 10, BLOCK, bank, {})
+        self.assertEqual(sdk.calls[0]['pools'][0]['tick'], 15360)
+        self.assertEqual(sdk.calls[0]['pools'][0]['reserve0'], '700')
+        self.assertEqual(sdk.calls[0]['pools'][0]['bitmapWords'], [{'wordPosition': 0, 'bitmap': '1'}])
+
+    async def test_ordinary_first_word_failure_keeps_sdk_demand_fallback(self):
+        current = concentrated(A, B, 10)
+        engine, registry, sdk, route = self.setup_path([current])
+        extend = registry.extend_ticks
+        attempts = []
+        async def flaky(snapshot, requests, block):
+            attempts.append(deepcopy(requests))
+            if len(attempts) == 1:
+                raise OSError('advisory read failed')
+            return await extend(snapshot, requests, block)
+        registry.extend_ticks = flaky
+        sdk.missing = [{'poolId': current['id'], 'wordPositions': [0], 'ticks': []}]
+        registry.release[pool_identity(current)].set()
+        self.assertEqual(await price_path(engine, route, 10, BLOCK, {}, {}), (10, 20))
+        self.assertEqual(attempts, [sdk.missing, sdk.missing])
+
+    async def test_ordinary_first_word_failure_does_not_reject_unused_word(self):
+        current = concentrated(A, B, 10)
+        engine, registry, sdk, route = self.setup_path([current])
+        sdk.zero = True
+        async def unavailable(*_):
+            raise OSError('unused first word unavailable')
+        registry.extend_ticks = unavailable
+        registry.release[pool_identity(current)].set()
+        self.assertEqual(await price_path(engine, route, 10, BLOCK, {}, {}), (10, 0))
+
+    async def test_cancellation_during_first_word_reads_drains_all_owned_subscriptions(self):
+        pools = [concentrated(A, B, 10), concentrated(B, C, 11, 'v4')]
+        engine, registry, sdk, route = self.setup_path(pools)
+        entered = {row['id']: asyncio.Event() for row in pools}
+        drained = {row['id']: asyncio.Event() for row in pools}
+        async def blocked(snapshot, *_):
+            entered[snapshot['id']].set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained[snapshot['id']].set()
+        registry.extend_ticks = blocked
+        for event in registry.release.values():
+            event.set()
+        task = asyncio.create_task(price_path(engine, route, 10, BLOCK, {}, {}))
+        await asyncio.wait_for(asyncio.gather(*(event.wait() for event in entered.values())), 1)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(all(event.is_set() for event in drained.values()))
+        self.assertEqual(sdk.calls, [])
+
+    async def test_bitmap_prefetch_preserves_concurrently_selected_canonical_coverage(self):
+        current = concentrated(A, B, 10)
+        engine, registry, sdk, route = self.setup_path([current])
+        entered, release = asyncio.Event(), asyncio.Event()
+        extend = registry.extend_ticks
+        async def blocked(snapshot, requests, block):
+            entered.set()
+            await release.wait()
+            return await extend(snapshot, requests, block)
+        registry.extend_ticks = blocked
+        registry.release[pool_identity(current)].set()
+        canonical = {}
+        task = asyncio.create_task(price_path(engine, route, 10, BLOCK, {}, canonical))
+        await asyncio.wait_for(entered.wait(), 1)
+        chosen = {**state(current), 'reserve0': '2500', 'ticks': [{'index': 77}],
+                  'bitmapWords': [{'wordPosition': 0, 'bitmap': '2'}, {'wordPosition': 8, 'bitmap': '3'}]}
+        canonical[current['id']] = deepcopy(chosen)
+        release.set()
+        self.assertEqual(await task, (10, 20))
+        self.assertEqual(sdk.calls[0]['pools'][0], chosen)
+        self.assertEqual(canonical[current['id']], chosen)
+
+    async def test_unused_bitmap_disproof_survives_zero_output_and_owned_drain(self):
+        pools = [pool(A, B, 10), concentrated(B, C, 11)]
+        engine, registry, sdk, route = self.setup_path(pools)
+        sdk.zero = True
+        async def disproved(*_):
+            raise SnapshotChanged('first bitmap disproved')
+        registry.extend_ticks = disproved
+        for event in registry.release.values():
+            event.set()
+        with self.assertRaisesRegex(SnapshotChanged, 'first bitmap disproved'):
+            await price_path(engine, route, 10, BLOCK, {}, {})
 
     async def test_same_route_identity_with_different_observed_address_does_not_supply_state(self):
         wanted = {**pool(A, B, 10), 'protocol': 'v3', 'feePips': 500}

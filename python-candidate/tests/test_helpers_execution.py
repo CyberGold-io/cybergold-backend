@@ -73,7 +73,9 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             result = await service(provider).get(HelpersExecutionRequest.model_validate(row['payload']))
             self.assertEqual(result['gas'], row['gas'])
             self.assertEqual(result['blockTag'], 'latest')
-            self.assertEqual([call for call in provider.calls if call['method'] in ('eth_call', 'eth_estimateGas')], row['calls'])
+            self.assertEqual(provider.calls, row['calls'])
+            self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': None, 'blockHash': None,
+                'blockTimestamp': None, 'blockTag': 'latest', 'observedAt': result['context']['observedAt']})
 
     async def test_true_exact_out_mixed_basket_preserves_order_permit_amount_and_compact_permit2_subset(self):
         rows = [row for row in ROWS if row['payload']['operation'].endswith('WithMixedPermits')]
@@ -97,13 +99,11 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
         await observer.get(HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
         self.assertEqual(sum(call['method'] == 'eth_estimateGas' for call in provider.calls), len(ROWS) + 1)
 
-    async def test_chain_and_changed_head_do_not_publish_a_fee_observation(self):
-        provider = Provider(chain='0x1')
-        with self.assertRaisesRegex(ValueError, 'chain mismatch'):
-            await service(provider).get(HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
-        self.assertEqual([call['method'] for call in provider.calls], ['eth_chainId'])
-        with self.assertRaisesRegex(ValueError, 'head changed'):
-            await service(Provider(reorg=True)).get(HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
+    async def test_latest_fee_observation_never_acquires_or_rereads_a_header(self):
+        for provider in (Provider(chain='0x1'), Provider(reorg=True)):
+            value = await service(provider).get(HelpersExecutionRequest.model_validate(ROWS[0]['payload']))
+            self.assertEqual(value['context']['blockTag'], 'latest')
+            self.assertEqual(provider.calls, ROWS[0]['calls'])
 
     async def test_cancellation_stops_simulation_before_estimation(self):
         provider = Provider(blocked=True)
@@ -139,7 +139,7 @@ class HelpersExecutionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.json()['helpers'], ROWS[0]['helpers'])
             result = await client.post('/api/transaction/helpers-execution', json={**ROWS[0]['payload'], 'args': []})
             self.assertEqual(result.status_code, 503)
-        self.assertTrue(all(call['method'] in ('eth_call', 'eth_estimateGas', 'eth_chainId', 'eth_getBlockByNumber') for call in provider.calls))
+        self.assertTrue(all(call['method'] in ('eth_call', 'eth_estimateGas') for call in provider.calls))
 
     async def test_simulation_and_estimation_preserve_rpc_stage_and_known_revert_identity(self):
         for signature, types, values, code in (

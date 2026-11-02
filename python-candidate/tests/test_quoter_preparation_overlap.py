@@ -10,7 +10,7 @@ from cybergold_candidate.quoter.bootstrap import current_bootstrap
 from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.recovery_rpc import SnapshotChanged
-from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings
+from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixture_plan_simulator
 
 
 REQUEST = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
@@ -40,11 +40,20 @@ class Fixture(Quoter):
         registry = SimpleNamespace(chain=1, core=CORE, inventory={POOL['id']: deepcopy(POOL)}, seed=None)
         registry.get_rpc = lambda: self.rpc
         engine = SimpleNamespace(registry=registry)
-        super().__init__(settings(), engine, basis_reader=self.read_basis, preview=self.preview_core)
+        super().__init__(settings(), engine, basis_reader=self.read_basis, preview=self.preview_core,
+                         plan_simulator=self.simulate_plan)
         self.selected_calls, self.ordinary_calls, self.previews = [], [], []
         self.seeded_assets, self.discovered_assets = [], []
         self.path_started = asyncio.Event()
         self.core_completed = asyncio.Event()
+        self.simulated_calls = []
+
+    async def exploration_block(self):
+        return deepcopy(BLOCK)
+
+    async def simulate_plan(self, request, selected, **kwargs):
+        self.simulated_calls.append((deepcopy(selected), kwargs.get('block'), kwargs.get('pricing', True)))
+        return await fixture_plan_simulator(self, request, selected, basis_reader=self.read_basis, **kwargs)
 
     async def read_basis(self, _):
         return deepcopy(ASSETS), list(WEIGHTS)
@@ -110,11 +119,11 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['quotedInput'], '10000')
         self.assertGreater(int(value['quotedOutput']), 0)
         self.assertEqual(len(q.selected_calls), 1)
-        self.assertEqual(q.selected_calls[0], ([], [], BLOCK))
+        self.assertEqual(q.selected_calls[0][:2], ([], []))
         self.assertFalse(q.ordinary_calls)
         self.assertFalse(q.previews)
         self.assertTrue(drained.is_set())
-        self.assertEqual((q.rpc.heads, q.rpc.verifications), (1, 1))
+        self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
 
     async def test_ordinary_core_grid_and_every_supplier_receive_real_preparation(self):
         q, release = Fixture(), asyncio.Event()
@@ -155,32 +164,37 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(supplier.closed for supplier in suppliers))
         self.assertGreater(int(value['quotedOutput']), 0)
 
-    async def test_core_and_mixed_seeds_wait_for_real_basis(self):
+    async def test_completed_core_and_mixed_seeds_do_not_wait_for_exploration_basis(self):
         for share in (50, 100):
             with self.subTest(share=share):
                 q = Fixture()
                 original = await q.candidate(REQUEST, share, 'core-first', BLOCK, ASSETS, WEIGHTS, first=True)
                 q.selected_calls.clear()
-                entered, release = asyncio.Event(), asyncio.Event()
+                q.ordinary_calls.clear()
+                entered, drained = asyncio.Event(), asyncio.Event()
                 async def basis(_):
                     entered.set()
-                    await release.wait()
-                    return deepcopy(ASSETS), list(WEIGHTS)
+                    try:
+                        await asyncio.Event().wait()
+                    finally:
+                        drained.set()
                 q.basis_reader = basis
                 budget = QuoteBudget()
                 async def update(frame):
+                    self.assertEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
+                    self.assertFalse(drained.is_set())
                     budget.finish_selection('best-initial')
                 with budget_context(budget):
                     async with asyncio.timeout(1):
                         task = asyncio.create_task(q.get(REQUEST, update, seed=original))
                         await entered.wait()
-                        self.assertFalse(q.selected_calls)
-                        release.set()
-                        await task
-                self.assertTrue(q.selected_calls)
-                self.assertEqual(q.selected_calls[0], (ASSETS, WEIGHTS, BLOCK))
+                        value = await task
+                self.assertEqual(value['quotedOutput'], original['quotedOutput'])
+                self.assertEqual(len(q.selected_calls), 1)
+                self.assertFalse(q.ordinary_calls)
+                self.assertTrue(drained.is_set())
 
-    async def test_disproof_from_basis_drain_invalidates_early_market_qualification(self):
+    async def test_sdk_basis_disproof_during_drain_does_not_retract_helpers_qualification(self):
         q, entered = Fixture(), asyncio.Event()
         async def basis(_):
             entered.set()
@@ -195,8 +209,8 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
             budget.finish_selection('best-initial')
         with budget_context(budget):
             async with asyncio.timeout(1):
-                with self.assertRaises(SnapshotChanged):
-                    await q.get(REQUEST, update, seed=seed())
+                value = await q.get(REQUEST, update, seed=seed())
+        self.assertGreater(int(value['quotedOutput']), 0)
         self.assertEqual(q.rpc.verifications, 0)
 
     async def test_caller_cancellation_drains_basis_and_early_market_replay(self):
@@ -225,26 +239,89 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(replay_drained.is_set())
         self.assertEqual(q.rpc.verifications, 0)
 
-    async def test_basis_disproof_cancels_an_unfinished_market_seed(self):
+    async def test_sdk_basis_disproof_does_not_cancel_pending_helpers_seed(self):
         q = Fixture()
-        replaying, release, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        replaying, release, disproved, drained = (asyncio.Event() for _ in range(4))
         async def basis(_):
-            await release.wait()
+            await replaying.wait()
+            disproved.set()
             raise SnapshotChanged('basis disproved pinned head')
-        async def path(*_):
+        async def path(_route, amount, *_):
             replaying.set()
             try:
-                await asyncio.Event().wait()
+                await release.wait()
+                return amount, amount*2
             finally:
                 drained.set()
         q.basis_reader, q.price_path = basis, path
         async with asyncio.timeout(1):
             task = asyncio.create_task(q.get(REQUEST, seed=seed()))
-            await replaying.wait()
+            await disproved.wait()
+            self.assertFalse(task.done())
+            self.assertFalse(drained.is_set())
             release.set()
-            with self.assertRaises(SnapshotChanged):
-                await task
+            value = await task
+        self.assertGreater(int(value['quotedOutput']), 0)
         self.assertTrue(drained.is_set())
+
+    async def test_sdk_candidate_disproof_does_not_cancel_pending_helpers_seed(self):
+        q, replaying, disproved = Fixture(), asyncio.Event(), asyncio.Event()
+        candidate = q.candidate
+        async def exploratory(*args, **kwargs):
+            if kwargs.get('selected') is None:
+                await replaying.wait()
+                disproved.set()
+                raise SnapshotChanged('SDK candidate observation changed')
+            return await candidate(*args, **kwargs)
+        async def path(_route, amount, *_):
+            replaying.set()
+            await disproved.wait()
+            return amount, amount*2
+        q.candidate, q.price_path = exploratory, path
+        budget = QuoteBudget()
+        async def update(frame):
+            self.assertTrue(disproved.is_set())
+            self.assertEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
+            budget.finish_selection('best-initial')
+        with budget_context(budget):
+            async with asyncio.timeout(1):
+                value = await q.get(REQUEST, update, seed=seed())
+        self.assertGreater(int(value['quotedOutput']), 0)
+
+    async def test_nomination_provider_disproof_does_not_cancel_pending_helpers_seed(self):
+        q, simulating, disproved = Fixture(), asyncio.Event(), asyncio.Event()
+        class Supplier:
+            name = 'controlled-sdk-nomination'
+            closed = False
+            async def discover(self, *_):
+                await simulating.wait()
+                disproved.set()
+                raise SnapshotChanged('nomination observations changed')
+            async def close(self):
+                self.closed = True
+        supplier = Supplier()
+        q.route_provider_factory = lambda: [PendingRouteTool(supplier)]
+        original_candidate, original_simulation = q.candidate, q.plan_simulator
+        async def candidates(*args, **kwargs):
+            if kwargs.get('selected') is None:
+                current_bootstrap().offer_feeds(WETH, CORE, 10000, BLOCK)
+                raise RuntimeError('SDK exploration has no completed candidate')
+            return await original_candidate(*args, **kwargs)
+        async def simulation(request, selected, **kwargs):
+            simulating.set()
+            await disproved.wait()
+            return await original_simulation(request, selected, **kwargs)
+        q.candidate, q.plan_simulator = candidates, simulation
+        budget = QuoteBudget()
+        async def update(frame):
+            self.assertTrue(disproved.is_set())
+            self.assertEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
+            budget.finish_selection('best-initial')
+        with budget_context(budget):
+            async with asyncio.timeout(1):
+                value = await q.get(REQUEST, update, seed=seed())
+        self.assertGreater(int(value['quotedOutput']), 0)
+        self.assertTrue(supplier.closed)
 
     async def test_ordinary_basis_error_does_not_reject_independent_market_seed(self):
         q = Fixture()
@@ -268,13 +345,14 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
     async def test_malformed_optional_seed_leaves_ordinary_search_available(self):
         q, budget = Fixture(), QuoteBudget()
         malformed = {'inputs': deepcopy(REQUEST['inputs']), 'plan': {'allocations': [{}]}}
-        async def update(_):
+        async def update(frame):
+            self.assertNotEqual(frame['value']['searchCoverage']['selectedPhase'], 'saved-plan')
             budget.finish_selection('best-initial')
         with budget_context(budget):
             async with asyncio.timeout(1):
                 value = await q.get(REQUEST, update, seed=malformed)
         self.assertTrue(q.ordinary_calls)
-        self.assertFalse(q.selected_calls)
+        self.assertEqual(len(q.selected_calls), 1)
         self.assertGreater(int(value['quotedOutput']), 0)
 
     async def test_selected_market_replay_omits_unused_basis(self):
@@ -284,9 +362,10 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         q.basis_reader = unnecessary
         value = await q.evaluate_selected(REQUEST, seed()['plan'])
         self.assertEqual(value['routeFamily'], 'market')
-        self.assertEqual(q.selected_calls, [([], [], BLOCK)])
+        self.assertEqual(q.selected_calls, [])
+        self.assertEqual([(block, pricing) for _, block, pricing in q.simulated_calls], [(None, False)])
         self.assertFalse(q.previews)
-        self.assertEqual((q.rpc.heads, q.rpc.verifications), (1, 1))
+        self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
 
 
 if __name__ == '__main__':

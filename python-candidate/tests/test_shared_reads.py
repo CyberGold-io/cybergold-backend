@@ -350,8 +350,8 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(values, [{'result': 'failed'}])
         self.assertEqual(counts['issued'], 1)
 
-    async def test_five_concurrent_fresh_waves_reduce_issued_reads_without_dropping_candidates(self):
-        for asset, current, shared in ((WETH, 135, 71), (target()['inputAsset'], 315, 179)):
+    async def test_five_concurrent_pinned_waves_reduce_issued_reads_without_dropping_candidates(self):
+        for asset, shared in ((WETH, 56), (target()['inputAsset'], 164)):
             search, _, wire = service()
             self.addAsyncCleanup(search.close)
             original = wire.send
@@ -362,36 +362,41 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             search.rpc.client = httpx.AsyncClient(transport=httpx.MockTransport(delayed))
             requests = [{'mode': 'exact-in', 'targets': [target(asset, amount=100 + i),
                 target(asset, ASSET_C, amount=200 + i)]} for i in range(5)]
-            values = await asyncio.gather(*(search.get(request) for request in requests))
-            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 15)
-            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 15)
+            values = await asyncio.gather(*(search.get(request, block={'number': 101, 'hash': HASH})
+                                          for request in requests))
+            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 0)
+            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 0)
             self.assertTrue(all(value['metrics']['rpcReadsScope'] == 'coordinator' for value in values))
             self.assertTrue(all(value['metrics']['candidateCalls'] == (8 if asset == WETH else 26) for value in values))
-            self.assertEqual(sum(len(batch) for batch in wire.batches) + 15, shared)
+            self.assertEqual(sum(len(batch) for batch in wire.batches), shared)
 
-    async def test_mainnet_warm_pool_reuse_keeps_amount_reads_fresh_and_new_hash_misses(self):
+    async def test_explicit_pinned_mainnet_pool_reuse_keeps_amount_reads_fresh_and_new_hash_misses(self):
         search, provider, wire = service()
         self.addAsyncCleanup(search.close)
         async def quote(_path, amount): return amount + 777
         wire.on_quote = quote
         def members():
             return sum(len(batch) for batch in wire.batches)
-        first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]})
+        block = {'number': 101, 'hash': HASH}
+        first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]}, block=block)
         first_members = members()
-        second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]})
+        second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]}, block=block)
         second_members = members()-first_members
         self.assertEqual((first_members, second_members), (24, 8))
-        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (3, 3))
+        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (0, 0))
         self.assertEqual(second['metrics']['rpcReadsScope'], 'coordinator')
         self.assertEqual(int(second['results'][0]['best']['quote']), int(first['results'][0]['best']['quote']) + 1)
         provider.block_hash = '0x' + 'b' * 64
-        third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]})
+        block = {'number': 101, 'hash': provider.block_hash}
+        third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]}, block=block)
         self.assertEqual(members()-first_members-second_members, 24)
-        self.assertEqual(third['metrics']['rpcReads'], 3)
+        self.assertEqual(third['metrics']['rpcReads'], 0)
         self.assertEqual(third['context']['blockHash'], provider.block_hash)
+        self.assertEqual(provider.calls, [])
+        # Explicit pinned producers retain their own canonical verification.
         provider.reorg = True
         with self.assertRaisesRegex(Exception, 'snapshot changed'):
-            await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=103)]})
+            await search.rpc.assert_canonical(block)
 
     async def test_sandbox_same_hash_override_is_observed_without_any_new_marker(self):
         settings = SimpleNamespace(**{**vars(SETTINGS), 'NEXT_PUBLIC_CHAIN_ID': '31338'})
@@ -408,7 +413,9 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         before = len(wire.batches)
         wire.pool_liquidity = lambda _fee: 123
         second = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
-        self.assertEqual(second['context']['blockHash'], HASH)
+        self.assertEqual(second['context']['blockHash'], None)
+        self.assertEqual(second['context']['blockTag'], 'latest')
+        self.assertEqual(provider.calls, [])
         self.assertEqual(second['metrics']['candidateCalls'], 4)
         native = [row for batch in wire.batches[before:] for row in batch
             if row['params'][0]['data'][:10] not in ('0x1698ee82', '0x1a686502')]

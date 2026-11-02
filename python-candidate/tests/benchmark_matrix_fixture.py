@@ -24,7 +24,7 @@ from cybergold_candidate.uniswap_state import PoolRegistry
 from cybergold_candidate.uniswap_v4 import POOL_MANAGER, STATE_VIEW
 from cybergold_candidate.routing_encoding import ZERO
 from quoter_fixture import synthetic_pool
-from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings
+from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixture_plan_simulator
 
 
 @dataclass(frozen=True)
@@ -307,8 +307,15 @@ class MatrixService:
             return {'netCygldOut': str(matched*3), 'amountsInExact': [str(matched)]*2,
                 'orderedCoreAssets': [PAXG, OTHER],
                 'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        async def simulate(request, selected, **kwargs):
+            # Synthetic SDK component benchmark, never a Helpers execution oracle.
+            return await fixture_plan_simulator(self.quoter, request, selected,
+                basis_reader=basis, **kwargs)
         self.quoter = Quoter(self.settings, self.engine, preview=preview,
-                             basis_reader=basis, exploration_seed=42)
+                             basis_reader=basis, exploration_seed=42, plan_simulator=simulate)
+        async def exploration_block():
+            return deepcopy(BLOCK)  # Known synthetic SDK construction data, no header RPC.
+        self.quoter.exploration_block = exploration_block
         self.quoter.seed_routes = lambda *_: None
         async def discover(*_):
             self.discovery_calls += 1

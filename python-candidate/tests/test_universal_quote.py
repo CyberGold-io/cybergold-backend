@@ -68,10 +68,31 @@ class Engine:
         return {'amountIn':str(used),'amountOut':str(received)}
 
 
+async def fixture_plan_simulator(quoter, request, selected, *, basis_reader, candidate=None,
+                                 block=None, pricing=True, **_):
+    """Component oracle only: preserve legacy SDK replay, never emulate Helpers."""
+    if candidate is not None:
+        value = deepcopy(candidate)
+    else:
+        from cybergold_candidate.quoter.evaluate import evaluate_candidate
+        at = deepcopy(BLOCK if block is None else block)
+        market = request['intent'] < 2 and all(row['kind'] == 1 for row in selected['allocations'])
+        assets, weights = ([], []) if market else await basis_reader(at)
+        value = await evaluate_candidate(quoter, request, 100, 'core-first', at, assets, weights,
+                                         selected=selected, selection=pricing)
+    value['context'] = {**value['context'], 'blockNumber': None, 'blockHash': None,
+                        'blockTag': 'latest', 'verification': 'fixture-sdk-oracle'}
+    return value
+
+
 class Quotes(UniversalQuotes):
     def __init__(self,engine,configured=True):
         self.previews=[]; self.evaluated=[]; self.selected_evaluated=[]
-        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call)
+        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call,
+                         plan_simulator=self.simulate_plan)
+    async def exploration_block(self): return deepcopy(BLOCK)
+    async def simulate_plan(self,request,selected,**options):
+        return await fixture_plan_simulator(self,request,selected,basis_reader=self.basis_reader,**options)
     async def basis_call(self,block): return [PAXG,OTHER],[500000,500000]
     def seed_routes(self,*_): pass
     async def discover(self,*_): pass
@@ -197,7 +218,7 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(int(value['quotedOutput']),int(value['outputMinimum']))
         self.assertEqual(compile_plan(value['plan'],value['planDescription'],int(value['outputMinimum'])),value['plan'])
         self.assertEqual(value['retentionDisclosure']['custodian'],HELPERS)
-        self.assertEqual(service.engine.calls[-1],('canonical',BLOCK))
+        self.assertNotIn(('canonical',BLOCK),service.engine.calls)
         for mode,args in service.previews:
             self.assertEqual(mode,'issue-exact-in');self.assertEqual(len(args['maximumAmountsIn']),2)
 

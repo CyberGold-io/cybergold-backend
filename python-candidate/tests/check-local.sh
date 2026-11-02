@@ -53,6 +53,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_completed_route_hints.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_topology_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_scheduling_trace.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
@@ -73,9 +74,11 @@ python-candidate/.venv/bin/python python-candidate/tests/test_nearby_search.py
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identity.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
+python-candidate/.venv/bin/python python-candidate/tests/test_latest_uniswap_state.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py
 python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_plan_simulation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
@@ -237,6 +240,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_safe_execution.py 
 
 node --import tsx python-candidate/tests/node-helpers-execution-reference.ts > "$candidate_reference_dir/helpers-execution.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_helpers_execution.py "$candidate_reference_dir/helpers-execution.json"
+python-candidate/.venv/bin/python python-candidate/tests/test_simulation_funding.py
 
 node --import tsx python-candidate/tests/node-recovery-share-precision-reference.ts > "$candidate_reference_dir/recovery-share-precision.json"
 python-candidate/.venv/bin/python python-candidate/tests/test_recovery_share_precision.py "$candidate_reference_dir/recovery-share-precision.json"
@@ -264,5 +268,6 @@ python-candidate/.venv/bin/python python-candidate/tests/test_selected_forward_r
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_intent_cold_seed.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_experiments.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_history.py
+python-candidate/.venv/bin/python python-candidate/tests/test_core_quote_latest.py
 python-candidate/.venv/bin/python python-candidate/tests/test_shared_reads.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_freshness.py

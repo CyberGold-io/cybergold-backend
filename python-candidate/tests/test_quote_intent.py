@@ -189,6 +189,12 @@ class DirectProvider(Provider):
             raise AssertionError('Direct preview received swap legs')
 
 
+async def pinned_get(intent, request, on_update, **options):
+    """Explicit historical/fault-control pin; production defaults stay latest."""
+    block = await intent.routes.rpc.block(None)
+    return await intent.get(request, on_update, block=block, **options)
+
+
 def service(chain_id=1):
     provider, wire = Provider(), QuoteWire()
     wire.provider = provider
@@ -370,7 +376,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
                         frames.append(frame)
                         if frame['type'] == 'qualified':
                             qualified.set()
-                    operation = asyncio.create_task(intent.get(request('issue-exact-in', native), publish))
+                    operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in', native), publish))
                     try:
                         await self.ready(qualified)
                         self.assertFalse(operation.done())
@@ -405,7 +411,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
         async def publish(frame):
             if frame['type'] == 'qualified':
                 qualified.set()
-        operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+        operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in'), publish))
         try:
             await self.ready(provider.final_started)
             self.assertFalse(qualified.is_set())
@@ -435,7 +441,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
             async def publish(frame):
                 if frame['type'] == ('qualified' if opt_in else 'estimate'):
                     observed.set()
-            operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+            operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in'), publish))
             try:
                 await self.ready(observed)
                 self.assertFalse(operation.done())
@@ -459,7 +465,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
             frames.append(frame)
             if frame['type'] == 'qualified':
                 qualified.set()
-        operation = asyncio.create_task(intent.get(value, publish))
+        operation = asyncio.create_task(pinned_get(intent, value, publish))
         try:
             await self.ready(qualified)
             self.assertFalse(operation.done())
@@ -483,7 +489,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
         intent, provider, _routes, control = self.fixture()
         provider.fail_final = True
         frames = []
-        operation = asyncio.create_task(intent.get(request('issue-exact-in'), lambda frame: asyncio.sleep(0, result=frames.append(frame))))
+        operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in'), lambda frame: asyncio.sleep(0, result=frames.append(frame))))
         try:
             await self.ready(provider.final_started)
             for _ in range(20):
@@ -505,7 +511,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
                     frames.append(frame)
                     if frame['type'] == 'qualified':
                         qualified.set()
-                operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+                operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in'), publish))
                 try:
                     await self.ready(qualified)
                     incumbent = next(frame['value'] for frame in frames if frame['type'] == 'qualified')
@@ -537,7 +543,7 @@ class EarlyCheckedIssueTests(unittest.IsolatedAsyncioTestCase):
                     frames.append(frame)
                     if frame['type'] == 'estimate':
                         estimated.set()
-                operation = asyncio.create_task(intent.get(request('issue-exact-in'), publish))
+                operation = asyncio.create_task(pinned_get(intent, request('issue-exact-in'), publish))
                 try:
                     await self.ready(estimated)
                     if options.get('opt_in') is not False:
@@ -607,7 +613,7 @@ class RetainedTypedRedemptionTests(unittest.IsolatedAsyncioTestCase):
                 typed.search_routes = reserve
                 routes.multi_protocol = typed
                 value = {**request('redeem-exact-out', native), 'slippageBps': 500}
-                first = await intent.get(value, lambda _frame: asyncio.sleep(0))
+                first = await pinned_get(intent, value, lambda _frame: asyncio.sleep(0))
                 self.assertEqual(first['expectedInputAmount'], '100')
                 self.assertEqual(first['executionAmount'], '106')
                 self.assertEqual(first['preview']['minimumAmountOut'], '200')
@@ -619,7 +625,7 @@ class RetainedTypedRedemptionTests(unittest.IsolatedAsyncioTestCase):
                 provider.contract_calls.clear()
                 selected = {**value, 'deadline': '1792000010', 'retainedPlan': old_plan}
                 try:
-                    current = await intent.get(selected, lambda _frame: asyncio.sleep(0))
+                    current = await pinned_get(intent, selected, lambda _frame: asyncio.sleep(0))
                 except TypeError:
                     self.fail('Retained typed redemption raised TypeError instead of completing selected-route inversion')
                 self.assertEqual(searches, [], 'Selected-route revalidation must not restart route discovery')
@@ -750,7 +756,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
                 intent.qualification = False
                 intent.retain_plans = True
-                first = await intent.get(request(mode), lambda frame: asyncio.sleep(0))
+                first = await pinned_get(intent, request(mode), lambda frame: asyncio.sleep(0))
                 provider.block_hash = '0x' + 'c' * 64
                 wire.batches.clear()
                 calls = self.fail_quote_calls(route, wire, lambda candidate_mode, _row:
@@ -780,7 +786,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                         if mode == 'issue-exact-in':
                             for target in value['targets']:
                                 target['amount'] = '5000'
-                        result = await intent.get(value, lambda frame: asyncio.sleep(0))
+                        result = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
                         self.assertEqual(result['slippageBps'], bps)
                         expected.append(result['expectedInputAmount'] if mode.endswith('exact-out') else result['displayAmount'])
                         limits.append(int(result['maximumInputAmount']) if mode == 'issue-exact-out'
@@ -797,12 +803,12 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
         intent.retain_plans = True
         value = {**request('redeem-exact-in'), 'amount': '10000', 'slippageBps': 300}
-        first = await intent.get(value, lambda frame: asyncio.sleep(0))
-        same = await intent.get({**value, 'retainedPlan': retained_plan(first)}, lambda frame: asyncio.sleep(0))
+        first = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
+        same = await pinned_get(intent, {**value, 'retainedPlan': retained_plan(first)}, lambda frame: asyncio.sleep(0))
         self.assertEqual(same['metrics']['candidateCalls'], 2)
         self.assertEqual(same['preview']['minimumAmountOut'], '19400')
         events = []
-        tighter = await intent.get({**value, 'slippageBps': 50, 'retainedPlan': retained_plan(first)},
+        tighter = await pinned_get(intent, {**value, 'slippageBps': 50, 'retainedPlan': retained_plan(first)},
                                    lambda frame: asyncio.sleep(0, result=events.append(frame)))
         self.assertEqual(events[0]['type'], 'invalidated')
         self.assertEqual(tighter['preview']['minimumAmountOut'], '19900')
@@ -813,8 +819,8 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         intent.retain_plans = True
         provider.issue_cap = 150
         value = request('issue-exact-in')
-        for result in (await intent.get(value, lambda frame: asyncio.sleep(0)),
-                       await intent.get(value, lambda frame: asyncio.sleep(0))):
+        for result in (await pinned_get(intent, value, lambda frame: asyncio.sleep(0)),
+                       await pinned_get(intent, value, lambda frame: asyncio.sleep(0))):
             self.assertEqual(result['executionAmount'], '150')
             self.assertEqual(result['requestedGrossCygldOut'], '200')
             self.assertEqual(result['requestedNetCygldOut'], '200')
@@ -828,12 +834,12 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
             intent.retain_plans = True
             value = request('redeem-exact-in', native)
-            result = await intent.get(value, lambda frame: asyncio.sleep(0))
+            result = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
             self.assertEqual(result['displayAmount'], '200')
             self.assertEqual(result['preview']['minimumAmountOut'], '198')
             self.assertEqual(result['executionAmount'], '100')
             provider.block_hash = '0x'+'c'*64
-            fresh = await intent.get(value, lambda frame: asyncio.sleep(0))
+            fresh = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
             self.assertEqual(fresh['metrics']['candidateCalls'], 2)
             self.assertEqual(fresh['displayAmount'], '200')
             self.assertEqual(fresh['preview']['minimumAmountOut'], '198')
@@ -848,7 +854,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     intent.retain_plans = True
                     provider.issue_cap = 150
                     value = request('issue-exact-in', native)
-                    first = await intent.get(value, lambda frame: asyncio.sleep(0))
+                    first = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
                     self.assertEqual(value['amount'], '100')
                     self.assertEqual(first['executionAmount'], '150')
                     self.assertEqual(first['expectedInputAmount'], '76')
@@ -858,7 +864,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     # when checking an already selected quote.
                     provider.issue_cap = 200
                     provider.block_hash = '0x' + 'c' * 64
-                    checked = await intent.get({**value, 'retainedPlan': retained_plan(first)},
+                    checked = await pinned_get(intent, {**value, 'retainedPlan': retained_plan(first)},
                                                lambda frame: asyncio.sleep(0))
                     self.assertEqual(checked['executionAmount'], '150')
                     self.assertEqual(checked['expectedInputAmount'], '76')
@@ -881,7 +887,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 wire.on_quote = inconsistent
                 frames = []
                 with self.assertRaises(Exception) as failure:
-                    await intent.get(request('issue-exact-in', native),
+                    await pinned_get(intent, request('issue-exact-in', native),
                         lambda frame: asyncio.sleep(0, result=frames.append(frame)))
                 self.assertEqual(public_quote_error(failure.exception)['code'], 'quote-contract-reverted')
                 finals = [args for name, args, _ in provider.contract_calls
@@ -898,7 +904,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(native=native, cap=cap):
                     intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
                     provider.issue_fees, provider.issue_cap = (1, 2), cap
-                    result = await intent.get(request('issue-exact-in', native), lambda frame: asyncio.sleep(0))
+                    result = await pinned_get(intent, request('issue-exact-in', native), lambda frame: asyncio.sleep(0))
                     expected = cap or 197
                     self.assertEqual(int(result['displayAmount']), expected)
                     self.assertEqual(int(result['executionAmount']), expected)
@@ -913,7 +919,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
         intent.retain_plans = True
         value = request('redeem-exact-in')
-        first = await intent.get(value, lambda frame: asyncio.sleep(0))
+        first = await pinned_get(intent, value, lambda frame: asyncio.sleep(0))
         key = json.dumps({k:v for k,v in value.items() if k not in ('deadline','retainedPlan')},sort_keys=True)
         weak = deepcopy(first)
         weak['preview']['minimumAmountOut'] = '100'
@@ -927,7 +933,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         plan = {k:deepcopy(first[k]) for k in ('executionAmount','maximumInputAmount','quotes','expectedCoreOutputs')}
         plan['minimumAmountOut'] = first['preview']['minimumAmountOut']
         events = []
-        result = await intent.get({**value,'retainedPlan':plan},lambda frame:asyncio.sleep(0,result=events.append(frame)))
+        result = await pinned_get(intent, {**value,'retainedPlan':plan},lambda frame:asyncio.sleep(0,result=events.append(frame)))
         self.assertEqual(events[0]['type'],'invalidated')
         self.assertLess(int(result['preview']['minimumAmountOut']),int(plan['minimumAmountOut']))
         self.assertEqual(intent.retained[key][1],weak)
@@ -935,10 +941,10 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_retained_plan_from_another_input_is_recalculated_for_the_current_intent(self):
         intent, provider, route, wire = service();self.addAsyncCleanup(route.close)
         intent.retain_plans = True
-        first = await intent.get(request('redeem-exact-in'),lambda frame:asyncio.sleep(0))
+        first = await pinned_get(intent, request('redeem-exact-in'),lambda frame:asyncio.sleep(0))
         plan = {k:deepcopy(first[k]) for k in ('executionAmount','maximumInputAmount','quotes','expectedCoreOutputs')}
         plan.update(executionAmount='99',minimumAmountOut=first['preview']['minimumAmountOut'])
-        result = await intent.get({**request('redeem-exact-in'),'retainedPlan':plan},lambda frame:asyncio.sleep(0))
+        result = await pinned_get(intent, {**request('redeem-exact-in'),'retainedPlan':plan},lambda frame:asyncio.sleep(0))
         self.assertEqual(result['executionAmount'],'100')
         self.assertEqual(result['metrics']['candidateCalls'],8)
 
@@ -948,12 +954,12 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(mode=mode, native=native):
                     intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
                     intent.retain_plans = True
-                    first = await intent.get(request(mode,native), lambda frame: asyncio.sleep(0))
+                    first = await pinned_get(intent, request(mode,native), lambda frame: asyncio.sleep(0))
                     original_bounds = first.get('expectedCoreOutputs')
                     for index in (1, 1, 2): # A second browser/deadline also reuses the selected plan.
                         provider.block_hash = '0x'+str(index)*64
                         next_request = {**request(mode,native), 'deadline': str(1792000000+index)}
-                        current = await intent.get(next_request, lambda frame: asyncio.sleep(0))
+                        current = await pinned_get(intent, next_request, lambda frame: asyncio.sleep(0))
                         self.assertEqual(current['context']['blockHash'], provider.block_hash)
                         self.assertEqual(current['metrics']['candidateCalls'], 4 if mode in ('issue-exact-in', 'redeem-exact-out') else 2)
                         self.assertEqual(current['metrics']['iterations'], 0)
@@ -969,12 +975,12 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_changed_price_invalidates_retained_execution_then_falls_back_to_complete_search(self):
         intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
         intent.retain_plans = True
-        first = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+        first = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
         provider.block_hash = '0x'+'c'*64
         async def changed(path, amount): return amount
         wire.on_quote = changed
         events = []
-        fresh = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0,result=events.append(frame)))
+        fresh = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0,result=events.append(frame)))
         self.assertEqual(events[0]['type'], 'invalidated')
         self.assertLess(int(fresh['preview']['minimumAmountOut']), int(first['preview']['minimumAmountOut']))
         self.assertEqual(fresh['metrics']['candidateCalls'], 10) # 2 checked + all 8 candidates.
@@ -985,13 +991,13 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(mode=mode, native=native):
                     intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
                     intent.retain_plans = True
-                    first = await intent.get(request(mode, native), lambda frame: asyncio.sleep(0))
+                    first = await pinned_get(intent, request(mode, native), lambda frame: asyncio.sleep(0))
                     for index in (1, 2):
                         provider.block_hash = '0x'+str(index)*64
                         next_request = {**request(mode, native), 'deadline': str(1792000000+index),
                                         'retainedPlan': retained_plan(first)}
                         wire.batches.clear()
-                        current = await intent.get(next_request, lambda frame: asyncio.sleep(0))
+                        current = await pinned_get(intent, next_request, lambda frame: asyncio.sleep(0))
                         self.assertEqual(current['context']['blockHash'], provider.block_hash)
                         calls = 4 if mode in ('issue-exact-in', 'redeem-exact-out') else 2
                         self.assertEqual(current['metrics']['candidateCalls'], calls)
@@ -1013,7 +1019,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(fault=fault):
                 intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
                 intent.retain_plans = True
-                first = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+                first = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
                 provider.block_hash = '0x'+'c'*64
                 if fault == 'price':
                     async def changed(path, amount): return amount
@@ -1028,7 +1034,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                         return await original(*args, **kwargs)
                     route.engine.quote_branches = once
                 events = []
-                fresh = await intent.get({**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
+                fresh = await pinned_get(intent, {**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
                                          lambda frame: asyncio.sleep(0, result=events.append(frame)))
                 self.assertEqual(events[0]['type'], 'invalidated')
                 self.assertEqual(fresh['metrics']['candidateCalls'], 9 if fault == 'route-revert' else 10)
@@ -1038,7 +1044,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
         intent.retain_plans = True
         for _ in range(2):
-            result = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+            result = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
             self.assertEqual(result['metrics']['candidateCalls'], 8)
             self.assertEqual(intent.retained, {})
 
@@ -1048,7 +1054,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(chain_id=chain_id, code=code):
                     intent, provider, route, wire = service(chain_id); self.addAsyncCleanup(route.close)
                     intent.retain_plans = True
-                    first = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+                    first = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
                     provider.block_hash = '0x'+'c'*64
                     original, batches = route.engine.quote_branches, []
                     async def transient(*args, **kwargs):
@@ -1058,12 +1064,12 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     events = []
                     next_request = {**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)}
                     with self.assertRaises(QuoteFailure) as raised:
-                        await intent.get(next_request, lambda frame: asyncio.sleep(0, result=events.append(frame)))
+                        await pinned_get(intent, next_request, lambda frame: asyncio.sleep(0, result=events.append(frame)))
                     self.assertEqual(raised.exception.code, code)
                     self.assertEqual(batches, ['exactIn']) # No all-route fallback after a failed selected read.
                     self.assertNotIn('invalidated', [event['type'] for event in events])
                     route.engine.quote_branches = original
-                    fresh = await intent.get(next_request, lambda frame: asyncio.sleep(0))
+                    fresh = await pinned_get(intent, next_request, lambda frame: asyncio.sleep(0))
                     self.assertEqual(fresh['metrics']['candidateCalls'], 2)
                     self.assertEqual(fresh['preview']['minimumAmountOut'], first['preview']['minimumAmountOut'])
 
@@ -1071,7 +1077,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         for error in (RpcTimeout(), httpx.ConnectError('Private upstream detail')):
             intent, provider, route, wire = service(31338); self.addAsyncCleanup(route.close)
             intent.retain_plans = True
-            first = await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+            first = await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
             provider.block_hash = '0x'+'c'*64
             wire.batches.clear()
             original = provider.make_request
@@ -1082,7 +1088,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             provider.make_request = fail_core
             events = []
             with self.assertRaises(type(error)) as raised:
-                await intent.get({**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
+                await pinned_get(intent, {**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
                                  lambda frame: asyncio.sleep(0, result=events.append(frame)))
             self.assertEqual(public_quote_error(raised.exception)['code'], public_quote_error(error)['code'])
             self.assertEqual(wire.batches, [])
@@ -1092,7 +1098,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         intent, provider, route, _wire = service(31338)
         self.addAsyncCleanup(route.close)
         intent.retain_plans = True
-        first = await intent.get(request('redeem-exact-in'), lambda _: asyncio.sleep(0))
+        first = await pinned_get(intent, request('redeem-exact-in'), lambda _: asyncio.sleep(0))
         provider.block_hash = '0x'+'c'*64
         async def changed(*_args, **_kwargs):
             raise SnapshotChanged('Selected pool snapshot was disproved', retry=1)
@@ -1100,7 +1106,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             self.fail('A disproved selected snapshot restarted candidate discovery')
         route.engine.quote_branches, route.engine.search_routes = changed, forbidden
         with self.assertRaisesRegex(SnapshotChanged, 'Selected pool snapshot'):
-            await intent.get({**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
+            await pinned_get(intent, {**request('redeem-exact-in'), 'retainedPlan': retained_plan(first)},
                 lambda _: asyncio.sleep(0))
         self.assertEqual(route.engine.semaphore._value, 8)
 
@@ -1113,7 +1119,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(name=name):
                 intent, provider, route, wire = service(); self.addAsyncCleanup(route.close)
                 intent.retain_plans = True
-                await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
+                await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0))
                 provider.block_hash = '0x'+'c'*64
                 original, rejected = provider.make_request, False
                 data = Web3.to_hex(Web3.keccak(text=name+'()'))[:10]
@@ -1126,7 +1132,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 provider.make_request = reject_selected
                 events = []
                 with self.assertRaises(KnownPreviewError) as failure:
-                    await intent.get(request('redeem-exact-in'), lambda frame: asyncio.sleep(0, result=events.append(frame)))
+                    await pinned_get(intent, request('redeem-exact-in'), lambda frame: asyncio.sleep(0, result=events.append(frame)))
                 self.assertEqual(failure.exception.code, code)
                 self.assertTrue(rejected)
                 self.assertEqual(events[0]['type'], 'invalidated')
@@ -1142,7 +1148,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             install_fixture_engine(route)
             self.addAsyncCleanup(route.close)
             value = {**request(mode), 'orderedAssets': [WETH], 'targets': [], 'adapter': ''}
-            result = await QuoteIntent(SETTINGS, route).get(value, lambda event: asyncio.sleep(0))
+            result = await pinned_get(QuoteIntent(SETTINGS, route), value, lambda event: asyncio.sleep(0))
             self.assertEqual(result['quotes'], [])
             self.assertEqual(wire.batches, [])
             if mode == 'redeem-exact-in':
@@ -1161,7 +1167,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         install_fixture_engine(route)
         self.addAsyncCleanup(route.close)
         value = {**request('issue-exact-in'), 'orderedAssets': [WETH], 'targets': [], 'adapter': ''}
-        result = await QuoteIntent(SETTINGS, route).get(value, lambda event: asyncio.sleep(0))
+        result = await pinned_get(QuoteIntent(SETTINGS, route), value, lambda event: asyncio.sleep(0))
         self.assertEqual(value['amount'], '100')
         self.assertEqual(result['executionAmount'], '60')
         self.assertEqual(result['expectedInputAmount'], '60')
@@ -1179,7 +1185,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                     intent, provider, route, wire = service()
                     self.addAsyncCleanup(route.close)
                     events=[]
-                    result=await intent.get(request(mode,native),lambda event: asyncio.sleep(0,result=events.append(event)))
+                    result=await pinned_get(intent, request(mode,native),lambda event: asyncio.sleep(0,result=events.append(event)))
                     self.assertEqual(sum(method=='eth_chainId' for method,_ in provider.calls),1)
                     self.assertEqual(sum(method.startswith('eth_getBlock') and params[0] == 'latest'
                                          for method,params in provider.calls), 1)
@@ -1208,7 +1214,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         estimate_received=asyncio.Event()
         async def update(event):
             if event['type']=='estimate':estimate_received.set()
-        operation=asyncio.create_task(intent.get(request('issue-exact-in'),update))
+        operation=asyncio.create_task(pinned_get(intent, request('issue-exact-in'),update))
         await asyncio.wait_for(estimate_received.wait(),2)
         self.assertFalse(operation.done())
         provider.finish_final.set();result=await operation
@@ -1227,7 +1233,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 events.append(event)
                 if event['type'] == 'qualified': qualified.set()
             wire.on_quote = quote
-            operation = asyncio.create_task(intent.get(request(mode), update))
+            operation = asyncio.create_task(pinned_get(intent, request(mode), update))
             try:
                 await asyncio.wait_for(qualified.wait(), 2)
                 self.assertFalse(operation.done())
@@ -1272,7 +1278,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                         if event['type'] == 'qualified':
                             ready.set()
                     wire.on_quote = quote
-                    final = await asyncio.wait_for(intent.get(request(mode, native), update), 2)
+                    final = await asyncio.wait_for(pinned_get(intent, request(mode, native), update), 2)
                     self.assertTrue(failed_tail)
                     incumbent = next(event['value'] for event in events if event['type'] == 'qualified')
                     for field in ('quotes', 'preview', 'executionAmount', 'maximumInputAmount'):
@@ -1297,7 +1303,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             if event['type'] == 'estimate':
                 estimated.set()
         with self.assertRaises(TimeoutError) as raised:
-            await asyncio.wait_for(intent.get(request('issue-exact-in'), update), 2)
+            await asyncio.wait_for(pinned_get(intent, request('issue-exact-in'), update), 2)
         self.assertTrue(estimated.is_set())
         self.assertFalse(any(event['type'] == 'qualified' for event in events))
         self.assertEqual(public_quote_error(raised.exception)['code'], 'quote-timeout')
@@ -1317,7 +1323,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 ready.set()
         wire.on_quote = quote
         with self.assertRaises(SnapshotChanged):
-            await asyncio.wait_for(intent.get(request('issue-exact-out'), update), 2)
+            await asyncio.wait_for(pinned_get(intent, request('issue-exact-out'), update), 2)
         self.assertTrue(ready.is_set())
 
     async def test_qualifier_snapshot_disproof_survives_later_tail_timeout(self):
@@ -1347,7 +1353,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             if event['type'] == 'qualified':
                 first.set()
         with self.assertRaises(SnapshotChanged):
-            await asyncio.wait_for(intent.get(request('issue-exact-out'), publish), 2)
+            await asyncio.wait_for(pinned_get(intent, request('issue-exact-out'), publish), 2)
         invalidated = next(index for index, event in enumerate(events) if event['type'] == 'invalidated')
         self.assertFalse(any(event['type'] == 'qualified' for event in events[invalidated+1:]))
 
@@ -1371,7 +1377,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             if frame['type'] == 'invalidated':
                 invalidated.set()
         with self.assertRaises(SnapshotChanged):
-            await asyncio.wait_for(intent.get(request('issue-exact-out'), update), 2)
+            await asyncio.wait_for(pinned_get(intent, request('issue-exact-out'), update), 2)
         self.assertTrue(invalidated.is_set())
         self.assertFalse(any(frame['type'] in ('qualified', 'complete') for frame in frames))
         self.assertEqual(routes.engine.semaphore._value, 8)
@@ -1388,7 +1394,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             if event['type'] == 'qualified':
                 ready.set()
         wire.on_quote = quote
-        operation = asyncio.create_task(intent.get(request('issue-exact-out'), update))
+        operation = asyncio.create_task(pinned_get(intent, request('issue-exact-out'), update))
         try:
             await asyncio.wait_for(ready.wait(), 2)
             self.assertFalse(operation.done())
@@ -1430,7 +1436,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         routes.get = search
         with rpc_diagnostic_scope(), patch.object(TokenPreviewRpc, 'preview', preview):
             with self.assertRaises(TimeoutError) as raised:
-                await asyncio.wait_for(intent.get(request('issue-exact-in'), lambda _: asyncio.sleep(0)), 2)
+                await asyncio.wait_for(pinned_get(intent, request('issue-exact-in'), lambda _: asyncio.sleep(0)), 2)
             payload = public_quote_error(raised.exception)
         self.assertTrue(preview_cancelled.is_set())
         self.assertEqual(payload['code'], 'quote-timeout')
@@ -1483,7 +1489,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with rpc_diagnostic_scope():
                     with self.assertRaises(TimeoutError) as raised:
                         async with asyncio.timeout(2):
-                            await intent.get(request(mode), publish)
+                            await pinned_get(intent, request(mode), publish)
                     payload = public_quote_error(raised.exception)
                 self.assertTrue(replay_cancelled.is_set())
                 self.assertFalse(any(event['type'] == 'qualified' for event in events))
@@ -1514,7 +1520,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 with rpc_diagnostic_scope(), patch('cybergold_candidate.route_search.asyncio.timeout',
                         side_effect=lambda _seconds: ordinary_timeout(.08)):
                     with self.assertRaises(TimeoutError) as raised:
-                        await intent.get(request(mode), publish)
+                        await pinned_get(intent, request(mode), publish)
                     payload = public_quote_error(raised.exception)
                 logical, physical = payload['quoteDiagnostics'], payload['diagnostics']
                 self.assertEqual(payload['code'], 'quote-timeout')
@@ -1530,7 +1536,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
             intent,provider,route,_=service();self.addAsyncCleanup(route.close)
             setattr(provider,fault,True)
             with self.assertRaises(Exception):
-                await intent.get(request('issue-exact-in'),lambda event: asyncio.sleep(0))
+                await pinned_get(intent, request('issue-exact-in'),lambda event: asyncio.sleep(0))
 
     async def test_first_protected_search_wave_has_its_own_phase_and_iteration(self):
         intent, _provider, routes, _wire = service()
@@ -1556,7 +1562,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         routes.get = search
         with rpc_diagnostic_scope():
             with self.assertRaises(TimeoutError) as raised:
-                await intent.get(request('redeem-exact-out'), lambda _event: asyncio.sleep(0))
+                await pinned_get(intent, request('redeem-exact-out'), lambda _event: asyncio.sleep(0))
             logical = public_quote_error(raised.exception)['quoteDiagnostics']
         self.assertEqual(calls, ['exact-out', 'exact-in'])
         self.assertTrue(early_forward)
@@ -1577,7 +1583,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
         with rpc_diagnostic_scope(), patch('cybergold_candidate.rpc_diagnostics._QuoteWork.snapshot',
                 side_effect=ValueError('optional observer unavailable')):
             with self.assertRaises(TimeoutError) as raised:
-                await intent.get(request('issue-exact-in'), lambda _event: asyncio.sleep(0))
+                await pinned_get(intent, request('issue-exact-in'), lambda _event: asyncio.sleep(0))
             payload = public_quote_error(raised.exception)
         self.assertEqual(payload['code'], 'quote-timeout')
         self.assertEqual(payload['diagnostics']['stage'], 'route-search')
@@ -1634,7 +1640,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
                 qualified.set()
         typed.search_routes, typed.compose_core_rows = reserve, compose
         routes.multi_protocol = typed
-        operation = asyncio.create_task(intent.get(request('redeem-exact-in'), update))
+        operation = asyncio.create_task(pinned_get(intent, request('redeem-exact-in'), update))
         try:
             await asyncio.wait_for(later_searched.wait(), 1)
             self.assertFalse(qualified.is_set())
@@ -1657,7 +1663,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_context_reads_overlap_and_chain_check_precedes_contract_calls(self):
         intent,provider,route,_=service();self.addAsyncCleanup(route.close)
         provider.hold_chain,provider.hold_header=asyncio.Event(),asyncio.Event()
-        operation=asyncio.create_task(intent.get(request('issue-exact-out'),lambda event:asyncio.sleep(0)))
+        operation=asyncio.create_task(pinned_get(intent, request('issue-exact-out'),lambda event:asyncio.sleep(0)))
         for _ in range(20):
             if len(provider.calls)>=2:break
             await asyncio.sleep(0)
@@ -1668,7 +1674,7 @@ class IntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_disconnect_cancels_pending_final_and_never_publishes_completion(self):
         intent,provider,route,_=service();self.addAsyncCleanup(route.close)
         provider.finish_final=asyncio.Event()
-        operation=asyncio.create_task(intent.get(request('issue-exact-in'),lambda event:asyncio.sleep(0)))
+        operation=asyncio.create_task(pinned_get(intent, request('issue-exact-in'),lambda event:asyncio.sleep(0)))
         await provider.final_started.wait();operation.cancel()
         with self.assertRaises(asyncio.CancelledError):await operation
 
@@ -1774,7 +1780,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_protected_burn_is_adjusted_but_raw_metadata_keeps_the_original_seed(self):
         intent, provider, _, value, _, publish, _ = self.fixture()
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[0], 102)
         self.assertEqual(result['executionAmount'], '102')
         self.assertEqual(result['displayAmount'], '102')
@@ -1783,7 +1789,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_direct_output_and_recovery_shares_do_not_pad_a_valid_supply_limited_seed(self):
         intent, provider, wire, value, _, publish, _ = self.fixture(shape='direct', amount=100, supply=100)
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns, [100])
         self.assertEqual(result['executionAmount'], '100')
         self.assertEqual(result['expectedInputAmount'], '100')
@@ -1792,7 +1798,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_mixed_supply_rejection_restores_original_gross_in_every_returned_field(self):
         intent, provider, _, value, frames, publish, _ = self.fixture(shape='mixed', amount=100, supply=100)
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[:2], [102, 100])
         self.assertEqual(result['executionAmount'], '100')
         self.assertEqual(result['displayAmount'], '100')
@@ -1802,7 +1808,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tiny_routed_plateau_uses_specific_supply_fallback_and_keeps_raw_inversion(self):
         intent, provider, _, value, _, publish, _ = self.fixture(amount=2, supply=2)
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[:2], [3, 2])
         self.assertEqual(result['executionAmount'], '2')
         self.assertEqual(result['expectedInputAmount'], '1')
@@ -1814,11 +1820,11 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
                 intent, provider, _, value, frames, publish, _ = self.fixture(bps=bps)
                 if bps == 10_000:
                     with self.assertRaises(InvalidPreview):
-                        await intent.get(value, publish)
+                        await pinned_get(intent, value, publish)
                     self.assertEqual(len(provider.burns), 11)
                     self.assertFalse(any(frame['type'] == 'qualified' for frame in frames))
                 else:
-                    result = await intent.get(value, publish)
+                    result = await pinned_get(intent, value, publish)
                     minimum = int(result['preview']['minimumAmountOut'])
                     self.assertLessEqual(200, minimum)
                     self.assertLessEqual(minimum, ceil(200, bps))
@@ -1827,7 +1833,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_protocol_and_helper_fees_remain_in_the_burn_and_advisory_metadata(self):
         intent, provider, _, value, _, publish, _ = self.fixture(fees=(5, 7))
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[0], 114)
         self.assertEqual(result['executionAmount'], '114')
         self.assertEqual(result['expectedInputAmount'], '112')
@@ -1842,7 +1848,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
         seeds = VerifiedGrossSeed()
         seeds.rows[seeds.key(value, {'chainId': 1, 'blockHash': HASH})] = (time.monotonic(), 101)
         intent.seeds = seeds
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[0], 101)
         self.assertEqual(result['executionAmount'], '102')
         self.assertEqual(result['expectedInputAmount'], '101')
@@ -1853,7 +1859,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
         async def identity(_path, amount):
             return amount
         wire.on_quote = identity
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertEqual(provider.burns[0], maximum)
         self.assertEqual(result['executionAmount'], '2')
         self.assertEqual(result['expectedInputAmount'], '2')
@@ -1866,12 +1872,12 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(options=options):
                 intent, provider, _, value, _, publish, _ = self.fixture(**options)
                 with self.assertRaises(error_type):
-                    await intent.get(value, publish)
+                    await pinned_get(intent, value, publish)
                 self.assertEqual(provider.burns, [102])
 
     async def test_late_advisory_rpc_failure_preserves_checked_execution_with_optional_metadata_absent(self):
         intent, _, _, value, frames, publish, _ = self.fixture(raw_fault='rpc')
-        result = await intent.get(value, publish)
+        result = await pinned_get(intent, value, publish)
         self.assertNotIn('expectedInputAmount', result)
         self.assertEqual(result['executionAmount'], '102')
         self.assertEqual(result['preview']['minimumAmountOut'], '200')
@@ -1880,9 +1886,9 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
     async def test_late_advisory_reorg_and_caller_cancellation_never_return_a_checked_stale_tuple(self):
         intent, _, _, value, _, publish, _ = self.fixture(raw_fault='reorg')
         with self.assertRaises(SnapshotChanged):
-            await intent.get(value, publish)
+            await pinned_get(intent, value, publish)
         intent, _, _, value, frames, publish, started = self.fixture(raw_fault='hold')
-        task = asyncio.create_task(intent.get(value, publish))
+        task = asyncio.create_task(pinned_get(intent, value, publish))
         try:
             await asyncio.wait_for(started.wait(), 1)
             self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
@@ -1895,7 +1901,7 @@ class ProtectionAwareRedemptionSeedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_padded_basket_cancellation_does_not_retry_the_original_seed(self):
         intent, provider, _, value, _, publish, started = self.fixture(basket_fault='hold')
-        task = asyncio.create_task(intent.get(value, publish))
+        task = asyncio.create_task(pinned_get(intent, value, publish))
         try:
             await asyncio.wait_for(started.wait(), 1)
             task.cancel()
@@ -2029,7 +2035,7 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
             if frame['type'] == 'qualified':
                 frames.append(frame['value'])
                 qualified.set()
-        task = asyncio.create_task(intent.get(value, update))
+        task = asyncio.create_task(pinned_get(intent, value, update))
         async def cancel():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
@@ -2132,7 +2138,7 @@ class EarlyProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
         frames = []
         budget = QuoteBudget(.3, .3)
         with budget_context(budget):
-            task = asyncio.create_task(budget.produce(intent.get(value,
+            task = asyncio.create_task(budget.produce(pinned_get(intent, value,
                 lambda frame: asyncio.sleep(0, result=frames.append(frame)))))
         try:
             await asyncio.wait_for(entered.wait(), 1)
@@ -2219,7 +2225,7 @@ class RepeatedProtectedRedemptionPointTests(unittest.IsolatedAsyncioTestCase):
                 invalidated.set()
             elif frame['type'] == 'qualified':
                 frames.append(frame['value'])
-        task = asyncio.create_task(intent.get(value, update))
+        task = asyncio.create_task(pinned_get(intent, value, update))
         try:
             await self.wait(invalidated)
             self.assertEqual(frames, [])
