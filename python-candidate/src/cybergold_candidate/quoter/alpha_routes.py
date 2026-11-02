@@ -88,6 +88,7 @@ class AlphaRoutes:
                         'blockNumber': int(block['number']), 'source': source,
                         'target': target, 'amount': str(amount), 'pools': pools}
             canonical = {}
+            terminal_error = False
             try:
                 await self._write(process, outgoing)
                 while True:
@@ -112,13 +113,19 @@ class AlphaRoutes:
                     elif 'candidates' in response:
                         yield response['candidates']
                         return
+                    elif 'error' in response:
+                        # A matched terminal error retires this request in the
+                        # worker. Its healthy calculation process is reusable.
+                        terminal_error = True
+                        raise AlphaRouteError('AlphaRouter candidate discovery unavailable')
                     else:
                         # Do not expose arbitrary child text, URLs or inputs.
                         raise AlphaRouteError('AlphaRouter candidate discovery unavailable')
             except BaseException:
-                # This serialized query owns this calculation child. Killing it
-                # retires pending callbacks without a second selection clock.
-                await self._stop(process)
+                # Cancellation, disproof and broken framing/transport still
+                # retire the child and all calculation work it owns.
+                if not terminal_error:
+                    await self._stop(process)
                 raise
 
     async def _quote(self, request, block, canonical):

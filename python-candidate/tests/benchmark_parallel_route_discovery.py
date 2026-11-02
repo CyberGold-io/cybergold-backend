@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_FILES = (
     'package.json', 'package-lock.json',
     'src/uniswap-sdk/alpha-provider.ts', 'src/uniswap-sdk/alpha-worker.ts',
+    'src/uniswap-sdk/calculation-session.ts',
     'src/uniswap-sdk/uniroute-local.ts', 'src/uniswap-sdk/uniroute-worker.ts',
     'src/uniswap-sdk/engine.ts', 'src/uniswap-sdk/worker.ts',
     'python-candidate/src/cybergold_candidate/quoter/alpha_routes.py',

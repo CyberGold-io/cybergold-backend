@@ -14,6 +14,16 @@ Cancellation retires owned continuations; losing their worker remains an SDK
 error. SDK diagnostics count each start/resume exchange, rather than counting
 only fresh swap simulations, and exclude the intervening Python state reads.
 
+AlphaRouter and UniRoute-local discovery children belong to one route search.
+They reuse a child after a completed request returns an ordinary supplier error.
+Each terminal result or error retires that request's pending quote callbacks and
+suppresses later candidate or quote frames from its calculation. This keeps an
+ordinary discovery error from repeatedly paying Node/module startup cost.
+Cancellation, canonical-state disproof and broken framing or transport still
+retire and reap the child. Supplier errors retain their existing public outcome;
+worker reuse does not change chain support, the selection clock, pricing slots
+or economic ranking.
+
 Core, Market and direct Uniswap quotes use the same structured route engine
 and completion-driven scheduler. Every swap candidate uses the pinned SDK
 simulation: V2, V3, V4, mixed and split routes, plus retained-route revalidation

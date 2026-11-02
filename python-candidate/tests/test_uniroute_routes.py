@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import unittest
 
 from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
+from cybergold_candidate.quoter.alpha_routes import AlphaRouteError
 from cybergold_candidate.quoter.bootstrap import ProviderUnavailable
 
 
@@ -57,6 +58,24 @@ class LocalUniRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(candidates[0][0]['hops'][0]['pool']['token0']['chainId'], 31338)
         finally:
             await provider.close()
+
+    async def test_ordinary_calculation_error_reuses_worker_for_next_request(self):
+        value = engine()
+        original = deepcopy(value.registry.inventory)
+        next(iter(value.registry.inventory.values()))['token0']['address'] = None
+        provider = self.provider(value)
+        try:
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 100, BLOCK)
+            child = provider.process
+            self.assertIsNone(child.returncode)
+            value.registry.inventory = original
+            candidates = await provider.discover(A, C, 100, BLOCK)
+            self.assertEqual(len(candidates), 1)
+            self.assertIs(provider.process, child)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
 
 
 if __name__ == '__main__':

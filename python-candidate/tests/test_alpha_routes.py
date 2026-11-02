@@ -1,7 +1,9 @@
 """Real AlphaRouter child with a controlled canonical Python pricing boundary."""
 import asyncio
 from copy import deepcopy
+import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -100,7 +102,67 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_actual_unsupported_chain_returns_ordinary_provider_error(self):
         provider = self.provider(Engine(chain=31338))
-        with self.assertRaises(AlphaRouteError):
+        try:
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            child = provider.process
+            self.assertIsNotNone(child)
+            self.assertIsNone(child.returncode)
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            self.assertIs(provider.process, child)
+            self.assertEqual(provider.sequence, 2)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
+
+    async def test_terminal_error_after_quote_callback_reuses_child_for_next_request(self):
+        script = '''import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    if request['id'] == '1':
+        print(json.dumps({'id': '1', 'operation': 'quote', 'quoteId': '1:1',
+            'mode': 'exactIn', 'amount': '1000', 'branches': [{'amountIn': '1000',
+            'hops': [{'pool': request['pools'][0], 'zeroForOne': True}]}]}), flush=True)
+        json.loads(next(sys.stdin))
+        print(json.dumps({'id': '1', 'error': 'ordinary calculation failure'}), flush=True)
+    else:
+        print(json.dumps({'id': request['id'], 'candidates': []}), flush=True)
+'''
+        engine = Engine()
+        provider = AlphaRoutes(engine, command=[sys.executable, '-u', '-c', script])
+        try:
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            child = provider.process
+            self.assertEqual(len(engine.calls), 1)
+            self.assertIsNone(child.returncode)
+            self.assertEqual(await provider.discover(A, C, 1000, BLOCK), [])
+            self.assertIs(provider.process, child)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
+
+    async def test_eof_and_invalid_frames_still_retire_child(self):
+        frames = [None, 'not-json', json.dumps({'id': 'other', 'error': 'wrong request'}),
+                  json.dumps({'id': '1', 'unexpected': True})]
+        for frame in frames:
+            with self.subTest(frame=frame):
+                statement = 'sys.exit(0)' if frame is None else f'print({frame!r}, flush=True)'
+                script = f'import sys\nnext(sys.stdin)\n{statement}\n'
+                provider = AlphaRoutes(Engine(), command=[sys.executable, '-u', '-c', script])
+                with self.assertRaises((AlphaRouteError, json.JSONDecodeError)):
+                    await provider.discover(A, C, 1000, BLOCK)
+                self.assertIsNone(provider.process)
+                await provider.close()
+
+    async def test_transport_failure_still_retires_child(self):
+        provider = AlphaRoutes(Engine(), command=[sys.executable, '-u', '-c',
+                              'import sys\nfor line in sys.stdin: pass'])
+        async def disconnected(*_):
+            raise BrokenPipeError()
+        provider._write = disconnected
+        with self.assertRaises(BrokenPipeError):
             await provider.discover(A, C, 1000, BLOCK)
         self.assertIsNone(provider.process)
         await provider.close()

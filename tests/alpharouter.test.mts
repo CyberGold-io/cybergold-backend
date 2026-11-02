@@ -1,11 +1,90 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { setImmediate } from 'node:timers/promises';
+import { createCalculationSession } from '../src/uniswap-sdk/calculation-session.ts';
 import { routeRequest } from '../src/uniswap-sdk/alpha-worker.ts';
 import { runRequest } from '../src/uniswap-sdk/engine.ts';
 import { cases, BLOCK, gasSupportPools, WETH, USDC } from './alpha-fixtures.mts';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
+
+test('terminal calculation errors retire pending callbacks and silence late work before reuse', async () => {
+  const frames: any[] = [];
+  let fail: (error: Error) => void;
+  let lateQuote: (value: any) => Promise<any>;
+  let latePublish: (value: any[]) => void;
+  let pendingRetired = false;
+  const session = createCalculationSession(async (request, quote, publish) => {
+    if (request.id !== 'first') return [['next result']];
+    lateQuote = quote;
+    latePublish = publish;
+    publish([['early candidate']]);
+    const pending = quote({ amount: '100' });
+    void pending.catch(() => { pendingRetired = true; });
+    await Promise.all([pending, new Promise((_, reject) => { fail = reject; })]);
+    return [];
+  }, value => { frames.push(value); }, error => (error as Error).message);
+  session.receive({ id: 'first' });
+  const callback = frames.find(frame => frame.operation === 'quote');
+  fail!(new Error('ordinary failure'));
+  await setImmediate();
+  assert.equal(pendingRetired, true);
+  assert.deepEqual(frames.at(-1), { id: 'first', error: 'ordinary failure' });
+  const terminalLength = frames.length;
+  await assert.rejects(lateQuote!({ amount: '200' }), /retired/);
+  latePublish!([['late candidate']]);
+  assert.equal(session.receive({ id: 'first', operation: 'quoteResult', quoteId: callback.quoteId,
+    result: { quote: '999' } }), true);
+  await setImmediate();
+  assert.equal(frames.length, terminalLength);
+  session.receive({ id: 'next' });
+  await setImmediate();
+  assert.deepEqual(frames.at(-1), { id: 'next', candidates: [['next result']] });
+  session.close();
+});
+
+test('closing a calculation session retires callbacks without publishing a terminal or late frame', async () => {
+  const frames: any[] = [];
+  let retired = false;
+  let publishLate: (value: any[]) => void;
+  const session = createCalculationSession(async (_request, quote, publish) => {
+    publishLate = publish;
+    try { await quote({ amount: '100' }); }
+    catch { retired = true; }
+    publish([['completed after input close']]);
+    return [];
+  }, value => { frames.push(value); }, () => 'ordinary failure');
+  session.receive({ id: 'closing' });
+  assert.equal(frames.length, 1);
+  session.close();
+  await setImmediate();
+  assert.equal(retired, true);
+  publishLate!([['late candidate']]);
+  assert.equal(frames.length, 1);
+});
+
+test('active calculation callbacks resolve and retain the existing unknown-frame signal', async () => {
+  const frames: any[] = [];
+  const session = createCalculationSession(async (_request, quote, publish) => {
+    const result = await quote({ amount: '100' });
+    publish([[result.quote]]);
+    return [[result.quote]];
+  }, value => { frames.push(value); }, () => 'ordinary failure');
+  session.receive({ id: 'active' });
+  const callback = frames[0];
+  assert.equal(session.receive({ id: 'unknown', operation: 'quoteResult', quoteId: callback.quoteId,
+    result: { quote: 'bad' } }), false);
+  assert.equal(session.receive({ id: 'active', operation: 'quoteResult', quoteId: callback.quoteId,
+    result: { quote: '200' } }), true);
+  await setImmediate();
+  assert.deepEqual(frames.slice(1), [
+    { id: 'active', operation: 'candidates', candidates: [['200']] },
+    { id: 'active', candidates: [['200']] },
+  ]);
+  session.close();
+});
+
 for (const fixture of cases) test('actual AlphaRouter canonical callback: '+fixture.id, async () => {
   const calls: any[] = [];
   const selected = await routeRequest({ id: fixture.id, chainId: 1, blockNumber: BLOCK,
