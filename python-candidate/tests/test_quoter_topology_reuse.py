@@ -143,3 +143,7 @@ class TopologyReuseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.topology.walks, {})
         await first.close()
         await second.close()
+
+
+if __name__ == '__main__':
+    unittest.main()
