@@ -86,6 +86,8 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine
 python-candidate/.venv/bin/python python-candidate/tests/test_route_scheduler.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.py
 python-candidate/.venv/bin/python python-candidate/tests/test_initial_snapshot_scheduling.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_path_snapshots.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_preparation_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py

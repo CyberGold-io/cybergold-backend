@@ -47,6 +47,7 @@ SOURCE_FILES = (
     'python-candidate/src/cybergold_candidate/quoter/uniroute_routes.py',
     'python-candidate/src/cybergold_candidate/quoter/providers.py',
     'python-candidate/src/cybergold_candidate/quoter/amm_adapter.py',
+    'python-candidate/src/cybergold_candidate/quoter/amm.py',
     'python-candidate/src/cybergold_candidate/quoter/discovery.py',
     'python-candidate/src/cybergold_candidate/quoter/exploration.py',
     'python-candidate/src/cybergold_candidate/quoter/prefix.py',

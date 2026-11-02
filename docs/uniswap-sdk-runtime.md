@@ -24,6 +24,20 @@ retire and reap the child. Supplier errors retain their existing public outcome;
 worker reuse does not change chain support, the selection clock, pricing slots
 or economic ranking.
 
+Known ordered AMM paths acquire their missing initial canonical pool snapshots
+concurrently. Replay consumes those observations in hop order and preserves the
+candidate's private post-state; bitmap/tick requests still follow exact SDK
+demand. Later ordinary read errors are consumed only when that hop is reached,
+and unused subscriptions are canceled and drained. Canonical disproof retains
+its existing effect on the whole quote.
+
+A saved pure Market plan starts after the pinned head while ordinary Core
+basket preparation runs independently. Core and mixed plans still await their
+actual basket basis. Selected Market-only preparation omits the unused basket
+read. An ordinary basket-read failure affects dependent work, while a canonical
+disproof still invalidates every result. Both changes retain the existing
+selection clock, pricing capacity, comparator and parallel discovery suppliers.
+
 Core, Market and direct Uniswap quotes use the same structured route engine
 and completion-driven scheduler. Every swap candidate uses the pinned SDK
 simulation: V2, V3, V4, mixed and split routes, plus retained-route revalidation
