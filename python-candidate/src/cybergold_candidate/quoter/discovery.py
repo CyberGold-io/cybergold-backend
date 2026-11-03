@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from ..routing_encoding import ZERO, weighted_routes
 from ..route_search import WETH
 from ..uniswap_routes import pool_identity, opposite
-from .cooperative import CHECKPOINT, finish, sort_steps
+from .cooperative import CHECKPOINT, close, finish, sort_steps
 
 
 def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
@@ -71,6 +71,27 @@ def current_topology():
     return _topology.get()
 
 
+class _WalkComputation:
+    """A cache-owned computation advanced by any subscribing consumer."""
+    def __init__(self, steps):
+        self.steps, self.result, self.error = steps, None, None
+        self.done = False
+
+    def advance(self):
+        if self.done:
+            return
+        try:
+            next(self.steps)
+        except StopIteration as result:
+            self.result, self.done = result.value, True
+        except BaseException as error:
+            self.error, self.done = error, True
+            raise
+
+    def close(self):
+        close(self.steps)
+
+
 class TopologyCache:
     """One discovery owner's immutable walks and rendered-route identities.
 
@@ -80,6 +101,8 @@ class TopologyCache:
     """
     def __init__(self):
         self.walks, self.validated = {}, {}
+        self.pending_walks = {}
+        self.build_starts = self.build_reuses = 0
         self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
 
@@ -106,6 +129,9 @@ class TopologyCache:
             for identity, pool in unique.items()), key=repr))
 
     def clear(self):
+        for computation in self.pending_walks.values():
+            computation.close()
+        self.pending_walks.clear()
         self.walks.clear()
         self.validated.clear()
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
@@ -122,22 +148,47 @@ class TopologyCache:
             graph = self._graph(unique)
         key = source.lower(), target.lower(), weth.lower(), max_hops, graph
         if key not in self.walks:
-            routes = yield from _enumerate_path_steps(list(unique.values()), source, target, weth, max_hops)
-            walks = []
-            for route in routes:
-                walks.append(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
-                    if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route))
-                yield CHECKPOINT
-            self.walks[key] = tuple(walks)
-            self.graph_builds += 1
-            return routes
-        self.path_hits += 1
+            computation = self.pending_walks.get(key)
+            if computation is None:
+                computation = _WalkComputation(self._build_walk_steps(key, list(unique.values()),
+                    source, target, weth, max_hops))
+                self.pending_walks[key] = computation
+                self.build_starts += 1
+            else:
+                self.build_reuses += 1
+            try:
+                while not computation.done:
+                    computation.advance()
+                    yield CHECKPOINT
+                if computation.error is not None:
+                    raise computation.error
+                walks = computation.result
+            finally:
+                # A consumer owns only its subscription. Suspended progress
+                # remains with this request until another consumer or clear().
+                if computation.done and self.pending_walks.get(key) is computation:
+                    del self.pending_walks[key]
+        else:
+            self.path_hits += 1
+            walks = self.walks[key]
         routes = []
-        for route in self.walks[key]:
+        for route in walks:
             routes.append([{'pool': unique[step[0]], 'zeroForOne': step[1]}
                 if isinstance(step[0], tuple) else {'kind': step[0], 'currencyOut': step[1]} for step in route])
             yield CHECKPOINT
         return (yield from sort_steps(routes, key=lambda route: (len(route), repr(route)))) if len(routes) > 1 else routes
+
+    def _build_walk_steps(self, key, pools, source, target, weth, max_hops):
+        routes = yield from _enumerate_path_steps(pools, source, target, weth, max_hops)
+        walks = []
+        for route in routes:
+            walks.append(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
+                if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route))
+            yield CHECKPOINT
+        result = tuple(walks)
+        self.walks[key] = result
+        self.graph_builds += 1
+        return result
 
     def nomination_identity(self, candidate):
         amounts = [int(row['amountIn']) for row in candidate]
