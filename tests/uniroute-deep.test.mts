@@ -79,20 +79,42 @@ test('actual published deep5 improves the canonical asymmetric split over deep25
   assert.equal(JSON.stringify(request.pools), original);
 });
 
-test('raw finder linears publish before a blocked canonical percentage quote', async () => {
+test('raw finder publishes before all independent percentage callbacks start and settle', async () => {
   const request = asymmetric(), order: string[] = [];
+  const linears = await discoverLocal(request);
+  const expected = await quoteLocalSplits(request, linears, canonical(request));
+  const callbacks: Parameters<LocalQuote>[0][] = [], published: LocalCandidate[][] = [];
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   let entered!: () => void;
   const started = new Promise<void>(resolve => { entered = resolve; });
   const quote = canonical(request);
+  let settled = false;
   const operation = discoverDeepLocal(request, async callback => {
-    order.push('quote'); entered(); await gate; return quote(callback);
-  }, rows => { order.push('finder'); assert.equal(rows.length, 2); });
-  await started;
-  assert.deepEqual(order, ['finder', 'quote']);
-  release();
-  assert((await operation).length > 0);
+    order.push('quote'); callbacks.push(callback); entered(); await gate; return quote(callback);
+  }, rows => { order.push('finder'); published.push(rows); });
+  void operation.then(() => { settled = true; }, () => { settled = true; });
+  try {
+    await started;
+    assert.equal(order[0], 'finder');
+    assert.deepEqual(published, [linears]);
+    assert.equal(callbacks.length, 40, 'both paths must start all 20 percentages while the first is held');
+    assert(order.slice(1).every(stage => stage === 'quote'));
+    assert.equal(settled, false, 'optimized results cannot finish while their observations are held');
+    for (const candidate of published[0]) {
+      const path = candidate[0].hops;
+      const amounts = callbacks.filter(callback => callback.branches[0].hops === path)
+        .map(callback => callback.amount);
+      assert.deepEqual(amounts, Array.from({ length: 20 }, (_, index) =>
+        (BigInt(request.amount)*BigInt(100-index*5)/100n).toString()));
+    }
+    release();
+    assert.deepEqual(await operation, expected, 'held concurrent observations retain every ordered split result');
+  } finally {
+    // An assertion failure must also release and drain every owned callback.
+    release();
+    await operation.catch(() => undefined);
+  }
 });
 
 test('shared terminal pool is only an upstream split limitation; all finder paths survive', async () => {
