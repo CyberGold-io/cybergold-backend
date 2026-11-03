@@ -145,7 +145,7 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
             #84-path fixture: includes ordered remote weights and every split.
             self.assertEqual(len(candidates), 10543)
             self.assertEqual(observed, '47f68e065d2712f0322816dc80e9adae77e2e31a2c0c5c8800a33b5227781321')
-            self.assertGreater(len(batches), 1)
+            self.assertEqual(len(batches), 2)
             self.assertEqual(len(transport.requests), 1)
             self.assertEqual((registry.calls, registry.metadata_calls), ([], []))
         finally:

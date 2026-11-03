@@ -361,12 +361,16 @@ class UniswapApiProvider:
         candidates = chained(nominees, ordinary)
         batch, emitted = [], False
         try:
-            for nominee in candidates:
+            for index, nominee in enumerate(candidates, 1):
                 batch.append([{**branch, 'hops': deepcopy(prefix) + branch['hops'] + deepcopy(suffix)}
                               for branch in nominee])
-                if len(batch) == QUANTUM:
+                if not emitted and len(batch) == QUANTUM:
                     yield HostedCandidates(batch, attribution)
                     emitted, batch = True, []
+                # Yield computation without announcing every split chunk as
+                # a new whole-plan search revision. One completed tail retains
+                # every remaining nomination after the first ready cohort.
+                if index % QUANTUM == 0:
                     await asyncio.sleep(0)
             if batch or not emitted:
                 yield HostedCandidates(batch, attribution)
