@@ -18,8 +18,8 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
     source, target = request['inputs'][0]['currency'], request['outputCurrency']
     amount = int(request['inputs'][0]['amount'])
 
-    def feeds(expanded):
-        groups = quoter.amm.family_offers(source, target, amount, block)
+    async def feeds(expanded):
+        groups = await quoter.amm.async_family_offers(source, target, amount, block)
         if seeded:
             rng = random.Random(session.random_seed)
             for _, routes in groups:

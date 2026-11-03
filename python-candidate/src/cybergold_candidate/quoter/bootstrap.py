@@ -18,6 +18,7 @@ from ..uniswap_routes import pool_identity
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
 from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
+from .cooperative import CHECKPOINT
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
@@ -280,7 +281,8 @@ class RouteBootstrap:
             self._changed.set()
         return True
 
-    def offer_feeds(self, source, target, amount, block, *, path_projection=None):
+    def offer_feeds(self, source, target, amount, block, *, path_projection=None,
+                    cooperative=False, projection_steps=None):
         """Start all pending tools now; return their separate lazy offer feeds."""
         self._raise_failure()
         if self._closed:
@@ -295,10 +297,19 @@ class RouteBootstrap:
                          'wanted_catalog': self._catalog_input, 'task': None}
                 self._queries[key].append(entry)
                 self._start_entry(entry)
-        regular = [round_robin((self._available(entry, path_projection), iter(deepcopy(entry['offers']))))
+        def copied(rows):
+            snapshot = list(rows)
+            def steps():
+                for row in snapshot:
+                    if cooperative:
+                        yield CHECKPOINT
+                    yield deepcopy(row)
+            return steps()
+        regular = [round_robin((self._available(entry, path_projection, cooperative=cooperative,
+                                             projection_steps=projection_steps), copied(entry['offers'])))
                    for entry in self._queries[key] if entry.get('feed') is not None]
         if key in self._completed_offers:
-            regular.insert(0, iter(deepcopy([offer for _, offer in self._completed_offers[key].values()])))
+            regular.insert(0, copied([offer for _, offer in self._completed_offers[key].values()]))
         quick = _quick_offers.get()
         # A quick whole-plan pass tries ready nominations before re-entering
         # lazy custom tails. Every ordinary feed remains available afterward.
@@ -351,12 +362,13 @@ class RouteBootstrap:
             attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
             attempt['completedMs'] = self._elapsed_ms()
 
-    def _available(self, entry, path_projection=None):
+    def _available(self, entry, path_projection=None, *, cooperative=False, projection_steps=None):
         attempt = entry['attempt']
         attempt['feedIterations'] += 1
         iterator = None
         try:
-            iterator = iter(entry['feed'].available_projected(path_projection))
+            iterator = iter(entry['feed'].available_steps(path_projection, projection_steps) if cooperative
+                            else entry['feed'].available_projected(path_projection))
             while True:
                 started = self._loop.time()
                 try:
@@ -366,6 +378,9 @@ class RouteBootstrap:
                     return
                 finally:
                     attempt['feedReadMs'] += (self._loop.time() - started) * 1000
+                if candidate is CHECKPOINT:
+                    yield CHECKPOINT
+                    continue
                 attempt['feedReads'] += 1
                 attempt['candidates'] += 1
                 if attempt['firstCandidateMs'] is None:

@@ -1,5 +1,6 @@
 """Construct complete execution proposals; Helpers alone measures their result."""
 from copy import deepcopy
+from contextlib import aclosing
 
 from ..market_fee import get_market_fee_rate, routed_sell_budget
 from ..quote_budget import current_budget
@@ -15,12 +16,13 @@ def identity_template(currency):
     return {'inputCurrency': currency, 'outputCurrency': currency, 'routes': []}
 
 
-def nominate_conversion(self, source, target, amount, block, *, market=False):
+async def nominate_conversion(self, source, target, amount, block, *, market=False):
     """Encode a supplied topology without pricing its amount or pool state."""
     if not amount or source.lower() == target.lower():
         return identity_template(source), {'inputCurrency': source, 'outputCurrency': target, 'branches': []}
-    candidate = next(iter(self.amm.nominations(source, target, amount, block,
-                                              market=market, first=True)), None)
+    async with aclosing(self.amm.async_nominations(source, target, amount, block,
+                                                  market=market, first=True)) as candidates:
+        candidate = await anext(candidates, None)
     if candidate is None:
         raise QuoteFailure('quote-no-route')
     branches, origins = candidate
@@ -87,7 +89,7 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
         async def convert(source, target, lot, operation, *, market=False, topology=False, optional=False):
             if first or topology:
                 try:
-                    route, chosen = nominate_conversion(self, source, target, lot, block, market=market)
+                    route, chosen = await nominate_conversion(self, source, target, lot, block, market=market)
                 except QuoteFailure as error:
                     if not optional or error.code != 'quote-no-route':
                         raise
