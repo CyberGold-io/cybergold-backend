@@ -2,12 +2,14 @@
 import asyncio
 from copy import deepcopy
 import json
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.requests import ClientDisconnect
 
 from .basket_preview import InvalidPreview
 from .quoter.types import EconomicRequest
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.dormant_routes import with_dormant_routes
+from .quoter.ranking import prefer_completed
 from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
 
@@ -31,10 +33,12 @@ async def observed_json(request, intent, execute, *, kind, source, phase, invali
         return work_evidence(work, requestInputs=intent.get('inputs', []), **values)
     with operation_work() as work:
         try:
-            result = await execute()
-        except asyncio.CancelledError:
+            result = await request_operation(request, execute)
+        except (asyncio.CancelledError, ClientDisconnect) as error:
             observe(lambda: observation.finish('cancelled', frame={'economicEvidence': evidence(work,
                 operationKind=kind, resultSource=source, operationPhase=phase)}))
+            if isinstance(error, ClientDisconnect):
+                return Response(status_code=499)
             raise
         except InvalidPreview as error:
             payload = (failure(request, error, observation.operation, payload={'error': str(error)})
@@ -58,6 +62,26 @@ async def observed_json(request, intent, execute, *, kind, source, phase, invali
             frame={'value': result, 'economicEvidence': evidence(work,
                 operationKind=kind, resultSource=source, operationPhase=phase)}))
         return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+
+
+async def request_operation(request, execute):
+    """After body parsing, the JSON client owns its operation until delivery."""
+    async def disconnected():
+        while (await request.receive())['type'] != 'http.disconnect':
+            pass
+    operation = asyncio.create_task(execute())
+    caller = asyncio.create_task(disconnected())
+    try:
+        done, _ = await asyncio.wait((operation, caller), return_when=asyncio.FIRST_COMPLETED)
+        if operation in done:
+            return await operation
+        await caller
+        raise ClientDisconnect()
+    finally:
+        for task in (operation, caller):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(operation, caller, return_exceptions=True)
 
 
 class CacheFeed:
@@ -160,7 +184,7 @@ class EconomicQuotes:
         if request['intent'] in (0, 1):
             try:
                 lower = (await self.store.neighbors(request, scope=scope)).get('lower')
-                if lower and int(lower['quote']['quotedOutput']) > int(previous['quotedOutput']):
+                if lower and prefer_completed(lower['quote'], previous, scalar=True):
                     offered = {**deepcopy(lower['quote']), 'request': deepcopy(request)}
             except Exception:
                 pass  # Optional neighbor failure leaves the exact cache hit.

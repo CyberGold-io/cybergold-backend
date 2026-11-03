@@ -182,6 +182,44 @@ def capacity_nominations(adapter, paths, *, origins=('uniroute-local', 'uniswap-
 
 
 class OrdinaryCapacityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_transition_preserves_partial_first_physical_source_debit(self):
+        from cybergold_candidate.quoter.amm import price_path
+        from cybergold_candidate.quoter.contracts import capture_paths
+        for kind, physical_source in (('wrap', WETH), ('unwrap', ZERO)):
+            with self.subTest(transition=kind):
+                engine = Engine()
+                engine.cap = 4000
+                selected = pool(physical_source, PAXG, '0x'+'45'*20, physical_source == ZERO)
+                engine.registry.inventory[selected['id']] = selected
+                hop = capacity_hop(physical_source, selected)
+                physical = await price_path(engine, [hop], 10001, BLOCK, {}, {})
+                with capture_paths() as traces:
+                    actual = await price_path(engine, [{'kind': kind, 'currencyOut': physical_source}, hop],
+                                              10001, BLOCK, {}, {})
+                self.assertEqual(actual, physical)
+                self.assertEqual(actual, (4000, 3972))
+                self.assertEqual((traces[0].funded, traces[0].consumed, traces[0].output),
+                                 (10001, 4000, 3972))
+                self.assertEqual(len(traces[0].hops), 1)
+                self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_native_transition_does_not_hide_true_intermediate_partial_fill(self):
+        from cybergold_candidate.quoter.amm import PartialPath, price_path
+        from cybergold_candidate.quoter.contracts import capture_paths
+        engine = CapacityEngine()
+        route = [{'kind': 'wrap', 'currencyOut': WETH}, capacity_hop(WETH, engine.prefix),
+                 capacity_hop(OTHER, engine.thin)]
+        with capture_paths(), self.assertRaises(PartialPath) as caught:
+            await price_path(engine, route, 1000, BLOCK, {}, {})
+        trace = caught.exception.trace
+        self.assertEqual((trace.funded, trace.consumed), (1000, 1000))
+        self.assertEqual(len(trace.hops), 2)
+        self.assertEqual(trace.hops[0].consumed, 1000)
+        self.assertLess(trace.hops[1].consumed, trace.hops[1].funded)
+        self.assertEqual(trace.hops[1].consumed, 50)
+        self.assertEqual(engine.inverses, [])
+        self.assertEqual(engine.semaphore._value, 8)
+
     async def test_unrepairable_nomination_leaves_an_independent_alternative_available(self):
         q = Quotes(CapacityEngine()); engine = q.engine
         partial = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]

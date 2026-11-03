@@ -15,7 +15,7 @@ import httpx
 
 from ..pool_producer import PoolIdentifier, PoolProducer
 from ..protocol_config import configured_address
-from ..route_observations import api_exchange, origin_scope, record_api_status, record_api_retry
+from ..route_observations import api_exchange, origin_scope, record_api_status
 from ..uniswap_api_queue import retry_after_seconds
 from ..uniswap_routes import pool_identity, v3_branches, v4_pool_id
 from ..uniswap_state import POOL_MANAGER
@@ -297,24 +297,17 @@ class UniswapApiProvider:
             self.client = self.client_factory()
             self.clients.add(self.client)
         with origin_scope(self.name):
-            retry = False
-            while True:
-                await self.queue.wait()
-                try:
-                    with api_exchange():
-                        if retry:
-                            record_api_retry()
-                        response = await self.client.post(QUOTE_URL, headers=headers, json=payload)
-                        record_api_status(response.status_code)
-                        if response.status_code >= 400:
-                            raise HostedRouteError(f'Uniswap route provider returned HTTP {response.status_code}')
-                except HostedRouteError:
-                    if response.status_code != 429:
-                        raise
+            await self.queue.wait()
+            with api_exchange():
+                response = await self.client.post(QUOTE_URL, headers=headers, json=payload)
+                record_api_status(response.status_code)
+                if response.status_code == 429:
+                    # A query is one independent provider attempt. Retain the
+                    # shared server cooldown for subsequent queries without
+                    # retrying this failed calculation indefinitely.
                     self.queue.pause(retry_after_seconds(response.headers.get('Retry-After')))
-                    retry = True
-                else:
-                    break
+                if response.status_code >= 400:
+                    raise HostedRouteError(f'Uniswap route provider returned HTTP {response.status_code}')
         document = response.json()
         identifiers = topology_identifiers(document, guidestar=self.guidestar)
         pools = {pool_identity(pool): pool for pool in (semantic_pool(identifier, registry) for identifier in identifiers)}

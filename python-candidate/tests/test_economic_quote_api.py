@@ -43,6 +43,31 @@ async def persisted(service):
 
 
 class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cached_offer_uses_fitting_funding_even_from_a_higher_budget_and_prefers_less_on_tie(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        self.addAsyncCleanup(quotes.close)
+        small_request = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        smaller = await quoter.quote(small_request)
+        maximum = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '50005'}]}
+        previous = await quoter.quote(maximum)
+        previous['quotedOutput'] = smaller['quotedOutput']
+        previous['estimatedRecipientOutputs'] = deepcopy(smaller['estimatedRecipientOutputs'])
+        # The historical search tried an even larger maximum and found this
+        # smaller-funded complete tuple; its funding still fits the new input.
+        smaller['request'] = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '100010'}]}
+        before = deepcopy(smaller)
+        store.neighbors = AsyncMock(return_value={'lower': {'quote': smaller}})
+        quoter.quote = AsyncMock(side_effect=AssertionError('Cache selection must not reprice'))
+        offered = await quotes.cached_offer(maximum, previous, store.capture_scope(maximum))
+        self.assertEqual(offered['request'], maximum)
+        self.assertEqual(offered['quotedOutput'], previous['quotedOutput'])
+        self.assertEqual(offered['inputs'], smaller['inputs'])
+        self.assertEqual(offered['plan'], smaller['plan'])
+        self.assertEqual(offered['fees'], smaller['fees'])
+        self.assertEqual(smaller, before)
+        quoter.quote.assert_not_called()
+
     async def test_cached_offer_selects_better_complete_tuple_without_rpc_or_mutation(self):
         store = SharedStore()
         quoter, quotes = service(store)

@@ -9,7 +9,7 @@ import time
 from typing import Literal
 
 import httpx
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, TypeAdapter
 from web3 import Web3
 
@@ -265,5 +265,5 @@ async def handle_route_stream(request, service):
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
 
-    return StreamingResponse(events(), media_type='application/x-ndjson',
-        headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
+    from .progressive_quotes import OwnedStreamingResponse
+    return OwnedStreamingResponse.create(events())

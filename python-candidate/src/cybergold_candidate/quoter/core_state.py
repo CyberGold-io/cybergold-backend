@@ -265,6 +265,11 @@ class CoreQuoteState:
         mapping = EVENT_FIELDS.get(name)
         if mapping:
             self.update({target: arguments[source] for target, source in mapping.items()})
+            if name == 'MaxTotalSupplyUpdated':
+                # The effective cap also includes the global maximum. Later
+                # ordinary facts/models can repopulate this advisory hint;
+                # the event does not require a quote-time getter.
+                self.invalidate(['effectiveCap'])
         elif name == 'DiamondCut':
             self.invalidate(['helperFee'] if address and address.lower() == self.helpers.lower() else FIELDS)
         elif name in ('RecoveryActivated', 'RecoveryRehabilitated'):

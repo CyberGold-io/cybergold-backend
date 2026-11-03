@@ -91,6 +91,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_cache_parallel.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
+python-candidate/.venv/bin/python python-candidate/tests/test_economic_http_lifetime.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_sample_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py

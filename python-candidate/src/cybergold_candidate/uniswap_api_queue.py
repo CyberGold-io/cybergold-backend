@@ -2,7 +2,8 @@
 
 One quote engine owns the queue for its configured API key. Start times are
 spaced, not HTTP responses: slow requests can remain in flight concurrently.
-The existing quote task owns cancellation and the total waiting/retry budget.
+The existing quote task owns cancellation; each provider query attempts HTTP
+once, and a server cooldown applies to subsequent independent queries.
 """
 import asyncio
 from email.utils import parsedate_to_datetime

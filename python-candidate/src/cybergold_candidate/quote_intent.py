@@ -7,7 +7,7 @@ import json
 import time
 from typing import Literal
 
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, TypeAdapter
 from web3 import Web3
 
@@ -1066,5 +1066,5 @@ async def handle_quote_intent(request, service):
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
             observation.finish('cancelled')
-    return StreamingResponse(events(), media_type='application/x-ndjson',
-        headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
+    from .progressive_quotes import OwnedStreamingResponse
+    return OwnedStreamingResponse.create(events())
