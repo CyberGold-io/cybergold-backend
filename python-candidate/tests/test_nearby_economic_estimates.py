@@ -30,6 +30,16 @@ def quote_sample(**changes):
 
 
 class SampleTests(unittest.TestCase):
+    def test_legacy_completed_limited_phases_survive_without_new_metadata(self):
+        for phase in ('backward-prefix', 'measured-funding', 'capacity-limited'):
+            with self.subTest(phase=phase):
+                legacy = quote_sample(inputs=[{'currency': USDT, 'amount': '600'}],
+                    estimatedRetainedInputCharges=[], searchCoverage={'selectedPhase': phase})
+                self.assertTrue(sample_for_quote(legacy)['inputLimitObserved'])
+        unknown = quote_sample(inputs=[{'currency': USDT, 'amount': '600'}],
+            estimatedRetainedInputCharges=[], searchCoverage={'selectedPhase': 'saved-plan'})
+        self.assertNotIn('inputLimitObserved', sample_for_quote(unknown))
+
     def test_input_limit_hint_is_explicit_and_does_not_mutate_cached_economics(self):
         legacy = quote_sample(inputs=[{'currency': USDT, 'amount': '600'}], estimatedRetainedInputCharges=[])
         self.assertNotIn('inputLimitObserved', sample_for_quote(legacy))

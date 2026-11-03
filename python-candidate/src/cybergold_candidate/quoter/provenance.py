@@ -1,4 +1,5 @@
 """Diagnostic nomination origin; never part of route admission or ranking."""
+from .reuse_estimate import input_limit_observed
 
 
 def origin_names(value):
@@ -38,7 +39,7 @@ def merge_origins(incumbent, candidate):
     left, right = incumbent['plan'], candidate['plan']
     if left['allocations'] != right['allocations'] or left['body'] != right['body']:
         return
-    if candidate.get('searchCoverage', {}).get('inputLimitObserved') is True:
+    if input_limit_observed(candidate):
         incumbent.setdefault('searchCoverage', {})['inputLimitObserved'] = True
         sample = incumbent.get('reuseSample')
         if isinstance(sample, dict):

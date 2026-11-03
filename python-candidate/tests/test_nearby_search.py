@@ -121,7 +121,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(outcome=outcome):
                 q, saved, edited, expanded = await self.budget_replay_fixture()
                 saved['request'] = deepcopy(edited)  # Exact key, lower actual funding.
-                saved['searchCoverage']['inputLimitObserved'] = True
+                saved['searchCoverage']['selectedPhase'] = 'backward-prefix'  # Pre-field canonical observation.
                 saved['plan']['_budget_replay_fixture'] = True
                 original = q.candidate
                 full_started, both_settled = asyncio.Event(), asyncio.Event()
@@ -231,7 +231,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                     return await sdk(resolved, *args, **kwargs)
                 q.engine.quote_sdk_branches = acquire
                 saved = await q.quote(request())
-                saved['searchCoverage']['inputLimitObserved'] = True
+                saved['searchCoverage']['selectedPhase'] = 'capacity-limited'  # Pre-field canonical observation.
                 expected = saved['quotedOutput']
                 saved['quotedOutput'] = '999999999999999999999999'
                 edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}

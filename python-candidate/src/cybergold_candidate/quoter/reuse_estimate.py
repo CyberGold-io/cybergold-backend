@@ -20,7 +20,8 @@ def scalar_request(request):
 def input_limit_observed(quote):
     """Historical limitation of this route/funding, never a capacity bound."""
     coverage = quote.get('searchCoverage')
-    return isinstance(coverage, dict) and coverage.get('inputLimitObserved') is True
+    return isinstance(coverage, dict) and (coverage.get('inputLimitObserved') is True
+        or coverage.get('selectedPhase') in ('backward-prefix', 'measured-funding', 'capacity-limited'))
 
 
 def sample_for_quote(quote):
