@@ -226,6 +226,34 @@ def path_steps(pools, source, target, weth=WETH, max_hops=3):
             _enumerate_path_steps(pools, source, target, weth, max_hops))
 
 
+def early_path_steps(pools, source, target, *, preferred=None, weth=WETH, max_hops=3):
+    """An early subset of the same graph: singles and one preferred connector.
+
+    The ordinary producer owns native transitions and hook/path semantics.
+    These small subgraphs introduce no pool or path absent from the full graph.
+    The exhaustive walk and its original split order still follow afterward.
+    """
+    unique = TopologyCache._unique(pools)
+    found, seen = [], set()
+    def collect(routes):
+        for route in routes:
+            identity = route_identity(route)
+            if identity not in seen:
+                seen.add(identity)
+                found.append(route)
+            yield CHECKPOINT
+    yield from collect((yield from _enumerate_path_steps([], source, target, weth, max_hops)))
+    for pool in unique.values():
+        yield from collect((yield from _enumerate_path_steps([pool], source, target, weth, max_hops)))
+    anchor = unique.get(pool_identity(preferred)) if preferred is not None else None
+    if anchor is not None:
+        for identity, pool in unique.items():
+            if identity != pool_identity(anchor):
+                yield from collect((yield from _enumerate_path_steps(
+                    [anchor, pool], source, target, weth, max_hops)))
+    return (yield from sort_steps(found, key=lambda route: (len(route), repr(route)))) if len(found) > 1 else found
+
+
 def route_candidates(routes, amount):
     for route in routes:
         yield [{'amountIn': str(amount), 'hops': route}]

@@ -16,8 +16,8 @@ from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_steps
 from .custom_routes import CustomRoutes
 from .contracts import path_nomination
-from .discovery import current_topology, route_identity
-from .route_tools import RouteQuery, round_robin
+from .discovery import current_topology, route_identity, early_path_steps
+from .route_tools import RouteQuery, FeedSteps, round_robin
 from .cooperative import CHECKPOINT, close, values, async_values, async_finish, finish, sort_steps
 
 
@@ -144,23 +144,32 @@ class CyberGoldAmmAdapter:
                 routes = yield from sort_steps(routes,
                     key=lambda route: route_priority(route, pool_identity(registry.seed)))
             return routes
+        def early_paths(pools):
+            return (yield from early_path_steps(pools, source, target,
+                preferred=registry.seed if market else None))
         if bootstrap is not None:
             feeds = bootstrap.offer_feeds(source, target, amount, block, path_projection=project_paths,
-                cooperative=True, projection_steps=project_steps)
+                cooperative=True, projection_steps=project_steps, early_paths=early_paths)
         else:
-            feed = CustomRoutes(registry).discover(query)
+            available_feed = CustomRoutes(registry).discover(query)
             def offers():
-                candidates = iter(feed.available_steps(project_paths, project_steps))
+                candidates = iter(available_feed.available_steps(project_paths, project_steps, early_paths))
                 try:
                     for candidate in candidates:
                         yield CHECKPOINT if candidate is CHECKPOINT else {
                             'branches': candidate, 'origins': ['cybergold-custom']}
                 finally:
                     close(candidates)
-            feeds = [offers()]
-        feeds = [normalize_steps(offers, source, target) for offers in feeds]
-        if first:
-            feeds = [prioritize_steps(feed, registry) for feed in feeds]
+            feeds = [FeedSteps(offers(), progressive=True)]
+        normalized = []
+        for feed in feeds:
+            steps = normalize_steps(feed, source, target)
+            # A progressive producer has already applied the same preference
+            # projection, with an explicitly early subset. Do not swallow it
+            # behind an all-linear buffer; every other feed keeps that buffer.
+            normalized.append(prioritize_steps(steps, registry)
+                              if first and not getattr(feed, 'progressive', False) else steps)
+        feeds = normalized
         if linear_only:
             feeds = [linear_prefix(feed) for feed in feeds]
         return adapt_steps(round_robin(feeds), source, self.core, market=market, anchor=anchor)

@@ -15,7 +15,7 @@ from ..quote_budget import SearchStopped, current_budget
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
-from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
+from .route_tools import PendingRouteTool, RouteQuery, RouteTool, FeedSteps, async_batches, round_robin
 from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
 from .cooperative import CHECKPOINT
@@ -282,7 +282,7 @@ class RouteBootstrap:
         return True
 
     def offer_feeds(self, source, target, amount, block, *, path_projection=None,
-                    cooperative=False, projection_steps=None):
+                    cooperative=False, projection_steps=None, early_paths=None):
         """Start all pending tools now; return their separate lazy offer feeds."""
         self._raise_failure()
         if self._closed:
@@ -305,8 +305,9 @@ class RouteBootstrap:
                         yield CHECKPOINT
                     yield deepcopy(row)
             return steps()
-        regular = [round_robin((self._available(entry, path_projection, cooperative=cooperative,
-                                             projection_steps=projection_steps), copied(entry['offers'])))
+        regular = [FeedSteps(round_robin((self._available(entry, path_projection, cooperative=cooperative,
+                                             projection_steps=projection_steps, early_paths=early_paths), copied(entry['offers']))),
+                    progressive=cooperative and getattr(entry['feed'].available, 'progressive_nominations', False))
                    for entry in self._queries[key] if entry.get('feed') is not None]
         if key in self._completed_offers:
             regular.insert(0, copied([offer for _, offer in self._completed_offers[key].values()]))
@@ -362,12 +363,12 @@ class RouteBootstrap:
             attempt['status'] = 'unavailable' if isinstance(error, ProviderUnavailable) else 'error'
             attempt['completedMs'] = self._elapsed_ms()
 
-    def _available(self, entry, path_projection=None, *, cooperative=False, projection_steps=None):
+    def _available(self, entry, path_projection=None, *, cooperative=False, projection_steps=None, early_paths=None):
         attempt = entry['attempt']
         attempt['feedIterations'] += 1
         iterator = None
         try:
-            iterator = iter(entry['feed'].available_steps(path_projection, projection_steps) if cooperative
+            iterator = iter(entry['feed'].available_steps(path_projection, projection_steps, early_paths) if cooperative
                             else entry['feed'].available_projected(path_projection))
             while True:
                 started = self._loop.time()

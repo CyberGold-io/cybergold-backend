@@ -5,7 +5,19 @@ from collections.abc import AsyncIterable, Awaitable, Iterable
 from dataclasses import dataclass
 from inspect import isawaitable, iscoroutine
 from typing import Any, TypeAlias
-from .cooperative import CHECKPOINT
+from .cooperative import CHECKPOINT, close
+
+
+class FeedSteps:
+    """Private ordering capability; every underlying offer remains eligible."""
+    def __init__(self, steps, *, progressive=False):
+        self.steps, self.progressive = steps, progressive
+
+    def __iter__(self):
+        return iter(self.steps)
+
+    def close(self):
+        close(self.steps)
 
 
 RouteCandidate: TypeAlias = list[dict[str, Any]]
@@ -41,8 +53,11 @@ class CandidateFeed:
         project = getattr(self.available, 'with_path_projection', None)
         return project(projection) if projection is not None and project is not None else self.available
 
-    def available_steps(self, projection=None, projection_steps=None):
+    def available_steps(self, projection=None, projection_steps=None, early_paths=None):
         available = self.available_projected(projection)
+        early = getattr(available, 'with_early_paths', None)
+        if early_paths is not None and early is not None:
+            available = early(early_paths)
         steps = getattr(available, 'cooperative_steps', None)
         return steps(projection_steps) if steps is not None else available
 
