@@ -60,20 +60,20 @@ export async function quoteLocalSplits(request: LocalRequest, linears: LocalCand
   const fetcher = { async fetchQuotes(_chain: unknown, _input: unknown, _output: unknown,
       amount: bigint, percentageRoutes: any[], _mode: unknown, _context: unknown, _tags: unknown,
       _block: unknown, _tokens: unknown, _overrides: unknown, report: { droppedRoutes: number }) {
-    const observations = [];
-    for (const route of percentageRoutes) {
+    const observations = await Promise.all(percentageRoutes.map(async route => {
       const portion = amount*BigInt(route.percentage)/100n;
       try {
         const result = await quote({ mode: 'exactIn', amount: portion.toString(),
           branches: [{ amountIn: portion.toString(), hops: semantic.get(route.path)! }] });
-        if (result.quote !== null) observations.push(new QuoteBasic(route, BigInt(result.quote)));
+        return result.quote === null ? null : new QuoteBasic(route, BigInt(result.quote));
       } catch {
         // A missing percentage observation cannot retract the early finder
         // hints or exclude other canonically quoted paths/percentages.
         report.droppedRoutes += 1;
+        return null;
       }
-    }
-    return observations;
+    }));
+    return observations.filter(observation => observation !== null);
   } };
   const selector = new SimpleQuoteSelector();
   const strategy = new DeepQuoteStrategy(fetcher,

@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 from copy import deepcopy
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 import os
 import json
 from uuid import uuid4
 
-from cybergold_candidate.quoter.store import EconomicQuoteStore, normalized_economic_request
+from cybergold_candidate.quoter.store import EconomicQuoteStore, normalized_economic_request, request_identity
 from cybergold_candidate.quoter.path_families import quote_path_family
 
 
@@ -29,6 +30,33 @@ def fixture():
 
 
 class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unrelated_neighbor_headers_do_not_hash_deployment_identity(self):
+        settings, registry, request, _ = fixture()
+        service = EconomicQuoteStore(settings, registry)
+        scope = service.capture_scope(request)
+        candidates = [request, {**request, 'intent': 1}, {**request, 'outputCurrency': HELPERS},
+                      {**request, 'inputs': [{'currency': HELPERS, 'amount': '100000'}]}]
+        headers = [{'identity': service.capture_scope(candidate).identity, 'request': candidate,
+                    'funded_input': '100000', 'quoted_output': str(10+index)}
+                   for index, candidate in enumerate(candidates)]
+        quote = {'request': deepcopy(request), 'inputs': deepcopy(request['inputs']), 'quotedOutput': '10'}
+        executed = []
+        async def prepare(): pass
+        class Connection:
+            async def execute(self, query, params):
+                executed.append(params); return self
+            async def fetchall(self):
+                return headers if len(executed) == 1 else [{'identity': scope.identity, 'quote': quote}]
+        @asynccontextmanager
+        async def connection(): yield Connection()
+        registry.store.prepare = prepare
+        registry.store.database = SimpleNamespace(connection=connection)
+        with patch('cybergold_candidate.quoter.store.request_identity', wraps=request_identity) as hashed:
+            result = await service.neighbors(request, scope=scope)
+        self.assertEqual(hashed.call_count, 1)
+        self.assertEqual(result, [{'family': 'market', 'side': 'lower', 'identity': scope.identity, 'quote': quote}])
+        self.assertEqual(len(executed), 2)
+
     async def test_larger_cached_budget_can_be_the_best_fitting_lower_quote(self):
         settings, registry, request, _ = fixture()
         service = EconomicQuoteStore(settings, registry)

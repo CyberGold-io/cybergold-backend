@@ -116,9 +116,11 @@ class EconomicQuoteStore:
                         if len(candidate['inputs']) != 1:
                             continue
                         candidate_intent = {**candidate, 'inputs': [{'currency': candidate['inputs'][0]['currency']}]}
+                        if candidate_intent != intent:
+                            continue
                         family = row.get('path_family', 'market')
                         identity = request_identity(candidate, deployment)
-                        if candidate_intent != intent or row['identity'] not in (identity, identity+':'+family):
+                        if row['identity'] not in (identity, identity+':'+family):
                             continue
                         # Old single-winner and new per-family rows can name
                         # the same logical point. Their producer sequence keeps

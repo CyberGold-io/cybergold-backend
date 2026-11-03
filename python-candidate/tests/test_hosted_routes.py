@@ -3,8 +3,10 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
+import hashlib
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -16,6 +18,7 @@ from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_v4 import v4_pool_id
 from cybergold_candidate.uniswap_api_queue import UniswapApiQueue
+from cybergold_candidate.uniswap_routes import pool_identity
 
 
 A, B, C, D, HELPERS, CANONICAL_V2, CANONICAL_V3, MANAGER, FAKE = (
@@ -112,6 +115,75 @@ def make_provider(document, *, guidestar=False, config=None, registry=None, stat
 
 
 class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
+    def many_paths(self):
+        source, target = '0x'+'11'*20, '0x'+'ee'*20
+        middles = ['0x'+format(index, '040x') for index in range(101, 106)]
+        def row(a, b, fee):
+            return standard_pool('v3', a, b, fee=fee, amountIn='10000')
+        routes = [[row(source, target, fee)] for fee in (100, 500, 3000, 10000)]
+        routes.extend([row(source, middle, left), row(middle, target, right)]
+            for middle in middles for left in (100, 500, 3000, 10000) for right in (100, 500, 3000, 10000))
+        return source, target, {'quote': {'route': routes, 'routeCandidates': [{}]}}
+
+    async def test_cooperative_batches_preserve_full_prechange_candidate_digest_and_one_http(self):
+        source, target, document = self.many_paths()
+        provider, registry, transport, clients = make_provider(document, uniroute=True)
+        batches, candidates = [], []
+        try:
+            async for batch in provider.discover_batches(source, target, 10000, BLOCK):
+                self.assertIsInstance(batch, HostedCandidates)
+                self.assertEqual(batch.engine_attribution, {'engine': 'uniroute', 'evidence': 'route-candidates'})
+                batches.append(batch)
+                candidates.extend(batch)
+            def shape(candidate):
+                return [[int(row['amountIn']), [list(pool_identity(hop['pool']))+[hop['zeroForOne']]
+                    if 'pool' in hop else [hop['kind'], hop['currencyOut'].lower()]
+                    for hop in row['hops']]] for row in candidate]
+            observed = hashlib.sha256(json.dumps([shape(row) for row in candidates],
+                sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            # Captured from the prechange eager provider using this finite
+            #84-path fixture: includes ordered remote weights and every split.
+            self.assertEqual(len(candidates), 10543)
+            self.assertEqual(observed, '47f68e065d2712f0322816dc80e9adae77e2e31a2c0c5c8800a33b5227781321')
+            self.assertGreater(len(batches), 1)
+            self.assertEqual(len(transport.requests), 1)
+            self.assertEqual((registry.calls, registry.metadata_calls), ([], []))
+        finally:
+            await provider.close()
+        self.assertTrue(clients[0].is_closed)
+
+    async def test_first_hosted_batch_precedes_split_tail_and_closing_drains_iterator(self):
+        from cybergold_candidate.quoter.discovery import route_candidates
+        source, target, document = self.many_paths()
+        provider, registry, transport, clients = make_provider(document)
+        made, closed = 0, False
+        def counted(*args):
+            nonlocal made, closed
+            try:
+                for candidate in route_candidates(*args):
+                    made += 1
+                    yield candidate
+            finally:
+                closed = True
+        feed = provider.discover_batches(source, target, 10000, BLOCK)
+        probe = asyncio.create_task(asyncio.sleep(0))
+        try:
+            with patch('cybergold_candidate.quoter.hosted_routes.route_candidates', counted):
+                first = await anext(feed)
+                self.assertTrue(probe.done(), 'cooperative graph work must let another ready task progress')
+                self.assertTrue(first)
+                self.assertLess(made, 10542)
+                self.assertFalse(closed)
+                await feed.aclose()
+                self.assertTrue(closed)
+            self.assertEqual(len(transport.requests), 1)
+            self.assertEqual((registry.calls, registry.metadata_calls), ([], []))
+        finally:
+            await feed.aclose()
+            await probe
+            await provider.close()
+        self.assertTrue(clients[0].is_closed and transport.closed)
+
     async def test_uniroute_api_has_explicit_integration_source_and_optional_engine_evidence(self):
         document = {'routing': 'CLASSIC', 'quote': {'route': [[standard_pool('v3', A, B, fee=3000)]],
             'routeCandidates': [{'routeString': 'NEVER PARSE THIS', 'quoteAmount': str(2**255)}]}}

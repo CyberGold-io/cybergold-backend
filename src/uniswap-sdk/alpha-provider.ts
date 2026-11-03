@@ -208,21 +208,19 @@ export function createAlphaRouter(options: AlphaOptions) {
   const quoteMany = async (amounts: any[], routes: any[], mode: 'exactIn' | 'exactOut') => {
     record('quote.'+mode, { routes: routes.length, amounts: amounts.map(amount => amount.quotient.toString()) });
     options.nominateRoutes?.(routes);
-    const routesWithQuotes = [];
-    for (const route of routes) {
+    const routesWithQuotes = await Promise.all(routes.map(async route => {
       const pools = (route.pools ?? route.pairs).map((pool: any) => snapshotBySdkPool.get(pool));
-      const observations = [];
-      for (const amount of amounts) {
+      const observations = await Promise.all(amounts.map(async amount => {
         const result = await options.quoteRoute({ route, amount, mode, pools, blockNumber });
         record('quote.amount', { protocol: route.protocol, mode, pools: pools.map((row: any) => row?.id),
           amount: amount.quotient.toString(), quote: result.quote });
-        observations.push({ amount, quote: result.quote === null ? null : BigNumber.from(result.quote),
+        return { amount, quote: result.quote === null ? null : BigNumber.from(result.quote),
           sqrtPriceX96AfterList: result.sqrtPriceX96AfterList?.map((value: string) => BigNumber.from(value)) ?? [],
           initializedTicksCrossedList: result.initializedTicksCrossedList ?? [],
-          gasEstimate: BigNumber.from(result.gasEstimate ?? 0), gasLimit: BigNumber.from(0) });
-      }
-      routesWithQuotes.push([route, observations]);
-    }
+          gasEstimate: BigNumber.from(result.gasEstimate ?? 0), gasLimit: BigNumber.from(0) };
+      }));
+      return [route, observations];
+    }));
     return { routesWithQuotes, blockNumber: BigNumber.from(blockNumber) };
   };
   const onChainQuoteProvider = {

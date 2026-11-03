@@ -144,7 +144,8 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 async def observed_progressive(value, publish, **options):
                     async def delivered(frame):
                         await publish(frame)
-                        if frame['type'] == 'qualified' and frame['value']['observation']['source'] == 'stored':
+                        if (frame['type'] == 'qualified' and frame['value']['observation']['source'] == 'stored'
+                                and frame['value']['plan'] == lower['plan']):
                             historical_delivered.set()
                     return await progressive(value, delivered, **options)
                 quotes.progressive = observed_progressive
@@ -156,8 +157,10 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 if streamed:
                     frames = [json.loads(line) for line in response.text.splitlines()]
                     qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
-                    self.assertEqual(qualified[0]['plan'], lower['plan'])
-                    self.assertEqual(qualified[0]['observation']['source'], 'stored')
+                    stored = [value for value in qualified if value['observation']['source'] == 'stored']
+                    self.assertEqual(stored[-1]['plan'], lower['plan'])
+                    self.assertEqual([int(value['quotedOutput']) for value in stored],
+                                     sorted(int(value['quotedOutput']) for value in stored))
                     self.assertEqual(qualified[-1]['inputs'], maximum['inputs'])
                     result = next(frame['value'] for frame in frames if frame['type'] == 'complete')
                 else:

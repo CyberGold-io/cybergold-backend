@@ -14,8 +14,8 @@ from .provenance import origin_names
 def proposal_identity(proposal):
     """One resized execution topology, independent of diagnostic enrichment."""
     from .plan_simulation import executable_body
-    proposal = deepcopy(proposal)
-    proposal['plan']['body'] = executable_body(proposal['plan']['body'])
+    proposal = {**proposal, 'plan': {**proposal['plan'],
+        'body': executable_body(proposal['plan']['body'])}}
     def execution(value):
         if isinstance(value, dict):
             return {key: pool_identity(item) if key == 'pool' else execution(item)

@@ -240,6 +240,8 @@ class EconomicQuotes:
                         offered = {**deepcopy(neighbor['quote']), 'request': deepcopy(request)}
             except Exception:
                 pass  # Optional neighbor failure leaves the exact cache hit.
+        if offered is None:
+            return None
         offered = with_dormant_routes(offered, getattr(self.quoter.engine.registry, 'seed', None))
         return {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
 

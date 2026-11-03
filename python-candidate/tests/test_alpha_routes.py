@@ -11,6 +11,7 @@ from unittest.mock import patch
 from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError
 from cybergold_candidate.quoter.bootstrap import ProviderUnavailable
 from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.search_observations import search_observation_scope
 
 
 A, B, C = ('0x'+value*40 for value in ('1', '2', '3'))
@@ -67,6 +68,51 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await provider.close()
         self.assertIsNotNone(child.returncode)
+
+    async def test_actual_local_tools_overlap_independent_callbacks_and_keep_private_banks(self):
+        from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
+        for cls in (AlphaRoutes, UnirouteLocal):
+            with self.subTest(provider=cls.name):
+                engine = Engine([pool(), pool(A, B, 500), pool(B, C)])
+                original = engine.quote_sdk_branches
+                entered, sibling, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                active, peak = 0, 0
+                async def quote(*args, **options):
+                    nonlocal active, peak
+                    active += 1
+                    peak = max(peak, active)
+                    if entered.is_set():
+                        sibling.set()
+                    else:
+                        entered.set()
+                    try:
+                        await release.wait()
+                        return await original(*args, **options)
+                    finally:
+                        active -= 1
+                engine.quote_sdk_branches = quote
+                provider = cls(engine)
+                pending = asyncio.create_task(provider.discover(A, C, 10007, BLOCK))
+                try:
+                    await asyncio.wait_for(entered.wait(), 5)
+                    # The first observation has not returned. Another must be
+                    # running independently under the existing eight permits.
+                    await asyncio.wait_for(sibling.wait(), 2)
+                    self.assertFalse(pending.done())
+                    release.set()
+                    candidates = await asyncio.wait_for(pending, 5)
+                    self.assertGreater(peak, 1)
+                    self.assertLessEqual(peak, 8)
+                    self.assertTrue(candidates)
+                    self.assertEqual(len({id(call[4]) for call in engine.calls}), len(engine.calls))
+                    self.assertTrue(all(call[4] == {} for call in engine.calls))
+                finally:
+                    release.set()
+                    pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+                    await provider.close()
+                self.assertFalse(provider.requests)
+                self.assertEqual(engine.semaphore._value, 8)
 
     async def test_v2_also_uses_canonical_callback_not_dummy_reserves(self):
         engine = Engine([pool(protocol='v2')])
@@ -249,6 +295,93 @@ for line in sys.stdin:
         await provider.close()
         with self.assertRaises(ProviderUnavailable):
             await provider.discover(A, C, 1000, BLOCK)
+
+
+class CallbackObservationTests(unittest.IsolatedAsyncioTestCase):
+    def request(self, amount=1000):
+        return {'mode': 'exactIn', 'amount': str(amount),
+                'branches': [{'amountIn': str(amount), 'hops': [{'pool': pool(), 'zeroForOne': True}]}]}
+
+    async def test_equal_callbacks_share_work_but_preserve_answers_and_query_scope(self):
+        engine = Engine()
+        original = engine.quote_sdk_branches
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def quote(*args, **options):
+            entered.set()
+            await release.wait()
+            return await original(*args, **options)
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            first = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            second = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await asyncio.sleep(0)
+            release.set()
+            values = await asyncio.gather(first, second)
+            values.append(await provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            self.assertEqual(values, [{'quote': '2000'}] * 3)
+            self.assertEqual(len(engine.calls), 1)
+            values[0]['quote'] = 'mutated consumer copy'
+            self.assertEqual(values[1]['quote'], '2000')
+            await provider._quote(self.request(1001), BLOCK, {}, (provider, '1'))
+            await provider._quote(self.request(), BLOCK, {}, (provider, '2'))
+            self.assertEqual(len(engine.calls), 3)
+            self.assertEqual(len({id(call[4]) for call in engine.calls}), 3)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_ordinary_failure_is_not_retained_as_a_failed_quote(self):
+        engine, count = Engine(), 0
+        original = engine.quote_sdk_branches
+        async def quote(*args, **options):
+            nonlocal count
+            count += 1
+            if count == 1:
+                raise OSError('ordinary RPC failure')
+            return await original(*args, **options)
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}, (provider, '1')), {'quote': None})
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}, (provider, '1')), {'quote': '2000'})
+        self.assertEqual(count, 2)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_cancelled_subscriber_preserves_sibling_then_final_cancel_drains_work(self):
+        engine = Engine()
+        entered, release, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        original = engine.quote_sdk_branches
+        async def quote(*args, **options):
+            entered.set()
+            try:
+                await release.wait()
+                return await original(*args, **options)
+            finally:
+                drained.set()
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            first = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            second = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await asyncio.sleep(0)
+            first.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first
+            self.assertFalse(drained.is_set())
+            release.set()
+            self.assertEqual(await second, {'quote': '2000'})
+            self.assertEqual(len(engine.calls), 1)
+            entered.clear()
+            release.clear()
+            drained.clear()
+            final = asyncio.create_task(provider._quote(self.request(1001), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            final.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await final
+            await asyncio.wait_for(drained.wait(), 1)
+        self.assertEqual(engine.semaphore._value, 8)
 
 
 if __name__ == '__main__':
