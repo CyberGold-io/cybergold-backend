@@ -68,6 +68,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_observations
 python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_directional_bitmap_acquisition.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_families.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_failure_history.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py

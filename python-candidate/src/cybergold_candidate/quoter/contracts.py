@@ -40,8 +40,8 @@ class SearchSession:
     repairs: int = 0
 
     def claim(self):
-        # Passive work count. The producer clock and pricing slots already
-        # bound work; failed attempts do not exclude later useful proposals.
+        # Passive work count. Pricing slots bound concurrency; failed
+        # attempts do not exclude later useful proposals from this search.
         self.starts += 1
         return True
 

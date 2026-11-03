@@ -375,6 +375,15 @@ class Quoter:
         weights = []
         route_bootstrap = None
         direct_funding, default_funding = None, None
+        best, first_failure, observations = None, None, {}
+        def remember_failure(error):
+            nonlocal first_failure
+            # Only this first informative failure can become the terminal
+            # error. Retaining every discarded traceback also retains each
+            # failed candidate's private bank for the whole search lifetime.
+            if first_failure is None and not isinstance(error, InvalidPreview) and not (
+                    isinstance(error, QuoteFailure) and error.code == 'quote-no-route'):
+                first_failure = error
         if request['intent'] in (0, 1):
             self.seed_routes(request, [])
         async def prepare_basis():
@@ -401,13 +410,12 @@ class Quoter:
                     # The producer below retains ownership through cleanup.
                     await asyncio.shield(preparation)
                 except SnapshotChanged as error:
-                    failures.append(error)
+                    remember_failure(error)
                     return False
                 except Exception as error:
-                    failures.append(error)
+                    remember_failure(error)
                     return False
             return True
-        best, failures, observations = None, [], {}
         session = SearchSession(self.exploration_seed if self.exploration_seed is not None else randbits(64))
         reconstructions = set()
         repair_started = set()
@@ -418,7 +426,7 @@ class Quoter:
                 except SearchStopped:
                     pass
                 except Exception as error:
-                    failures.append(error)
+                    remember_failure(error)
             task = asyncio.create_task(owned())
             reconstructions.add(task)
             def finished(done):
@@ -434,7 +442,7 @@ class Quoter:
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
                            failure_sink=None, limited_funding=None):
             nonlocal best
-            errors = failures if failure_sink is None else failure_sink
+            record_error = remember_failure if failure_sink is None else failure_sink.append
             try:
                 needs_core = request['intent'] == 0 and share != 0
                 if selected is None and needs_core and not await prepared():
@@ -458,7 +466,7 @@ class Quoter:
                 except SnapshotChanged as error:
                     # The SDK only constructs proposals. A failed exploratory
                     # snapshot says nothing about an independent Helpers quote.
-                    errors.append(error)
+                    record_error(error)
                     return
                 # This records a completed observation, not a funding bound.
                 # Replayed historical knowledge applies only to the unchanged
@@ -502,7 +510,7 @@ class Quoter:
                         except SearchStopped:
                             pass
                         except Exception as error:
-                            failures.append(error)
+                            remember_failure(error)
                     reconstruct_later(reprice())
                 return value
             except SnapshotChanged:
@@ -510,14 +518,14 @@ class Quoter:
             except PartialPath as error:
                 if partial:
                     raise
-                errors.append(error)
+                record_error(error)
             except Exception as error:
                 if partial and isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted':
                     # An optional failed whole path can ask the SDK to explore
                     # a different funding/prefix shape; no SDK reprice is
                     # required for a successful Helpers observation.
                     raise
-                errors.append(error)
+                record_error(error)
                 failed = selected if selected is not None else getattr(error, 'candidate_plan', None)
                 if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
                     failed_request = {**funded_request,
@@ -548,7 +556,7 @@ class Quoter:
                 except SearchStopped:
                     pass
                 except Exception as error:
-                    failures.append(error)
+                    remember_failure(error)
             async def core_side():
                 if await prepared():
                     await side(assets)
@@ -558,7 +566,7 @@ class Quoter:
                 else:
                     await core_side()
             except Exception as error:
-                failures.append(error)
+                remember_failure(error)
             finally:
                 session.discovery_done.set()
         try:
@@ -578,7 +586,7 @@ class Quoter:
                             try:
                                 proposal = neighbor_proposals(offered, int(maxima[0]['amount']), assets)[-1]
                             except Exception as error:
-                                failures.append(error)
+                                remember_failure(error)
                                 return
                             await evaluate(100, 'core-first', False, selected=proposal['plan'],
                                 funding=proposal['inputs'], phase='saved-plan-budget')
@@ -598,7 +606,7 @@ class Quoter:
                 except SnapshotChanged:
                     raise
                 except Exception as error:
-                    failures.append(error)
+                    remember_failure(error)
                 finally:
                     session.seed_done.set()
             async def limited():
@@ -611,7 +619,7 @@ class Quoter:
                     if funding is not None:
                         await evaluate(100, 'core-first', True, funding=funding, phase='capacity-limited')
                 except Exception as error:
-                    failures.append(error)
+                    remember_failure(error)
             async def nearby():
                 if neighbor_task is None or request['intent'] not in (0, 1):
                     return
@@ -734,14 +742,14 @@ class Quoter:
                 if isinstance(outcome, SnapshotChanged):
                     preparation_error = outcome
                 elif isinstance(outcome, Exception):
-                    failures.append(outcome)
+                    remember_failure(outcome)
             measured = current_route_observations()
             if measured is not None and route_bootstrap is not None:
                 # The session has drained before exposing its terminal outcome,
                 # including no-route, context disproof and caller cancellation.
                 measured.discovery = route_bootstrap.metrics
             if preparation_error is not None:
-                failures.append(preparation_error)
+                remember_failure(preparation_error)
         budget.cleanup_done()
         if best is not None and not budget.stop.is_set():
             budget.finish_selection('complete')
@@ -755,9 +763,7 @@ class Quoter:
                 best['metrics']['routeDiscovery'] = route_bootstrap.metrics
                 best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder-and-quote-split-components', 'uniroute-api': 'trading-api-observed-engine'}
         if best is None:
-            informative = next((error for error in failures if not isinstance(error, InvalidPreview) and
-                not (isinstance(error, QuoteFailure) and error.code == 'quote-no-route')), None)
-            raise informative or QuoteFailure('quote-no-route')
+            raise first_failure or QuoteFailure('quote-no-route')
         return best
 
     quote = get
