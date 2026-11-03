@@ -30,6 +30,37 @@ def quote_sample(**changes):
 
 
 class SampleTests(unittest.TestCase):
+    def test_input_limit_hint_is_explicit_and_does_not_mutate_cached_economics(self):
+        legacy = quote_sample(inputs=[{'currency': USDT, 'amount': '600'}], estimatedRetainedInputCharges=[])
+        self.assertNotIn('inputLimitObserved', sample_for_quote(legacy))
+        legacy['reuseSample'] = {**sample_for_quote(legacy), 'inputLimitObserved': True}
+        self.assertNotIn('inputLimitObserved', attach_reuse_sample(legacy)['reuseSample'])
+        limited = {**legacy, 'searchCoverage': {'inputLimitObserved': True}}
+        before = deepcopy(limited)
+        sample = sample_for_quote(limited)
+        self.assertTrue(sample['inputLimitObserved'])
+        attached = attach_reuse_sample(limited)
+        self.assertTrue(attached['reuseSample']['inputLimitObserved'])
+        self.assertEqual(limited, before)
+        self.assertEqual({key: value for key, value in attached.items() if key != 'reuseSample'},
+                         {key: value for key, value in before.items() if key != 'reuseSample'})
+
+    def test_input_limit_metadata_tie_merge_reuses_existing_body_identity_boundary(self):
+        from cybergold_candidate.quoter.provenance import merge_origins
+        original = quote_sample(plan={'allocations': [], 'body': {'branches': []}, 'conversions': {}})
+        observed = {**deepcopy(original), 'searchCoverage': {'inputLimitObserved': True}}
+        tied = attach_reuse_sample(original)
+        merge_origins(tied, observed)
+        self.assertTrue(tied['searchCoverage']['inputLimitObserved'])
+        self.assertTrue(tied['reuseSample']['inputLimitObserved'])
+        different = deepcopy(observed)
+        different['plan']['body']['branches'] = [{'kind': 1, 'amountIn': '600'}]
+        untouched = deepcopy(original)
+        merge_origins(untouched, different)
+        self.assertNotIn('inputLimitObserved', untouched.get('searchCoverage', {}))
+        self.assertEqual(untouched['inputs'], original['inputs'])
+        self.assertEqual(untouched['fees'], original['fees'])
+
     def test_shared_python_typescript_integer_vectors(self):
         vectors = json.loads((Path(__file__).resolve().parents[2]/'tests/fixtures/nearby-amount-estimates.json').read_text())
         for vector in vectors:

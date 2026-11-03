@@ -61,6 +61,8 @@ export type UniversalExactInputQuote = {
   context: EconomicQuoteContext;
   retentionDisclosure: { custodian: string; beneficiary: "helpers-owner-at-settlement" };
   searchCoverage: { coreSharesPercent?: number[]; orders?: string[]; maxCoreInvocations: number;
+    /** Historical route/funding limitation, advisory only. */
+    inputLimitObserved?: boolean;
     maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed"
       | "capacity-limited" | "route-family" | "route-family-exploration" | "backward-prefix" | "nearby-upper" | "nearby-lower" };
   /** Producer clocks, distinct from client request or browser journey duration. */
@@ -84,6 +86,8 @@ export type EconomicPlan = {
 export type EconomicReuseSample = {
   referenceInput: string; netOutput: string; fees: UniversalExactInputQuote["fees"];
   basis: "observed-nonretained" | "market-sale-consumed" | "funded-input-approximation";
+  /** Historical limitation of this route/funding; not a global or current maximum. */
+  inputLimitObserved?: boolean;
 };
 export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescription" | "outputMinimum" | "economicQuote"> & {
   request: EconomicRequest; plan: EconomicPlan;

@@ -1264,6 +1264,8 @@ export interface components {
                 };
                 /** @enum {string} */
                 basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                /** @description Historical limitation of this route/funding; not a global or current maximum. */
+                inputLimitObserved?: boolean;
             };
             pricingEvidence?: {
                 /** @constant */
@@ -1347,6 +1349,8 @@ export interface components {
                 coreSharesPercent?: number[];
                 orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
@@ -1692,6 +1696,8 @@ export interface components {
                 coreSharesPercent?: number[];
                 orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
@@ -5211,6 +5217,8 @@ export interface components {
                     coreSharesPercent?: number[];
                     orders?: string[];
                     maxCoreInvocations: number;
+                    /** @description Historical route/funding limitation, advisory only. */
+                    inputLimitObserved?: boolean;
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
@@ -6872,6 +6880,8 @@ export interface components {
                 coreSharesPercent?: number[];
                 orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
@@ -7405,6 +7415,8 @@ export interface components {
                     coreSharesPercent?: number[];
                     orders?: string[];
                     maxCoreInvocations: number;
+                    /** @description Historical route/funding limitation, advisory only. */
+                    inputLimitObserved?: boolean;
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
@@ -11826,6 +11838,8 @@ export interface components {
                 coreSharesPercent?: number[];
                 orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";

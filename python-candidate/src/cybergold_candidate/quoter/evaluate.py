@@ -83,11 +83,13 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
     else:
         bank, canonical, recorded = {}, observations if observations is not None else {}, {}
         conversion_funding = {}
+        input_limit_observed = False
         budget = current_budget()
         intent = request['intent']
         amount = int(request['inputs'][0]['amount'])
 
         async def convert(source, target, lot, operation, *, market=False, topology=False, optional=False):
+            nonlocal input_limit_observed
             if first or topology:
                 try:
                     route, chosen = await nominate_conversion(self, source, target, lot, block, market=market)
@@ -105,6 +107,7 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
                                               market=market, capture=chosen)
                     route, _, _ = await budget.discovery(pending) if budget and selection else await pending
                 conversion_funding[operation] = chosen.pop('_funding', lot)
+                input_limit_observed |= conversion_funding[operation] < lot
                 chosen.pop('_observation', None)
             recorded[operation] = deepcopy(chosen)
             return route
@@ -179,4 +182,5 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
         inputs[0]['amount'] = str(sum(int(row['amountIn']) for row in plan['allocations']))
     return {'request': deepcopy(request), 'plan': plan, 'inputs': inputs,
             'searchCoverage': {'coreSharesPercent': list(CORE_SHARES), 'orders': ['core-first', 'market-first'],
-                               'maxCoreInvocations': 1, 'maxAmmHops': 3, 'scope': 'selected-inventory'}}
+                               'maxCoreInvocations': 1, 'maxAmmHops': 3, 'scope': 'selected-inventory',
+                               **({'inputLimitObserved': True} if selected is None and input_limit_observed else {})}}

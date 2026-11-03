@@ -38,6 +38,11 @@ def merge_origins(incumbent, candidate):
     left, right = incumbent['plan'], candidate['plan']
     if left['allocations'] != right['allocations'] or left['body'] != right['body']:
         return
+    if candidate.get('searchCoverage', {}).get('inputLimitObserved') is True:
+        incumbent.setdefault('searchCoverage', {})['inputLimitObserved'] = True
+        sample = incumbent.get('reuseSample')
+        if isinstance(sample, dict):
+            sample['inputLimitObserved'] = True
     for operation, chosen in left['conversions'].items():
         offered = right['conversions'].get(operation)
         if isinstance(chosen, dict) and isinstance(offered, dict) and chosen.get('template') == offered.get('template'):

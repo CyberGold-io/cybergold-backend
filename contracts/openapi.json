@@ -8042,6 +8042,10 @@
                       "observed-nonretained"
                     ],
                     "type": "string"
+                  },
+                  "inputLimitObserved": {
+                    "description": "Historical limitation of this route/funding; not a global or current maximum.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -8365,6 +8369,10 @@
               },
               "maxCoreInvocations": {
                 "type": "number"
+              },
+              "inputLimitObserved": {
+                "description": "Historical route/funding limitation, advisory only.",
+                "type": "boolean"
               },
               "maxAmmHops": {
                 "type": "number"
@@ -9765,6 +9773,10 @@
                   },
                   "maxCoreInvocations": {
                     "type": "number"
+                  },
+                  "inputLimitObserved": {
+                    "description": "Historical route/funding limitation, advisory only.",
+                    "type": "boolean"
                   },
                   "maxAmmHops": {
                     "type": "number"
@@ -24173,6 +24185,10 @@
                               "maxCoreInvocations": {
                                 "type": "number"
                               },
+                              "inputLimitObserved": {
+                                "description": "Historical route/funding limitation, advisory only.",
+                                "type": "boolean"
+                              },
                               "maxAmmHops": {
                                 "type": "number"
                               },
@@ -30828,6 +30844,10 @@
                   "maxCoreInvocations": {
                     "type": "number"
                   },
+                  "inputLimitObserved": {
+                    "description": "Historical route/funding limitation, advisory only.",
+                    "type": "boolean"
+                  },
                   "maxAmmHops": {
                     "type": "number"
                   },
@@ -33014,6 +33034,10 @@
                               },
                               "maxCoreInvocations": {
                                 "type": "number"
+                              },
+                              "inputLimitObserved": {
+                                "description": "Historical route/funding limitation, advisory only.",
+                                "type": "boolean"
                               },
                               "maxAmmHops": {
                                 "type": "number"
@@ -51034,6 +51058,10 @@
               },
               "maxCoreInvocations": {
                 "type": "number"
+              },
+              "inputLimitObserved": {
+                "description": "Historical route/funding limitation, advisory only.",
+                "type": "boolean"
               },
               "maxAmmHops": {
                 "type": "number"

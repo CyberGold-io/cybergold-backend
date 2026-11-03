@@ -46,6 +46,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['quotedOutput'], reference['quotedOutput'])
                 self.assertEqual(result['request'], edited)
                 self.assertEqual(result['searchCoverage']['selectedPhase'], 'backward-prefix')
+                self.assertTrue(result['searchCoverage']['inputLimitObserved'])
                 recovery.assert_awaited_once()
                 self.assertEqual(recovery.await_args.args[1]['inputs'], edited['inputs'])
                 self.assertEqual(recovery.await_args.kwargs['unsettled'], hint)
@@ -120,6 +121,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(outcome=outcome):
                 q, saved, edited, expanded = await self.budget_replay_fixture()
                 saved['request'] = deepcopy(edited)  # Exact key, lower actual funding.
+                saved['searchCoverage']['inputLimitObserved'] = True
                 saved['plan']['_budget_replay_fixture'] = True
                 original = q.candidate
                 full_started, both_settled = asyncio.Event(), asyncio.Event()
@@ -163,6 +165,8 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['inputs'], edited['inputs'] if outcome == 'ordinary-wins' else expected['inputs'])
                 self.assertEqual(result['quotedOutput'], str(int(expanded['quotedOutput']) + 1000)
                                  if outcome == 'ordinary-wins' else expected['quotedOutput'])
+                self.assertEqual(result['searchCoverage'].get('inputLimitObserved', False),
+                                 outcome == 'expanded-fails')
                 plan = next(plan for amount, plan in calls if amount == '50005')
                 self.assertEqual(sum(int(row['amountIn']) for row in plan['allocations']), 50005)
                 self.assertEqual({row['kind'] for row in plan['allocations']}, {0, 1})
@@ -227,6 +231,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                     return await sdk(resolved, *args, **kwargs)
                 q.engine.quote_sdk_branches = acquire
                 saved = await q.quote(request())
+                saved['searchCoverage']['inputLimitObserved'] = True
                 expected = saved['quotedOutput']
                 saved['quotedOutput'] = '999999999999999999999999'
                 edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}
@@ -275,6 +280,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['quotedOutput'], '1' if unavailable else expected)
                 self.assertEqual(result['inputs'][0]['amount'], '100010' if unavailable else '10001')
                 self.assertNotEqual(result['quotedOutput'], saved['quotedOutput'])
+                self.assertEqual(result['searchCoverage'].get('inputLimitObserved', False), not unavailable)
                 self.assertEqual(q.engine.semaphore._value, 8)
 
     async def test_upper_settles_once_for_absent_unusable_or_failed_cache(self):

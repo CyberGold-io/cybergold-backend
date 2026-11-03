@@ -65,6 +65,7 @@ class ProgressiveTests(ProgressiveFixture):
             chosen['discoveryOrigins'] = ['cybergold-custom']
         attach_origins(first)
         terminal = deepcopy(first)
+        terminal['searchCoverage']['inputLimitObserved'] = True
         for chosen in terminal['plan']['conversions'].values():
             chosen['discoveryOrigins'] = ['cybergold-custom', 'uniswap-alpharouter']
         attach_origins(terminal)
@@ -80,10 +81,13 @@ class ProgressiveTests(ProgressiveFixture):
         self.assertEqual(result['routeOrigins']['discoveryProviders'],
                          ['cybergold-custom', 'uniswap-alpharouter'])
         self.assertEqual(result['quotedOutput'], first['quotedOutput'])
+        self.assertTrue(result['reuseSample']['inputLimitObserved'])
+        self.assertNotIn('inputLimitObserved', frames[0]['value']['reuseSample'])
         self.assertEqual(result['plan']['body'], first['plan']['body'])
         self.assertEqual(frames[0]['value']['routeOrigins']['discoveryProviders'], ['cybergold-custom'])
         stored = service.store.rows[service.store.capture_scope(economic_request())]
         self.assertEqual(stored['routeOrigins'], result['routeOrigins'])
+        self.assertTrue(stored['reuseSample']['inputLimitObserved'])
 
     async def test_neighbor_sdk_disproof_does_not_retract_a_completed_helpers_quote(self):
         from cybergold_candidate.quoter import search

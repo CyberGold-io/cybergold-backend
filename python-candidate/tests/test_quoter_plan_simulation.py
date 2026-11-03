@@ -197,6 +197,7 @@ class OrdinaryCapacitySimulationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('_funding', repr(value['plan']))
         self.assertEqual(value['quotedOutput'], '777', 'Helpers economics must replace SDK construction amounts')
         self.assertEqual(value['pricingEvidence']['engine'], 'helpers-execution')
+        self.assertTrue(value['searchCoverage']['inputLimitObserved'])
         calls = [row for row in engine.priced if row[0] == engine.prefix['id']]
         left = 'reserve0' if capacity_hop(WETH, engine.prefix)['zeroForOne'] else 'reserve1'
         self.assertEqual([row[1] for row in calls], [500, 51, 500])

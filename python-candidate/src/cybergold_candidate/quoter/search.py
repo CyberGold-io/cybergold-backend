@@ -33,6 +33,7 @@ from ..rpc_block_context import LATEST_BLOCK, rpc_block_parameter
 from .amm import price_path, PartialPath
 from .discovery import paths, route_candidates
 from .ranking import prefer_completed
+from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import measured_funding_proposal, cached_core_funding
@@ -431,7 +432,7 @@ class Quoter:
             return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
-                           failure_sink=None):
+                           failure_sink=None, limited_funding=None):
             nonlocal best
             errors = failures if failure_sink is None else failure_sink
             try:
@@ -459,6 +460,15 @@ class Quoter:
                     # snapshot says nothing about an independent Helpers quote.
                     errors.append(error)
                     return
+                # This records a completed observation, not a funding bound.
+                # Replayed historical knowledge applies only to the unchanged
+                # selected funding; an expanded successful plan starts fresh.
+                retained_limit = limited_funding is not None and len(value['inputs']) == len(limited_funding) and all(
+                    current['currency'].lower() == previous['currency'].lower()
+                    and int(current['amount']) == int(previous['amount'])
+                    for current, previous in zip(value['inputs'], limited_funding, strict=True))
+                if phase in ('backward-prefix', 'measured-funding') or retained_limit:
+                    value.setdefault('searchCoverage', {})['inputLimitObserved'] = True
                 if selected is not None:
                     # A legacy seed/neighbor is a newly offered quote here,
                     # unlike TransactionPreparation's already-accepted plan.
@@ -572,7 +582,8 @@ class Quoter:
                                 return
                             await evaluate(100, 'core-first', False, selected=proposal['plan'],
                                 funding=proposal['inputs'], phase='saved-plan-budget')
-                        retained = evaluate(100, 'core-first', False, selected=offered['plan'], funding=funding)
+                        retained = evaluate(100, 'core-first', False, selected=offered['plan'], funding=funding,
+                            limited_funding=funding if input_limit_observed(offered) else None)
                         if request['intent'] in (0, 1) and int(funding[0]['amount']) < int(maxima[0]['amount']):
                             # The exact request key can retain a smaller-funded
                             # winner. Start its full-budget topology replay now,
@@ -629,7 +640,8 @@ class Quoter:
                                 with bootstrap_priority():
                                     value = await evaluate(100, 'core-first', False,
                                         selected=proposal['plan'], funding=proposal['inputs'], phase='nearby-'+side,
-                                        failure_sink=errors)
+                                        failure_sink=errors,
+                                        limited_funding=row['quote']['inputs'] if input_limit_observed(row['quote']) else None)
                                 attempt['completed'] = value is not None
                                 neighbor_metrics['completed'] += value is not None
                                 if errors:
