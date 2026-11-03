@@ -8,6 +8,7 @@ the local Helpers simulation prices them against the execution chain.
 """
 import asyncio
 from copy import deepcopy
+import json
 
 from web3 import Web3
 
@@ -16,6 +17,8 @@ import httpx
 from ..pool_producer import PoolIdentifier, PoolProducer
 from ..protocol_config import configured_address
 from ..route_observations import api_exchange, origin_scope, record_api_status
+from ..route_work_slots import engine_work
+from ..search_observations import current_search_observations
 from ..uniswap_api_queue import retry_after_seconds
 from ..uniswap_routes import pool_identity, v3_branches, v4_pool_id
 from ..uniswap_state import POOL_MANAGER
@@ -273,14 +276,39 @@ class UniswapApiProvider:
         return {'nominationChainId': 1 if execution == 31338 else execution,
                 'executionChainId': execution}
 
+    async def _market_input(self, prefix, amount, block):
+        """Explore the foreign AMM segment at its local prefix's output units.
+
+        The API never knows the fork-only Core token. This SDK observation is
+        a nomination quantity only; the complete composed plan still receives
+        its independent Helpers price. Other suppliers/publication do not await
+        this provider's exploratory work.
+        """
+        async def price():
+            async with engine_work(self.engine.semaphore):
+                value = await self.engine.quote_sdk_branches(
+                    [{'amountIn': str(amount), 'hops': prefix}], 'exactIn', int(amount), block,
+                    candidate={}, canonical={})
+            return int(value['amountOut'])
+        shared = current_search_observations()
+        if shared is None:
+            return await price()
+        key = ('hosted-market-prefix', int(self.engine.registry.chain), int(amount),
+               tuple((pool_identity(hop['pool']), hop['zeroForOne']) for hop in prefix),
+               json.dumps(block, sort_keys=True))
+        return await shared.read(key, price)
+
     async def discover(self, source, target, amount, block):
         if not self.api_key:
             raise ProviderUnavailable('Uniswap API key is not configured')
         registry = self.engine.registry
+        funding = int(amount)
         source, target, prefix, suffix = market_segment(registry, source, target)
         if source.lower() == target.lower():
             return HostedCandidates([[{'amountIn': str(amount), 'hops': prefix + suffix}]],
                 {'engine': 'unverified', 'evidence': 'not-disclosed'})
+        if prefix:
+            amount = await self._market_input(prefix, funding, block)
         # The existing Sandbox is a Mainnet fork. Only topology acquisition uses
         # its parent; local pool identities and execution always retain 31338.
         chain = 1 if registry.chain == 31338 else registry.chain
@@ -317,7 +345,7 @@ class UniswapApiProvider:
             # Optional split proportions cannot retract ordinary structured paths.
             nominees = []
         nominees.extend(route_candidates(paths(list(pools.values()), source, target,
-            max_hops=3-len(prefix)-len(suffix)), int(amount)))
+            max_hops=3-len(prefix)-len(suffix)), funding))
         candidates = [[{**branch, 'hops': deepcopy(prefix) + branch['hops'] + deepcopy(suffix)}
                        for branch in nominee] for nominee in nominees]
         return HostedCandidates(candidates, observed_engine(document))

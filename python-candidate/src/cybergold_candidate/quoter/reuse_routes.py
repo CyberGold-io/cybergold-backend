@@ -4,10 +4,27 @@ These values nominate complete semantic execution bodies. They contain no
 historical pool state, price promise, transaction guard or executable calldata.
 """
 from copy import deepcopy
+import json
 
 from ..basket_preview import InvalidPreview
-from ..uniswap_routes import PoolRef
+from ..uniswap_routes import PoolRef, pool_identity
 from .provenance import origin_names
+
+
+def proposal_identity(proposal):
+    """One resized execution topology, independent of diagnostic enrichment."""
+    from .plan_simulation import executable_body
+    proposal = deepcopy(proposal)
+    proposal['plan']['body'] = executable_body(proposal['plan']['body'])
+    def execution(value):
+        if isinstance(value, dict):
+            return {key: pool_identity(item) if key == 'pool' else execution(item)
+                    for key, item in value.items()
+                    if key not in ('discoveryOrigins', 'topologyOrigin')}
+        if isinstance(value, (list, tuple)):
+            return [execution(item) for item in value]
+        return value.lower() if isinstance(value, str) and value.startswith('0x') else value
+    return json.dumps(execution(proposal), sort_keys=True, separators=(',', ':'))
 
 
 def _conversion(value):

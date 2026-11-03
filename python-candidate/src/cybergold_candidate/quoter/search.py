@@ -37,11 +37,13 @@ from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import measured_funding_proposal, cached_core_funding
-from .reuse_routes import neighbor_proposals
+from .reuse_routes import neighbor_proposals, proposal_identity
+from .path_families import quote_path_family
+from .market_segments import market_segment_entry, observe_market_segments, observed_market_revision
 from .bootstrap import RouteBootstrap, bootstrap_scope, current_bootstrap
 from .amm_adapter import CyberGoldAmmAdapter
 from .custom_routes import CustomRoutes
-from .provenance import attach_origins, merge_origins
+from .provenance import attach_origins, merge_origins, origin_names
 from ..route_observations import RouteObservations, current_route_observations, route_observation_scope
 from ..search_observations import search_observation_scope, current_search_observations
 from .core_state import CoreQuoteState
@@ -64,7 +66,9 @@ async def alongside_bootstrap(ordinary, bootstrap, *, incumbent=None):
             await asyncio.gather(tasks[1], return_exceptions=True)
         await tasks[0]
         if incumbent is not None and incumbent() is None:
-            await tasks[1]
+            # A missing ordinary result can wait for the offered route, but
+            # optional lookup failure/cancellation is not caller cancellation.
+            await asyncio.gather(tasks[1], return_exceptions=True)
         if tasks[1].done():
             await asyncio.gather(tasks[1], return_exceptions=True)
     finally:
@@ -246,12 +250,13 @@ class Quoter:
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
-                  seed_lookup=None):
+                  seed_lookup=None, on_family=None):
         observations = RouteObservations()
         with route_observation_scope(observations):
             try:
                 result = await self._produce(request, on_update, core_only=core_only,
-                                             seed=seed, neighbors=neighbors, seed_lookup=seed_lookup)
+                                             seed=seed, neighbors=neighbors, seed_lookup=seed_lookup,
+                                             on_family=on_family)
             except (Exception, asyncio.CancelledError) as error:
                 error.quoter_metrics = {**self.producer_metrics(current_budget()),
                     **getattr(error, 'quoter_metrics', {}),
@@ -263,7 +268,7 @@ class Quoter:
         return attach_origins(result)
 
     async def _produce(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
-                       seed_lookup=None):
+                       seed_lookup=None, on_family=None):
         budget = current_budget()
         # The SQL feed starts alongside head/basis acquisition. Its caller
         # captures the existing scope; this task never owns a second search.
@@ -271,7 +276,7 @@ class Quoter:
             try:
                 return await neighbors()
             except Exception:
-                return {}
+                return []
         neighbor_task = (asyncio.create_task(lookup_neighbors())
                          if neighbors is not None and not core_only else None)
         async def lookup_seed():
@@ -285,7 +290,7 @@ class Quoter:
             async with simulation_scope(), search_observation_scope():
                 result = await budget.produce(self._get(request, on_update, core_only=core_only,
                                                        seed=seed, neighbor_task=neighbor_task,
-                                                       seed_task=seed_task))
+                                                       seed_task=seed_task, on_family=on_family))
         except Exception as error:
             # Private diagnostic evidence preserves the public error contract.
             # In particular, exhaustion can still return quote-no-route while
@@ -364,8 +369,9 @@ class Quoter:
             return None
         return [{**row, 'amount': str(amount)} for row, amount in zip(request['inputs'], amounts, strict=True)]
 
+    @market_segment_entry
     async def _get(self, request, on_update=None, *, core_only=False, seed=None, neighbor_task=None,
-                   seed_task=None):
+                   seed_task=None, on_family=None):
         request = self.normalise_request(request)
         budget = current_budget()
         registry = self.engine.registry
@@ -376,6 +382,7 @@ class Quoter:
         route_bootstrap = None
         direct_funding, default_funding = None, None
         best, first_failure, observations = None, None, {}
+        family_best = {}
         def remember_failure(error):
             nonlocal first_failure
             # Only this first informative failure can become the terminal
@@ -458,7 +465,8 @@ class Quoter:
                     shared = current_search_observations()
                     if selected is None and shared is not None:
                         identity = ('complete-candidate', share, order, first,
-                            json.dumps(funded_request, sort_keys=True), route_bootstrap.revision if route_bootstrap else 0)
+                            json.dumps(funded_request, sort_keys=True), route_bootstrap.revision if route_bootstrap else 0,
+                            observed_market_revision(funded_request, share, order))
                         pending = shared.read(identity, produce_candidate)
                     else:
                         pending = produce_candidate()
@@ -485,7 +493,13 @@ class Quoter:
                 value['request'] = deepcopy(request)
                 attach_origins(value)
                 merge_origins(best, value)
-                if prefer_completed(value, best, scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2):
+                family = quote_path_family(value)
+                merge_origins(family_best.get(family), value)
+                family_improves = prefer_completed(value, family_best.get(family),
+                    scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
+                improves = prefer_completed(value, best,
+                    scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
+                if family_improves or improves:
                     if not budget.qualified():
                         return
                     value['searchCoverage']['selectedPhase'] = phase or ('saved-plan' if selected is not None
@@ -496,6 +510,11 @@ class Quoter:
                     if measured is not None:
                         discovery_metrics.update(physicalRpc=measured.metrics, apiRequests=measured.api_metrics)
                     value.setdefault('metrics', {})['routeDiscovery'] = discovery_metrics
+                if family_improves:
+                    family_best[family] = value
+                    if on_family:
+                        await on_family(deepcopy(value))
+                if improves:
                     best = value
                     if on_update: await on_update({'type': 'qualified', 'value': value})
                 # A lower-funding body is a new proposal. Price it alongside
@@ -512,6 +531,12 @@ class Quoter:
                         except Exception as error:
                             remember_failure(error)
                     reconstruct_later(reprice())
+                if selected is None and observe_market_segments(value, funded_request, share, order):
+                    # The completed Helpers quote is already published. Its
+                    # actual Core-produced market lots now seed exploration;
+                    # retaining this owner keeps providers alive for the pass.
+                    await evaluate(share, order, False, funding=funded_request['inputs'],
+                        phase='observed-market-segments')
                 return value
             except SnapshotChanged:
                 raise
@@ -571,6 +596,11 @@ class Quoter:
                 session.discovery_done.set()
         try:
             async def seeded_body():
+                # The family neighbor feed includes exact points. It owns all
+                # cached candidates when present, so a fifth global seed does
+                # not compete with the requested four lower/upper routes.
+                if neighbor_task is not None:
+                    return
                 offered = (seed if seed is not None else
                     await budget.discovery(asyncio.shield(seed_task)) if seed_task is not None else None)
                 if offered is not None:
@@ -623,69 +653,88 @@ class Quoter:
             async def nearby():
                 if neighbor_task is None or request['intent'] not in (0, 1):
                     return
-                selected_neighbors = await budget.discovery(asyncio.shield(neighbor_task))
-                async def replay_neighbor(side):
-                    source = None
-                    settled = True
+                rows = await budget.discovery(asyncio.shield(neighbor_task))
+                if not rows:
+                    # Optional SQL failure cannot discard an available exact
+                    # seed. This fallback is still only one cached route.
+                    offered = seed if seed is not None else (
+                        await budget.discovery(asyncio.shield(seed_task)) if seed_task is not None else None)
+                    rows = ([{'family': quote_path_family(offered), 'side': 'lower', 'quote': offered}]
+                            if offered is not None else [])
+                jobs = {}
+                for row in rows:
+                    source = {'attempts': []}
                     try:
-                        row = selected_neighbors.get(side)
-                        if not row:
-                            return
-                        source = {'side': side, 'identity': row.get('identity'), 'attempts': []}
+                        source.update(side=row['side'], family=row['family'], identity=row.get('identity'))
+                        proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
+                        proposal = proposals[-1]
+                        identity = proposal_identity(proposal)
+                        if identity in jobs:
+                            job = jobs[identity]
+                            job['upper'] |= row['side'] == 'upper'
+                            job['source'].setdefault('aliases', []).append({key: source[key]
+                                for key in ('side', 'family', 'identity')})
+                            # Equivalent cached topologies keep every original
+                            # nomination origin, without another Helpers call.
+                            for operation, chosen in job['proposal']['plan']['conversions'].items():
+                                other = proposal['plan']['conversions'].get(operation, {})
+                                names = set(origin_names(chosen.get('discoveryOrigins')))
+                                names.update(origin_names(other.get('discoveryOrigins')))
+                                if names:
+                                    chosen['discoveryOrigins'] = sorted(names)
+                            continue
                         basis = row['quote'].get('reuseSample', {}).get('basis')
                         if basis is not None:
                             source['referenceBasis'] = basis
                         neighbor_metrics['sources'].append(source)
-                        proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
-                        async def replay_proposal(proposal):
-                            nonlocal settled
-                            attempt = {'funding': proposal['inputs'][0]['amount']}
-                            source['attempts'].append(attempt)
-                            neighbor_metrics['starts'] += 1
-                            started = asyncio.get_running_loop().time()
-                            try:
-                                errors = []
-                                with bootstrap_priority():
-                                    value = await evaluate(100, 'core-first', False,
-                                        selected=proposal['plan'], funding=proposal['inputs'], phase='nearby-'+side,
-                                        failure_sink=errors,
-                                        limited_funding=row['quote']['inputs'] if input_limit_observed(row['quote']) else None)
-                                attempt['completed'] = value is not None
-                                neighbor_metrics['completed'] += value is not None
-                                if errors:
-                                    attempt['failureCode'] = public_quote_error(errors[-1])['code']
-                            except (SearchStopped, asyncio.CancelledError):
-                                settled = False
-                                raise
-                            finally:
-                                attempt['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
-                        # The fitting replay must not hold the edited budget
-                        # behind a slow call. Both complete plans use ordinary
-                        # independent Helpers pricing and the same owner clock.
-                        async def replay(proposal):
-                            operation = replay_proposal(proposal)
-                            if int(proposal['inputs'][0]['amount']) == int(request['inputs'][0]['amount']):
-                                return await wait_reconstruction(reconstruct_later(operation))
-                            return await operation
-                        await owned_reads(*(replay(proposal) for proposal in reversed(proposals)))
-                    except asyncio.CancelledError:
-                        settled = False
-                        raise
+                        jobs[identity] = {'source': source, 'proposal': proposal,
+                            'fallback': proposals[0] if len(proposals) > 1 else None,
+                            'quote': row['quote'], 'upper': row['side'] == 'upper'}
                     except Exception as error:
-                        # Optional legacy/cache shape failures must not replace
-                        # the ordinary terminal quote-no-route/error taxonomy.
-                        if source is not None:
-                            source['failureCode'] = public_quote_error(error)['code']
+                        source['failureCode'] = public_quote_error(error)['code']
+                        neighbor_metrics['sources'].append(source)
+
+                async def replay_job(job):
+                    source = job['source']
+                    async def attempt(proposal):
+                        observation = {'funding': proposal['inputs'][0]['amount']}
+                        source['attempts'].append(observation)
+                        neighbor_metrics['starts'] += 1
+                        started = asyncio.get_running_loop().time()
+                        try:
+                            errors = []
+                            with bootstrap_priority():
+                                value = await evaluate(100, 'core-first', False,
+                                    selected=proposal['plan'], funding=proposal['inputs'],
+                                    phase='nearby-'+source['side'], failure_sink=errors,
+                                    limited_funding=job['quote']['inputs']
+                                        if input_limit_observed(job['quote']) else None)
+                            observation['completed'] = value is not None
+                            neighbor_metrics['completed'] += value is not None
+                            if errors:
+                                observation['failureCode'] = public_quote_error(errors[-1])['code']
+                            return value
+                        finally:
+                            observation['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
+                    async def replay():
+                        value = await attempt(job['proposal'])
+                        if value is None and job['fallback'] is not None:
+                            # A failed expansion may still have a fitting
+                            # complete route. Pay that fallback only on failure;
+                            # initial seeding prices at most four distinct plans.
+                            await attempt(job['fallback'])
+                    await wait_reconstruction(reconstruct_later(replay()))
+
+                async def upper():
+                    settled = False
+                    try:
+                        await owned_reads(*(replay_job(job) for job in jobs.values() if job['upper']))
+                        settled = True
                     finally:
-                        # The App may retain a validated candidate behind its
-                        # displayed upper arithmetic hint. Release that wait on
-                        # success, absence or ordinary replay failure.
-                        # Only economic streams supply this neighbor work.
-                        if settled and side == 'upper' and on_update:
+                        if settled and on_update:
                             await on_update({'type': 'upper-replay-settled'})
-                # Each neighbor proceeds independently. Neither awaits the
-                # other's acquisition, nor changes E17's exact-seed event.
-                await owned_reads(replay_neighbor('upper'), replay_neighbor('lower'))
+                await owned_reads(upper(), owned_reads(*(
+                    replay_job(job) for job in jobs.values() if not job['upper'])))
             async def ordinary_body():
                 ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
                     observations=observations, seeded=seed is not None, core_only=core_only), limited(),
@@ -748,6 +797,12 @@ class Quoter:
                 # The session has drained before exposing its terminal outcome,
                 # including no-route, context disproof and caller cancellation.
                 measured.discovery = route_bootstrap.metrics
+            if on_family:
+                # Equivalent later nominations can add origins without a new
+                # economic winner. Preserve those final whole-family tuples
+                # after owned work drains, including on caller cancellation.
+                for value in family_best.values():
+                    await on_family(deepcopy(value))
             if preparation_error is not None:
                 remember_failure(preparation_error)
         budget.cleanup_done()

@@ -45,6 +45,12 @@ class CanonicalPublication:
     async def run(self):
         while (item := await self.queue.get()) is not None:
             kind, value = item
+            if kind == 'stored':
+                # The optional historical read may finish after current
+                # Helpers pricing. It never holds or replaces that result.
+                if self.best is None and not self.closed:
+                    await self.publish({'type': 'qualified', 'value': value})
+                continue
             if kind == 'upper-replay-settled':
                 if not self.closed:
                     await self.publish({'type': kind})
@@ -69,20 +75,32 @@ class CanonicalPublication:
 async def progressive_quote(service, request, publish, *, refresh=False):
     request = EconomicRequest.model_validate(request).model_dump()
     cache = service.cache_feed(request)
+    scalar = request['intent'] in (0, 1)
     try:
-        previous = await cache.lookup() if not refresh else None
+        previous = await cache.lookup() if not scalar and not refresh else None
         if previous is not None:
             offered = await service.cached_offer(request, previous, await cache.scope())
             await publish({'type': 'qualified', 'value': deepcopy(offered)})
-            if not service.unfilled_budget(request, offered):
-                return offered
+            return offered
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
-            seed=previous, seed_lookup=cache.lookup if refresh else None,
-            neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
+            seed=previous, seed_lookup=cache.lookup if scalar or refresh else None,
+            neighbors=cache.neighbors if scalar else None,
+            on_family=cache.observe_family if scalar else None))
         consumer = asyncio.create_task(publication.run())
+        async def historical_offer():
+            try:
+                stored = await cache.lookup()
+                if stored is not None:
+                    offered = await service.cached_offer(request, stored, await cache.scope(),
+                                                         neighbors=await cache.neighbors())
+                    publication.queue.put_nowait(('stored', deepcopy(offered)))
+            except Exception:
+                pass  # Optional historical input cannot reject current pricing.
+        historical = (asyncio.create_task(historical_offer()) if scalar and not refresh else None)
         tasks = (producer, consumer)
+        owned = (*tasks, historical) if historical is not None else tasks
         terminal = None
         try:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -97,13 +115,14 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             await consumer
         finally:
             publication.closed = True
-            for task in tasks:
+            for task in owned:
                 if not task.done():
                     task.cancel()
-            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+            outcomes = await asyncio.gather(*owned, return_exceptions=True)
             disproof = publication.disproof or next((error for error in outcomes
                                                      if isinstance(error, SnapshotChanged)), None)
             if disproof is not None:
+                cache.completed.clear()
                 if publication.context is not None:
                     disproof.economic_context = deepcopy(publication.context)
                 raise disproof
@@ -118,6 +137,7 @@ async def progressive_quote(service, request, publish, *, refresh=False):
                 cache.save(publication.best)
         return deepcopy(publication.best)
     finally:
+        cache.flush()
         await cache.close()
 
 

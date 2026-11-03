@@ -18,7 +18,7 @@ from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.telemetry import configure_logging, getter_reads, rpc_exchange
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from test_economic_quote_api import SharedStore
-from test_universal_quote import Quotes, Engine, request, PAXG, OTHER, CORE, USER
+from test_universal_quote import Quotes, Engine, request, PAXG, OTHER, CORE, USER, BLOCK
 
 
 def economic_request(intent=0):
@@ -174,10 +174,15 @@ class ProgressiveTests(ProgressiveFixture):
                     return await candidate(*args, **kwargs)
                 q.candidate = measured
                 async def proposals_neighbors():
-                    return {side: {'identity': side, 'quote': {'side': side}} for side in ['upper', 'lower']}
+                    return [{'family': 'core', 'side': side, 'identity': side, 'quote': {'side': side}} for side in ['upper', 'lower']]
                 def proposals(quote, *_):
                     plan = deepcopy(self.base['plan'])
                     plan['_side'] = quote['side']
+                    # Distinct physical AMM protocols survive the production
+                    # topology dedup; the private side marker does not. These
+                    # candidate bodies are deliberately held before pricing.
+                    step = plan['body']['branches'][0]['data']['acquisitions'][0]['route']['routes'][0]['steps'][0]
+                    step['kind'] = 1 if quote['side'] == 'upper' else 0
                     return [{'plan': plan, 'inputs': economic_request()['inputs']}]
                 async def publish(frame):
                     frames.append(deepcopy(frame))
@@ -489,15 +494,17 @@ class ProgressiveTests(ProgressiveFixture):
             lambda frame: asyncio.sleep(0, result=frames.append(frame)))
         self.assertEqual(result['quotedOutput'], '100'); self.assertEqual(len(frames), 1)
 
-    async def test_historical_hit_needs_no_new_head_or_confirmation(self):
+    async def test_historical_basket_hit_needs_no_new_head_or_confirmation(self):
+        query = economic_request(2)
+        historical = await Quotes(Engine()).quote(query)
         store = SharedStore()
-        await store.save(economic_request(), self.base, scope=str(economic_request()))
+        await store.save(query, historical, scope=str(query))
         service = self.service(AsyncMock(side_effect=AssertionError('no search')), store=store)
         service.quoter.canonical = AsyncMock(side_effect=AssertionError('no new canonical check'))
         frames = []
-        result = await service.progressive(economic_request(), lambda frame: asyncio.sleep(0, result=frames.append(frame)))
+        result = await service.progressive(query, lambda frame: asyncio.sleep(0, result=frames.append(frame)))
         self.assertEqual(result['observation']['source'], 'stored')
-        self.assertEqual(result['context'], self.base['context']); self.assertEqual(len(frames), 1)
+        self.assertEqual(result['context'], historical['context']); self.assertEqual(len(frames), 1)
         self.assertEqual(service.quoter.canonical_calls, [])
 
     async def test_failed_explicit_refresh_keeps_the_previous_historical_observation(self):
@@ -541,10 +548,10 @@ class ProgressiveTests(ProgressiveFixture):
 
 
 class StreamTransportTests(ProgressiveFixture):
-    async def asgi_stream(self, service, *, spec='2.4', refresh=False):
+    async def asgi_stream(self, service, *, spec='2.4', refresh=False, intent=0):
         inbox = asyncio.Queue(); frames, headers = [], {}
         ready, terminal = asyncio.Event(), asyncio.Event()
-        body = json.dumps({**economic_request(), 'refresh': refresh}).encode()
+        body = json.dumps({**economic_request(intent), 'refresh': refresh}).encode()
         inbox.put_nowait({'type': 'http.request', 'body': body, 'more_body': False})
         async def receive(): return await inbox.get()
         async def send(message):
@@ -650,7 +657,7 @@ class StreamTransportTests(ProgressiveFixture):
         stream = io.StringIO()
         configure_logging(stream)
         try:
-            for outcome in ('succeeded', 'cancelled', 'stored', 'refresh'):
+            for outcome in ('succeeded', 'cancelled', 'stored', 'scalar-cached', 'refresh'):
                 with self.subTest(outcome):
                     async def script(value, callback, **_):
                         getter_reads({'requested': 3, 'issued': 2, 'coalesced': 1, 'reused': 0})
@@ -661,9 +668,12 @@ class StreamTransportTests(ProgressiveFixture):
                             await asyncio.Event().wait()
                         return self.value(100)
                     service = self.service(script)
-                    if outcome == 'stored':
-                        await service.store.save(economic_request(), self.base, scope=str(economic_request()))
-                    task, inbox, _, _, ready, _ = await self.asgi_stream(service, refresh=outcome == 'refresh')
+                    if outcome in ('stored', 'scalar-cached'):
+                        query = economic_request(2 if outcome == 'stored' else 0)
+                        historical = await Quotes(Engine()).quote(query) if outcome == 'stored' else self.base
+                        await service.store.save(query, historical, scope=str(query))
+                    task, inbox, _, _, ready, _ = await self.asgi_stream(service, refresh=outcome == 'refresh',
+                        intent=2 if outcome == 'stored' else 0)
                     await asyncio.wait_for(ready.wait(), 1)
                     if outcome == 'cancelled':
                         inbox.put_nowait({'type': 'http.disconnect'})
@@ -684,7 +694,7 @@ class StreamTransportTests(ProgressiveFixture):
                     self.assertEqual(row['rpc']['transport']['completed'], int(outcome != 'stored'))
                     self.assertEqual(row['rpc']['transport']['rpcCallsStarted'], 0 if outcome == 'stored' else 2)
                     self.assertTrue(row['requestId'])
-            self.assertEqual(len(rows), 4)
+            self.assertEqual(len(rows), 5)
         finally:
             logger.handlers, logger.level, logger.propagate = previous
 
@@ -747,6 +757,151 @@ class StreamTransportTests(ProgressiveFixture):
         finally:
             logger.handlers, logger.level, logger.propagate = previous
 
+
+
+class FamilyPersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        from cybergold_candidate.quoter.path_families import quote_path_family
+        q = Quotes(Engine())
+        query = economic_request()
+        self.market = await q.candidate(query, 0, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        self.core = await q.candidate(query, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
+        self.market['quotedOutput'] = '200'
+        self.core['quotedOutput'] = '100'
+        self.assertEqual(quote_path_family(self.market), 'market')
+        self.assertEqual(quote_path_family(self.core), 'core')
+        from cybergold_candidate.quoter.provenance import attach_origins
+        for family, value in [('market', self.market), ('core', self.core)]:
+            for chosen in value['plan']['conversions'].values():
+                chosen['discoveryOrigins'] = ['cybergold-custom' if family == 'market' else 'uniroute-local']
+            attach_origins(value)
+
+    def service(self, script):
+        value = EconomicQuotes(ScriptedQuoter(script), SharedStore())
+        self.addAsyncCleanup(value.close)
+        return value
+
+    async def stored(self, service):
+        await asyncio.gather(*tuple(service.background))
+        return service.store.family_rows.get(service.store.capture_scope(economic_request()), {})
+
+    async def test_json_and_stream_save_both_qualified_families_without_publishing_the_global_loser(self):
+        for streamed in (False, True):
+            with self.subTest(streamed=streamed):
+                async def script(request, callback=None, **options):
+                    await options['on_family'](self.core)
+                    await options['on_family'](self.market)
+                    if callback:
+                        await callback({'type': 'qualified', 'value': self.market})
+                    return deepcopy(self.market)
+                service, frames = self.service(script), []
+                result = (await service.progressive(economic_request(),
+                    lambda frame: asyncio.sleep(0, result=frames.append(deepcopy(frame)))) if streamed
+                    else await service.get(economic_request()))
+                self.assertEqual(result['quotedOutput'], '200')
+                if streamed:
+                    self.assertEqual([frame['value']['quotedOutput'] for frame in frames], ['200'])
+                stored = await self.stored(service)
+                self.assertEqual(set(stored), {'market', 'core'})
+                for family, original in [('market', self.market), ('core', self.core)]:
+                    for field in ('inputs', 'quotedOutput', 'plan', 'context', 'fees', 'routeOrigins'):
+                        self.assertEqual(stored[family][field], original[field])
+
+    async def test_full_budget_scalar_cache_is_offered_then_both_families_still_search(self):
+        better = deepcopy(self.core)
+        better['quotedOutput'] = '300'
+        for streamed in (False, True):
+            with self.subTest(streamed=streamed):
+                called, historical = asyncio.Event(), asyncio.Event()
+                async def script(request, callback=None, **options):
+                    called.set()
+                    seeded = await options['seed_lookup']()
+                    self.assertEqual(seeded['plan'], self.market['plan'])
+                    neighbors = await options['neighbors']()
+                    self.assertEqual(neighbors[0]['family'], 'market')
+                    if streamed:
+                        await historical.wait()
+                    await options['on_family'](better)
+                    if callback:
+                        await callback({'type': 'qualified', 'value': better})
+                    return deepcopy(better)
+                service, frames = self.service(script), []
+                await service.store.save(economic_request(), self.market,
+                                         scope=service.store.capture_scope(economic_request()))
+                service.store.lookup = AsyncMock(wraps=service.store.lookup)
+                service.store.neighbors = AsyncMock(wraps=service.store.neighbors)
+                async def publish(frame):
+                    frames.append(deepcopy(frame))
+                    if frame['type'] == 'qualified' and frame['value']['observation']['source'] == 'stored':
+                        historical.set()
+                result = (await service.progressive(economic_request(), publish) if streamed
+                          else await service.get(economic_request()))
+                self.assertTrue(called.is_set())
+                self.assertEqual(result['quotedOutput'], '300')
+                service.store.lookup.assert_awaited_once()
+                service.store.neighbors.assert_awaited_once()
+                if streamed:
+                    self.assertEqual(frames[0]['value']['observation']['source'], 'stored')
+                    self.assertEqual([frame['value']['quotedOutput'] for frame in frames], ['200', '300'])
+                self.assertEqual(set(await self.stored(service)), {'market', 'core'})
+
+    async def test_cancellation_after_ready_saves_the_losing_family_after_producer_drain(self):
+        ready, drained = asyncio.Event(), asyncio.Event()
+        async def script(request, callback, **options):
+            try:
+                await options['on_family'](self.core)
+                await options['on_family'](self.market)
+                await callback({'type': 'qualified', 'value': self.market})
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+        async def publish(frame):
+            ready.set()
+        service = self.service(script)
+        task = asyncio.create_task(service.progressive(economic_request(), publish))
+        await ready.wait(); task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(drained.is_set())
+        stored = await self.stored(service)
+        self.assertEqual(set(stored), {'market', 'core'})
+        self.assertEqual(stored['core']['quotedOutput'], '100')
+        self.assertEqual(stored['market']['quotedOutput'], '200')
+
+    async def test_producer_disproof_discards_both_family_observations(self):
+        ready = asyncio.Event()
+        async def script(request, callback, **options):
+            await options['on_family'](self.core)
+            await options['on_family'](self.market)
+            await callback({'type': 'qualified', 'value': self.market})
+            await ready.wait()
+            raise SnapshotChanged('test producer disproof')
+        async def publish(frame):
+            ready.set()
+        service = self.service(script)
+        service.store.save = AsyncMock(wraps=service.store.save)
+        with self.assertRaises(SnapshotChanged):
+            await service.progressive(economic_request(), publish)
+        await self.stored(service)
+        service.store.save.assert_not_called()
+
+    async def test_one_optional_family_write_failure_does_not_suppress_the_sibling(self):
+        from cybergold_candidate.quoter.path_families import quote_path_family
+        async def script(request, callback=None, **options):
+            await options['on_family'](self.core)
+            await options['on_family'](self.market)
+            return deepcopy(self.market)
+        service = self.service(script)
+        save = service.store.save
+        async def write(request, quote, **options):
+            if quote_path_family(quote) == 'core':
+                raise OSError('test optional family write failure')
+            return await save(request, quote, **options)
+        service.store.save = AsyncMock(side_effect=write)
+        self.assertEqual((await service.get(economic_request()))['quotedOutput'], '200')
+        stored = await self.stored(service)
+        self.assertEqual(set(stored), {'market'})
+        self.assertEqual(service.store.save.await_count, 2)
 
 if __name__ == '__main__':
     unittest.main()

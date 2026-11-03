@@ -362,18 +362,85 @@ class HostedForkAndSplitTests(unittest.IsolatedAsyncioTestCase):
                 source, target = (B, A) if sale else (A, B)
                 document = {'quote': {'route': [[standard_pool('v3', source, target, fee=500)]]}}
                 provider, _, transport, _ = make_provider(document, registry=registry, uniroute=True)
+                prefix_calls = []
+                async def prefix_quote(branches, mode, amount, block, **options):
+                    prefix_calls.append((deepcopy(branches), mode, amount, block, options))
+                    return {'amountOut': '67'}
+                provider.engine.semaphore = asyncio.Semaphore(8)
+                provider.engine.quote_sdk_branches = prefix_quote
                 self.addAsyncCleanup(provider.close)
                 candidates = await provider.discover(D if sale else A, A if sale else D, 101, BLOCK)
                 payload = json.loads(transport.requests[0].content)
                 self.assertEqual((payload['tokenInChainId'], payload['tokenOutChainId']), (1, 1))
                 self.assertEqual((payload['tokenIn'].lower(), payload['tokenOut'].lower()), (source, target))
                 self.assertNotIn(D, (payload['tokenIn'].lower(), payload['tokenOut'].lower()))
+                self.assertEqual(payload['amount'], '67' if sale else '101')
+                self.assertEqual(candidates[0][0]['amountIn'], '101')
+                self.assertEqual(len(prefix_calls), int(sale))
+                if sale:
+                    self.assertEqual(prefix_calls[0][1:4], ('exactIn', 101, BLOCK))
+                    self.assertEqual(prefix_calls[0][0][0]['hops'][0]['pool']['id'], registry.seed['id'])
                 hops = candidates[0][0]['hops']
                 self.assertEqual([hop['pool']['protocol'] for hop in hops], ['v4', 'v3'] if sale else ['v3', 'v4'])
                 self.assertEqual(hops[0 if sale else -1]['pool']['id'], registry.seed['id'])
                 self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for hop in hops for token in ('token0', 'token1')))
                 self.assertFalse(registry.calls)
                 self.assertFalse(registry.metadata_calls)
+
+    async def test_real_sdk_prefix_output_is_the_hosted_market_input_not_core_units(self):
+        from cybergold_candidate.route_quote_engine import RouteQuoteEngine
+        from quoter_fixture import Registry as OfflineRegistry, synthetic_pool
+        seed = synthetic_pool(B, D, 7905, 'v2')
+        seed.update(reserve0='2000000', reserve1='1000000')
+        for token in ('token0', 'token1'):
+            seed[token]['chainId'] = 31338
+        registry = OfflineRegistry([seed])
+        registry.chain, registry.core = 31338, D
+        engine = RouteQuoteEngine(settings(NEXT_PUBLIC_CHAIN_ID='31338'), registry)
+        self.addAsyncCleanup(engine.close)
+        transport = FixtureTransport({'quote': {'route': [[standard_pool('v2', B, A)]]}})
+        provider = UniRouteApiProvider(engine, settings(),
+            client_factory=lambda: httpx.AsyncClient(transport=transport))
+        self.addAsyncCleanup(provider.close)
+        candidates = await provider.discover(D, A, 101, BLOCK)
+        expected = 101*997*2000000//(1000000*1000+101*997)
+        payload = json.loads(transport.requests[0].content)
+        self.assertEqual(payload['amount'], str(expected))
+        self.assertNotEqual(expected, 101)
+        self.assertEqual((payload['tokenIn'].lower(), payload['tokenInChainId']), (B, 1))
+        self.assertEqual(candidates[0][0]['amountIn'], '101')
+        self.assertEqual(candidates[0][0]['hops'][0]['pool']['id'], seed['id'])
+
+    async def test_both_hosted_sources_share_the_observed_local_prefix_quantity(self):
+        from cybergold_candidate.search_observations import search_observation_scope
+        registry = Registry()
+        registry.chain, registry.core = 31338, D
+        registry.seed = {'id': v4_pool_id((B, D, 100, 1, ZERO)), 'protocol': 'v4',
+            'token0': {'address': B, 'chainId': 31338}, 'token1': {'address': D, 'chainId': 31338},
+            'feePips': 100, 'tickSpacing': 1, 'hooks': ZERO, 'poolManager': MANAGER}
+        api, _, standard, _ = make_provider({'quote': {'route': [[standard_pool('v3', B, A, fee=500)]]}},
+                                            registry=registry, uniroute=True)
+        guide, _, experimental, _ = make_provider({'quote': {'route': [], 'swapSteps': [
+            {'type': 'V3_SWAP_EXACT_IN', 'path': packed([B, A], [500]), 'amountIn': '67'}]}},
+            registry=registry, guidestar=True)
+        self.addAsyncCleanup(api.close)
+        self.addAsyncCleanup(guide.close)
+        calls = []
+        async def prefix_quote(branches, mode, amount, block, **options):
+            calls.append((branches, mode, amount, block, options))
+            await asyncio.sleep(0)
+            return {'amountOut': '67'}
+        for provider in (api, guide):
+            provider.engine.semaphore = asyncio.Semaphore(8)
+            provider.engine.quote_sdk_branches = prefix_quote
+        async with search_observation_scope():
+            candidates = await asyncio.gather(*(provider.discover(D, A, 101, BLOCK) for provider in (api, guide)))
+        self.assertEqual(len(calls), 1)
+        for transport, offers in zip((standard, experimental), candidates, strict=True):
+            request = json.loads(transport.requests[0].content)
+            self.assertEqual((request['tokenIn'], request['amount']), (B, '67'))
+            self.assertEqual(offers[0][0]['amountIn'], '101')
+            self.assertEqual(offers[0][0]['hops'][0]['pool']['id'], registry.seed['id'])
 
     async def test_standard_proposed_split_weights_survive_alongside_graph_alternatives(self):
         routes = [[{**standard_pool('v3', A, B, fee=fee), 'amountIn': str(weight)}]

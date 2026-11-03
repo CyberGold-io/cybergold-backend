@@ -128,17 +128,26 @@ class CachedEconomicEstimates:
                 'outputCurrency': self.core if buy else counter}
             scope = self.store.capture_scope(economic)
             neighbors = await self.store.neighbors(economic, scope=scope)
-            upper = neighbors.get('upper')
-            if upper is not None:
-                quote = upper['quote']
+            for neighbor in neighbors:
+                quote = neighbor['quote']
                 sample = sample_for_quote(quote)
+                if neighbor['side'] != 'upper' and not (neighbor['side'] == 'lower'
+                        and sample and sample.get('inputLimitObserved')):
+                    continue
+                # A known limited lower remains its observed tuple above that
+                # funding; ordinary lower observations are not extrapolated.
                 estimate = arithmetic_estimate(sample, request['amount']) if sample else None
-                if estimate is not None:
-                    packet['estimate'] = {**estimate, 'context': deepcopy(quote['context'])}
-                    if upper.get('identity') is not None:
-                        packet['estimate']['sourceIdentity'] = upper['identity']
-                    if quote.get('request', {}).get('inputs'):
-                        packet['estimate']['sourceRequestedInput'] = quote['request']['inputs'][0]['amount']
+                if estimate is None:
+                    continue
+                previous = packet.get('estimate')
+                rank = (int(estimate['amount']), -int(estimate['referenceInput']))
+                if previous is not None and rank <= (int(previous['amount']), -int(previous['referenceInput'])):
+                    continue
+                packet['estimate'] = {**estimate, 'context': deepcopy(quote['context'])}
+                if neighbor.get('identity') is not None:
+                    packet['estimate']['sourceIdentity'] = neighbor['identity']
+                if quote.get('request', {}).get('inputs'):
+                    packet['estimate']['sourceRequestedInput'] = quote['request']['inputs'][0]['amount']
         except Exception:
             # Optional SQL/accounting failure is an empty hint, not permission
             # to hydrate inventory/models, read a head or call RPC/SDK.

@@ -28,9 +28,9 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(service.close)
         return service
 
-    async def test_json_and_stream_refresh_start_before_optional_scope_and_return_before_it(self):
-        for streamed in (False, True):
-            with self.subTest(streamed=streamed):
+    async def test_json_and_stream_search_start_before_optional_scope_and_return_before_it(self):
+        for streamed, refresh in ((False, False), (False, True), (True, False), (True, True)):
+            with self.subTest(streamed=streamed, refresh=refresh):
                 held, drained, quoted = asyncio.Event(), asyncio.Event(), asyncio.Event()
                 async def observe():
                     try:
@@ -56,8 +56,8 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
                 frames = []
                 async def publish(frame):
                     frames.append(deepcopy(frame))
-                operation = (service.progressive(self.request, publish, refresh=True) if streamed
-                             else service.get(self.request, refresh=True))
+                operation = (service.progressive(self.request, publish, refresh=refresh) if streamed
+                             else service.get(self.request, refresh=refresh))
                 result = await asyncio.wait_for(operation, 1)
                 self.assertTrue(quoted.is_set())
                 self.assertFalse(drained.is_set())
@@ -71,6 +71,96 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(drained.is_set())
                 self.assertFalse(service.background)
 
+    async def test_feed_coalesces_both_sql_reads_and_cancelling_one_reader_preserves_its_sibling(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def observe():
+            entered.set(); await release.wait()
+        service = self.service(AsyncMock(), observe_scope=observe)
+        service.store.lookup = AsyncMock(return_value=self.value)
+        service.store.neighbors = AsyncMock(return_value=[{'family': 'market', 'side': 'lower', 'quote': self.value}])
+        feed = service.cache_feed(self.request)
+        one, two, three = (asyncio.create_task(read()) for read in (feed.neighbors, feed.neighbors, feed.lookup))
+        try:
+            await entered.wait(); one.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await one
+            release.set()
+            neighbors, value = await asyncio.gather(two, three)
+            self.assertEqual(neighbors[0]['quote'], self.value)
+            self.assertEqual(value, self.value)
+            neighbors[0]['quote']['quotedOutput'] = 'different-caller-copy'
+            self.assertEqual((await feed.neighbors())[0]['quote'], self.value)
+            self.assertEqual(await feed.lookup(), self.value)
+            service.store.lookup.assert_awaited_once()
+            service.store.neighbors.assert_awaited_once()
+        finally:
+            for task in (one, two, three):
+                task.cancel()
+            await asyncio.gather(one, two, three, return_exceptions=True)
+            await feed.close()
+        self.assertTrue(all(task.done() for task in feed.reads.values()))
+
+    async def test_independently_cancelled_sql_producers_are_misses_but_caller_cancel_still_drains(self):
+        service = self.service(AsyncMock())
+        service.store.lookup = AsyncMock(side_effect=asyncio.CancelledError())
+        service.store.neighbors = AsyncMock(side_effect=asyncio.CancelledError())
+        feed = service.cache_feed(self.request)
+        self.assertIsNone(await feed.lookup())
+        self.assertEqual(await feed.neighbors(), [])
+        # A sibling joins the same completed optional miss, without retrying.
+        self.assertIsNone(await feed.lookup())
+        self.assertEqual(await feed.neighbors(), [])
+        service.store.lookup.assert_awaited_once()
+        service.store.neighbors.assert_awaited_once()
+        await feed.close()
+        entered, drained = asyncio.Event(), asyncio.Event()
+        async def held(*_, **__):
+            try:
+                entered.set(); await asyncio.Event().wait()
+            finally:
+                drained.set()
+        service.store.lookup = AsyncMock(side_effect=held)
+        feed = service.cache_feed(self.request)
+        caller = asyncio.create_task(feed.lookup())
+        await entered.wait(); caller.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await caller
+        self.assertFalse(drained.is_set(), 'the feed still owns its memoized SQL producer')
+        await feed.close()
+        self.assertTrue(drained.is_set())
+        self.assertTrue(all(task.done() for task in feed.reads.values()))
+
+    async def test_late_historical_offer_cannot_replace_an_already_published_current_quote(self):
+        ready, release, offered = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        old, fresh = deepcopy(self.value), deepcopy(self.value)
+        old['quotedOutput'], fresh['quotedOutput'] = '900', '100'
+        async def script(request, callback, **options):
+            await callback({'type': 'qualified', 'value': fresh})
+            await ready.wait(); release.set()
+            await offered.wait()
+            return deepcopy(fresh)
+        service = self.service(script)
+        async def lookup(*_, **__):
+            await release.wait()
+            return deepcopy(old)
+        service.store.lookup = AsyncMock(side_effect=lookup)
+        service.store.neighbors = AsyncMock(return_value=[])
+        cached_offer = service.cached_offer
+        async def observed_offer(*args, **options):
+            value = await cached_offer(*args, **options)
+            offered.set()
+            return value
+        service.cached_offer = observed_offer
+        frames = []
+        async def publish(frame):
+            frames.append(deepcopy(frame)); ready.set()
+        result = await asyncio.wait_for(service.progressive(self.request, publish), 1)
+        self.assertTrue(offered.is_set())
+        self.assertEqual([frame['value']['quotedOutput'] for frame in frames], ['100'])
+        self.assertEqual(result['quotedOutput'], '100')
+        service.store.lookup.assert_awaited_once()
+        service.store.neighbors.assert_awaited_once()
+
     async def test_optional_exact_lookup_and_neighbors_are_independent_and_errors_are_misses(self):
         for error in (OSError('optional SQL failure'), SnapshotChanged('optional cache context changed')):
             with self.subTest(error=type(error).__name__):
@@ -83,12 +173,12 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
                 async def neighbors(*_, **__):
                     await exact_started.wait()
                     neighbors_done.set()
-                    return {'lower': {'quote': deepcopy(self.value)}, 'upper': None}
+                    return [{'family': 'market', 'side': 'lower', 'quote': deepcopy(self.value)}]
                 store.lookup, store.neighbors = lookup, neighbors
                 async def script(_request, **kwargs):
                     seed, nearby = await asyncio.gather(kwargs['seed_lookup'](), kwargs['neighbors']())
                     self.assertIsNone(seed)
-                    self.assertEqual(nearby['lower']['quote']['plan'], self.value['plan'])
+                    self.assertEqual(nearby[0]['quote']['plan'], self.value['plan'])
                     return deepcopy(self.value)
                 result = await asyncio.wait_for(self.service(script, store=store).get(self.request, refresh=True), 1)
                 self.assertEqual(result['quotedOutput'], self.value['quotedOutput'])
@@ -102,7 +192,7 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 drained.set()
         service = self.service(AsyncMock(), observe_scope=observe)
-        service.store.neighbors = AsyncMock(return_value={'lower': {'quote': self.value}, 'upper': None})
+        service.store.neighbors = AsyncMock(return_value=[{'family': 'market', 'side': 'lower', 'quote': self.value}])
         feed = service.cache_feed(self.request)
         one, two = asyncio.create_task(feed.lookup()), asyncio.create_task(feed.neighbors())
         try:
@@ -113,7 +203,7 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(drained.is_set())
             self.assertFalse(two.done())
             release.set()
-            self.assertEqual((await asyncio.wait_for(two, 1))['lower']['quote'], self.value)
+            self.assertEqual((await asyncio.wait_for(two, 1))[0]['quote'], self.value)
             self.assertTrue(drained.is_set())
             service.quoter.engine.registry.ensure_loaded.assert_awaited_once()
         finally:

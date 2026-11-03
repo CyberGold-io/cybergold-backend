@@ -271,7 +271,7 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
             amount = decoded['plan']['inputs'][0]['amount']
             return encoded(measured(amount * 10, stages=[
                 stage(0, ZERO, WETH, amount, amount), stage(1, WETH, CORE, amount, amount * 10)]))
-        simulation, q, rpc, provider = fixture(observed, observed, observed)
+        simulation, q, rpc, provider = fixture(observed, observed)
         saved = attach_origins(await simulation(request, plan))
         edited = {**request, 'inputs': [{**request['inputs'][0], 'amount': '30000'}]}
         saved['request'] = deepcopy(edited)
@@ -299,7 +299,8 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
                 self.assert_exact = scope == '30000' and value == edited
                 return deepcopy(saved)
             async def neighbors(self, value, *, scope):
-                return {'lower': None, 'upper': None}
+                self.assert_exact = scope == '30000' and value == edited
+                return [{'family': 'market', 'side': 'lower', 'identity': 'saved-native', 'quote': deepcopy(saved)}]
             async def save(self, *args, **kwargs):
                 return True
         store = Store()
@@ -313,12 +314,12 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['request'], edited)
         self.assertEqual(result['inputs'], edited['inputs'])
         self.assertEqual(result['quotedOutput'], '299700')
-        self.assertEqual(result['searchCoverage']['selectedPhase'], 'saved-plan-budget')
+        self.assertEqual(result['searchCoverage']['selectedPhase'], 'nearby-lower')
         self.assertEqual(result['observation'], {'source': 'search', 'refresh': True})
         self.assertEqual(result['routeOrigins']['discoveryProviders'], ['cybergold-custom', 'uniroute-local'])
-        self.assertEqual(len(provider.calls), 2)
-        self.assertEqual({decode(provider, index)[-1]['plan']['inputs'][0]['amount'] for index in range(2)}, {10000, 30000})
-        self.assertTrue(all(decode(provider, index)[2] == 'latest' for index in range(2)))
+        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(decode(provider, 0)[-1]['plan']['inputs'][0]['amount'], 30000)
+        self.assertEqual(decode(provider, 0)[2], 'latest')
         self.assertEqual((rpc.heads, rpc.verifications), ([], []))
         q.engine.quote_sdk_branches.assert_not_called()
         self.assertEqual(saved, retained)
@@ -619,7 +620,7 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(provider.calls), 1)
         self.assertEqual((rpc.heads, rpc.verifications), ([], []))
 
-    async def test_schema_provenance_and_stored_observation_preserve_helpers_evidence(self):
+    async def test_schema_provenance_and_stored_offer_preserve_helpers_evidence(self):
         request, plan = market()
         simulation, q, rpc, provider = fixture(encoded(measured(100000, stages=[stage(0, WETH, CORE, 10000, 100000)])))
         quote = attach_origins(await simulation(request, plan))
@@ -633,9 +634,11 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
             async def lookup(self, request, *, scope):
                 return deepcopy(normalized)
             async def neighbors(self, request, *, scope):
-                return {}
-        q.quote = AsyncMock(side_effect=AssertionError('Stored quote must not reprice'))
-        value = await EconomicQuotes(q, Store()).get(request)
+                return []
+        q.quote = AsyncMock(side_effect=AssertionError('Historical offer must not reprice'))
+        service = EconomicQuotes(q, Store())
+        value = await service.cached_offer(request, normalized, 'same-scope')
+        await service.close()
         self.assertEqual(value['observation'], {'source': 'stored', 'refresh': False})
         self.assertEqual(value['pricingEvidence'], quote['pricingEvidence'])
         self.assertEqual(value['context'], quote['context'])
