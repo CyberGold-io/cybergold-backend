@@ -1,8 +1,8 @@
-"""One producer's selection clock, distinct from caller cancellation.
+"""One producer's measured lifetime, distinct from caller cancellation.
 
-The selection window includes context acquisition and executable qualification.
-Existing terminal canonical checks and owned-task drain follow selection; their
-elapsed time is measured rather than hidden in a new discovery allowance.
+Production searches finish their finite work and publish checked improvements
+as they arrive. Explicit selection windows remain available to experiments;
+canonical checks and owned-task drain are measured separately in either mode.
 """
 import asyncio
 from contextlib import contextmanager
@@ -44,11 +44,11 @@ def budget_entry(function):
 
 
 class QuoteBudget:
-    def __init__(self, initial=5, extension=10):
+    def __init__(self, initial=None, extension=10):
         self.loop = asyncio.get_running_loop()
         self.started = self.loop.time()
-        self.initial = self.started + initial
-        self.deadline = self.initial + extension
+        self.initial = None if initial is None else self.started + initial
+        self.deadline = None if self.initial is None else self.initial + extension
         self.stop = asyncio.Event()
         self.ready = False
         self.first_qualified = None
@@ -67,20 +67,20 @@ class QuoteBudget:
             self.stop.set()
 
     def qualified(self):
-        """Admit a checked candidate while its producer's window is open."""
+        """Accept checked improvements until completion or an explicit cutoff."""
         now = self.loop.time()
         if self.stop.is_set():
             return False
-        if now >= self.deadline:
+        if self.deadline is not None and now >= self.deadline:
             self.finish_selection('timeout')
             return False
-        if now >= self.initial and self.ready:
+        if self.initial is not None and now >= self.initial and self.ready:
             self.finish_selection('best-initial')
             return False
         self.ready = True
         if self.first_qualified is None:
             self.first_qualified = now
-        if now >= self.initial:
+        if self.initial is not None and now >= self.initial:
             self.finish_selection('first-extension')
         return True
 
@@ -94,7 +94,7 @@ class QuoteBudget:
         self.drained = self.loop.time()
 
     async def prepare(self, operation):
-        """Context work consumes the original fifteen seconds as well."""
+        """Prepare owned context, sharing an explicitly requested window."""
         async with asyncio.timeout_at(self.deadline):
             return await self.discovery(operation)
 
@@ -122,6 +122,10 @@ class QuoteBudget:
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, stopped, return_exceptions=True)
+            if iscoroutine(operation):
+                # Cancellation can precede the owned task's first turn. Its
+                # coroutine then never awaited this accepted operation.
+                operation.close()
 
     async def produce(self, operation):
         async def clock():
@@ -131,7 +135,7 @@ class QuoteBudget:
                 return
             await asyncio.sleep(max(0, self.deadline - self.loop.time()))
             self.finish_selection('timeout')
-        timer = asyncio.create_task(clock())
+        timer = asyncio.create_task(clock()) if self.initial is not None else None
         try:
             result = await operation
             if self.selected is None:
@@ -143,8 +147,9 @@ class QuoteBudget:
             bind_quote_error(error, quote_failure_context(stopped))
             raise error from None
         finally:
-            timer.cancel()
-            await asyncio.gather(timer, return_exceptions=True)
+            if timer is not None:
+                timer.cancel()
+                await asyncio.gather(timer, return_exceptions=True)
             self.finished = self.loop.time()
 
     def timings(self):

@@ -158,6 +158,23 @@ class CoreQuoteStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([value[key] for key in ('helperFee', 'issueFee', 'redeemFee')], [42, 43, 44])
         self.assertEqual(len(rpc.calls), 7)
 
+    async def test_max_supply_event_invalidates_derived_cap_without_waiting_for_rpc(self):
+        cache, rpc = self.cache()
+        await cache.start()
+        await cache.warming
+        cache.update({'maxSupply': 20, 'effectiveCap': 20, 'supply': 10})
+        cache.apply_event('MaxTotalSupplyUpdated', {'newMaxTotalSupply': 30})
+        self.assertEqual(cache.value['maxSupply'], 30)
+        self.assertEqual(cache.value['supply'], 10)
+        self.assertNotIn('effectiveCap', cache.value)
+        self.assertEqual(len(rpc.calls), 7)
+        # A recovery cap can remain below the new global maximum. Preserve
+        # its later ordinary observation rather than guessing that it is 30.
+        cache.observe_facts({'issuanceCapacity': {
+            'effectiveCygldSupplyCap': {'status': 'success', 'value': '25'}}})
+        self.assertEqual((await cache.get())['effectiveCap'], 25)
+        self.assertEqual(len(rpc.calls), 7)
+
     async def test_model_preserves_actual_erc20_and_recovery_descriptors_and_capacity(self):
         cache, rpc = self.cache()
         cache.observe_model({'assets': [A, B], 'weights': ['500000', '500000'], 'conversions': ['1', '2'],

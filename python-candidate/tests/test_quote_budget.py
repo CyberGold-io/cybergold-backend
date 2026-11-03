@@ -1,4 +1,4 @@
-"""Producer deadline behavior through real trade coordination and intent sharing.
+"""Natural completion and explicit windows through real trade coordination.
 
 Provider I/O is inert: declared completion times represent already checked
 executions. Each provider uses the public budget hook, then its own finalizer;
@@ -6,8 +6,10 @@ these fixtures do not stand in for Core/market contract or route qualification.
 """
 import asyncio
 from copy import deepcopy
+import inspect
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context, current_budget
 from cybergold_candidate.quote_errors import QuoteFailure, RpcTimeout
@@ -148,6 +150,85 @@ class TotalQuoteBudgetTests(unittest.IsolatedAsyncioTestCase):
         async with asyncio.timeout(1):
             while not predicate():
                 await asyncio.sleep(0)
+
+    async def test_default_finishes_finite_work_and_publishes_later_better_candidate(self):
+        async def run(budget):
+            provider = self.providers(core=[(.005, 190), (.04, 260)], market=[(.01, 200)],
+                                      finishes={'core': .045, 'market': .02})
+            frames = []
+            task = self.operation(provider, budget, frames)
+            await self.wait_for(lambda: any(frame['type'] == 'qualified' for frame in frames))
+            self.assertFalse(task.done(), 'ready publication must precede finite tail completion')
+            result = await task
+            self.assertTrue(all(event.is_set() for event in provider.drained.values()))
+            self.assertFalse(provider.quotes.sharing.pending)
+            return result, frames, provider
+
+        bounded = QuoteBudget(.025, .1)
+        old_result, old_frames, old_provider = await run(bounded)
+        natural = QuoteBudget()
+        result, frames, provider = await run(natural)
+        self.assertEqual((old_result['strategy'], old_result['quotedOutput']), ('market', '200'))
+        self.assertEqual(bounded.reason, 'best-initial')
+        self.assertEqual((result['strategy'], result['quotedOutput']), ('core', '260'))
+        self.assertEqual(natural.reason, 'complete')
+        self.assertIsNone(natural.initial)
+        self.assertIsNone(natural.deadline)
+        self.assertEqual([frame['value']['quotedOutput'] for frame in frames
+                          if frame['type'] == 'qualified'], ['190', '200', '260'])
+        self.assertFalse(any(frame.get('value', {}).get('quotedOutput') == '260' for frame in old_frames))
+        # These inert providers perform no RPC. Count their checked execution
+        # work honestly: natural completion allows one more qualification.
+        self.assertEqual(sum(isinstance(item, tuple) for item in old_provider.actions), 2)
+        self.assertEqual(sum(isinstance(item, tuple) for item in provider.actions), 3)
+        self.assertGreater(natural.finished - natural.started, bounded.finished - bounded.started)
+
+    async def test_default_context_and_checked_winner_survive_past_former_maximum(self):
+        budget = QuoteBudget()
+        real_loop = asyncio.get_running_loop()
+        # Advance only this producer's measurement clock. No fifteen-second
+        # wall-clock sleep or extension is necessary to prove late admission.
+        budget.loop = SimpleNamespace(time=lambda: real_loop.time() + 20)
+        async def work():
+            await asyncio.sleep(0)
+            self.assertTrue(budget.qualified())
+            return {'value': 'checked'}
+        value = await budget.produce(budget.prepare(work()))
+        self.assertEqual(value, {'value': 'checked'})
+        self.assertGreaterEqual(budget.timings()['firstQualifiedMs'], 20_000)
+        self.assertEqual(budget.reason, 'complete')
+
+    async def test_default_last_disconnect_drains_without_a_selection_timer(self):
+        provider = self.providers()
+        budget = QuoteBudget()
+        operation = self.operation(provider, budget, [])
+        await asyncio.gather(*(event.wait() for event in provider.started.values()))
+        operation.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await operation
+        self.assertTrue(all(event.is_set() for event in provider.cancelled.values()))
+        self.assertTrue(all(event.is_set() for event in provider.drained.values()))
+        self.assertFalse(provider.quotes.sharing.pending)
+        self.assertIsNone(budget.reason)
+
+    async def test_owned_cancellation_before_first_turn_closes_accepted_operation(self):
+        entered = False
+        async def operation():
+            nonlocal entered
+            entered = True
+            await asyncio.Event().wait()
+        pending = operation()
+        create_task = asyncio.create_task
+        def cancel_before_first_turn(coroutine, *args, **kwargs):
+            task = create_task(coroutine, *args, **kwargs)
+            if coroutine.__qualname__.endswith('QuoteBudget.discovery.<locals>.owned'):
+                task.cancel()
+            return task
+        with patch('cybergold_candidate.quote_budget.asyncio.create_task', cancel_before_first_turn):
+            with self.assertRaises(asyncio.CancelledError):
+                await QuoteBudget().discovery(pending)
+        self.assertFalse(entered)
+        self.assertEqual(inspect.getcoroutinestate(pending), inspect.CORO_CLOSED)
 
     async def test_resolver_and_head_consume_original_initial_window(self):
         provider = self.providers(core=[(.09, 190)], resolver_delay=.04, head_delay=.04)

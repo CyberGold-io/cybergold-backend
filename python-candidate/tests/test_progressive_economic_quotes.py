@@ -65,6 +65,7 @@ class ProgressiveTests(ProgressiveFixture):
             chosen['discoveryOrigins'] = ['cybergold-custom']
         attach_origins(first)
         terminal = deepcopy(first)
+        terminal['searchCoverage']['inputLimitObserved'] = True
         for chosen in terminal['plan']['conversions'].values():
             chosen['discoveryOrigins'] = ['cybergold-custom', 'uniswap-alpharouter']
         attach_origins(terminal)
@@ -80,10 +81,65 @@ class ProgressiveTests(ProgressiveFixture):
         self.assertEqual(result['routeOrigins']['discoveryProviders'],
                          ['cybergold-custom', 'uniswap-alpharouter'])
         self.assertEqual(result['quotedOutput'], first['quotedOutput'])
+        self.assertTrue(result['reuseSample']['inputLimitObserved'])
+        self.assertNotIn('inputLimitObserved', frames[0]['value']['reuseSample'])
+        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'qualified'])
+        self.assertTrue(frames[1]['value']['reuseSample']['inputLimitObserved'])
+        for field in ('inputs', 'quotedOutput', 'fees', 'context'):
+            self.assertEqual(frames[1]['value'][field], frames[0]['value'][field])
         self.assertEqual(result['plan']['body'], first['plan']['body'])
         self.assertEqual(frames[0]['value']['routeOrigins']['discoveryProviders'], ['cybergold-custom'])
         stored = service.store.rows[service.store.capture_scope(economic_request())]
         self.assertEqual(stored['routeOrigins'], result['routeOrigins'])
+        self.assertTrue(stored['reuseSample']['inputLimitObserved'])
+
+    async def test_terminal_legacy_limit_is_qualified_before_http_complete(self):
+        query = economic_request()
+        query['inputs'][0]['amount'] = str(2 * int(query['inputs'][0]['amount']))
+        first = self.value(100, request=deepcopy(query))
+        first['searchCoverage'] = {**first['searchCoverage'], 'selectedPhase': 'saved-plan'}
+        first['searchCoverage'].pop('inputLimitObserved', None)
+        terminal = deepcopy(first)
+        terminal['searchCoverage']['selectedPhase'] = 'backward-prefix'
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': first})
+            return terminal
+        service = self.service(script)
+        app = create_app(economic_quotes=service)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+            response = await client.post('/api/economic-quotes/stream', json=query)
+        self.assertEqual(response.status_code, 200, response.text)
+        frames = [json.loads(line) for line in response.text.splitlines()]
+        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'qualified', 'complete'])
+        self.assertNotIn('inputLimitObserved', frames[0]['value']['reuseSample'])
+        self.assertTrue(frames[1]['value']['reuseSample']['inputLimitObserved'])
+        self.assertEqual(frames[1]['value']['inputs'], first['inputs'])
+        self.assertEqual(frames[1]['value']['fees'], first['fees'])
+        self.assertEqual(frames[1]['value']['plan']['body'], first['plan']['body'])
+        self.assertEqual(frames[1]['value']['quotedOutput'], first['quotedOutput'])
+        await self.persisted(service)
+        stored = service.store.rows[service.store.capture_scope(query)]
+        self.assertTrue(stored['reuseSample']['inputLimitObserved'])
+        self.assertEqual(stored['inputs'], first['inputs'])
+
+    async def test_terminal_hint_delivery_failure_remains_owned_and_propagates(self):
+        first = self.value(100)
+        first['searchCoverage'] = {'selectedPhase': 'saved-plan'}
+        terminal = deepcopy(first)
+        terminal['searchCoverage']['inputLimitObserved'] = True
+        async def script(value, callback, **_):
+            await callback({'type': 'qualified', 'value': first})
+            return terminal
+        service = self.service(script)
+        attempts = []
+        async def publish(frame):
+            attempts.append(deepcopy(frame))
+            if len(attempts) == 2:
+                raise OSError('fixture publisher disconnected')
+        with self.assertRaisesRegex(OSError, 'fixture publisher disconnected'):
+            await service.progressive(economic_request(), publish)
+        self.assertEqual(len(attempts), 2)
+        self.assertTrue(attempts[1]['value']['reuseSample']['inputLimitObserved'])
 
     async def test_neighbor_sdk_disproof_does_not_retract_a_completed_helpers_quote(self):
         from cybergold_candidate.quoter import search

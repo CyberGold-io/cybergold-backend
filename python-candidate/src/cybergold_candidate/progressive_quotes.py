@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from .quoter.ranking import prefer_completed
 from .quoter.provenance import merge_origins
-from .quoter.reuse_estimate import attach_reuse_sample
+from .quoter.reuse_estimate import attach_reuse_sample, input_limit_observed
 from .quoter.types import EconomicRequest
 from .recovery_rpc import SnapshotChanged
 from .telemetry import observe
@@ -49,7 +49,17 @@ class CanonicalPublication:
                 if not self.closed:
                     await self.publish({'type': kind})
                 continue
-            if self.closed or not self.preferred(value):
+            if self.closed:
+                continue
+            if kind == 'terminal' and self.best is not None:
+                previous_limit = input_limit_observed(self.best)
+                merge_origins(self.best, value)
+                if not previous_limit and input_limit_observed(self.best):
+                    # Equivalent terminal economics can add a paid limitation
+                    # observation. Deliver the whole winner via the same owned
+                    # publication path before the transport's complete frame.
+                    await self.publish({'type': 'qualified', 'value': deepcopy(self.best)})
+            if not self.preferred(value):
                 continue
             self.best = {**attach_reuse_sample(value),
                          'observation': {'source': 'search', 'refresh': self.refresh}}
@@ -62,9 +72,10 @@ async def progressive_quote(service, request, publish, *, refresh=False):
     try:
         previous = await cache.lookup() if not refresh else None
         if previous is not None:
-            value = await service.cached_offer(request, previous, await cache.scope())
-            await publish({'type': 'qualified', 'value': deepcopy(value)})
-            return value
+            offered = await service.cached_offer(request, previous, await cache.scope())
+            await publish({'type': 'qualified', 'value': deepcopy(offered)})
+            if not service.unfilled_budget(request, offered):
+                return offered
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,

@@ -290,7 +290,16 @@ class HelpersPlanSimulation:
             responses, counts = await reads.many([json.dumps(params, sort_keys=True)], produce, retain=True)
             response = responses[0]
         if 'error' in response:
-            raise preview_error(response['error']) or rpc_failure(response['error'])
+            error = preview_error(response['error']) or rpc_failure(response['error'])
+            data = response['error'].get('data')
+            if isinstance(data, str) and data[:10].lower() == '0xdb8b21c4':
+                try:
+                    currency, amount = rpc.w3.codec.decode(['address', 'uint256'], bytes.fromhex(data[10:]))
+                    # Private search input, not a capacity or output claim.
+                    error.unsettled_intermediate = {'currency': currency, 'amount': int(amount)}
+                except Exception:
+                    pass  # Malformed bytes keep their ordinary contract error.
+            raise error
         output = METHOD['outputs'][0]
         decoded = rpc.w3.codec.decode([collapse_if_tuple(output)], bytes.fromhex(response['result'][2:]))[0]
         measured = abi_value(decoded, output)

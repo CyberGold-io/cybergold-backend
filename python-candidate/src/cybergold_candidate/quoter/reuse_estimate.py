@@ -17,6 +17,13 @@ def scalar_request(request):
     return int(request['intent']) in (0, 1) and len(request['inputs']) == 1
 
 
+def input_limit_observed(quote):
+    """Historical limitation of this route/funding, never a capacity bound."""
+    coverage = quote.get('searchCoverage')
+    return isinstance(coverage, dict) and (coverage.get('inputLimitObserved') is True
+        or coverage.get('selectedPhase') in ('backward-prefix', 'measured-funding', 'capacity-limited'))
+
+
 def sample_for_quote(quote):
     """Normalize cached accounting without requiring exact legacy precision."""
     try:
@@ -72,7 +79,8 @@ def sample_for_quote(quote):
         if reference <= 0 or output < 0 or any(value < 0 for value in fees.values()):
             return None
         return {'referenceInput': str(reference), 'netOutput': str(output),
-                'fees': {name: str(value) for name, value in fees.items()}, 'basis': basis}
+                'fees': {name: str(value) for name, value in fees.items()}, 'basis': basis,
+                **({'inputLimitObserved': True} if input_limit_observed(quote) else {})}
     except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
         return None
 

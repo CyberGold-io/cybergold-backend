@@ -396,7 +396,7 @@
             }
           }
         },
-        "description": "Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast.",
+        "description": "Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Fully funded stored offers retain their original context; smaller-funded offers seed ordinary requested-budget optimization. Explicit refresh searches current state using saved topology. Execution guards and lifetime are bound during unsigned preparation.",
         "parameters": [
           {
             "name": "X-CyberGold-Attempt-Id",
@@ -426,7 +426,7 @@
         },
         "responses": {
           "200": {
-            "description": "Canonical-ready qualified improvements, then exactly one complete or error. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
+            "description": "Helpers-qualified improvements followed by complete or error; caller cancellation ends its subscription. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
             "content": {
               "application/x-ndjson": {
                 "schema": {
@@ -478,7 +478,7 @@
             }
           }
         },
-        "description": "Subscription-owned complete economic incumbents, canonically confirmed before ready publication while bounded search continues. Stored hits retain their historical observation contract. Caller disconnect cancels/drains only its owned work and preserves its last confirmed incumbent without signing or submission.",
+        "description": "Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Latest observations have nullable block coordinates; stored offers retain their original context. Caller disconnect cancels and drains only its owned work.",
         "parameters": [
           {
             "name": "X-CyberGold-Attempt-Id",
@@ -8042,6 +8042,10 @@
                       "observed-nonretained"
                     ],
                     "type": "string"
+                  },
+                  "inputLimitObserved": {
+                    "description": "Historical limitation of this route/funding; not a global or current maximum.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -8365,6 +8369,10 @@
               },
               "maxCoreInvocations": {
                 "type": "number"
+              },
+              "inputLimitObserved": {
+                "description": "Historical route/funding limitation, advisory only.",
+                "type": "boolean"
               },
               "maxAmmHops": {
                 "type": "number"
@@ -9765,6 +9773,10 @@
                   },
                   "maxCoreInvocations": {
                     "type": "number"
+                  },
+                  "inputLimitObserved": {
+                    "description": "Historical route/funding limitation, advisory only.",
+                    "type": "boolean"
                   },
                   "maxAmmHops": {
                     "type": "number"
@@ -24173,6 +24185,10 @@
                               "maxCoreInvocations": {
                                 "type": "number"
                               },
+                              "inputLimitObserved": {
+                                "description": "Historical route/funding limitation, advisory only.",
+                                "type": "boolean"
+                              },
                               "maxAmmHops": {
                                 "type": "number"
                               },
@@ -30828,6 +30844,10 @@
                   "maxCoreInvocations": {
                     "type": "number"
                   },
+                  "inputLimitObserved": {
+                    "description": "Historical route/funding limitation, advisory only.",
+                    "type": "boolean"
+                  },
                   "maxAmmHops": {
                     "type": "number"
                   },
@@ -33014,6 +33034,10 @@
                               },
                               "maxCoreInvocations": {
                                 "type": "number"
+                              },
+                              "inputLimitObserved": {
+                                "description": "Historical route/funding limitation, advisory only.",
+                                "type": "boolean"
                               },
                               "maxAmmHops": {
                                 "type": "number"
@@ -48266,7 +48290,8 @@
           "rpc-access-denied",
           "rpc-rate-limit",
           "rpc-timeout",
-          "rpc-unavailable"
+          "rpc-unavailable",
+          "unsupported-simulation-funding"
         ],
         "type": "string"
       },
@@ -48361,7 +48386,8 @@
                   "rpc-access-denied",
                   "rpc-rate-limit",
                   "rpc-timeout",
-                  "rpc-unavailable"
+                  "rpc-unavailable",
+                  "unsupported-simulation-funding"
                 ],
                 "type": "string"
               }
@@ -51034,6 +51060,10 @@
               },
               "maxCoreInvocations": {
                 "type": "number"
+              },
+              "inputLimitObserved": {
+                "description": "Historical route/funding limitation, advisory only.",
+                "type": "boolean"
               },
               "maxAmmHops": {
                 "type": "number"
@@ -61908,7 +61938,8 @@
               "rpc-access-denied",
               "rpc-rate-limit",
               "rpc-timeout",
-              "rpc-unavailable"
+              "rpc-unavailable",
+              "unsupported-simulation-funding"
             ],
             "type": "string"
           },

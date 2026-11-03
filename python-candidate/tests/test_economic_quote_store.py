@@ -25,6 +25,39 @@ def fixture():
 
 
 class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
+    async def test_larger_cached_budget_can_be_the_best_fitting_lower_quote(self):
+        settings, registry, request, _ = fixture()
+        service = EconomicQuoteStore(settings, registry)
+        quotes, headers, executed = {}, [], []
+        for amount, funding, output in [(95000, 95000, 99), (105000, 105000, 1),
+                                         (110000, 90000, 100), (120000, 80000, 100)]:
+            candidate = {**request, 'inputs': [{'currency': USDT, 'amount': str(amount)}]}
+            identity = service.capture_scope(candidate).identity
+            quotes[identity] = {'request': candidate, 'inputs': [{'currency': USDT, 'amount': str(funding)}],
+                                'quotedOutput': str(output)}
+            headers.append({'identity': identity, 'request': candidate,
+                            'funded_input': str(funding), 'quoted_output': str(output)})
+        async def prepare():
+            pass
+        class Connection:
+            async def execute(self, query, values):
+                executed.append((query, values))
+                return self
+            async def fetchall(self):
+                if len(executed) == 1:
+                    return headers
+                return [{'identity': key, 'quote': quotes[key]} for key in executed[-1][1][-1]]
+        @asynccontextmanager
+        async def connection():
+            yield Connection()
+        registry.store.prepare = prepare
+        registry.store.database = SimpleNamespace(connection=connection)
+        selected = await service.neighbors(request)
+        self.assertEqual(selected['lower']['quote']['inputs'][0]['amount'], '80000')
+        self.assertEqual(selected['lower']['quote']['request']['inputs'][0]['amount'], '120000')
+        self.assertEqual(selected['upper']['quote']['request']['inputs'][0]['amount'], '105000')
+        self.assertEqual(len(executed), 2)
+
     async def test_better_lower_output_is_not_hidden_by_a_nearer_bad_quote(self):
         settings, registry, request, _ = fixture()
         service = EconomicQuoteStore(settings, registry)

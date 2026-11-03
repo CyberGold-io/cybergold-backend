@@ -10,7 +10,8 @@ import time
 from types import SimpleNamespace
 from typing import Literal
 
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.requests import ClientDisconnect
 from eth_abi.exceptions import EncodingError
 from pydantic import BaseModel, Field
 from web3 import Web3
@@ -535,10 +536,16 @@ async def handle_trade_quote(request, service, *, model=False):
         return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
     observation = QuoteObservation(request, value)
     if model:
+        from .economic_quotes import request_operation
         try:
-            result = await service.get_model(value)
+            result = await request_operation(request, lambda: service.get_model(value))
             observation.finish('succeeded')
             return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+        except (asyncio.CancelledError, ClientDisconnect) as error:
+            observation.finish('cancelled')
+            if isinstance(error, ClientDisconnect):
+                return Response(status_code=499)
+            raise
         except Exception as error:
             payload = observation.event(observation.error(error))
             return JSONResponse({key: value for key, value in payload.items() if key != 'type'},
@@ -573,4 +580,5 @@ async def handle_trade_quote(request, service, *, model=False):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
             observation.finish('cancelled')
-    return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
+    from .progressive_quotes import OwnedStreamingResponse
+    return OwnedStreamingResponse.create(events())

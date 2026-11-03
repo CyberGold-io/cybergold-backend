@@ -68,6 +68,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_observations
 python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_directional_bitmap_acquisition.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_families.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quoter_failure_history.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
@@ -91,6 +92,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_cache_parallel.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
+python-candidate/.venv/bin/python python-candidate/tests/test_economic_http_lifetime.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_sample_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py

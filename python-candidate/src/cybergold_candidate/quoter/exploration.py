@@ -3,12 +3,12 @@ import random
 
 from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
-from ..market_fee import get_market_fee_rate, routed_sell_budget
 from ..route_scheduler import schedule_routes
 from .amm import PartialPath
 from .contracts import capture_paths
 from .discovery import market_plan, route_identity
 from .prefix import repair_prefix
+from .capacity_recovery import recover_selected
 
 
 async def explore(quoter, request, block, session, evaluate, incumbent, *, observations,
@@ -43,8 +43,9 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         session.started.add(identity)
         try:
             with capture_paths():
+                selected = market_plan(source, target, route, amount, origins=origins)
                 try:
-                    value = await evaluate(0, 'core-first', False, selected=market_plan(source, target, route, amount, origins=origins),
+                    value = await evaluate(0, 'core-first', False, selected=selected,
                         phase='route-family-exploration' if seeded else 'route-family', partial=True)
                     if value is not None:
                         session.resolved.add(identity)
@@ -53,9 +54,13 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
                         raise
                     # Explore why this new path cannot settle, so the existing
                     # backward-prefix producer can construct a different plan.
-                    rate = get_market_fee_rate(quoter.engine.registry.chain, source, target, 'exact-in')
-                    funding = amount - routed_sell_budget(amount, rate)[1] if request['intent'] == 1 else amount
-                    await quoter.price_path(route, funding, block, {}, observations)
+                    proposals = await recover_selected(quoter, request, selected, block, observations,
+                        unsettled=getattr(error, 'unsettled_intermediate', None))
+                    for proposal in proposals:
+                        session.claim()
+                        session.repairs += 1
+                        await evaluate(0, 'core-first', False, selected=proposal['plan'],
+                            funding=proposal['inputs'], phase='backward-prefix')
         except PartialPath as error:
             # Inline in the parent lease: no nested scheduler permit wait.
             session.claim()

@@ -15,10 +15,12 @@ from ..uniswap_routes import pool_identity
 from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_steps
 from .custom_routes import CustomRoutes
-from .contracts import path_nomination
+from .contracts import path_nomination, capture_paths
 from .discovery import current_topology, route_identity
 from .route_tools import RouteQuery, round_robin
 from .cooperative import CHECKPOINT, close, values, async_values, async_finish, finish, sort_steps
+from .amm import PartialPath
+from .prefix import backward_input
 
 
 def identity_template(currency):
@@ -218,8 +220,6 @@ class CyberGoldAmmAdapter:
             async for branches, origins in candidates:
                 # A common leading wrap belongs to Helpers funding, not to the
                 # adapter's whole-conversion intermediate set.
-                trial = deepcopy(bank)
-                output, consumed, retained = 0, 0, []
                 try:
                     leading = [row['hops'][0].get('kind') for row in branches]
                     normalized = deepcopy(branches)
@@ -229,17 +229,35 @@ class CyberGoldAmmAdapter:
                         for row in normalized:
                             row['hops'] = row['hops'][1:]
                     routes = weighted_routes(normalized)
-                    for row, funded in zip(normalized, split_runtime(amount, routes), strict=True):
-                        row['amountIn'] = str(funded)
-                    for row in normalized:
-                        funded = int(row['amountIn'])
-                        with path_nomination(source, origins):
-                            used, received = await price_path(row['hops'], funded, block, trial, canonical)
-                        output += received
-                        consumed += used
-                        if used < funded:
-                            retained.append({'branch': branch, 'stage': stage + (physical_source.lower() != source.lower()), 'currency': physical_source,
-                                             'amount': str(funded - used)})
+                    async def replay(funding):
+                        trial = deepcopy(bank)
+                        output, consumed, retained = 0, 0, []
+                        for row, funded in zip(normalized, split_runtime(funding, routes), strict=True):
+                            row['amountIn'] = str(funded)
+                            with path_nomination(source, origins), capture_paths(reuse=True):
+                                used, received = await price_path(row['hops'], funded, block, trial, canonical)
+                            output += received
+                            consumed += used
+                            if used < funded:
+                                retained.append({'branch': branch,
+                                    'stage': stage + (physical_source.lower() != source.lower()),
+                                    'currency': physical_source, 'amount': str(funded-used)})
+                        return output, consumed, retained, trial
+                    funding = amount
+                    try:
+                        output, consumed, retained, trial = await replay(funding)
+                    except PartialPath as error:
+                        from .capacity_recovery import scaled_funding
+                        repaired = await backward_input(self, error.trace)
+                        if repaired is None:
+                            continue
+                        funding = scaled_funding(amount, error.trace.funded, repaired)
+                        if not 0 < funding < amount:
+                            continue
+                        # The failed trial advanced its prefix. Reconstruct the
+                        # whole conversion from the preceding operation's bank,
+                        # retaining route weights and actual split order.
+                        output, consumed, retained, trial = await replay(funding)
                 except SnapshotChanged:
                     raise
                 except Exception as error:
@@ -248,10 +266,10 @@ class CyberGoldAmmAdapter:
                     continue
                 if retained:
                     retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
-                if best is None or output > best[0]:
+                if best is None or output > best[0] or (output == best[0] and funding < best[7]):
                     template = {'inputCurrency': physical_source, 'outputCurrency': target,
                                 'routes': routes}
-                    best = output, template, retained, trial, deepcopy(normalized), consumed, origins
+                    best = output, template, retained, trial, deepcopy(normalized), consumed, origins, funding
                     if first and output > 0:
                         break
                 await asyncio.sleep(0)
@@ -262,8 +280,10 @@ class CyberGoldAmmAdapter:
         if capture is not None:
             capture.update(inputCurrency=source, outputCurrency=target, branches=[{'hops': row['hops']} for row in best[4]], template=deepcopy(best[1]),
                            discoveryOrigins=sorted(best[6]),
-                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(amount),
+                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(best[7]),
                                          'consumedInput': str(best[5]), 'outputCurrency': target, 'output': str(best[0])})
+            if best[7] != amount:
+                capture['_funding'] = best[7]
         bank.clear()
         bank.update(best[3])
         return best[1], best[0], best[2]

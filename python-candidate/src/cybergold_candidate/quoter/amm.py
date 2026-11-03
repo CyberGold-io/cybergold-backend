@@ -114,7 +114,7 @@ async def price_path(engine, route, amount, block, bank, canonical):
             # physical replay. Retain it through the same path producer.
             native = paths([], source, physical_source)
             leading = native[0] if native and 'pool' in route[0] else []
-    current, used = amount, amount
+    current, used, physical_index = amount, amount, 0
     async with initial_snapshots(engine, route if current else [], block, canonical, bank) as acquire:
         for index, hop in enumerate(route):
             if not current:
@@ -140,13 +140,16 @@ async def price_path(engine, route, amount, block, bank, canonical):
                         if field in observed:
                             before[field] = deepcopy(observed[field])
                 trace.hops.append(HopTrace(deepcopy(hop), current, debit, output, before))
-            if index == 0:
+            # Native transitions preserve raw units. The first physical pool
+            # can retain source funding even when a wrap/unwrap precedes it.
+            if physical_index == 0:
                 used = debit
             elif debit < current:
                 if trace is not None:
                     trace.consumed, trace.output = used, output
                     raise PartialPath(trace)
                 raise InvalidPreview('Unsettled current-operation intermediate currency.')
+            physical_index += 1
             if session is not None:
                 target = hop['pool']['token1' if hop['zeroForOne'] else 'token0']['address']
                 session.publish_completed(RouteQuery(source, target, amount, block),

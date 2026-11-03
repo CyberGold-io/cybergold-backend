@@ -43,7 +43,32 @@ async def persisted(service):
 
 
 class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
-    async def test_better_fitting_cached_tuple_beats_poor_exact_hit_without_rpc_or_mutation(self):
+    async def test_cached_offer_uses_fitting_funding_even_from_a_higher_budget_and_prefers_less_on_tie(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        self.addAsyncCleanup(quotes.close)
+        small_request = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        smaller = await quoter.quote(small_request)
+        maximum = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '50005'}]}
+        previous = await quoter.quote(maximum)
+        previous['quotedOutput'] = smaller['quotedOutput']
+        previous['estimatedRecipientOutputs'] = deepcopy(smaller['estimatedRecipientOutputs'])
+        # The historical search tried an even larger maximum and found this
+        # smaller-funded complete tuple; its funding still fits the new input.
+        smaller['request'] = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '100010'}]}
+        before = deepcopy(smaller)
+        store.neighbors = AsyncMock(return_value={'lower': {'quote': smaller}})
+        quoter.quote = AsyncMock(side_effect=AssertionError('Cache selection must not reprice'))
+        offered = await quotes.cached_offer(maximum, previous, store.capture_scope(maximum))
+        self.assertEqual(offered['request'], maximum)
+        self.assertEqual(offered['quotedOutput'], previous['quotedOutput'])
+        self.assertEqual(offered['inputs'], smaller['inputs'])
+        self.assertEqual(offered['plan'], smaller['plan'])
+        self.assertEqual(offered['fees'], smaller['fees'])
+        self.assertEqual(smaller, before)
+        quoter.quote.assert_not_called()
+
+    async def test_cached_offer_selects_better_complete_tuple_without_rpc_or_mutation(self):
         store = SharedStore()
         quoter, quotes = service(store)
         small_request = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
@@ -58,16 +83,8 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         quoter.quote = AsyncMock(side_effect=AssertionError('Stored offer must not search'))
         block = quoter.engine.block
         quoter.engine.block = AsyncMock(side_effect=AssertionError('Stored offer must not read a head'))
-        app = create_app(economic_quotes=quotes)
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
-            ordinary = await client.post('/api/economic-quotes', json=large_request)
-            streamed = await client.post('/api/economic-quotes/stream', json=large_request)
-        self.assertEqual(ordinary.status_code, 200, ordinary.text)
-        self.assertEqual(streamed.status_code, 200, streamed.text)
-        frames = [json.loads(line) for line in streamed.text.splitlines()]
-        visible = [frame['value'] for frame in frames if frame['type'] in ('qualified', 'complete')]
-        self.assertTrue(visible)
-        for result in [ordinary.json(), *visible]:
+        offered = await quotes.cached_offer(large_request, poor, store.capture_scope(large_request))
+        for result in [offered]:
             self.assertEqual(result['request'], large_request)
             for field in ('inputs', 'plan', 'context', 'quotedOutput', 'fees', 'conversionObservations'):
                 self.assertEqual(result[field], small[field])
@@ -77,9 +94,54 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         quoter.engine.block.assert_not_called()
         quoter.engine.block = block
         prepared = await TransactionPreparation(quoter).prepare({
-            'quote': ordinary.json(), 'sender': USER, 'recipient': USER})
+            'quote': offered, 'sender': USER, 'recipient': USER})
         self.assertEqual(prepared['plan']['inputs'], small['inputs'])
         self.assertEqual(prepared['plan']['minimumOutput'], str(int(small['quotedOutput']) * 99 // 100))
+
+    async def test_ordinary_json_and_stream_optimize_underfunded_cache_at_requested_budget(self):
+        for streamed in (False, True):
+            with self.subTest(streamed=streamed):
+                store = SharedStore()
+                quoter, quotes = service(store)
+                self.addAsyncCleanup(quotes.close)
+                smaller = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+                maximum = {**smaller, 'inputs': [{**smaller['inputs'][0], 'amount': '50005'}]}
+                old = await quoter.quote(smaller)
+                full = await quoter.quote(maximum)
+                old['request'] = deepcopy(maximum)
+                await store.save(maximum, old, scope=store.capture_scope(maximum))
+                lower = deepcopy(old)
+                lower['quotedOutput'] = str(int(old['quotedOutput']) + 1)
+                lower['plan']['body']['known_floor_marker'] = True
+                store.neighbors = AsyncMock(return_value={'lower': {'quote': lower}})
+                async def optimize(value, callback=None, **options):
+                    self.assertEqual(value, maximum)
+                    self.assertEqual(options['seed']['inputs'], old['inputs'])
+                    self.assertEqual(options['seed']['plan'], old['plan'])
+                    self.assertEqual((await options['neighbors']())['lower']['quote']['plan'], lower['plan'])
+                    self.assertIsNone(options.get('seed_lookup'))
+                    if callback:
+                        await callback({'type': 'qualified', 'value': deepcopy(full)})
+                    return deepcopy(full)
+                quoter.quote = AsyncMock(side_effect=optimize)
+                app = create_app(economic_quotes=quotes)
+                endpoint = '/api/economic-quotes' + ('/stream' if streamed else '')
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+                    response = await client.post(endpoint, json=maximum)  # No refresh flag.
+                self.assertEqual(response.status_code, 200, response.text)
+                if streamed:
+                    frames = [json.loads(line) for line in response.text.splitlines()]
+                    qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
+                    self.assertEqual(qualified[0]['plan'], lower['plan'])
+                    self.assertEqual(qualified[0]['observation']['source'], 'stored')
+                    self.assertEqual(qualified[-1]['inputs'], maximum['inputs'])
+                    result = next(frame['value'] for frame in frames if frame['type'] == 'complete')
+                else:
+                    result = response.json()
+                self.assertEqual(result['inputs'], maximum['inputs'])
+                self.assertEqual(result['quotedOutput'], full['quotedOutput'])
+                self.assertEqual(result['observation'], {'source': 'search', 'refresh': False})
+                quoter.quote.assert_awaited_once()
 
     async def test_cached_floor_failure_is_optional_but_cancellation_propagates(self):
         store = SharedStore()

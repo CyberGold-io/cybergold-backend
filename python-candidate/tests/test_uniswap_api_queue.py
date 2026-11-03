@@ -9,12 +9,13 @@ import httpx
 
 from cybergold_candidate.quoter.hosted_routes import (
     HostedRouteError, UniRouteApiProvider, UniswapApiProvider)
+from cybergold_candidate.quoter.bootstrap import RouteBootstrap
 from cybergold_candidate.route_observations import (
     RouteObservations, project_route_discovery, route_observation_scope)
 from cybergold_candidate.uniswap_api_queue import UniswapApiQueue, retry_after_seconds
 from cybergold_candidate.trade_observation import economic_evidence
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
-from test_hosted_routes import A, B, BLOCK, Registry, settings
+from test_hosted_routes import A, B, BLOCK, Registry, settings, standard_pool
 
 
 class Clock:
@@ -168,7 +169,7 @@ class HostedQueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(recorder.metrics['requests'], 0)
         self.assertEqual(set(recorder.api_metrics['origins']), {'uniroute-api', 'uniswap-guidestar'})
 
-    async def test_429_cools_down_both_adapters_then_retries_in_existing_task(self):
+    async def test_429_ends_failed_query_and_cools_down_independent_adapter(self):
         starts = []
         async def handler(request):
             starts.append(asyncio.get_running_loop().time())
@@ -178,21 +179,25 @@ class HostedQueueTests(unittest.IsolatedAsyncioTestCase):
         recorder = RouteObservations()
         first, second = self.provider(handler), self.provider(handler, guidestar=True)
         with route_observation_scope(recorder):
-            await asyncio.gather(first.discover(A, B, 100, BLOCK), second.discover(A, B, 100, BLOCK))
+            outcomes = await asyncio.gather(first.discover(A, B, 100, BLOCK),
+                second.discover(A, B, 100, BLOCK), return_exceptions=True)
+        self.assertIsInstance(outcomes[0], HostedRouteError)
+        self.assertEqual(str(outcomes[0]), 'Uniswap route provider returned HTTP 429')
+        self.assertEqual(outcomes[1], [])
+        self.assertEqual(len(starts), 2)
         self.assertGreaterEqual(starts[1] - starts[0], .079)
-        self.assertGreaterEqual(starts[2] - starts[1], .019)
         observed = recorder.api_metrics
-        self.assertEqual(observed['httpStatuses'], {'200': 2, '429': 1})
+        self.assertEqual(observed['httpStatuses'], {'200': 1, '429': 1})
         self.assertEqual((observed['requests'], observed['errors'], observed['completed'], observed['retries']),
-                         (3, 1, 2, 1))
+                         (2, 1, 1, 0))
         projected = project_route_discovery({'apiRequests': observed})['apiRequests']
         self.assertEqual(projected['httpStatuses'], observed['httpStatuses'])
-        self.assertGreater(projected['summedQueueWaitMs'], 100)
+        self.assertGreater(projected['summedQueueWaitMs'], 75)
         self.assertNotIn('private', json.dumps(projected))
         stored = economic_evidence({'metrics': {'routeDiscovery': {'apiRequests': observed}}},
             {'operationKind': 'quoter', 'resultSource': 'stored-quote'})
         self.assertEqual(stored['observedQuoteMetrics']['routeDiscovery']['apiRequests']['httpStatuses'],
-                         {'200': 2, '429': 1})
+                         {'200': 1, '429': 1})
         self.assertNotIn('producerMetrics', stored)
 
     async def test_shared_queue_keeps_concurrent_request_observations_separate(self):
@@ -211,17 +216,44 @@ class HostedQueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(recorders[0].api_metrics['origins']), {'uniroute-api'})
         self.assertEqual(set(recorders[1].api_metrics['origins']), {'uniswap-guidestar'})
 
-    async def test_quote_deadline_cancels_cooldown_without_another_http_attempt(self):
+    async def test_429_finishes_without_a_global_clock_and_owner_cancels_next_cooldown(self):
         def handler(request):
             return httpx.Response(429, headers={'Retry-After': '60'})
         provider, recorder = self.provider(handler), RouteObservations()
         with route_observation_scope(recorder):
-            with self.assertRaises(TimeoutError):
-                async with asyncio.timeout(.03):
-                    await provider.discover(A, B, 100, BLOCK)
+            with self.assertRaises(HostedRouteError):
+                await asyncio.wait_for(provider.discover(A, B, 100, BLOCK), .5)
+            # A new query respects the server pause, but remains owned and
+            # immediately cancellable rather than restarting the failed one.
+            task = asyncio.create_task(provider.discover(A, B, 100, BLOCK))
+            await asyncio.sleep(0)
+            self.assertFalse(task.done())
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
         observed = recorder.api_metrics
         self.assertEqual((observed['requests'], observed['retries'], observed['queueEntries'],
                           observed['queueCancelled'], observed['cancelled']), (1, 0, 2, 1, 0))
+        self.assertFalse(self.queue.pending)
+
+    async def test_natural_bootstrap_completion_keeps_sibling_hints_after_429(self):
+        first = self.provider(lambda request: httpx.Response(429, headers={'Retry-After': '0'}), guidestar=True)
+        second = self.provider(lambda request: httpx.Response(200, json={'quote': {
+            'route': [[standard_pool('v3', A, B, fee=500)]]}}))
+        session = RouteBootstrap([first, second], nomination_only=True)
+        observed = []
+        async def ordinary():
+            session.offers(A, B, 100, BLOCK)
+            return 'ordinary-result'
+        async def reevaluate():
+            observed.extend(session.offers(A, B, 100, BLOCK))
+        result = await asyncio.wait_for(session.run(ordinary(), reevaluate), 1)
+        self.assertEqual(result, 'ordinary-result')
+        self.assertTrue(any(row['origins'] == ['uniroute-api'] for row in observed))
+        providers = session.metrics['providers']
+        self.assertEqual(providers['uniswap-guidestar']['error'], 1)
+        self.assertEqual(providers['uniswap-guidestar']['started'], 1)
+        self.assertEqual(providers['uniroute-api']['completed'], 1)
         self.assertFalse(self.queue.pending)
 
     async def test_non_429_errors_are_not_retried_and_have_http_statuses(self):

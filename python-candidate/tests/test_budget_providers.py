@@ -252,6 +252,30 @@ class MarketBudgetProviders(unittest.IsolatedAsyncioTestCase):
         with budget_context(budget):
             return await self.quotes._get(self.request, publish, block=BLOCK)
 
+    async def test_finite_market_tail_completes_without_whole_search_deadline(self):
+        budget, frames = QuoteBudget(), []
+        timeout = asyncio.timeout
+        def scaled_legacy_deadline(delay):
+            # Scale only the former whole-search allowance. Per-operation
+            # transport clocks retain their actual existing behavior.
+            return timeout(.01 if delay == 45 else delay)
+        with patch('cybergold_candidate.market_swap.asyncio.timeout', scaled_legacy_deadline):
+            operation = asyncio.create_task(self.run_market(budget, frames))
+            try:
+                await self.wait_qualified(budget)
+                first = next(frame['value'] for frame in frames if frame['type'] == 'qualified')
+                await asyncio.sleep(.025)
+                self.assertFalse(operation.done())
+                self.release.set()
+                result = await asyncio.wait_for(operation, 1)
+                self.assertEqual(result['params'], first['params'])
+                self.assertEqual(self.canonical_reads, 2)
+                self.assertFalse(self.cancelled.is_set())
+                self.assertEqual(self.quotes.semaphore._value, 8)
+            finally:
+                operation.cancel()
+                await asyncio.gather(operation, return_exceptions=True)
+
     async def test_market_stop_preserves_checked_best_and_final_canonical_read(self):
         budget, frames = QuoteBudget(), []
         operation = asyncio.create_task(self.run_market(budget, frames))

@@ -66,7 +66,7 @@ class EconomicQuoteStore:
     async def neighbors(self, request, *, scope=None):
         """Project bounded headers, then retrieve only the selected neighbors.
 
-        The lower candidate is the best observed output fitting the budget;
+        The lower candidate is the best observed output whose funding fits the budget;
         a nearer but poor quote must not hide it. The upper remains nearest
         for the existing arithmetic hint and downscaled replay. The captured
         identity preserves deployment/configuration family without a head or
@@ -88,6 +88,7 @@ class EconomicQuoteStore:
                 cursor = await connection.execute('''SELECT identity,
                     payload->'quote'->'request' AS request,
                     payload->'quote'->>'quotedOutput' AS quoted_output,
+                    payload->'quote'->'inputs'->0->>'amount' AS funded_input,
                     (payload->>'savedSequence')::bigint AS sequence
                     FROM cybergold_uniswap_state
                     WHERE chain_id=%s AND core_address=%s AND namespace=%s
@@ -104,18 +105,20 @@ class EconomicQuoteStore:
                         if candidate_family != family or request_identity(candidate, deployment) != row['identity']:
                             continue
                         amount = int(candidate['inputs'][0]['amount'])
-                        side = 'lower' if amount < budget else 'upper' if amount > budget else None
-                        if side is None:
+                        if amount == budget:
                             continue
-                        previous = chosen.get(side)
-                        # Rank scalar outputs with exact integers. Equal lower
-                        # outputs preserve the prior nearest-budget tie break;
-                        # equal headers retain the last successful save.
-                        output = int(row['quoted_output']) if side == 'lower' else 0
-                        if previous is None or (
-                                (output, amount) > (previous[2], previous[0]) if side == 'lower'
-                                else amount < previous[0]):
-                            chosen[side] = (amount, row['identity'], output)
+                        # A quote requested with a larger maximum can still
+                        # fit this budget. Use its actual declared funding,
+                        # falling back to the request for older stored headers.
+                        funded = int(row.get('funded_input') or amount)
+                        output = int(row['quoted_output'])
+                        lower = chosen.get('lower')
+                        rank = (output, -funded, -abs(amount-budget))
+                        if funded <= budget and (lower is None or rank > lower[3]):
+                            chosen['lower'] = (amount, row['identity'], output, rank)
+                        upper = chosen.get('upper')
+                        if amount > budget and (upper is None or amount < upper[0]):
+                            chosen['upper'] = (amount, row['identity'], output)
                     except (KeyError, TypeError, ValueError, AttributeError):
                         continue
                 if not chosen:
@@ -123,7 +126,8 @@ class EconomicQuoteStore:
                 cursor = await connection.execute('''SELECT identity, payload->'quote' AS quote
                     FROM cybergold_uniswap_state WHERE chain_id=%s AND core_address=%s
                     AND namespace=%s AND identity=ANY(%s)''',
-                    (selected.chain, selected.core, selected.namespace, [row[1] for row in chosen.values()]))
+                    (selected.chain, selected.core, selected.namespace,
+                     list(dict.fromkeys(row[1] for row in chosen.values()))))
                 quotes = {row['identity']: row['quote'] for row in await cursor.fetchall()}
                 return {side: {'identity': chosen[side][1], 'quote': deepcopy(quotes[chosen[side][1]])}
                         if side in chosen and chosen[side][1] in quotes else None for side in empty}
