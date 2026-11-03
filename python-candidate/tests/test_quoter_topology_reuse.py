@@ -116,7 +116,8 @@ class TopologyReuseTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(*session._tasks)
                 after = list(adapter.nominations(A, B, 101, BLOCK))
                 matching = [origins for branches, origins in after if branches == row]
-                self.assertEqual(matching, [['cybergold-custom', 'uniswap-alpharouter']])
+                self.assertEqual(len(matching), 1)
+                self.assertCountEqual(matching[0], ['cybergold-custom', 'uniswap-alpharouter'])
                 self.assertEqual(len(after), len(before))
         finally:
             await session.close()

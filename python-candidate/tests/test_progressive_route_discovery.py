@@ -9,11 +9,11 @@ from unittest.mock import patch
 from cybergold_candidate.quoter.amm_adapter import CyberGoldAmmAdapter, adapt_candidates, prioritize_candidates, route_priority
 from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
-from cybergold_candidate.quoter.cooperative import CHECKPOINT, finish, values
+from cybergold_candidate.quoter.cooperative import CHECKPOINT, async_values, finish, values
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
 from cybergold_candidate.quoter import discovery
 from cybergold_candidate.quoter.discovery import TopologyCache, _enumerate_paths, route_candidates, route_identity
-from cybergold_candidate.quoter.route_tools import RouteQuery
+from cybergold_candidate.quoter.route_tools import CandidateFeed, RouteQuery, RouteTool, round_robin
 from cybergold_candidate.route_search import WETH
 from cybergold_candidate.routing_encoding import ZERO, weighted_routes, split_runtime
 from cybergold_candidate.uniswap_routes import pool_identity
@@ -185,6 +185,68 @@ class EarlyNominationTests(unittest.IsolatedAsyncioTestCase):
         malformed = CustomRoutes(registry).discover(RouteQuery(A, C, None, BLOCK))
         with self.assertRaises(TypeError):
             list(malformed.available)
+
+
+class FairSourceStepsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_checkpoint_rotation_preserves_each_source_order_and_complete_coverage(self):
+        def slow():
+            yield CHECKPOINT
+            yield CHECKPOINT
+            yield 'slow-1'
+            yield 'slow-2'
+        def ready():
+            yield 'ready-1'
+            yield CHECKPOINT
+            yield 'ready-2'
+        expected = ['ready-1', 'slow-1', 'ready-2', 'slow-2']
+        self.assertEqual(list(values(round_robin([slow(), ready()]))), expected)
+        self.assertEqual([row async for row in async_values(round_robin([slow(), ready()]))], expected)
+
+    async def test_closing_after_ready_peer_closes_suspended_sources(self):
+        state = {'steps': 0, 'closed': []}
+        def slow():
+            try:
+                for _ in range(1000):
+                    state['steps'] += 1
+                    yield CHECKPOINT
+                yield 'slow'
+            finally:
+                state['closed'].append('slow')
+        def ready():
+            try:
+                yield 'ready'
+                yield 'later'
+            finally:
+                state['closed'].append('ready')
+        stream = async_values(round_robin([slow(), ready()]))
+        self.assertEqual(await anext(stream), 'ready')
+        self.assertEqual(state['steps'], 1)
+        await stream.aclose()
+        self.assertCountEqual(state['closed'], ['slow', 'ready'])
+
+    async def test_actual_adapter_reads_ready_peer_before_custom_first_nomination(self):
+        rows = fixture()
+        registry = SimpleNamespace(inventory={row['id']: row for row in rows}, seed=rows[-1])
+        route = next(route for route in _enumerate_paths(rows, A, D)
+                     if all(hop['pool']['feePips'] == 3000 for hop in route))
+        class Ready(RouteTool):
+            name = 'uniroute-api'
+            def discover(self, query):
+                return CandidateFeed(available=[[{'amountIn': str(query.amount), 'hops': route}]])
+        session = RouteBootstrap([CustomRoutes(registry), Ready()], catalog=registry)
+        adapter = CyberGoldAmmAdapter(SimpleNamespace(registry=registry), D)
+        try:
+            with bootstrap_scope(session):
+                candidates = adapter.async_nominations(A, D, 101, BLOCK, market=True, first=True)
+                try:
+                    branches, origins = await anext(candidates)
+                    self.assertEqual(origins, ['uniroute-api'])
+                    self.assertEqual(branches[0]['hops'], route)
+                    self.assertEqual(session.metrics['providers']['cybergold-custom']['feedReads'], 0)
+                finally:
+                    await candidates.aclose()
+        finally:
+            await session.close()
 
 
 if __name__ == '__main__':

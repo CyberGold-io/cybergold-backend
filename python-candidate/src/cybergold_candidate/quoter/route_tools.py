@@ -151,7 +151,11 @@ async def async_batches(feed):
 
 
 def round_robin(feeds):
-    """Read one nomination per feed/round without materializing a source."""
+    """Read one step per feed/round without materializing a source.
+
+    Checkpoints release the logical source turn too. Each source retains its
+    own ordering while ready peers can progress during another source's scan.
+    """
     pending = deque(iter(feed) for feed in feeds)
     try:
         while pending:
@@ -160,12 +164,7 @@ def round_robin(feeds):
                 value = next(feed)
             except StopIteration:
                 continue
-            # A checkpoint is work within this feed's current turn, not an
-            # offered candidate that rotates the source ordering.
-            if value is CHECKPOINT:
-                pending.appendleft(feed)
-            else:
-                pending.append(feed)
+            pending.append(feed)
             yield value
     finally:
         for feed in pending:
