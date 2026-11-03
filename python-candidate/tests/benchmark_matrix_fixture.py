@@ -241,6 +241,11 @@ class LoopbackState:
                 if address.lower() != STATE_VIEW.lower():
                     raise ValueError('unknown-pool')
                 pool = self.ids.get(Web3.to_hex(args[0]).lower())
+                if pool is None:
+                    # Every modeled StateView getter delegates to StateLibrary
+                    # extsload. Absent pool/tick mapping storage is zero, rather
+                    # than a pool-existence revert from the view contract.
+                    return self.codec.encode(outputs, [0] * len(outputs))
             if pool is None:
                 raise ValueError('unknown-pool')
             if signature == 'getReserves()':

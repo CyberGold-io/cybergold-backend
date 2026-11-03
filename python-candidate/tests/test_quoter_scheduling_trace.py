@@ -12,7 +12,11 @@ PROVIDERS = {'cybergold-custom', 'uniswap-alpharouter', 'uniroute-local',
 
 class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
     async def verify_case(self, *, core_preview, strategy='parallel'):
-        row = await run_fixture(node=NODE, core_preview=core_preview, strategy=strategy)
+        # Repeated per-read delays remain explicit fixture behavior. Scale
+        # correctness runs while benchmarks keep their original 6s/7s defaults;
+        # readiness before a held tail has separate event-controlled coverage.
+        row = await run_fixture(node=NODE, core_preview=core_preview, strategy=strategy,
+                                slow_scalar_ms=60, slow_catalog_ms=70)
         self.assertEqual(row['status'], 'completed', row.get('failureType'))
         self.assertEqual(row['output'], row['independentReference']['output'],
                          'Ready same-funding canonical plan was not evaluated before ordinary selection stopped.')
@@ -21,7 +25,9 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(row['replaySameOutput'])
         self.assertIsNone(row['configuration']['optionalLimit'])
         self.assertEqual(row['configuration']['engineSlots'], 8)
-        self.assertEqual(row['budgetConfiguration'], {'initialMs':5000.0,'deadlineMs':15000.0})
+        self.assertEqual(row['budgetConfiguration'],
+                         {'mode': 'producer-default', 'initialMs': None, 'deadlineMs': None})
+        self.assertEqual(row['fixtureDelaysMs'], {'oldScalar': 60, 'unrelatedCatalog': 70})
         suppliers = row['metrics']['routeDiscovery']['providers']
         expected = {'cybergold-custom'} if strategy=='custom-only' else PROVIDERS
         self.assertEqual(set(suppliers), expected)

@@ -1,7 +1,7 @@
 """Actual whole-Quoter scheduling traces over an explicit synthetic chain.
 
 The ordinary factory, graph discovery, optional work, eight pricing permits,
-5/15-second producer budget, SDK pricing and whole-plan comparison are intact.
+natural producer completion, SDK pricing and whole-plan comparison are intact.
 Chain replies/Core preview, selected-plan SDK component pricing and hosted
 HTTP responses are explicit fixture data; this does not emulate Helpers execution.
 No private environment file, live RPC or real Uniswap account is consumed.
@@ -85,8 +85,9 @@ class SchedulingTrace:
             self.tasks[task] = self.task_sequence
         budget = current_budget()
         if budget is not None and self.budget_windows is None:
-            self.budget_windows = {'initialMs':round((budget.initial-budget.started)*1000,3),
-                'deadlineMs':round((budget.deadline-budget.started)*1000,3)}
+            self.budget_windows = {'mode': 'producer-default' if budget.initial is None else 'bounded',
+                'initialMs': None if budget.initial is None else round((budget.initial-budget.started)*1000,3),
+                'deadlineMs': None if budget.deadline is None else round((budget.deadline-budget.started)*1000,3)}
         self.events.append({'event': kind, 'phase': self.phase, 'atMs': round((time.perf_counter()-self.started)*1000, 3),
             'producerMs': round(budget.elapsed(), 3) if budget is not None else None,
             'task': self.tasks.get(task), 'round': self.round_context.get(),

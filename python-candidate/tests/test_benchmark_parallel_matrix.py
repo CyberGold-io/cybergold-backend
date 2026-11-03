@@ -8,12 +8,39 @@ import unittest
 from cybergold_candidate.route_observations import RouteObservations, route_observation_scope
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.rpc_transport import rpc_provider
+from cybergold_candidate.uniswap_v4 import STATE_VIEW
+from web3 import Web3
 from benchmark_matrix_fixture import BLOCK, MatrixService, LoopbackState, matrix_cases
 from benchmark_parallel_matrix import canonical_cache, difference, prime, selected_request, selected_topology, summary
 
 
 ROOT = Path(__file__).resolve().parents[2]
 NODE = os.environ.get('CYBERGOLD_TEST_NODE', 'node')
+
+
+class SyntheticStateViewTests(unittest.TestCase):
+    def test_uninitialized_v4_state_is_zero_and_unrelated_getters_still_fail(self):
+        case = next(row for row in matrix_cases() if row.name == 'market-two-hop')
+        state = LoopbackState(case.pools)
+        missing = bytes.fromhex('ff' * 32)
+        self.assertNotIn(Web3.to_hex(missing), state.ids)
+        for signature, inputs, args, outputs in (
+                ('getSlot0(bytes32)', ['bytes32'], [missing], ['uint160', 'int24', 'uint24', 'uint24']),
+                ('getLiquidity(bytes32)', ['bytes32'], [missing], ['uint128']),
+                ('getTickBitmap(bytes32,int16)', ['bytes32', 'int16'], [missing, -1], ['uint256']),
+                ('getTickLiquidity(bytes32,int24)', ['bytes32', 'int24'], [missing, -60], ['uint128', 'int128'])):
+            with self.subTest(getter=signature):
+                data = Web3.keccak(text=signature)[:4] + state.codec.encode(inputs, args)
+                value = state.call(STATE_VIEW, data)
+                self.assertEqual(state.codec.decode(outputs, value), (0,) * len(outputs))
+                with self.assertRaisesRegex(ValueError, 'unknown-pool'):
+                    state.call('0x' + 'aa' * 20, data)
+        with self.assertRaisesRegex(ValueError, 'unknown-selector'):
+            state.call(STATE_VIEW, bytes.fromhex('ffffffff'))
+        with self.assertRaisesRegex(ValueError, 'unknown-pool'):
+            state.call('0x' + 'aa' * 20, Web3.keccak(text='slot0()')[:4])
+        self.assertEqual(len(state.pools), len(case.pools))
+        self.assertEqual(len(state.ids), len(case.pools))
 
 
 class MatrixAcquisitionTests(unittest.IsolatedAsyncioTestCase):
