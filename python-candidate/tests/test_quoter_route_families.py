@@ -10,6 +10,7 @@ import unittest
 from cybergold_candidate.quoter.discovery import families, market_plan, route_identity
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.types import EconomicQuote
+from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.tx_preparation import compile_execution
 from quoter_fixture import historical_service, historical_data, historical_route, service, synthetic_pool
 from test_universal_quote import BLOCK, CORE, PAXG, WETH, USER, fixture_plan_simulator
@@ -51,9 +52,14 @@ class FamilyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after, before)
         self.assertGreater(len(before), 39)
 
-    async def test_acquired_catalog_search_and_seed_replay_use_current_economics(self):
+    async def test_historical_bounded_catalog_search_and_seed_replay_use_current_economics(self):
         q, case = historical_service(self, exploration_seed=1700)
-        first = await q.get(case['request'])
+        # Preserve this historical smoke test's original explicit 5/15-second
+        # experiment. Its serialized SDK oracle over the captured large graph
+        # is not a natural-completion benchmark; dedicated tests cover that
+        # production default without this exhaustive synthetic workload.
+        with budget_context(QuoteBudget(initial=5, extension=10)):
+            first = await q.get(case['request'])
         # Every proposed Helpers call uses the explicit serialized SDK oracle
         # here. Its changed exploration cost is not a live Helpers performance
         # benchmark. Verify the complete tuple, then exact retained economics.
@@ -69,7 +75,8 @@ class FamilyTests(unittest.IsolatedAsyncioTestCase):
             *case['basis'], selected=selected)
         self.assertEqual(previous['quotedOutput'], seed_row['output'])
         previous['quotedOutput'] = '99999999999999999999999'  # Stale numbers are not trusted.
-        refreshed = await q.get(case['request'], seed=previous)
+        with budget_context(QuoteBudget(initial=5, extension=10)):
+            refreshed = await q.get(case['request'], seed=previous)
         self.assertEqual(refreshed['quotedOutput'], seed_row['output'])
         self.assertEqual(refreshed['metrics']['optionalSearch']['randomSeed'], '1700')
 
