@@ -166,7 +166,9 @@ class CompletedRouteHints(unittest.IsolatedAsyncioTestCase):
         candidate = [{'amountIn': '1', 'hops': [{'kind': 'wrap', 'currencyOut': WETH}, physical]},
                      {'amountIn': '2', 'hops': [{'kind': 'wrap', 'currencyOut': WETH}, physical]}]
         adapter = CyberGoldAmmAdapter(engine, C)
-        adapter.nominations = lambda *_args, **_kwargs: iter([(candidate, ['original-source'])])
+        async def nominations(*_args, **_kwargs):
+            yield candidate, ['original-source']
+        adapter.async_nominations = nominations
         async def replay(*args):
             return await price_path(engine, *args)
         with bootstrap_scope(session):

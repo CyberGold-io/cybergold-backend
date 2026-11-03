@@ -3,7 +3,8 @@
 Core anchoring, seed preference, private-state replay and funding compilation
 belong to the consuming CyberGold adapter, not this AMM path provider.
 """
-from .discovery import paths, route_candidates
+from .discovery import path_steps, route_candidates
+from .cooperative import CHECKPOINT, close, values
 from .route_tools import CandidateFeed, RouteTool
 
 
@@ -18,10 +19,21 @@ class _AvailableRoutes:
         # A query can precede ordinary catalog acquisition. Each consumption
         # sees today's request-owned inventory instead of buffering its old
         # paths or materializing the combinatorial split proposals.
-        routes = paths(list(self.registry.inventory.values()), self.query.source, self.query.target)
-        if self.projection is not None:
+        return values(self.cooperative_steps())
+
+    def cooperative_steps(self, projection_steps=None):
+        routes = yield from path_steps(list(self.registry.inventory.values()), self.query.source, self.query.target)
+        if projection_steps is not None:
+            routes = yield from projection_steps(routes)
+        elif self.projection is not None:
             routes = list(self.projection(routes))
-        yield from route_candidates(routes, self.query.amount)
+        candidates = route_candidates(routes, self.query.amount)
+        try:
+            for candidate in candidates:
+                yield CHECKPOINT
+                yield candidate
+        finally:
+            close(candidates)
 
 
 class CustomRoutes(RouteTool):

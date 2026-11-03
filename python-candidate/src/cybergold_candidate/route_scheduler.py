@@ -1,5 +1,6 @@
 """Completion-driven, fair route work; the owning quote keeps its clock."""
 import asyncio
+from inspect import isawaitable
 
 from .rpc_diagnostics import freeze_quote_work
 from .recovery_rpc import SnapshotChanged
@@ -20,7 +21,8 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
     completed quote delivery. The limit bounds held pricing-work permits;
     additional parked candidate tasks remain owned and drained. Cancellation
     drains only tasks created here, leaving shared read ownership
-    to the engine's ordinary subscription contract.
+    to the engine's ordinary subscription contract. A feed factory may prepare
+    its groups cooperatively before returning the ordinary per-leg iterators.
     """
     feeds, pending_next, ready, active = [], {}, {}, set()
     slots, changed = asyncio.Semaphore(limit), asyncio.Event()
@@ -51,14 +53,15 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
         ready.clear()
         raise_snapshot_disproof(outcomes)
 
-    def start_feeds():
+    async def start_feeds():
         nonlocal feeds
-        feeds = list(make_feeds(expanded))
+        offered = make_feeds(expanded)
+        feeds = list(await offered if isawaitable(offered) else offered)
         for index in range(len(feeds)):
             next_candidate(index)
 
     try:
-        start_feeds()
+        await start_feeds()
         while active or pending_next or ready or (discovery is not None and not expanded):
             # Each leg gets one turn before another candidate from that leg.
             while ready and not slots.locked():
@@ -102,7 +105,7 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
                 await discovery
                 await close_feeds()
                 expanded = True
-                start_feeds()
+                await start_feeds()
                 continue
             for index, task in list(pending_next.items()):
                 if task not in done:

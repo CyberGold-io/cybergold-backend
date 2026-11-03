@@ -8,40 +8,50 @@ from contextvars import ContextVar
 from ..routing_encoding import ZERO, weighted_routes
 from ..route_search import WETH
 from ..uniswap_routes import pool_identity, opposite
+from .cooperative import CHECKPOINT, finish, sort_steps
 
 
 def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
+    return finish(_enumerate_path_steps(pools, source, target, weth, max_hops))
+
+
+def _enumerate_path_steps(pools, source, target, weth=WETH, max_hops=3):
     """Selected pool graph plus explicit lossless native/WETH transitions."""
     graph = {}
     unique = {}
     for pool in pools:
+        yield CHECKPOINT
         identity = pool_identity(pool)
         if identity not in unique or pool.get('address'):
             unique[identity] = pool
     for pool in unique.values():
+        yield CHECKPOINT
         if pool.get('hooks', ZERO).lower() != ZERO:
             continue
         for token in (pool['token0'], pool['token1']):
             graph.setdefault(token['address'].lower(), []).append(pool)
     found = []
     def walk(current, route, visited, hops):
+        yield CHECKPOINT
         if current == target.lower():
             if route:
                 found.append(route)
             return
         if hops < max_hops:
-            for pool in sorted(graph.get(current, []), key=lambda row: (row['protocol'], row['id'])):
+            edges = yield from sort_steps(graph.get(current, []), key=lambda row: (row['protocol'], row['id']))
+            for pool in edges:
+                yield CHECKPOINT
                 following = opposite(pool, current)
                 if following not in visited:
-                    walk(following, route + [{'pool': pool, 'zeroForOne': current == pool['token0']['address'].lower()}],
+                    yield from walk(following, route + [{'pool': pool, 'zeroForOne': current == pool['token0']['address'].lower()}],
                          visited | {following}, hops + 1)
         if current in (ZERO, weth.lower()):
             following = weth.lower() if current == ZERO else ZERO
             if following not in visited:
-                walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
+                yield from walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
                     'currencyOut': following}], visited | {following}, hops)
-    walk(source.lower(), [], {source.lower()}, 0)
-    return sorted(found, key=lambda route: (len(route), repr(route))) if len(found) > 1 else found
+    yield from walk(source.lower(), [], {source.lower()}, 0)
+    return (yield from sort_steps(found, key=lambda route: (len(route), repr(route)))) if len(found) > 1 else found
 
 
 
@@ -101,6 +111,9 @@ class TopologyCache:
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
 
     def paths(self, pools, source, target, weth, max_hops):
+        return finish(self.path_steps(pools, source, target, weth, max_hops))
+
+    def path_steps(self, pools, source, target, weth, max_hops):
         pools = list(pools)
         if len(pools) == len(self._catalog_objects) and self._catalog_objects == frozenset(map(id, pools)):
             unique, graph = self._catalog_unique, self._catalog_graph
@@ -109,16 +122,22 @@ class TopologyCache:
             graph = self._graph(unique)
         key = source.lower(), target.lower(), weth.lower(), max_hops, graph
         if key not in self.walks:
-            routes = _enumerate_paths(list(unique.values()), source, target, weth, max_hops)
-            self.walks[key] = tuple(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
-                if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route) for route in routes)
+            routes = yield from _enumerate_path_steps(list(unique.values()), source, target, weth, max_hops)
+            walks = []
+            for route in routes:
+                walks.append(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
+                    if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route))
+                yield CHECKPOINT
+            self.walks[key] = tuple(walks)
             self.graph_builds += 1
             return routes
         self.path_hits += 1
-        routes = [[{'pool': unique[step[0]], 'zeroForOne': step[1]}
-                   if isinstance(step[0], tuple) else {'kind': step[0], 'currencyOut': step[1]}
-                   for step in route] for route in self.walks[key]]
-        return sorted(routes, key=lambda route: (len(route), repr(route))) if len(routes) > 1 else routes
+        routes = []
+        for route in self.walks[key]:
+            routes.append([{'pool': unique[step[0]], 'zeroForOne': step[1]}
+                if isinstance(step[0], tuple) else {'kind': step[0], 'currencyOut': step[1]} for step in route])
+            yield CHECKPOINT
+        return (yield from sort_steps(routes, key=lambda route: (len(route), repr(route)))) if len(routes) > 1 else routes
 
     def nomination_identity(self, candidate):
         amounts = [int(row['amountIn']) for row in candidate]
@@ -147,9 +166,13 @@ class TopologyCache:
 
 
 def paths(pools, source, target, weth=WETH, max_hops=3):
+    return finish(path_steps(pools, source, target, weth, max_hops))
+
+
+def path_steps(pools, source, target, weth=WETH, max_hops=3):
     cache = current_topology()
-    return (cache.paths(pools, source, target, weth, max_hops) if cache is not None else
-            _enumerate_paths(pools, source, target, weth, max_hops))
+    return (yield from cache.path_steps(pools, source, target, weth, max_hops) if cache is not None else
+            _enumerate_path_steps(pools, source, target, weth, max_hops))
 
 
 def route_candidates(routes, amount):

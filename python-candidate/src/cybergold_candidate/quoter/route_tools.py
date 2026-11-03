@@ -5,6 +5,7 @@ from collections.abc import AsyncIterable, Awaitable, Iterable
 from dataclasses import dataclass
 from inspect import isawaitable, iscoroutine
 from typing import Any, TypeAlias
+from .cooperative import CHECKPOINT
 
 
 RouteCandidate: TypeAlias = list[dict[str, Any]]
@@ -39,6 +40,11 @@ class CandidateFeed:
         """
         project = getattr(self.available, 'with_path_projection', None)
         return project(projection) if projection is not None and project is not None else self.available
+
+    def available_steps(self, projection=None, projection_steps=None):
+        available = self.available_projected(projection)
+        steps = getattr(available, 'cooperative_steps', None)
+        return steps(projection_steps) if steps is not None else available
 
 
 class RouteTool:
@@ -139,7 +145,12 @@ def round_robin(feeds):
                 value = next(feed)
             except StopIteration:
                 continue
-            pending.append(feed)
+            # A checkpoint is work within this feed's current turn, not an
+            # offered candidate that rotates the source ordering.
+            if value is CHECKPOINT:
+                pending.appendleft(feed)
+            else:
+                pending.append(feed)
             yield value
     finally:
         for feed in pending:

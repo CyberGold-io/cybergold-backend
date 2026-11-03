@@ -153,6 +153,18 @@ instances or other applications sharing the key need to share the assigned
 quota between their configured rates; this queue does not coordinate across
 hosts. A shared-key external consumer may still cause 429, handled as above.
 
+Local cooperative-enumeration candidate: the quoting adapter consumes one
+checkpointed computation stream for path walking, stable sorting, topology
+normalization, duplicate/anchor filtering and family grouping. Synchronous
+inspection consumes the same stream without scheduling; quote tasks yield
+every 64 work steps. These are scheduling checkpoints, not candidate limits.
+The source order, complete candidate stream, allocations, quote clock and
+pricing slots stay the same. Closing/cancelling a consumer closes its owned
+iterators; no thread work continues after cancellation. Empty/disconnected
+graphs retain the ordinary `quote-no-route` result. The local callback A/B in
+`python-candidate/tests/benchmark_cooperative_enumeration.py` measures progress
+independently of synthetic quote-output controls and uses no live credentials.
+
 The existing registry worker also retains pool activity in the existing
 `cybergold_uniswap_state` JSONB store. Normal monitoring reuses the canonical
 logs and header checks already acquired for state maintenance; quote/model

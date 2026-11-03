@@ -111,7 +111,7 @@ class HelpersPrefixFallbackTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(trace)
             traces.append(trace)
             raise PartialPath(trace)
-        quoter = SimpleNamespace(amm=SimpleNamespace(family_offers=lambda *_: [('family', [(route, ['uniroute-local'])])]),
+        quoter = SimpleNamespace(amm=SimpleNamespace(async_family_offers=AsyncMock(return_value=[('family', [(route, ['uniroute-local'])])])),
             engine=SimpleNamespace(registry=SimpleNamespace(chain=1)), price_path=AsyncMock(side_effect=price))
         async def evaluate(*args, **options):
             calls.append(options)
@@ -181,8 +181,8 @@ class HelpersPrefixFallbackTests(unittest.IsolatedAsyncioTestCase):
             routes.append([{'pool': pool, 'zeroForOne': WETH.lower() < CORE.lower()}])
         session, calls = SearchSession(0), []
         session.discovery_done.set()
-        quoter = SimpleNamespace(amm=SimpleNamespace(family_offers=lambda *_:
-            [('family', [(route, ['cybergold-custom']) for route in routes])]))
+        quoter = SimpleNamespace(amm=SimpleNamespace(async_family_offers=AsyncMock(return_value=
+            [('family', [(route, ['cybergold-custom']) for route in routes])])))
         async def evaluate(*_, **options):
             calls.append(options['selected'])
             return {'quotedOutput': '123'}
@@ -201,8 +201,8 @@ class HelpersPrefixFallbackTests(unittest.IsolatedAsyncioTestCase):
         from cybergold_candidate.rpc_block_context import LATEST_BLOCK
         route = [{'pool': synthetic_pool(WETH, CORE, 1000, 'v2'), 'zeroForOne': WETH.lower() < CORE.lower()}]
         session, calls = SearchSession(0), []
-        quoter = SimpleNamespace(amm=SimpleNamespace(family_offers=lambda *_:
-            [('family', [(route, ['cybergold-custom'])])]), price_path=AsyncMock())
+        quoter = SimpleNamespace(amm=SimpleNamespace(async_family_offers=AsyncMock(return_value=
+            [('family', [(route, ['cybergold-custom'])])])), price_path=AsyncMock())
         async def evaluate(*_, **options):
             calls.append(options['selected'])
             if len(calls) == 1:

@@ -114,7 +114,7 @@ class PipelineParallelTests(unittest.IsolatedAsyncioTestCase):
             physical['protocol'] = 'v3'
             physical['feePips'] = 100 + index
             routes.append((route, ['cybergold-custom']))
-        q.amm.family_offers = lambda *_: [('one-family', routes)]
+        q.amm.async_family_offers = AsyncMock(return_value=[('one-family', routes)])
         session = SearchSession(7)
         session.discovery_done.set()
         priced = []

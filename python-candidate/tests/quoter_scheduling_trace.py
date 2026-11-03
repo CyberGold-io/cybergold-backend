@@ -99,6 +99,7 @@ class SchedulingTrace:
         old_publish, old_run = RouteBootstrap._publish_batch, RouteBootstrap.run
         old_completed = getattr(RouteBootstrap, 'publish_completed', None)
         old_nominations, old_candidate = CyberGoldAmmAdapter.nominations, Quoter.candidate
+        old_async_nominations = getattr(CyberGoldAmmAdapter, 'async_nominations', None)
         old_acquire, old_release = PricingSlots.acquire, PricingSlots.release
         old_quote = quoter.engine.quote_sdk_branches
         old_snapshot = quoter.engine.registry.snapshot
@@ -168,6 +169,24 @@ class SchedulingTrace:
                 close = getattr(iterator, 'close', None)
                 if close is not None:
                     close()
+
+        async def async_nominations(adapter, source, target, amount, block, **kwargs):
+            iterator = old_async_nominations(adapter, source, target, amount, block, **kwargs)
+            task = asyncio.current_task()
+            previous = trace.candidates.get(task)
+            try:
+                async for branches, origins in iterator:
+                    tag = candidate_tag(branches, origins)
+                    trace.candidates[task] = tag
+                    trace.emit('conversion-candidate', sourceAsset=asset(source), targetAsset=asset(target),
+                               amount=str(amount), first=kwargs.get('first', False), **tag)
+                    yield branches, origins
+            finally:
+                if previous is None:
+                    trace.candidates.pop(task, None)
+                else:
+                    trace.candidates[task] = previous
+                await iterator.aclose()
 
         async def candidate(service, request, share, order, *args, **kwargs):
             trace.emit('whole-plan-start', share=share, order=order, first=kwargs.get('first', False))
@@ -250,6 +269,8 @@ class SchedulingTrace:
                 self.release()
 
         with ExitStack() as stack:
+            if old_async_nominations is not None:
+                stack.enter_context(patch.object(CyberGoldAmmAdapter, 'async_nominations', async_nominations))
             if old_completed is not None:
                 stack.enter_context(patch.object(RouteBootstrap, 'publish_completed', completed))
             for target, name, operation in ((RouteBootstrap, '_publish_batch', published),
