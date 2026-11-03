@@ -55,6 +55,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_completed_route_hi
 python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_topology_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cooperative_enumeration.py
+python-candidate/.venv/bin/python python-candidate/tests/test_progressive_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_scheduling_trace.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
