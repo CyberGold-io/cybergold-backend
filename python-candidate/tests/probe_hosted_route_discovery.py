@@ -130,6 +130,9 @@ class OneCandidateAdapter(CyberGoldAmmAdapter):
     def nominations(self, *_args, **_kwargs):
         return [(self.branches, [self.origin])]
 
+    async def async_nominations(self, *_args, **_kwargs):
+        yield self.branches, [self.origin]
+
 
 async def price_candidate(engine, branches, source, target, amount, block, *, origin='cybergold-custom', canonical=None):
     """Reuse serving's native, integer split and private shared-pool replay."""
