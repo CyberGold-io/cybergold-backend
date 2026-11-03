@@ -8,6 +8,7 @@ retention; they never subtract retained principal from the user's gross spend.
 """
 import asyncio
 import json
+from contextlib import aclosing
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import combinations
@@ -531,7 +532,8 @@ class Quoter:
                         except Exception as error:
                             remember_failure(error)
                     reconstruct_later(reprice())
-                if selected is None and observe_market_segments(value, funded_request, share, order):
+                if (selected is None or phase == 'core-market-bootstrap') and observe_market_segments(
+                        value, funded_request, share, order):
                     # The completed Helpers quote is already published. Its
                     # actual Core-produced market lots now seed exploration;
                     # retaining this owner keeps providers alive for the pass.
@@ -555,19 +557,47 @@ class Quoter:
                 if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
                     failed_request = {**funded_request,
                         'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}
-                    identity = json.dumps([failed_request, failed], sort_keys=True)
-                    if identity not in repair_started:
-                        repair_started.add(identity)
-                        unsettled = deepcopy(error.unsettled_intermediate)
-                        async def repair():
-                            from .capacity_recovery import recover_selected
-                            proposals = await budget.discovery(recover_selected(
-                                self, failed_request, failed, block, observations, unsettled=unsettled))
-                            for proposal in proposals:
+                    identity = proposal_identity({'inputs': failed_request['inputs'], 'plan': failed})
+                    recover_funding = identity not in repair_started
+                    repair_started.add(identity)
+                    unsettled = deepcopy(error.unsettled_intermediate)
+                    from .core_market_recovery import core_market_proposals, implicated_core_market_operations
+                    async def repair():
+                        from .capacity_recovery import recover_selected
+                        async def attempt(proposal):
+                            try:
+                                return await evaluate(share, order, False, selected=proposal['plan'],
+                                    funding=proposal['inputs'], phase='core-market-bootstrap', partial=True)
+                            except SnapshotChanged:
+                                raise
+                            except Exception as error:
+                                record_error(error)
+                        async with aclosing(core_market_proposals(
+                                self, failed_request, failed, block, unsettled=unsettled)) as alternatives:
+                            async for proposal in alternatives:
+                                identity = proposal_identity(proposal)
+                                if identity in repair_started:
+                                    continue
+                                repair_started.add(identity)
                                 session.repairs += 1
-                                await evaluate(share, order, False, selected=proposal['plan'],
-                                    funding=proposal['inputs'], phase='backward-prefix')
-                        reconstruct_later(repair())
+                                # One complete observation unlocks normal
+                                # amount-sensitive ranking. Independent search
+                                # and supplier arrivals remain live meanwhile.
+                                if await attempt(proposal) is not None:
+                                    return
+                        proposals = (await budget.discovery(recover_selected(
+                            self, failed_request, failed, block, observations, unsettled=unsettled))
+                            if recover_funding else [])
+                        for proposal in proposals:
+                            session.repairs += 1
+                            await evaluate(share, order, False, selected=proposal['plan'],
+                                funding=proposal['inputs'], phase='backward-prefix')
+                    task = reconstruct_later(repair())
+                    if selected is None and implicated_core_market_operations(failed, unsettled):
+                        # Ordinary Core topology bootstrap can start supplier
+                        # cohorts. Existing cached/backward replay keeps its
+                        # independent reconstruction owner and lifetime.
+                        await wait_reconstruction(task)
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
         if request['intent'] >= 2 or core_only: grid = [(100, 'core-first')]

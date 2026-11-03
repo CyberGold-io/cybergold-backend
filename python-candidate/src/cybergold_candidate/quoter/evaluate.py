@@ -26,6 +26,11 @@ async def nominate_conversion(self, source, target, amount, block, *, market=Fal
         candidate = await anext(candidates, None)
     if candidate is None:
         raise QuoteFailure('quote-no-route')
+    return encode_nomination(source, target, candidate)
+
+
+def encode_nomination(source, target, candidate):
+    """Encode an offered route, preserving the common adapter's split semantics."""
     branches, origins = candidate
     branches = deepcopy(branches)
     physical_source = source

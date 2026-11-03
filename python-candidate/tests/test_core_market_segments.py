@@ -93,6 +93,269 @@ def structured_pool(source, target):
             'amountIn': str(2**255), 'amountOut': str(2**256-1)}
 
 
+def unsettled_fixture(test):
+    """A genuine SDK partial fill in a Core-produced currency, then a funded fallback."""
+    q, direct, first, second = fixture(test)
+    thin = synthetic_pool(PAXG, WETH, 7901, 'v3', liquidity=10**5)
+    medium = synthetic_pool(PAXG, WETH, 7905, 'v2')
+    for pool in (thin, medium):
+        for token in ('token0', 'token1'):
+            pool[token]['chainId'] = 31338
+        q.engine.registry.inventory[pool['id']] = deepcopy(pool)
+        q.engine.registry.observed[pool['id']] = deepcopy(pool)
+    def route(pools):
+        source, hops = PAXG.lower(), []
+        for pool in pools:
+            direction = source == pool['token0']['address'].lower()
+            hops.append({'pool': deepcopy(pool), 'zeroForOne': direction})
+            source = pool['token1' if direction else 'token0']['address'].lower()
+        return hops
+    control = SimpleNamespace(bad=route((thin,)), medium=route((medium,)), good=route((first, second)),
+        calls=[], errors=[], attempts=[], closed=False, pending_done=asyncio.Event())
+    leaf = q.plan_simulator
+    async def simulate(request, selected, **options):
+        control.attempts.append(deepcopy(selected))
+        value = await leaf(request, selected, **options)
+        unmet = next((row for row in value['estimatedRetainedInputCharges']
+                      if row['currency'].lower() == PAXG.lower()), None)
+        if unmet is not None:
+            error = QuoteFailure('quote-contract-reverted')
+            error.unsettled_intermediate = {'currency': PAXG, 'amount': int(unmet['amount'])}
+            control.errors.append(error)
+            raise error
+        return value
+    q.plan_simulator = simulate
+    return q, control, leaf
+
+
+class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
+    def tool(self, q, control, paths, *, pending=None):
+        class Ready(RouteTool):
+            name = 'controlled-ready-alternatives'
+            def discover(self, query):
+                control.calls.append(query.amount)
+                return CandidateFeed(available=[[{'amountIn': str(query.amount), 'hops': deepcopy(path)}]
+                    for path in paths(query.amount)], pending=pending(query) if pending else None)
+            async def close(self):
+                control.closed = True
+        q.route_provider_factory = lambda: [Ready()]
+
+    async def test_failed_first_core_leg_bootstraps_full_funding_then_explores_actual_lot(self):
+        q, control, _ = unsettled_fixture(self)
+        self.tool(q, control, lambda amount: (control.bad, control.medium) if amount == 1 else
+                  (control.bad, control.medium, control.good))
+        updates = []
+        async def publish(frame):
+            if frame['type'] == 'qualified':
+                updates.append(deepcopy(frame['value']))
+        async with asyncio.timeout(5):
+            value = await q.get(REQUEST, publish, core_only=True)
+        self.assertEqual(control.calls, [1, 5000])
+        self.assertEqual(value['inputs'], REQUEST['inputs'])
+        self.assertEqual(updates[0]['searchCoverage']['selectedPhase'], 'core-market-bootstrap')
+        self.assertGreater(int(value['quotedOutput']), int(updates[0]['quotedOutput']))
+        self.assertEqual(len(value['plan']['conversions']['0:redeem:0']['branches'][0]['hops']), 2)
+        self.assertEqual(value['conversionObservations'][0]['fundedInput'], '5000')
+        self.assertEqual(value['plan']['conversions']['0:redeem:0']['discoveryOrigins'],
+                         ['controlled-ready-alternatives'])
+        self.assertTrue(control.errors)
+        self.assertTrue(control.closed)
+        # The recovery replaces only a market leg. Core allocation/descriptors
+        # and full request funding remain the complete Helpers call's inputs.
+        initial = control.attempts[0]
+        repaired = next(plan for plan in control.attempts
+                        if plan['conversions']['0:redeem:0']['branches'][0]['hops'] == control.medium)
+        self.assertEqual(initial['allocations'], repaired['allocations'])
+        self.assertEqual(initial['body']['branches'][0]['amountIn'], repaired['body']['branches'][0]['amountIn'])
+        self.assertEqual(initial['body']['branches'][0]['data']['expectedOutputs'],
+                         repaired['body']['branches'][0]['data']['expectedOutputs'])
+
+    async def test_late_ready_topology_is_not_masked_by_failed_plan_repair_dedup(self):
+        q, control, _ = unsettled_fixture(self)
+        failed = asyncio.Event()
+        leaf = q.plan_simulator
+        async def simulate(*args, **options):
+            try:
+                return await leaf(*args, **options)
+            except QuoteFailure:
+                failed.set()
+                raise
+        q.plan_simulator = simulate
+        async def late(query):
+            try:
+                await failed.wait()
+                await asyncio.sleep(0)
+                return [[{'amountIn': str(query.amount), 'hops': deepcopy(control.good)}]]
+            finally:
+                control.pending_done.set()
+        self.tool(q, control, lambda amount: (control.bad,), pending=late)
+        async with asyncio.timeout(5):
+            value = await q.get(REQUEST, core_only=True)
+        self.assertEqual(control.calls, [1, 5000])
+        self.assertEqual(value['inputs'], REQUEST['inputs'])
+        self.assertGreater(int(value['quotedOutput']), 10_000)
+        self.assertTrue(control.pending_done.is_set())
+        self.assertTrue(control.closed)
+
+    async def test_downstream_remainder_replaces_whole_unknown_core_funded_leg(self):
+        from cybergold_candidate.quoter.amm import PartialPath
+        from cybergold_candidate.quoter.contracts import capture_paths
+        q, control, leaf = unsettled_fixture(self)
+        thin = synthetic_pool(OTHER, WETH, 7907, 'v3', liquidity=10**5)
+        for token in ('token0', 'token1'):
+            thin[token]['chainId'] = 31338
+        q.engine.registry.observed[thin['id']] = deepcopy(thin)
+        bad = [deepcopy(control.good[0]),
+               {'pool': thin, 'zeroForOne': thin['token0']['address'].lower() == OTHER.lower()}]
+        remainders = []
+        async def simulate(request, selected, **options):
+            with capture_paths():
+                try:
+                    return await leaf(request, selected, **options)
+                except PartialPath as partial:
+                    last = partial.trace.hops[-1]
+                    source = last.hop['pool']['token0' if last.hop['zeroForOne'] else 'token1']['address']
+                    error = QuoteFailure('quote-contract-reverted')
+                    error.unsettled_intermediate = {'currency': source, 'amount': last.funded-last.consumed}
+                    remainders.append(deepcopy(error.unsettled_intermediate))
+                    raise error from None
+        q.plan_simulator = simulate
+        class Ready(RouteTool):
+            def __init__(self, name, path):
+                self.name, self.path = name, path
+            def discover(self, query):
+                control.calls.append(query.amount)
+                return CandidateFeed(available=[[{'amountIn': str(query.amount), 'hops': deepcopy(self.path)}]])
+        q.route_provider_factory = lambda: [Ready('thin-downstream', bad), Ready('full-funding', control.medium)]
+        async with asyncio.timeout(5):
+            value = await q.get(REQUEST, core_only=True)
+        self.assertTrue(remainders)
+        self.assertTrue(all(row['currency'].lower() == OTHER.lower() for row in remainders))
+        self.assertEqual(set(control.calls), {1, 5000})
+        self.assertEqual(value['inputs'], REQUEST['inputs'])
+        self.assertEqual(value['conversionObservations'][0]['fundedInput'], '5000')
+        self.assertEqual(value['plan']['conversions']['0:redeem:0']['discoveryOrigins'], ['full-funding'])
+
+    async def test_scalar_issuance_residual_recovers_without_resizing_acquisitions(self):
+        paxg = synthetic_pool(WETH, PAXG, 7921, 'v2')
+        other = synthetic_pool(WETH, OTHER, 7922, 'v2')
+        thin = synthetic_pool(OTHER, PAXG, 7923, 'v3', liquidity=10**5)
+        seed = synthetic_pool(PAXG, CORE, 7924, 'v4', liquidity=10**12)
+        q = service(self, [paxg, other, thin, seed])
+        def route(pools, source):
+            result = []
+            for pool in pools:
+                direction = source.lower() == pool['token0']['address'].lower()
+                result.append({'pool': deepcopy(pool), 'zeroForOne': direction})
+                source = pool['token1' if direction else 'token0']['address']
+            return result
+        bad, good = route((thin, seed), OTHER), route((other, paxg, seed), OTHER)
+        async def preview(mode, value, _):
+            self.assertEqual(mode, 'issue-exact-in')
+            return {'netCygldOut': '16000', 'amountsInExact': ['8000', '8000'],
+                'orderedCoreAssets': [PAXG, OTHER],
+                'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
+        async def discover(*_):
+            pass
+        q.preview, q.discover, q.seed_routes = preview, discover, lambda *_: None
+        leaf, attempts, queries = q.plan_simulator, [], []
+        async def simulate(request, selected, **options):
+            attempts.append(deepcopy(selected))
+            value = await leaf(request, selected, **options)
+            unmet = next((row for row in value['estimatedRetainedInputCharges']
+                          if row['currency'].lower() == OTHER.lower()), None)
+            if unmet is not None:
+                error = QuoteFailure('quote-contract-reverted')
+                error.unsettled_intermediate = {'currency': OTHER, 'amount': int(unmet['amount'])}
+                raise error
+            return value
+        q.plan_simulator = simulate
+        class Ready(RouteTool):
+            name = 'issuance-ready-market-legs'
+            def discover(self, query):
+                queries.append((query.source, query.target, query.amount))
+                key = query.source.lower(), query.target.lower()
+                paths = {
+                    (WETH.lower(), PAXG.lower()): [route((paxg,), WETH)],
+                    (WETH.lower(), OTHER.lower()): [route((other,), WETH)],
+                    (PAXG.lower(), CORE.lower()): [route((seed,), PAXG)],
+                    (OTHER.lower(), CORE.lower()): [bad, good],
+                }.get(key, [])
+                return CandidateFeed(available=[[{'amountIn': str(query.amount), 'hops': path}] for path in paths])
+        q.route_provider_factory = lambda: [Ready()]
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '20000'}], 'outputCurrency': CORE}
+        async with asyncio.timeout(5):
+            value = await q.get(request, core_only=True)
+        self.assertEqual(value['inputs'], request['inputs'])
+        self.assertGreater(int(value['quotedOutput']), 18000)
+        residual = next(row for row in value['conversionObservations'] if row['operation'] == '0:residual:1')
+        self.assertGreater(int(residual['fundedInput']), 1000)
+        self.assertIn((OTHER.lower(), CORE.lower(), int(residual['fundedInput'])), queries)
+        self.assertEqual(len(value['plan']['conversions']['0:residual:1']['branches'][0]['hops']), 3)
+        repaired = next(plan for plan in attempts
+                        if len(plan['conversions']['0:residual:1']['branches'][0]['hops']) == 3)
+        self.assertEqual(attempts[0]['body']['branches'][0]['data']['acquisitions'],
+                         repaired['body']['branches'][0]['data']['acquisitions'])
+
+    async def test_all_alternatives_fail_preserves_original_error_and_drains_provider(self):
+        q, control, _ = unsettled_fixture(self)
+        thin = synthetic_pool(PAXG, OTHER, 7906, 'v3', liquidity=10**5)
+        for token in ('token0', 'token1'):
+            thin[token]['chainId'] = 31338
+        q.engine.registry.observed[thin['id']] = deepcopy(thin)
+        other = [{'pool': thin, 'zeroForOne': thin['token0']['address'].lower() == PAXG.lower()},
+                 deepcopy(control.good[1])]
+        async def empty(_):
+            try:
+                await asyncio.sleep(0)
+                return []
+            finally:
+                control.pending_done.set()
+        self.tool(q, control, lambda amount: (control.bad, other), pending=empty)
+        async with asyncio.timeout(5):
+            with self.assertRaises(QuoteFailure) as raised:
+                await q.get(REQUEST, core_only=True)
+        self.assertIs(raised.exception, control.errors[0])
+        self.assertEqual(control.calls, [1])
+        self.assertEqual(sum(plan['conversions']['0:redeem:0']['branches'][0]['hops'] == other
+                             for plan in control.attempts), 1)
+        self.assertTrue(control.pending_done.is_set())
+        self.assertTrue(control.closed)
+
+    async def test_caller_cancellation_propagates_and_drains_bootstrap_and_provider(self):
+        q, control, _ = unsettled_fixture(self)
+        entered, cancelled = asyncio.Event(), asyncio.Event()
+        leaf = q.plan_simulator
+        async def simulate(request, selected, **options):
+            hops = selected['conversions']['0:redeem:0']['branches'][0]['hops']
+            if hops == control.medium:
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    cancelled.set()
+            return await leaf(request, selected, **options)
+        q.plan_simulator = simulate
+        async def pending(_):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                control.pending_done.set()
+        self.tool(q, control, lambda amount: (control.bad, control.medium), pending=pending)
+        task = asyncio.create_task(q.get(REQUEST, core_only=True))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 5)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(cancelled.is_set())
+        self.assertTrue(control.pending_done.is_set())
+        self.assertTrue(control.closed)
+
+
 class CoreMarketToolIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_measured_lot_ranks_all_nominees_after_a_detailed_baseline_was_coalesced(self):
         q, direct, first, second = fixture(self, remote_pools=True)
