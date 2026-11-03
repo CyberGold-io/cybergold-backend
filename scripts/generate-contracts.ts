@@ -45,11 +45,11 @@ operation("/api/protocol/config", "get", "ProtocolConfiguration", undefined, {
 });
 operation("/api/gold", "get", "Gold");
 operation("/api/economic-quotes", "post", "EconomicQuote", "EconomicQuoteRequest", {
-  description: "Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast.",
+  description: "Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Fully funded stored offers retain their original context; smaller-funded offers seed ordinary requested-budget optimization. Explicit refresh searches current state using saved topology. Execution guards and lifetime are bound during unsigned preparation.",
 });
 operation("/api/economic-quotes/stream", "post", "EconomicQuoteEvent", "EconomicQuoteRequest", {
-  description: "Subscription-owned complete economic incumbents, canonically confirmed before ready publication while bounded search continues. Stored hits retain their historical observation contract. Caller disconnect cancels/drains only its owned work and preserves its last confirmed incumbent without signing or submission.",
-  responses: { "200": { description: "Canonical-ready qualified improvements, then exactly one complete or error. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
+  description: "Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Latest observations have nullable block coordinates; stored offers retain their original context. Caller disconnect cancels and drains only its owned work.",
+  responses: { "200": { description: "Helpers-qualified improvements followed by complete or error; caller cancellation ends its subscription. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
     content: { "application/x-ndjson": { schema: ref("EconomicQuoteEvent") } } }, default: response(ref("PublicError")) },
 });
 operation("/api/tx-preparations", "post", "PreparedTransaction", "TransactionPreparationRequest", {

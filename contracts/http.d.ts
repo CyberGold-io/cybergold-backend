@@ -58,7 +58,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast. */
+        /** @description Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Fully funded stored offers retain their original context; smaller-funded offers seed ordinary requested-budget optimization. Explicit refresh searches current state using saved topology. Execution guards and lifetime are bound during unsigned preparation. */
         post: operations["post__api_economic_quotes"];
         delete?: never;
         options?: never;
@@ -75,7 +75,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Subscription-owned complete economic incumbents, canonically confirmed before ready publication while bounded search continues. Stored hits retain their historical observation contract. Caller disconnect cancels/drains only its owned work and preserves its last confirmed incumbent without signing or submission. */
+        /** @description Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Latest observations have nullable block coordinates; stored offers retain their original context. Caller disconnect cancels and drains only its owned work. */
         post: operations["post__api_economic_quotes_stream"];
         delete?: never;
         options?: never;
@@ -11138,7 +11138,7 @@ export interface components {
             omittedPools?: number;
         };
         /** @enum {string} */
-        QuoteCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        QuoteCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
         "Partial<Record<\"elapsedMs\"|\"subphaseElapsedMs\"|\"legacyCandidates\"|\"legacyCompleted\"|\"typedEnumerated\"|\"typedCompleted\"|\"typedPending\"|\"sdkRequests\"|\"sdkWaiting\"|\"sdkLockWaitMs\"|\"sdkExchangeMs\",number>>": {
             elapsedMs?: number;
             subphaseElapsedMs?: number;
@@ -11159,7 +11159,7 @@ export interface components {
             /** @enum {string} */
             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
         } & components["schemas"]["Partial<Record<\"outputMinimum\"|\"quotedInput\"|\"inputMaximum\"|\"quotedOutput\"|\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
             pools?: {
                 /** @enum {string} */
@@ -14457,7 +14457,7 @@ export interface components {
                 } & components["schemas"]["Partial<Record<\"pending\"|\"cancelled\"|\"attempts\"|\"qualified\"|\"rejected\"|\"superseded\"|\"notImproved\"|\"omittedRows\"|\"firstQualifiedMs\"|\"selectionMs\"|\"canonicalCompletedMs\"|\"cleanupCompletedMs\",number>>"];
             };
             /** @enum {string} */
-            errorClassification?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            errorClassification?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             tokenIn?: string;
             tokenOut?: string;
             amount?: string;
@@ -15427,7 +15427,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Canonical-ready qualified improvements, then exactly one complete or error. Snapshot disproof emits invalidated before error. Integers are decimal strings. */
+            /** @description Helpers-qualified improvements followed by complete or error; caller cancellation ends its subscription. Snapshot disproof emits invalidated before error. Integers are decimal strings. */
             200: {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */

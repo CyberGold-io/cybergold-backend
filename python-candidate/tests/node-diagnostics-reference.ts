@@ -26,7 +26,7 @@ cases.push({body:{...base,requestId:'secret',correlationId:'secret',workId:'secr
 for(const errorClassification of ['quote-service-unavailable','quote-stream-interrupted','quote-invalid-input','quote-request-limit'])
   cases.push({body:{...base,errorClassification}});
 for(const errorClassification of ['redemption-supply-exceeded','redemption-capacity-exceeded',
-  'insufficient-reserve-balance','insufficient-recovery-shares','insufficient-protocol-supply'])
+  'insufficient-reserve-balance','insufficient-recovery-shares','insufficient-protocol-supply','unsupported-simulation-funding'])
   cases.push({body:{...base,errorClassification,quoteDiagnostics:{
     routeWave:{legs:{count:1,rows:[{index:0,failureCounts:[{code:errorClassification,count:1}]}]}},
     providerQualifications:{provider:'core',attempts:1,rejected:1,
