@@ -147,11 +147,11 @@ def selected_conversion(selected, operation, source):
 
 
 def neighbor_proposals(quote, budget, assets):
-    """Reprice fitting original funding before trying the larger budget.
+    """Nominate fitting original funding and the complete requested budget.
 
-    Upscaling can become unproductive or consume the selection window. Keep
-    the already-fitting plan in contention first, without copying its old
-    price or extending that window. Both proposals still use current state.
+    Callers can price both independently, keeping the already-fitting plan in
+    contention while an upscale is slow or unproductive. Neither proposal
+    copies its old price or extends the selection window.
     """
     blueprint = extract_blueprint(quote)
     amounts = []

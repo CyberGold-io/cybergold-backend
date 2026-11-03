@@ -520,7 +520,22 @@ class Quoter:
                             row['currency'].lower() == maximum['currency'].lower()
                             and int(row['amount']) <= int(maximum['amount'])
                             for row, maximum in zip(funding, maxima, strict=True)):
-                        await evaluate(100, 'core-first', False, selected=offered['plan'], funding=funding)
+                        async def expanded_seed():
+                            try:
+                                proposal = neighbor_proposals(offered, int(maxima[0]['amount']), assets)[-1]
+                            except Exception as error:
+                                failures.append(error)
+                                return
+                            await evaluate(100, 'core-first', False, selected=proposal['plan'],
+                                funding=proposal['inputs'], phase='saved-plan-budget')
+                        retained = evaluate(100, 'core-first', False, selected=offered['plan'], funding=funding)
+                        if request['intent'] in (0, 1) and int(funding[0]['amount']) < int(maxima[0]['amount']):
+                            # The exact request key can retain a smaller-funded
+                            # winner. Start its full-budget topology replay now,
+                            # independently of the already-fitting fallback.
+                            await owned_reads(expanded_seed(), retained)
+                        else:
+                            await retained
             async def seeded():
                 try:
                     await seeded_body()
@@ -558,7 +573,7 @@ class Quoter:
                             source['referenceBasis'] = basis
                         neighbor_metrics['sources'].append(source)
                         proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
-                        for proposal in proposals:
+                        async def replay_proposal(proposal):
                             attempt = {'funding': proposal['inputs'][0]['amount']}
                             source['attempts'].append(attempt)
                             neighbor_metrics['starts'] += 1
@@ -575,6 +590,10 @@ class Quoter:
                                     attempt['failureCode'] = public_quote_error(errors[-1])['code']
                             finally:
                                 attempt['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
+                        # The fitting replay must not hold the edited budget
+                        # behind a slow call. Both complete plans use ordinary
+                        # independent Helpers pricing and the same owner clock.
+                        await owned_reads(*(replay_proposal(proposal) for proposal in reversed(proposals)))
                     except asyncio.CancelledError:
                         settled = False
                         raise

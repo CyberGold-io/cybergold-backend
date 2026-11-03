@@ -13,7 +13,129 @@ from test_universal_quote import Engine, Quotes, request
 
 
 class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
-    async def test_fitting_plan_is_repriced_before_upscaling_can_consume_selection(self):
+    async def budget_replay_fixture(self):
+        """Native mixed-Core topology, resolved against current fixture state."""
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        q = Quotes(Engine())
+        sdk = q.engine.quote_sdk_branches
+        async def acquire(branches, *args, **kwargs):
+            resolved = deepcopy(branches)
+            for branch in resolved:
+                for hop in branch['hops']:
+                    hop['pool'] = deepcopy(q.engine.registry.inventory[hop['pool']['id']])
+            return await sdk(resolved, *args, **kwargs)
+        q.engine.quote_sdk_branches = acquire
+        old_request = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        from test_universal_quote import BLOCK
+        assets, weights = await q.basis(BLOCK)
+        saved = await q.candidate(old_request, 50, 'core-first', BLOCK, assets, weights, first=True)
+        for chosen in saved['plan']['conversions'].values():
+            chosen['discoveryOrigins'] = ['uniroute-local', 'uniswap-alpharouter']
+        edited = {**old_request, 'inputs': [{**old_request['inputs'][0], 'amount': '50005'}]}
+        proposal = neighbor_proposals(saved, 50005, assets)[-1]
+        expanded = await q.candidate(edited, 100, 'core-first', BLOCK, assets, weights, selected=proposal['plan'])
+        self.assertGreater(int(expanded['quotedOutput']), int(saved['quotedOutput']))
+        return q, saved, edited, expanded
+
+    async def test_exact_low_funding_seed_starts_full_budget_and_keeps_fallback_and_ordinary_winner(self):
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        for outcome in ('expanded-wins', 'expanded-fails', 'ordinary-wins'):
+            with self.subTest(outcome=outcome):
+                q, saved, edited, expanded = await self.budget_replay_fixture()
+                saved['request'] = deepcopy(edited)  # Exact key, lower actual funding.
+                saved['plan']['_budget_replay_fixture'] = True
+                original = q.candidate
+                full_started, both_settled = asyncio.Event(), asyncio.Event()
+                calls, settled = [], []
+                async def candidate(value, *args, **options):
+                    if (options.get('selected') or {}).get('_budget_replay_fixture'):
+                        amount = value['inputs'][0]['amount']
+                        calls.append((amount, deepcopy(options['selected'])))
+                        try:
+                            if amount == '50005':
+                                full_started.set()
+                                if outcome == 'expanded-fails':
+                                    raise QuoteFailure('quote-contract-reverted')
+                            else:
+                                # An older replay may be slow. The expanded
+                                # proposal must enter before it can complete.
+                                await full_started.wait()
+                            return await original(value, *args, **options)
+                        finally:
+                            settled.append(amount)
+                            if len(settled) == 2:
+                                both_settled.set()
+                    await both_settled.wait()
+                    result = await original(value, *args, **options)
+                    output = int(expanded['quotedOutput']) + 1000 if outcome == 'ordinary-wins' else 1
+                    result['quotedOutput'] = str(output)
+                    result['estimatedRecipientOutputs'][0]['amount'] = str(output)
+                    return result
+                def marked(*args):
+                    rows = neighbor_proposals(*args)
+                    for row in rows:
+                        row['plan']['_budget_replay_fixture'] = True
+                    return rows
+                q.candidate = candidate
+                with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
+                    async with asyncio.timeout(2):
+                        result = await Quoter.get(q, edited, seed=saved)
+                self.assertEqual({amount for amount, _ in calls}, {'10001', '50005'})
+                self.assertEqual(result['request'], edited)
+                expected = saved if outcome == 'expanded-fails' else expanded
+                self.assertEqual(result['inputs'], edited['inputs'] if outcome == 'ordinary-wins' else expected['inputs'])
+                self.assertEqual(result['quotedOutput'], str(int(expanded['quotedOutput']) + 1000)
+                                 if outcome == 'ordinary-wins' else expected['quotedOutput'])
+                plan = next(plan for amount, plan in calls if amount == '50005')
+                self.assertEqual(sum(int(row['amountIn']) for row in plan['allocations']), 50005)
+                self.assertEqual({row['kind'] for row in plan['allocations']}, {0, 1})
+                self.assertTrue(all(chosen['inputCurrency'].lower() == edited['inputs'][0]['currency'].lower()
+                    for operation, chosen in plan['conversions'].items() if ':acquire:' in operation or ':market' in operation))
+                if outcome != 'ordinary-wins':
+                    self.assertEqual(result['routeOrigins']['discoveryProviders'], ['uniroute-local', 'uniswap-alpharouter'])
+                self.assertEqual(q.engine.semaphore._value, 8)
+
+    async def test_lower_neighbor_full_budget_starts_while_fitting_replay_is_blocked(self):
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        q, saved, edited, expanded = await self.budget_replay_fixture()
+        original = q.candidate
+        full_started, fitting_started, fitting_drained = (asyncio.Event() for _ in range(3))
+        async def candidate(value, *args, **options):
+            if (options.get('selected') or {}).get('_budget_replay_fixture'):
+                if value['inputs'][0]['amount'] == '50005':
+                    full_started.set()
+                    await fitting_started.wait()
+                    return await original(value, *args, **options)
+                fitting_started.set()
+                try:
+                    await full_started.wait()
+                    await asyncio.Event().wait()
+                finally:
+                    fitting_drained.set()
+            await full_started.wait()
+            result = await original(value, *args, **options)
+            result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
+            return result
+        def marked(*args):
+            rows = neighbor_proposals(*args)
+            for row in rows:
+                row['plan']['_budget_replay_fixture'] = True
+            return rows
+        async def neighbors():
+            return {'lower': {'identity': 'fitting-native-core', 'quote': saved}}
+        q.candidate = candidate
+        with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
+            async with asyncio.timeout(2):
+                result = await Quoter.get(q, edited, neighbors=neighbors)
+        self.assertEqual(result['inputs'], edited['inputs'])
+        self.assertEqual(result['quotedOutput'], expanded['quotedOutput'])
+        self.assertTrue(fitting_drained.is_set())
+        attempts = result['metrics']['nearbySearch']['sources'][0]['attempts']
+        self.assertEqual({row['funding'] for row in attempts}, {'10001', '50005'})
+        self.assertTrue(next(row['completed'] for row in attempts if row['funding'] == '50005'))
+        self.assertEqual(q.engine.semaphore._value, 8)
+
+    async def test_fitting_plan_survives_a_parallel_upscale_that_exhausts_selection(self):
         from cybergold_candidate.quote_budget import current_budget
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         for unavailable in (False, True):
@@ -33,21 +155,29 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}
                 original = q.candidate
                 qualified = asyncio.Event()
+                fitting_settled = asyncio.Event()
                 async def update(frame):
                     if frame['type'] == 'qualified':
                         qualified.set()
+                        if frame['value']['quotedOutput'] == expected:
+                            fitting_settled.set()
                 async def candidate(value, *args, **options):
                     if (options.get('selected') or {}).get('_fitting_fixture'):
                         if value['inputs'][0]['amount'] == '100010':
-                            # Deterministic clock boundary: the expanded replay
-                            # consumes the remaining selection window, leaving
-                            # no time for a later fitting replay. No sleep race.
+                            # Both calls start independently. Let the fitting
+                            # attempt settle before ending the window; a slow
+                            # expanded call still cannot erase that fallback.
+                            await fitting_settled.wait()
                             await qualified.wait()
                             current_budget().finish_selection('best-initial')
                             return await current_budget().discovery(asyncio.sleep(0))
-                        if unavailable:
-                            raise QuoteFailure('quote-no-route')
-                        return await original(value, *args, **options)
+                        try:
+                            if unavailable:
+                                raise QuoteFailure('quote-no-route')
+                            return await original(value, *args, **options)
+                        finally:
+                            if unavailable:
+                                fitting_settled.set()
                     result = await original(value, *args, **options)
                     # Model an ordinary low-output candidate at the producer
                     # boundary; this control tests scheduling, not AMM pricing.

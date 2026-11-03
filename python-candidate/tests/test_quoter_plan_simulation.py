@@ -139,6 +139,65 @@ def branches(values):
 
 
 class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_exact_cached_native_seed_replays_full_budget_once_without_sdk_repricing(self):
+        request, plan = market(native=True)
+        def observed(_method, params):
+            _, decoded = Web3().eth.contract(abi=ABI).decode_function_input(params[0]['data'])
+            amount = decoded['plan']['inputs'][0]['amount']
+            return encoded(measured(amount * 10, stages=[
+                stage(0, ZERO, WETH, amount, amount), stage(1, WETH, CORE, amount, amount * 10)]))
+        simulation, q, rpc, provider = fixture(observed, observed, observed)
+        saved = attach_origins(await simulation(request, plan))
+        edited = {**request, 'inputs': [{**request['inputs'][0], 'amount': '30000'}]}
+        saved['request'] = deepcopy(edited)
+        retained = deepcopy(saved)
+        provider.calls.clear()
+        q.basis_reader = AsyncMock(return_value=([PAXG, OTHER], [500000, 500000]))
+        q.seed_routes = lambda *_: None
+        q.discover = AsyncMock()
+        full_started = asyncio.Event()
+        original = q.candidate
+        async def candidate(value, *args, **kwargs):
+            if kwargs.get('selected') is not None:
+                if value['inputs'][0]['amount'] == '30000':
+                    full_started.set()
+                else:
+                    await full_started.wait()
+                return await original(value, *args, **kwargs)
+            await full_started.wait()
+            raise QuoteFailure('quote-no-route')
+        q.candidate = candidate
+        class Store:
+            def capture_scope(self, value):
+                return value['inputs'][0]['amount']
+            async def lookup(self, value, *, scope):
+                self.assert_exact = scope == '30000' and value == edited
+                return deepcopy(saved)
+            async def neighbors(self, value, *, scope):
+                return {'lower': None, 'upper': None}
+            async def save(self, *args, **kwargs):
+                return True
+        store = Store()
+        service = EconomicQuotes(q, store)
+        try:
+            async with asyncio.timeout(2):
+                result = await service.get(edited, refresh=True)
+        finally:
+            await service.close()
+        self.assertTrue(store.assert_exact)
+        self.assertEqual(result['request'], edited)
+        self.assertEqual(result['inputs'], edited['inputs'])
+        self.assertEqual(result['quotedOutput'], '299700')
+        self.assertEqual(result['searchCoverage']['selectedPhase'], 'saved-plan-budget')
+        self.assertEqual(result['observation'], {'source': 'search', 'refresh': True})
+        self.assertEqual(result['routeOrigins']['discoveryProviders'], ['cybergold-custom', 'uniroute-local'])
+        self.assertEqual(len(provider.calls), 2)
+        self.assertEqual({decode(provider, index)[-1]['plan']['inputs'][0]['amount'] for index in range(2)}, {10000, 30000})
+        self.assertTrue(all(decode(provider, index)[2] == 'latest' for index in range(2)))
+        self.assertEqual((rpc.heads, rpc.verifications), ([], []))
+        q.engine.quote_sdk_branches.assert_not_called()
+        self.assertEqual(saved, retained)
+
     async def test_core_sale_projects_actual_amounts_and_preparation_binds_actual_recovery(self):
         request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '10000'}], 'outputCurrency': WETH}
         outputs = [{'kind': 0, 'token': PAXG, 'id': '0', 'amount': '1'},
