@@ -6,8 +6,12 @@ from ..route_work_slots import engine_work
 from .discovery import market_plan, paths
 
 
-async def repair_prefix(quoter, request, trace, block, *, origins=None):
-    route = deepcopy(trace.route)
+async def backward_input(quoter, trace):
+    """Propose source funding from the existing measured partial-hop trace.
+
+    Each inverse observes that occurrence's private pre-swap pool state. The
+    result is a nomination; a complete forward execution still owns validity.
+    """
     partial = next((index for index, row in enumerate(trace.hops)
                     if index > 0 and row.consumed < row.funded), None)
     if partial is None:
@@ -27,6 +31,14 @@ async def repair_prefix(quoter, request, trace, block, *, origins=None):
         # overdelivery, shared-pool effects and partial fills are measured by
         # the complete Helpers execution before the proposal can be selected.
         target = int(value['amountIn'])
+    return target
+
+
+async def repair_prefix(quoter, request, trace, block, *, origins=None):
+    target = await backward_input(quoter, trace)
+    if target is None:
+        return None
+    route = deepcopy(trace.route)
     source, output = request['inputs'][0]['currency'], request['outputCurrency']
     if request['intent'] == 1:
         target += quoted_fee(target, get_market_fee_rate(quoter.engine.registry.chain, source, output, 'exact-in'))

@@ -12,17 +12,20 @@ from cybergold_candidate.economic_quotes import EconomicQuotes
 from cybergold_candidate.exact_input_plan import CORE_BUY, CORE_SELL, MARKET, SCALAR_BODY, CORE_OUTPUT, CONTINUATION
 from cybergold_candidate.helpers_execution import ABI
 from cybergold_candidate.quoter import Quoter
+from cybergold_candidate.quoter.amm_adapter import CyberGoldAmmAdapter
 from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, simulation_scope
 from cybergold_candidate.quoter.provenance import attach_origins
 from cybergold_candidate.quoter.simulation_funding import SIMULATION_SENDER
 from cybergold_candidate.quoter.types import EconomicQuote
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.quote_errors import QuoteFailure
+from cybergold_candidate.quote_errors import public_quote_error
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.route_work_slots import PricingSlots
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.tx_preparation import TransactionPreparation
-from test_universal_quote import BLOCK, CORE, HELPERS, ADAPTER, USER, WETH, PAXG, OTHER, settings
+from test_universal_quote import (BLOCK, CORE, HELPERS, ADAPTER, USER, WETH, PAXG, OTHER, settings,
+                                 CapacityEngine, capacity_hop, capacity_nominations)
 
 
 # Independent ITradeExactInput.TradeResult wire shape, not the implementation's
@@ -138,7 +141,128 @@ def branches(values):
     return CODEC.decode([f'({SCALAR_BODY})'], values['plan']['body'])[0][0]
 
 
+class OrdinaryCapacitySimulationTests(unittest.IsolatedAsyncioTestCase):
+    def capacity_fixture(self, intent=0):
+        def execute(_method, params):
+            _, values = Web3().eth.contract(abi=ABI).decode_function_input(params[0]['data'])
+            plan = values['plan']
+            rows = branches(values)
+            self.assertEqual(plan['inputs'][0]['amount'], sum(row[1] for row in rows))
+            raw_stages = []
+            def append(source, target, amount, output, returned=0):
+                raw_stages.append(stage(len(raw_stages), source, target, amount, output, returned=returned))
+            if rows[0][0] == 0:
+                core = CODEC.decode([CORE_BUY], rows[0][2])[0]
+                for index, (asset, acquisition) in enumerate(zip(core[0], core[1], strict=True)):
+                    amount, template = acquisition
+                    append(ZERO, WETH, amount, amount)
+                    append(WETH, asset, amount, 111*(index+1))
+                for index, asset in enumerate(core[0]):
+                    append(asset, CORE, 111*(index+1), 777 if index == 0 else 0)
+                return encoded(measured(777, stages=raw_stages, fees=(7, 11, 0)))
+            template, fee = CODEC.decode([MARKET], rows[0][2])[0]
+            lot = rows[0][1]
+            if intent == 0:
+                append(ZERO, WETH, lot, lot)
+                append(WETH, CORE, lot, 777)
+                return encoded(measured(777, stages=raw_stages))
+            append(CORE, WETH, lot-fee, 888)
+            return encoded(measured(888, currency=WETH, stages=raw_stages, fees=(0, 0, fee)))
+        _, q, rpc, provider = fixture(execute)
+        engine = CapacityEngine()
+        engine.registry.get_rpc = lambda: rpc
+        q.engine, q.amm = engine, CyberGoldAmmAdapter(engine, CORE)
+        return q, engine, rpc, provider
+
+    async def test_core_acquisition_repair_keeps_complete_body_and_shared_preceding_pool_state(self):
+        q, engine, rpc, provider = self.capacity_fixture()
+        prefix = [capacity_hop(WETH, engine.prefix)]
+        thin = prefix + [capacity_hop(OTHER, engine.thin)]
+        anchor = [capacity_hop(PAXG, engine.anchor)]
+        wrap = [{'kind': 'wrap', 'currencyOut': WETH}]
+        capacity_nominations(q.amm, {
+            (ZERO, PAXG.lower()): [(0, wrap+thin)], (ZERO, OTHER.lower()): [(0, wrap+prefix)],
+            (PAXG.lower(), CORE.lower()): [(0, anchor)],
+            (OTHER.lower(), CORE.lower()): [(0, [capacity_hop(OTHER, engine.thin)]+anchor)]})
+        request = {'intent': 0, 'inputs': [{'currency': ZERO, 'amount': '1000'}], 'outputCurrency': CORE}
+        value = await q.candidate(request, 100, 'core-first', BLOCK, [PAXG, OTHER], [500000, 500000])
+        encoded_plan = decode(provider)[-1]['plan']
+        core = CODEC.decode([CORE_BUY], branches(decode(provider)[-1])[0][2])[0]
+        self.assertEqual([row[0] for row in core[1]], [51, 500])
+        self.assertEqual(len(core[2]), 2)
+        self.assertEqual([row['kind'] for row in value['plan']['allocations']], [0])
+        self.assertEqual(value['inputs'], [{'currency': ZERO, 'amount': '551'}])
+        self.assertEqual(encoded_plan['inputs'][0]['amount'], 551)
+        self.assertEqual(request['inputs'][0]['amount'], '1000')
+        self.assertNotIn('_funding', repr(value['plan']))
+        self.assertEqual(value['quotedOutput'], '777', 'Helpers economics must replace SDK construction amounts')
+        self.assertEqual(value['pricingEvidence']['engine'], 'helpers-execution')
+        calls = [row for row in engine.priced if row[0] == engine.prefix['id']]
+        left = 'reserve0' if capacity_hop(WETH, engine.prefix)['zeroForOne'] else 'reserve1'
+        self.assertEqual([row[1] for row in calls], [500, 51, 500])
+        self.assertEqual([row[2][left] for row in calls], ['1000000', '1000000', '1000051'])
+        self.assertEqual(value['plan']['conversions']['0:acquire:0']['discoveryOrigins'],
+                         ['uniroute-local', 'uniswap-alpharouter'])
+        self.assertEqual((len(provider.calls), rpc.heads, rpc.verifications), (1, [], []))
+
+    async def test_native_market_repair_funds_the_lower_complete_helpers_call(self):
+        q, engine, rpc, provider = self.capacity_fixture()
+        route = [{'kind': 'wrap', 'currencyOut': WETH}, capacity_hop(WETH, engine.prefix),
+                 capacity_hop(OTHER, engine.thin), capacity_hop(PAXG, engine.anchor)]
+        capacity_nominations(q.amm, {(ZERO, CORE.lower()): [(0, route)]})
+        request = {'intent': 0, 'inputs': [{'currency': ZERO, 'amount': '1000'}], 'outputCurrency': CORE}
+        value = await q.candidate(request, 0, 'core-first', BLOCK, [], [])
+        _, transaction, tag, _, _, values = decode(provider)
+        self.assertEqual(value['inputs'][0]['amount'], '51')
+        self.assertEqual((values['plan']['inputs'][0]['amount'], transaction['value'], tag), (51, '0x33', 'latest'))
+        self.assertEqual(value['plan']['body']['branches'][0]['amountIn'], '51')
+        self.assertEqual(value['quotedOutput'], '776')
+        self.assertEqual(value['fees']['marketFeeCygld'], '1')
+        self.assertEqual(len(provider.calls), 1)
+
+    async def test_market_sell_repair_reconstructs_exact_gross_fee_and_topology_success_avoids_sdk(self):
+        q, engine, rpc, provider = self.capacity_fixture(1)
+        route = [capacity_hop(CORE, engine.anchor), capacity_hop(PAXG, engine.thin), capacity_hop(OTHER, engine.prefix)]
+        capacity_nominations(q.amm, {(CORE.lower(), WETH.lower()): [(0, route)]})
+        request = {'intent': 1, 'inputs': [{'currency': CORE, 'amount': '1001'}], 'outputCurrency': WETH}
+        value = await q.candidate(request, 0, 'core-first', BLOCK, [], [])
+        template, fee = CODEC.decode([MARKET], branches(decode(provider)[-1])[0][2])[0]
+        self.assertEqual(value['inputs'][0]['amount'], '52')
+        self.assertEqual((branches(decode(provider)[-1])[0][1], fee), (52, 1))
+        self.assertEqual(value['conversionObservations'][0]['fundedInput'], '51')
+        self.assertEqual(value['quotedOutput'], '888')
+        self.assertEqual(value['fees']['marketFeeCygld'], '1')
+        q, engine, _, provider = self.capacity_fixture(1)
+        capacity_nominations(q.amm, {(CORE.lower(), WETH.lower()): [(0, route)]})
+        value = await q.candidate(request, 0, 'core-first', BLOCK, [], [], first=True)
+        self.assertEqual(value['inputs'][0]['amount'], '1001')
+        self.assertEqual((engine.priced, engine.inverses), ([], []))
+        self.assertEqual(len(provider.calls), 1)
+
+
 class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unsettled_intermediate_error_is_private_and_other_reverts_do_not_trigger_sdk(self):
+        request, plan = market()
+        args = CODEC.encode(['address', 'uint256'], [PAXG, 123456789]).hex()
+        for data, expected in (('0xdb8b21c4'+args, {'currency': PAXG.lower(), 'amount': 123456789}),
+                               ('0xdeadbeef'+args, None), ('0xdb8b21c400', None), (None, None)):
+            with self.subTest(data=data):
+                error = {'code': 3, 'message': 'execution reverted'}
+                if data is not None:
+                    error['data'] = data
+                simulation, q, rpc, provider = fixture({'error': error})
+                with self.assertRaises(QuoteFailure) as raised:
+                    await simulation(request, plan)
+                self.assertEqual(raised.exception.code, 'quote-contract-reverted')
+                self.assertEqual(getattr(raised.exception, 'unsettled_intermediate', None), expected)
+                public = public_quote_error(raised.exception)
+                self.assertEqual(public['code'], 'quote-contract-reverted')
+                self.assertNotIn('unsettled_intermediate', public)
+                self.assertNotIn('123456789', repr(public))
+                q.engine.quote_sdk_branches.assert_not_called()
+                self.assertEqual(len(provider.calls), 1)
+                self.assertEqual((rpc.heads, rpc.verifications), ([], []))
+
     async def test_exact_cached_native_seed_replays_full_budget_once_without_sdk_repricing(self):
         request, plan = market(native=True)
         def observed(_method, params):

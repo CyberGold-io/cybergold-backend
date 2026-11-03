@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from web3 import Web3
@@ -126,6 +126,139 @@ class Quotes(UniversalQuotes):
 def request(intent=0):
     return {'intent':intent,'inputs':[{'currency':ZERO if intent==0 else CORE,'amount':'10001'}],
         'outputCurrency':CORE if intent in (0,2) else ZERO,'recipient':USER,'deadline':'2000000000','slippageBps':100}
+
+
+class CapacityEngine(Engine):
+    """Independent constant-product forward/inverse arithmetic with one thin hop."""
+    def __init__(self):
+        super().__init__()
+        rows = list(self.registry.inventory.values())
+        self.prefix, self.direct, self.thin, self.anchor = rows
+        self.prefix, self.direct = self.direct, self.prefix  # WETH/OTHER precedes OTHER/PAXG.
+        self.thin_id = self.thin['id']
+        self.priced, self.inverses = [], []
+        self.inverse_entered, self.inverse_release = asyncio.Event(), None
+        self.sdk = SimpleNamespace(request=self.inverse)
+
+    async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate, canonical):
+        hop = branches[0]['hops'][0]
+        state = candidate.setdefault(pool_identity(hop['pool']), deepcopy(hop['pool']))
+        left, right = ('reserve0', 'reserve1') if hop['zeroForOne'] else ('reserve1', 'reserve0')
+        self.priced.append((hop['pool']['id'], amount, deepcopy(state)))
+        used = min(amount, 50) if hop['pool']['id'] == self.thin_id else amount
+        x, y = int(state[left]), int(state[right])
+        output = used*997*y//(x*1000+used*997)
+        state[left], state[right] = str(x+used), str(y-output)
+        return {'amountIn': str(used), 'amountOut': str(output)}
+
+    async def inverse(self, value):
+        self.inverses.append(deepcopy(value))
+        self.inverse_entered.set()
+        if self.inverse_release is not None:
+            await self.inverse_release.wait()
+        state = value['pools'][0]
+        left, right = ('reserve0', 'reserve1') if value['zeroForOne'] else ('reserve1', 'reserve0')
+        x, y, target = int(state[left]), int(state[right]), int(value['amount'])
+        required = (x*target*1000 + (y-target)*997-1)//((y-target)*997)
+        return {'amountIn': str(required), 'amountOut': str(target)}
+
+
+def capacity_hop(source, row):
+    return {'pool': row, 'zeroForOne': source.lower() == row['token0']['address'].lower()}
+
+
+def capacity_nominations(adapter, paths, *, origins=('uniroute-local', 'uniswap-alpharouter'), closed=None):
+    """Finite semantic tool feed: the adapter still owns actual replay and funding."""
+    async def nominations(source, target, amount, _block, **_):
+        try:
+            branches = paths[(source.lower(), target.lower())]
+            routes = [{'sharePpm': share} for share, _ in branches]
+            yield [{'amountIn': str(funded), 'hops': deepcopy(route)}
+                   for (_, route), funded in zip(branches, split_runtime(amount, routes), strict=True)], list(origins)
+        finally:
+            if closed is not None:
+                closed.set()
+    adapter.async_nominations = nominations
+
+
+class OrdinaryCapacityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unrepairable_nomination_leaves_an_independent_alternative_available(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        partial = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        direct = [capacity_hop(WETH, engine.direct)]
+        async def nominations(*_args, **_kwargs):
+            for route in (partial, direct):
+                yield [{'amountIn': '1000', 'hops': route}], ['cybergold-custom']
+        q.amm.async_nominations = nominations
+        chosen = {}
+        with patch('cybergold_candidate.quoter.amm_adapter.backward_input', AsyncMock(return_value=None)) as inverse:
+            _, output, _ = await q.conversion(WETH, PAXG, 1000, BLOCK, {}, {}, capture=chosen)
+        inverse.assert_awaited_once()
+        self.assertGreater(output, 50)
+        self.assertNotIn('_funding', chosen)
+        self.assertEqual(chosen['branches'][0]['hops'], direct)
+
+    async def test_native_repair_replays_from_preceding_private_bank_and_preserves_origins(self):
+        from cybergold_candidate.quoter.contracts import capture_paths, path_operation
+        q = Quotes(CapacityEngine()); engine = q.engine
+        route = [{'kind': 'wrap', 'currencyOut': WETH}, capacity_hop(WETH, engine.prefix),
+                 capacity_hop(OTHER, engine.thin)]
+        capacity_nominations(q.amm, {(ZERO, PAXG.lower()): [(0, route)]})
+        previous = deepcopy(engine.prefix)
+        left, right = ('reserve0', 'reserve1') if capacity_hop(WETH, previous)['zeroForOne'] else ('reserve1', 'reserve0')
+        previous[left], previous[right] = '1000100', '999910'
+        bank = {pool_identity(previous): deepcopy(previous)}
+        chosen = {}
+        with capture_paths() as traces, path_operation('2:acquire:1', 2, 0):
+            template, output, retained = await q.conversion(ZERO, PAXG, 1000, BLOCK, bank, {}, capture=chosen)
+        funding = chosen['_funding']
+        self.assertTrue(0 < funding < 1000)
+        self.assertGreater(output, 0)
+        self.assertEqual(retained, [])
+        self.assertEqual(template['inputCurrency'].lower(), WETH.lower())
+        self.assertEqual(chosen['inputCurrency'], ZERO)
+        self.assertEqual(chosen['discoveryOrigins'], ['uniroute-local', 'uniswap-alpharouter'])
+        self.assertEqual(engine.inverses[0]['pools'][0][left], previous[left])
+        self.assertEqual([row[2][left] for row in engine.priced if row[0] == engine.prefix['id']],
+                         [previous[left], previous[left]])
+        self.assertEqual(bank[pool_identity(previous)][left], str(int(previous[left])+funding))
+        self.assertEqual(chosen['_observation']['fundedInput'], str(funding))
+        self.assertEqual([trace.funded for trace in traces], [1000, funding])
+        self.assertTrue(all(trace.operation == '2:acquire:1' and trace.branch == 2 for trace in traces))
+
+    async def test_split_repair_preserves_weights_and_actual_integer_allocations(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        partial = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        direct = [capacity_hop(WETH, engine.direct)]
+        capacity_nominations(q.amm, {(WETH.lower(), PAXG.lower()): [(250000, partial), (0, direct)]})
+        chosen = {}
+        template, output, _ = await q.conversion(WETH, PAXG, 1003, BLOCK, {}, {}, capture=chosen)
+        self.assertTrue(0 < chosen['_funding'] < 1003)
+        # The tool's 250/1003 lot is encoded as 249252 ppm before replay.
+        # Repair keeps that actual template, including Solidity's remainder.
+        self.assertEqual([row['sharePpm'] for row in template['routes']], [249252, 0])
+        allocated = split_runtime(chosen['_funding'], template['routes'])
+        self.assertEqual(sum(allocated), chosen['_funding'])
+        self.assertEqual([row[1] for row in engine.priced if row[0] == engine.direct['id']], [allocated[1]])
+        self.assertEqual([row[1] for row in engine.priced if row[0] == engine.prefix['id']], [249, allocated[0]])
+        self.assertGreater(output, 0)
+
+    async def test_cancelled_inverse_discards_trial_drains_feed_and_restores_slot(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        engine.inverse_release = asyncio.Event()
+        closed = asyncio.Event()
+        route = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        capacity_nominations(q.amm, {(WETH.lower(), PAXG.lower()): [(0, route)]}, closed=closed)
+        bank = {pool_identity(engine.prefix): deepcopy(engine.prefix)}
+        retained = deepcopy(bank)
+        pending = asyncio.create_task(q.conversion(WETH, PAXG, 1000, BLOCK, bank, {}))
+        await asyncio.wait_for(engine.inverse_entered.wait(), 1)
+        pending.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await pending
+        self.assertEqual(bank, retained)
+        self.assertTrue(closed.is_set())
+        self.assertEqual(engine.semaphore._value, 8)
 
 
 class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):

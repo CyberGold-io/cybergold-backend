@@ -120,12 +120,14 @@ class HelpersPrefixFallbackTests(unittest.IsolatedAsyncioTestCase):
             return {'quotedOutput': '123'}
         funding = [{'currency': source, 'amount': '1234'}]
         repaired = market_plan(source, target, route, 1234, origins=['uniroute-local'])
-        repair = AsyncMock(return_value=(funding, repaired))
+        # The Market wrapper and selected-plan callers now share the same
+        # extracted inverse kernel. Sell adds its existing two-unit fee.
+        repair = AsyncMock(return_value=1232 if intent == 1 else 1234)
         session = SearchSession(0)
         session.discovery_done.set()
         # A high SDK bound/incumbent cannot authenticate latest Helpers output.
         # Those mathematical component functions remain independently tested.
-        with patch('cybergold_candidate.quoter.exploration.repair_prefix', repair), \
+        with patch('cybergold_candidate.quoter.capacity_recovery.backward_input', repair), \
              patch('cybergold_candidate.quoter.policy.output_upper_bound', side_effect=AssertionError('SDK prune')) as bound, \
              budget_context(QuoteBudget()):
             await explore(quoter, request, LATEST_BLOCK, session, evaluate,
@@ -157,8 +159,7 @@ class HelpersPrefixFallbackTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(traces), 1)
                 expected = 10001 - routed_sell_budget(10001, 1000)[1] if intent == 1 else 10001
                 self.assertEqual(traces[0].funded, expected)
-                repair.assert_awaited_once_with(quoter, request, traces[0],
-                    {'number': 0, 'hash': 'latest', 'tag': 'latest'}, origins=['uniroute-local'])
+                repair.assert_awaited_once_with(quoter, traces[0])
                 self.assertEqual(calls[1]['selected']['conversions']['0:market']['discoveryOrigins'], ['uniroute-local'])
 
     async def test_rpc_failure_does_not_launch_sdk_repair(self):

@@ -62,9 +62,10 @@ async def progressive_quote(service, request, publish, *, refresh=False):
     try:
         previous = await cache.lookup() if not refresh else None
         if previous is not None:
-            value = await service.cached_offer(request, previous, await cache.scope())
-            await publish({'type': 'qualified', 'value': deepcopy(value)})
-            return value
+            offered = await service.cached_offer(request, previous, await cache.scope())
+            await publish({'type': 'qualified', 'value': deepcopy(offered)})
+            if not service.unfilled_budget(request, offered):
+                return offered
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,

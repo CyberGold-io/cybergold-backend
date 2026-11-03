@@ -66,7 +66,11 @@ def current_nomination():
 
 
 @contextmanager
-def capture_paths():
+def capture_paths(*, reuse=False):
+    existing = _traces.get()
+    if reuse and existing is not None:
+        yield existing
+        return
     rows = []
     token = _traces.set(rows)
     try:

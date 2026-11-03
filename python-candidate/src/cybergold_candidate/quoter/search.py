@@ -228,7 +228,16 @@ class Quoter:
         value = with_dormant_routes(value, getattr(self.engine.registry, 'seed', None))
         # SDK quantities choose promising paths/allocations. Only execution of
         # the complete plan supplies the published economic result.
-        return await self.plan_simulator(request, value['plan'], candidate=value)
+        funded = {**request, 'inputs': deepcopy(value['inputs'])}
+        try:
+            return await self.plan_simulator(funded, value['plan'], candidate=value)
+        except QuoteFailure as error:
+            # Preserve construction inputs only for optional failed-plan
+            # exploration. Successful quotes still take one Helpers call.
+            if getattr(error, 'unsettled_intermediate', None) is not None:
+                error.candidate_plan = value['plan']
+                error.candidate_inputs = value['inputs']
+            raise
 
     async def exploration_block(self):
         """Local SDK metadata only; exploration needs no header acquisition."""
@@ -400,6 +409,26 @@ class Quoter:
         best, failures, observations = None, [], {}
         session = SearchSession(self.exploration_seed if self.exploration_seed is not None else randbits(64))
         reconstructions = set()
+        repair_started = set()
+        def reconstruct_later(operation):
+            async def owned():
+                try:
+                    return await operation
+                except SearchStopped:
+                    pass
+                except Exception as error:
+                    failures.append(error)
+            task = asyncio.create_task(owned())
+            reconstructions.add(task)
+            def finished(done):
+                reconstructions.discard(done)
+                operation.close()  # Also owns cancellation before the first turn.
+                if not done.cancelled():
+                    done.exception()
+            task.add_done_callback(finished)
+            return task
+        async def wait_reconstruction(task):
+            return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
                            failure_sink=None):
@@ -464,9 +493,7 @@ class Quoter:
                             pass
                         except Exception as error:
                             failures.append(error)
-                    task = asyncio.create_task(reprice())
-                    reconstructions.add(task)
-                    task.add_done_callback(reconstructions.discard)
+                    reconstruct_later(reprice())
                 return value
             except SnapshotChanged:
                 raise
@@ -481,6 +508,23 @@ class Quoter:
                     # required for a successful Helpers observation.
                     raise
                 errors.append(error)
+                failed = selected if selected is not None else getattr(error, 'candidate_plan', None)
+                if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
+                    failed_request = {**funded_request,
+                        'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}
+                    identity = json.dumps([failed_request, failed], sort_keys=True)
+                    if identity not in repair_started:
+                        repair_started.add(identity)
+                        unsettled = deepcopy(error.unsettled_intermediate)
+                        async def repair():
+                            from .capacity_recovery import recover_selected
+                            proposals = await budget.discovery(recover_selected(
+                                self, failed_request, failed, block, observations, unsettled=unsettled))
+                            for proposal in proposals:
+                                session.repairs += 1
+                                await evaluate(share, order, False, selected=proposal['plan'],
+                                    funding=proposal['inputs'], phase='backward-prefix')
+                        reconstruct_later(repair())
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
         if request['intent'] >= 2 or core_only: grid = [(100, 'core-first')]
@@ -533,7 +577,8 @@ class Quoter:
                             # The exact request key can retain a smaller-funded
                             # winner. Start its full-budget topology replay now,
                             # independently of the already-fitting fallback.
-                            await owned_reads(expanded_seed(), retained)
+                            expanded = reconstruct_later(expanded_seed())
+                            await owned_reads(wait_reconstruction(expanded), retained)
                         else:
                             await retained
             async def seeded():
@@ -574,6 +619,7 @@ class Quoter:
                         neighbor_metrics['sources'].append(source)
                         proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
                         async def replay_proposal(proposal):
+                            nonlocal settled
                             attempt = {'funding': proposal['inputs'][0]['amount']}
                             source['attempts'].append(attempt)
                             neighbor_metrics['starts'] += 1
@@ -588,12 +634,20 @@ class Quoter:
                                 neighbor_metrics['completed'] += value is not None
                                 if errors:
                                     attempt['failureCode'] = public_quote_error(errors[-1])['code']
+                            except (SearchStopped, asyncio.CancelledError):
+                                settled = False
+                                raise
                             finally:
                                 attempt['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
                         # The fitting replay must not hold the edited budget
                         # behind a slow call. Both complete plans use ordinary
                         # independent Helpers pricing and the same owner clock.
-                        await owned_reads(*(replay_proposal(proposal) for proposal in reversed(proposals)))
+                        async def replay(proposal):
+                            operation = replay_proposal(proposal)
+                            if int(proposal['inputs'][0]['amount']) == int(request['inputs'][0]['amount']):
+                                return await wait_reconstruction(reconstruct_later(operation))
+                            return await operation
+                        await owned_reads(*(replay(proposal) for proposal in reversed(proposals)))
                     except asyncio.CancelledError:
                         settled = False
                         raise
@@ -649,7 +703,11 @@ class Quoter:
             with bootstrap_scope(route_bootstrap):
                 await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
                 while reconstructions:
-                    await asyncio.gather(*tuple(reconstructions), return_exceptions=True)
+                    completed = tuple(reconstructions)
+                    await asyncio.gather(*completed, return_exceptions=True)
+                    # Already-finished tasks make gather return inline; retire
+                    # this batch without waiting for queued done callbacks.
+                    reconstructions.difference_update(completed)
         except SearchStopped:
             pass
         finally:

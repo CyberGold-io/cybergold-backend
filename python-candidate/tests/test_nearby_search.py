@@ -13,6 +13,83 @@ from test_universal_quote import Engine, Quotes, request
 
 
 class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_exact_and_neighbor_budget_failures_feed_the_shared_backward_repair(self):
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        for source in ('exact', 'lower'):
+            with self.subTest(source=source):
+                q, saved, edited, _ = await self.budget_replay_fixture()
+                q.amm.async_family_offers = AsyncMock(return_value=[])
+                saved['request'] = deepcopy(edited)
+                assets, weights = await q.basis(None)
+                proposal = neighbor_proposals(saved, 40004, assets)[-1]
+                reference = await q.candidate({**edited, 'inputs': proposal['inputs']},
+                    100, 'core-first', None, assets, weights, selected=proposal['plan'])
+                original = q.candidate
+                hint = {'currency': saved['inputs'][0]['currency'], 'amount': 7}
+                async def candidate(value, *args, **options):
+                    if options.get('selected') is not None and value['inputs'] == edited['inputs']:
+                        error = QuoteFailure('quote-contract-reverted')
+                        error.unsettled_intermediate = deepcopy(hint)
+                        raise error
+                    result = await original(value, *args, **options)
+                    if options.get('selected') is None:
+                        result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
+                    return result
+                q.candidate = candidate
+                recovery = AsyncMock(return_value=[proposal])
+                options = {'seed': saved} if source == 'exact' else {
+                    'neighbors': AsyncMock(return_value={'lower': {'quote': saved}})}
+                with patch('cybergold_candidate.quoter.capacity_recovery.recover_selected', recovery):
+                    async with asyncio.timeout(2):
+                        result = await Quoter.get(q, edited, **options)
+                self.assertEqual(result['inputs'], proposal['inputs'])
+                self.assertEqual(result['quotedOutput'], reference['quotedOutput'])
+                self.assertEqual(result['request'], edited)
+                self.assertEqual(result['searchCoverage']['selectedPhase'], 'backward-prefix')
+                recovery.assert_awaited_once()
+                self.assertEqual(recovery.await_args.args[1]['inputs'], edited['inputs'])
+                self.assertEqual(recovery.await_args.kwargs['unsettled'], hint)
+                self.assertEqual(sum(int(row['amountIn']) for row in
+                    recovery.await_args.args[2]['allocations']), 50005)
+                self.assertEqual(result['routeOrigins']['discoveryProviders'],
+                    ['uniroute-local', 'uniswap-alpharouter'])
+
+    async def test_started_requested_budget_replay_outlives_ordinary_completion(self):
+        """A real known route attempt is not owned by optional cache latency."""
+        q, saved, edited, expanded = await self.budget_replay_fixture()
+        saved['request'] = deepcopy(edited)
+        q.amm.async_family_offers = AsyncMock(return_value=[])
+        q.route_provider_factory = lambda: []
+        original = q.candidate
+        full_started, bootstrap_closed = asyncio.Event(), asyncio.Event()
+        cancelled = []
+        async def candidate(value, *args, **options):
+            if options.get('selected') is not None:
+                if value['inputs'][0]['amount'] == edited['inputs'][0]['amount']:
+                    full_started.set()
+                    try:
+                        await bootstrap_closed.wait()
+                    except asyncio.CancelledError:
+                        cancelled.append(True)
+                        raise
+                return await original(value, *args, **options)
+            await full_started.wait()
+            result = await original(value, *args, **options)
+            result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
+            return result
+        q.candidate = candidate
+        async def bootstrap(ordinary, offered, **options):
+            result = await alongside_bootstrap(ordinary, offered, **options)
+            bootstrap_closed.set()
+            return result
+        with patch('cybergold_candidate.quoter.search.alongside_bootstrap', bootstrap):
+            async with asyncio.timeout(2):
+                result = await Quoter.get(q, edited, seed=saved)
+        self.assertTrue(bootstrap_closed.is_set())
+        self.assertFalse(cancelled)
+        self.assertEqual(result['inputs'], edited['inputs'])
+        self.assertEqual(result['quotedOutput'], expanded['quotedOutput'])
+
     async def budget_replay_fixture(self):
         """Native mixed-Core topology, resolved against current fixture state."""
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
@@ -215,7 +292,9 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(sum(frame['type'] == 'upper-replay-settled' for frame in frames), 1)
 
     async def test_cancelled_upper_uses_terminal_completion_instead_of_an_early_marker(self):
+        from cybergold_candidate.quote_budget import QuoteBudget, budget_context
         q = Quotes(Engine()); saved = await q.quote(request())
+        budget = QuoteBudget()
         entered, drained = asyncio.Event(), asyncio.Event()
         candidate = q.candidate
         async def measured(*args, **kwargs):
@@ -233,6 +312,8 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         frames = []
         async def update(frame):
             frames.append(deepcopy(frame))
+            if frame['type'] == 'qualified':
+                budget.finish_selection('best-initial')
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         def marked(*args):
             rows = neighbor_proposals(*args)
@@ -240,8 +321,9 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 row['plan']['_upper_replay'] = True
             return rows
         with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
-            async with asyncio.timeout(2):
-                value = await q.quote(request(), update, neighbors=neighbors)
+            with budget_context(budget):
+                async with asyncio.timeout(2):
+                    value = await q.quote(request(), update, neighbors=neighbors)
         self.assertTrue(drained.is_set())
         self.assertGreater(int(value['quotedOutput']), 0)
         self.assertFalse(any(frame['type'] == 'upper-replay-settled' for frame in frames))

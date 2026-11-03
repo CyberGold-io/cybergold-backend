@@ -153,8 +153,8 @@ class EconomicQuotes:
         """Offer the better complete stored tuple, preserving its observation.
 
         An old poor exact-budget row must not mask a better fitting quote.
-        This remains a DB-only historical lookup; explicit Refresh owns fresh
-        pricing, and transaction preparation replays the selected plan.
+        This remains a DB-only historical lookup. A scalar offer below the
+        requested budget seeds ordinary optimization as well as Refresh.
         """
         offered = previous
         if request['intent'] in (0, 1):
@@ -167,15 +167,22 @@ class EconomicQuotes:
         offered = with_dormant_routes(offered, getattr(self.quoter.engine.registry, 'seed', None))
         return {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
 
+    @staticmethod
+    def unfilled_budget(request, quote):
+        """An existing smaller-funded plan still needs the requested-amount try."""
+        return request['intent'] in (0, 1) and int(quote['inputs'][0]['amount']) < int(request['inputs'][0]['amount'])
+
     async def get(self, request, *, refresh=False):
         request = EconomicRequest.model_validate(request).model_dump()
         cache = self.cache_feed(request)
         try:
-            # Ordinary lookup retains the DB-only cache-hit product behavior.
-            # Explicit refresh starts pricing before any optional cache await.
+            # A complete funded cache hit remains immediate. Smaller-funded
+            # hits supply topology to the ordinary requested-budget search.
             previous = await cache.lookup() if not refresh else None
             if previous is not None:
-                return await self.cached_offer(request, previous, await cache.scope())
+                offered = await self.cached_offer(request, previous, await cache.scope())
+                if not self.unfilled_budget(request, offered):
+                    return offered
             value = attach_reuse_sample(await self.quoter.quote(request, seed=previous,
                 seed_lookup=cache.lookup if refresh else None,
                 neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
