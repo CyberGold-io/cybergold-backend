@@ -140,6 +140,93 @@ class FlowSchedulingTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(task, return_exceptions=True)
         self.assertFalse(lock.locked())
 
+    async def test_context_only_lock_preserves_entry_value_and_times_acquisition_only(self):
+        owner = self
+        value, exits = object(), []
+        class ContextOnlyLock:
+            async def __aenter__(self):
+                owner.now = 1
+                return value
+            async def __aexit__(self, *error):
+                exits.append(error)
+                owner.now = 21
+        with flow_scope(self.flow):
+            async with sdk_bridge.exchange_lock(ContextOnlyLock()) as entered:
+                self.assertIs(entered, value)
+                self.now = 20
+        self.assertEqual(exits, [(None, None, None)])
+        self.assertEqual(self.row()['summedWallMs'], 1000,
+                         'SDK queue timing must exclude the body and context exit')
+
+    async def test_context_only_lock_preserves_exception_suppression(self):
+        error, observed = RuntimeError('body failure'), []
+        class ContextOnlyLock:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, kind, value, traceback):
+                observed.append((kind, value, traceback))
+                return True
+        with flow_scope(self.flow):
+            async with sdk_bridge.exchange_lock(ContextOnlyLock()):
+                raise error
+        self.assertEqual(len(observed), 1)
+        self.assertIs(observed[0][0], RuntimeError)
+        self.assertIs(observed[0][1], error)
+        self.assertIsNotNone(observed[0][2])
+        self.assertEqual(self.row()['completed'], 1)
+
+    async def test_context_only_lock_preserves_body_error_and_cancellation(self):
+        inner, observed = asyncio.Lock(), []
+        class ContextOnlyLock:
+            async def __aenter__(self):
+                return await inner.__aenter__()
+            async def __aexit__(self, kind, value, traceback):
+                observed.append((kind, value))
+                return await inner.__aexit__(kind, value, traceback)
+        error = RuntimeError('body failure')
+        with self.assertRaises(RuntimeError) as caught:
+            async with sdk_bridge.exchange_lock(ContextOnlyLock()):
+                raise error
+        self.assertIs(caught.exception, error)
+        self.assertFalse(inner.locked())
+        entered = asyncio.Event()
+        async def operation():
+            async with sdk_bridge.exchange_lock(ContextOnlyLock()):
+                entered.set()
+                await asyncio.Event().wait()
+        task = asyncio.create_task(operation())
+        await entered.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual([kind for kind, _ in observed], [RuntimeError, asyncio.CancelledError])
+        self.assertIs(observed[0][1], error)
+        self.assertFalse(inner.locked())
+
+    async def test_context_only_cancelled_entry_keeps_existing_holder_and_does_not_exit(self):
+        inner, exits = asyncio.Lock(), []
+        await inner.acquire()
+        class ContextOnlyLock:
+            async def __aenter__(self):
+                return await inner.__aenter__()
+            async def __aexit__(self, *error):
+                exits.append(error)
+                return await inner.__aexit__(*error)
+        async def operation():
+            with flow_scope(self.flow):
+                async with sdk_bridge.exchange_lock(ContextOnlyLock()):
+                    self.fail('cancelled entry must never enter the body')
+        task = asyncio.create_task(operation())
+        await until(lambda: bool(inner._waiters))
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(inner.locked())
+        self.assertEqual(exits, [])
+        inner.release()
+        self.assertFalse(inner.locked())
+        self.assertEqual((self.row()['cancelled'], self.row()['inFlight']), (1, 0))
+
     async def test_pool_clone_boundary_preserves_mutable_caller_ownership(self):
         original = {'id': 'pool', 'token0': {'metadata': {'labels': ['a']}},
                     'bitmapWords': [{'wordPosition': 0, 'bitmap': '1'}], 'ticks': [{'index': 0, 'liquidityNet': '2'}]}

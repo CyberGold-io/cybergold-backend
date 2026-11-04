@@ -8,11 +8,14 @@ from .quote_flow import stage
 @asynccontextmanager
 async def exchange_lock(lock):
     with stage('sdk.queue', kind='queue'):
-        await lock.acquire()
+        entered = await lock.__aenter__()
     try:
-        yield
-    finally:
-        lock.release()
+        yield entered
+    except BaseException as error:
+        if not await lock.__aexit__(type(error), error, error.__traceback__):
+            raise
+    else:
+        await lock.__aexit__(None, None, None)
 
 
 def encode(payload):
