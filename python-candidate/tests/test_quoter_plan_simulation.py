@@ -264,14 +264,14 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(provider.calls), 1)
                 self.assertEqual((rpc.heads, rpc.verifications), ([], []))
 
-    async def test_exact_cached_native_seed_replays_full_budget_once_without_sdk_repricing(self):
+    async def test_exact_cached_native_seed_replays_original_and_full_budget_once_each_without_sdk(self):
         request, plan = market(native=True)
         def observed(_method, params):
             _, decoded = Web3().eth.contract(abi=ABI).decode_function_input(params[0]['data'])
             amount = decoded['plan']['inputs'][0]['amount']
             return encoded(measured(amount * 10, stages=[
                 stage(0, ZERO, WETH, amount, amount), stage(1, WETH, CORE, amount, amount * 10)]))
-        simulation, q, rpc, provider = fixture(observed, observed)
+        simulation, q, rpc, provider = fixture(observed, observed, observed)
         saved = attach_origins(await simulation(request, plan))
         edited = {**request, 'inputs': [{**request['inputs'][0], 'amount': '30000'}]}
         saved['request'] = deepcopy(edited)
@@ -317,9 +317,10 @@ class HelpersPlanSimulationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['searchCoverage']['selectedPhase'], 'nearby-lower')
         self.assertEqual(result['observation'], {'source': 'search', 'refresh': True})
         self.assertEqual(result['routeOrigins']['discoveryProviders'], ['cybergold-custom', 'uniroute-local'])
-        self.assertEqual(len(provider.calls), 1)
-        self.assertEqual(decode(provider, 0)[-1]['plan']['inputs'][0]['amount'], 30000)
-        self.assertEqual(decode(provider, 0)[2], 'latest')
+        self.assertEqual(len(provider.calls), 2)
+        self.assertCountEqual([decode(provider, index)[-1]['plan']['inputs'][0]['amount']
+                               for index in range(2)], [30000, 10000])
+        self.assertTrue(all(decode(provider, index)[2] == 'latest' for index in range(2)))
         self.assertEqual((rpc.heads, rpc.verifications), ([], []))
         q.engine.quote_sdk_branches.assert_not_called()
         self.assertEqual(saved, retained)
