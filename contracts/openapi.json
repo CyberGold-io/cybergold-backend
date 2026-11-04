@@ -478,7 +478,7 @@
             }
           }
         },
-        "description": "Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Scalar searches start alongside optional cached offers and retain separate pure-Market and Core-containing family winners; up to four distinct lower/upper cached routes seed current-budget pricing. Latest observations have nullable block coordinates; stored offers retain their original context and cannot replace an already published current result. Caller disconnect cancels and drains only its owned work.",
+        "description": "Subscription-owned selected economic observations are published by the Backend while discovery continues to natural completion. The shared Backend cache supplies early historical observations and lower/upper routes independently per market/Core-containing family. Whole-plan Helpers latest-state repricing replaces a candidate's previous observation in either direction, then the Backend ranks the latest complete candidate tuples and emits its selected result; independent weaker paths are not emitted merely because they are fresh. Fast estimates are separate advisory Backend results. Latest observations have nullable block coordinates. Caller disconnect cancels and drains only its owned work.",
         "parameters": [
           {
             "name": "X-CyberGold-Attempt-Id",
@@ -7952,6 +7952,44 @@
                   "conversions"
                 ]
               },
+              "routeOrigins": {
+                "description": "Diagnostic nomination origins; never required to replay or rank a route.",
+                "type": "object",
+                "properties": {
+                  "economicEvaluator": {
+                    "type": "string",
+                    "const": "cybergold-quoter"
+                  },
+                  "pricing": {
+                    "enum": [
+                      "canonical-sdk-and-core-previews",
+                      "helpers-execution-with-policy-fees"
+                    ],
+                    "type": "string"
+                  },
+                  "discoveryProviders": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "conversions": {
+                    "$ref": "#/components/schemas/Record%3Cstring%2Cstring%5B%5D%3E"
+                  },
+                  "adapterConversions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "conversions",
+                  "discoveryProviders",
+                  "economicEvaluator",
+                  "pricing"
+                ]
+              },
               "conversionObservations": {
                 "description": "Measured conversion quantities; these never reduce declared funding by inference.",
                 "type": "array",
@@ -8599,6 +8637,9 @@
           "settlementPolicy",
           "strategy"
         ]
+      },
+      "Record<string,string[]>": {
+        "type": "object"
       },
       "Record<string,string>": {
         "type": "object"
@@ -23682,8 +23723,16 @@
                                 "type": "string"
                               },
                               "source": {
-                                "type": "string",
-                                "const": "cached-upper"
+                                "enum": [
+                                  "cached-lower",
+                                  "cached-upper"
+                                ],
+                                "type": "string"
+                              },
+                              "fullBudget": {
+                                "description": "Advisory display covers this request's full budget; never executable.",
+                                "const": true,
+                                "type": "boolean"
                               },
                               "referenceInput": {
                                 "type": "string"
@@ -23781,6 +23830,43 @@
                               },
                               "sourceRequestedInput": {
                                 "type": "string"
+                              },
+                              "routeOrigins": {
+                                "type": "object",
+                                "properties": {
+                                  "economicEvaluator": {
+                                    "type": "string",
+                                    "const": "cybergold-quoter"
+                                  },
+                                  "pricing": {
+                                    "enum": [
+                                      "canonical-sdk-and-core-previews",
+                                      "helpers-execution-with-policy-fees"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "discoveryProviders": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "conversions": {
+                                    "$ref": "#/components/schemas/Record%3Cstring%2Cstring%5B%5D%3E"
+                                  },
+                                  "adapterConversions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "conversions",
+                                  "discoveryProviders",
+                                  "economicEvaluator",
+                                  "pricing"
+                                ]
                               }
                             },
                             "required": [
@@ -53255,8 +53341,16 @@
                     "type": "string"
                   },
                   "source": {
-                    "type": "string",
-                    "const": "cached-upper"
+                    "enum": [
+                      "cached-lower",
+                      "cached-upper"
+                    ],
+                    "type": "string"
+                  },
+                  "fullBudget": {
+                    "description": "Advisory display covers this request's full budget; never executable.",
+                    "const": true,
+                    "type": "boolean"
                   },
                   "referenceInput": {
                     "type": "string"
@@ -53354,6 +53448,43 @@
                   },
                   "sourceRequestedInput": {
                     "type": "string"
+                  },
+                  "routeOrigins": {
+                    "type": "object",
+                    "properties": {
+                      "economicEvaluator": {
+                        "type": "string",
+                        "const": "cybergold-quoter"
+                      },
+                      "pricing": {
+                        "enum": [
+                          "canonical-sdk-and-core-previews",
+                          "helpers-execution-with-policy-fees"
+                        ],
+                        "type": "string"
+                      },
+                      "discoveryProviders": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "conversions": {
+                        "$ref": "#/components/schemas/Record%3Cstring%2Cstring%5B%5D%3E"
+                      },
+                      "adapterConversions": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "conversions",
+                      "discoveryProviders",
+                      "economicEvaluator",
+                      "pricing"
+                    ]
                   }
                 },
                 "required": [

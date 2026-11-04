@@ -85,6 +85,33 @@ test('active calculation callbacks resolve and retain the existing unknown-frame
   session.close();
 });
 
+test('ordered cancellation removes retired query records and acknowledges after late work is silenced', async () => {
+  const frames: any[] = [];
+  let publishLate: (value: any[]) => void;
+  const session = createCalculationSession(async (request, quote, publish) => {
+    publishLate = publish;
+    await quote({ amount: request.amount });
+    return [[request.id]];
+  }, value => { frames.push(value); }, () => 'ordinary failure');
+  for (let index = 0; index < 100; index++) {
+    const id = String(index);
+    session.receive({ id, amount: '100' });
+    const callback = frames.at(-1);
+    session.receive({ id, operation: 'quoteResult', quoteId: callback.quoteId, result: { quote: '200' } });
+    await setImmediate();
+    assert.deepEqual(frames.at(-1), { id, candidates: [[id]] });
+    session.receive({ id, operation: 'cancel' });
+    assert.deepEqual(frames.at(-1), { id, operation: 'cancelled' });
+    const length = frames.length;
+    publishLate!([['retired']]);
+    assert.equal(frames.length, length);
+    // A deleted owner cannot resolve a callback in a later calculation.
+    assert.equal(session.receive({ id, operation: 'quoteResult', quoteId: callback.quoteId,
+      result: { quote: 'late duplicate' } }), false);
+  }
+  session.close();
+});
+
 for (const fixture of cases) test('actual AlphaRouter canonical callback: '+fixture.id, async () => {
   const calls: any[] = [];
   const selected = await routeRequest({ id: fixture.id, chainId: 1, blockNumber: BLOCK,

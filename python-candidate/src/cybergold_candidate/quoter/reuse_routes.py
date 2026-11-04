@@ -4,11 +4,28 @@ These values nominate complete semantic execution bodies. They contain no
 historical pool state, price promise, transaction guard or executable calldata.
 """
 from copy import deepcopy
+from hashlib import sha256
 import json
 
 from ..basket_preview import InvalidPreview
 from ..uniswap_routes import PoolRef, pool_identity
 from .provenance import origin_names
+
+
+def funded_route_identity(value):
+    """Funded executable topology, without prices, guards or SDK observations."""
+    def normalized(node, projected=False):
+        if isinstance(node, list):
+            return [normalized(item, projected) for item in node]
+        if isinstance(node, dict):
+            return {key: normalized(item, key == 'expectedOutputs')
+                    for key, item in node.items()
+                    if key not in ('feeCygld', 'minimumOutput', 'minimumAmount')
+                    and not (projected and key == 'amount')}
+        return node.lower() if isinstance(node, str) and node.startswith('0x') else node
+    body = normalized({'inputs': [{'currency': row['currency'], 'amount': str(int(row['amount']))}
+                                 for row in value['inputs']], 'body': value['plan']['body']})
+    return sha256(json.dumps(body, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
 def proposal_identity(proposal):

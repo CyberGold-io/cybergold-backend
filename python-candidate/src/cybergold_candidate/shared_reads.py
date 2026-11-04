@@ -22,6 +22,7 @@ class PendingRead:
 class SharedReads:
     def __init__(self, max_completed=4096):
         self.pending = {}
+        self.groups = {}
         self.completed = OrderedDict()
         self.max_completed = max_completed
 
@@ -75,6 +76,17 @@ class SharedReads:
             task = asyncio.create_task(self._produce(new, produce, retain))
             for _, entry in new:
                 entry.task = task
+            self.groups[task] = new
+            def finished(done):
+                entries = self.groups.pop(done, ())
+                if done.cancelled():
+                    # A producer cancelled before its first turn cannot run
+                    # _produce's cleanup or wake its waiting subscribers.
+                    for key, entry in entries:
+                        entry.future.cancel()
+                        if self.pending.get(key) is entry:
+                            del self.pending[key]
+            task.add_done_callback(finished)
         try:
             if len(selected) == 1 and selected[0][1] is not None:
                 values = [await asyncio.shield(selected[0][1].future)]
@@ -92,12 +104,12 @@ class SharedReads:
             # One subscriber can cancel without cancelling another's read.
             # When every member is unused, retain the ordinary cancellation.
             for task in tasks:
-                if not task.done() and not any(entry.users for entry in self.pending.values()
-                                              if entry.task is task):
+                entries = self.groups.get(task, ())
+                if not task.done() and not any(entry.users for _, entry in entries):
                     # New callers must not join work already being cancelled.
                     # The old producer's identity check preserves replacements.
-                    for key, entry in list(self.pending.items()):
-                        if entry.task is task:
+                    for key, entry in entries:
+                        if self.pending.get(key) is entry:
                             del self.pending[key]
                     task.cancel()
                     await asyncio.gather(task, return_exceptions=True)
@@ -109,7 +121,7 @@ class SharedReads:
         return values[0]
 
     async def close(self):
-        tasks = {entry.task for entry in self.pending.values() if entry.task}
+        tasks = tuple(self.groups)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

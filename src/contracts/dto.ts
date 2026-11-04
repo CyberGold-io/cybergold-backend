@@ -91,6 +91,10 @@ export type EconomicReuseSample = {
 };
 export type EconomicQuote = Omit<UniversalExactInputQuote, "plan" | "planDescription" | "outputMinimum" | "economicQuote"> & {
   request: EconomicRequest; plan: EconomicPlan;
+  /** Diagnostic nomination origins; never required to replay or rank a route. */
+  routeOrigins?: { economicEvaluator: "cybergold-quoter";
+    pricing: "helpers-execution-with-policy-fees" | "canonical-sdk-and-core-previews";
+    discoveryProviders: string[]; conversions: Record<string, string[]>; adapterConversions?: string[] };
   /** Measured conversion quantities; these never reduce declared funding by inference. */
   conversionObservations?: { operation: string; inputCurrency: string; fundedInput: string;
     consumedInput: string; outputCurrency: string; output: string }[];
@@ -712,10 +716,13 @@ export type TradeQuoteModelPacket = {
   namespace: "trade"; intent: TradeModelRequest;
   models: ({ strategy: "core"; value: QuoteModelPacket } | { strategy: "market"; value: MarketQuoteModelPacket })[];
   estimate?: { strategy: "core" | "market"; amount: string } | {
-    strategy: "universal"; amount: string; source: "cached-upper";
+    strategy: "universal"; amount: string; source: "cached-upper" | "cached-lower";
+    /** Advisory display covers this request's full budget; never executable. */
+    fullBudget?: true;
     referenceInput: string; basis: EconomicReuseSample["basis"];
     fees: EconomicReuseSample["fees"]; context: EconomicQuote["context"];
     sourceIdentity?: string; sourceRequestedInput?: string;
+    routeOrigins?: EconomicQuote["routeOrigins"];
   };
   /** Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
   budgetRange?: { minimumBudget: string; maximumBudget?: string; quotedInput: string; quotedOutput: string };

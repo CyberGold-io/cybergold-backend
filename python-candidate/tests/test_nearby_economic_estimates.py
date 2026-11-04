@@ -203,9 +203,7 @@ class CachedApiTests(unittest.IsolatedAsyncioTestCase):
         core['context']['observedAt'] = 'core-observation'
         store.neighbors.return_value = [
             {'family': 'market', 'side': 'upper', 'identity': 'market-upper', 'quote': market},
-            {'family': 'core', 'side': 'upper', 'identity': 'core-upper', 'quote': core},
-            {'family': 'market', 'side': 'lower', 'identity': 'ignored-lower',
-             'quote': quote_sample(quotedOutput='999999999999999999999')}]
+            {'family': 'core', 'side': 'upper', 'identity': 'core-upper', 'quote': core}]
         result = await engines.quotes.get_model(trade_request(amount='900'))
         estimate = result['estimate']
         self.assertEqual(estimate['amount'], '999')
@@ -215,6 +213,54 @@ class CachedApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(estimate['sourceIdentity'], 'core-upper')
         self.assertEqual(estimate['sourceRequestedInput'], '1000')
         self.assertEqual((engines.heads, engines.models, engines.core_calls, engines.market_calls), (0, 0, [], []))
+
+    async def test_backend_extrapolates_full_lower_but_preserves_paid_limit(self):
+        engines, store, _, _ = self.fixture()
+        quote = quote_sample(inputs=[{'currency': USDT, 'amount': '400'}],
+            quotedOutput='600', estimatedRetainedInputCharges=[],
+            routeOrigins={'discoveryProviders': ['uniswap-guidestar']})
+        quote['request']['inputs'][0]['amount'] = '400'
+        store.neighbors.return_value = [{'family': 'market', 'side': 'lower',
+                                        'identity': 'known-lower', 'quote': quote}]
+        packet = await engines.quotes.get_model(trade_request(amount='500'))
+        self.assertEqual(packet['estimate']['amount'], '750')
+        self.assertEqual(packet['estimate']['referenceInput'], '500')
+        self.assertEqual(packet['estimate']['source'], 'cached-lower')
+        self.assertTrue(packet['estimate']['fullBudget'])
+        self.assertEqual(packet['estimate']['routeOrigins'], quote['routeOrigins'])
+        self.assertEqual(packet['estimate']['sourceRequestedInput'], '400')
+        quote['searchCoverage'] = {'inputLimitObserved': True}
+        limited = await engines.quotes.get_model(trade_request(amount='500'))
+        self.assertEqual(limited['estimate']['amount'], '600')
+        self.assertEqual(limited['estimate']['referenceInput'], '400')
+        self.assertNotIn('fullBudget', limited['estimate'])
+        self.assertEqual(quote['quotedOutput'], '600')
+        self.assertEqual((engines.heads, engines.models, engines.core_calls, engines.market_calls), (0, 0, [], []))
+
+    async def test_upper_estimate_marks_current_budget_coverage_below_its_reference(self):
+        engines, _, _, _ = self.fixture()
+        packet = await engines.quotes.get_model(trade_request(amount='500'))
+        self.assertEqual(packet['estimate']['source'], 'cached-upper')
+        self.assertEqual(packet['estimate']['referenceInput'], '500')
+        self.assertTrue(packet['estimate']['fullBudget'])
+
+    async def test_retargeted_fitting_replay_is_not_evidence_of_saturation(self):
+        engines, store, _, _ = self.fixture()
+        quote = quote_sample(inputs=[{'currency': USDT, 'amount': '400'}],
+            quotedOutput='600', estimatedRetainedInputCharges=[],
+            searchCoverage={'selectedPhase': 'retained-route-replay'})
+        quote['request']['inputs'][0]['amount'] = '500'
+        store.neighbors.return_value = [{'family': 'core', 'side': 'lower', 'quote': quote}]
+        packet = await engines.quotes.get_model(trade_request(amount='500'))
+        self.assertEqual(packet['estimate']['amount'], '750')
+        self.assertEqual(packet['estimate']['referenceInput'], '500')
+
+    async def test_measured_source_remainder_clamps_lower_arithmetic(self):
+        engines, store, _, quote = self.fixture()
+        store.neighbors.return_value = [{'family': 'market', 'side': 'lower', 'quote': quote}]
+        packet = await engines.quotes.get_model(trade_request(amount='1500'))
+        self.assertEqual(packet['estimate']['amount'], '999')
+        self.assertEqual(packet['estimate']['referenceInput'], '600')
 
     async def test_invalid_family_hint_does_not_hide_a_valid_sibling_and_ties_use_less_input(self):
         engines, store, _, valid = self.fixture()

@@ -534,6 +534,45 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bank.pending, {})
         await bank.close()
 
+    async def test_producer_cancelled_before_first_turn_wakes_waiters_and_cleans_entries(self):
+        bank, started = SharedReads(), []
+        async def produce():
+            started.append(True)
+            return {'result': 'unused'}
+        reader = asyncio.create_task(bank.one('early-producer', produce))
+        # The reader's first turn creates its producer behind this callback.
+        asyncio.get_running_loop().call_soon(lambda: bank.pending['early-producer'].task.cancel())
+        with self.assertRaises(asyncio.CancelledError):
+            await asyncio.wait_for(reader, 1)
+        self.assertEqual(started, [])
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+        await bank.close()
+
+    async def test_close_owns_a_retiring_producer_after_its_pending_keys_were_removed(self):
+        bank = SharedReads()
+        started, retiring, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def produce():
+            try:
+                started.set()
+                await asyncio.Event().wait()
+            finally:
+                try:
+                    retiring.set()
+                    await asyncio.Event().wait()
+                finally:
+                    drained.set()
+        reader = asyncio.create_task(bank.one('retiring', produce))
+        await started.wait()
+        reader.cancel()
+        await retiring.wait()
+        self.assertEqual(bank.pending, {})
+        self.assertFalse(drained.is_set())
+        await bank.close()
+        with self.assertRaises(asyncio.CancelledError): await reader
+        self.assertTrue(drained.is_set())
+        self.assertEqual(bank.groups, {})
+
 
 if __name__ == '__main__':
     unittest.main()

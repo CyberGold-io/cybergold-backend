@@ -308,6 +308,9 @@ class ProgressiveTests(ProgressiveFixture):
         self.assertEqual(service.quoter.canonical_calls, [])
 
     async def test_serial_delivery_cannot_publish_a_worse_older_tuple(self):
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        independent = self.value(200)
+        independent.update(neighbor_proposals(independent, int(independent['inputs'][0]['amount'])-1, [PAXG, OTHER])[-1])
         started, release = asyncio.Event(), asyncio.Event()
         calls = 0
         frames = []
@@ -321,9 +324,9 @@ class ProgressiveTests(ProgressiveFixture):
             await callback({'type': 'qualified', 'value': self.value(100)})
             await started.wait()
             await callback({'type': 'qualified', 'value': self.value(300)})
-            await callback({'type': 'qualified', 'value': self.value(200)})
+            await callback({'type': 'qualified', 'value': independent})
             release.set()
-            return self.value(250)
+            return {**deepcopy(independent), 'quotedOutput': '250'}
         service = self.service(script)
         result = await service.progressive(economic_request(), publish)
         self.assertEqual([f['value']['quotedOutput'] for f in frames], ['100', '300'])
@@ -342,7 +345,7 @@ class ProgressiveTests(ProgressiveFixture):
         canonical.assert_not_awaited()
         self.assertEqual(service.quoter.canonical_calls, [])
 
-    async def test_disproof_in_publisher_cancels_search_and_prevents_save(self):
+    async def test_publisher_snapshot_error_cancels_search_without_retracting_helpers_observation(self):
         drained = asyncio.Event()
         async def publish(_):
             raise SnapshotChanged('existing disproof')
@@ -358,7 +361,8 @@ class ProgressiveTests(ProgressiveFixture):
             await asyncio.wait_for(service.progressive(economic_request(), publish), 1)
         self.assertEqual(failure.exception.economic_context, self.base['context'])
         self.assertTrue(drained.is_set())
-        store.save.assert_not_called()
+        await self.persisted(service)
+        self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
     async def test_racing_terminal_does_not_outrun_publisher_disproof(self):
         checking, release = asyncio.Event(), asyncio.Event()
@@ -369,9 +373,11 @@ class ProgressiveTests(ProgressiveFixture):
             await checking.wait(); release.set()
             return self.value(200)
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
+        service = self.service(script, store=store)
         with self.assertRaises(SnapshotChanged):
-            await self.service(script, store=store).progressive(economic_request(), publish)
-        store.save.assert_not_called()
+            await service.progressive(economic_request(), publish)
+        await self.persisted(service)
+        self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
     async def test_stop_drains_search_then_saves_the_confirmed_snapshot_once(self):
         ready, search_drained = asyncio.Event(), asyncio.Event()
@@ -383,7 +389,6 @@ class ProgressiveTests(ProgressiveFixture):
                 search_drained.set()
         store = SharedStore(); saving = store.save
         async def save(*args, **kwargs):
-            self.assertTrue(search_drained.is_set())
             await asyncio.sleep(.01)
             return await saving(*args, **kwargs)
         store.save = AsyncMock(side_effect=save)
@@ -392,11 +397,12 @@ class ProgressiveTests(ProgressiveFixture):
         await asyncio.wait_for(ready.wait(), 1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError): await task
+        self.assertTrue(search_drained.is_set())
         await self.persisted(service)
         store.save.assert_awaited_once()
         self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
-    async def test_disproof_during_cancel_drain_prevents_persisting_older_incumbent(self):
+    async def test_snapshot_error_during_cancel_drain_preserves_completed_helpers_observation(self):
         ready = asyncio.Event()
         async def script(value, callback, **_):
             try:
@@ -405,13 +411,15 @@ class ProgressiveTests(ProgressiveFixture):
             finally:
                 raise SnapshotChanged('disproof observed while draining producer')
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
-        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(),
+        service = self.service(script, store=store)
+        task = asyncio.create_task(service.progressive(economic_request(),
             lambda frame: asyncio.sleep(0, result=ready.set())))
         await ready.wait(); task.cancel()
         with self.assertRaises(SnapshotChanged): await task
-        store.save.assert_not_called()
+        await self.persisted(service)
+        self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '100')
 
-    async def test_publisher_disproof_while_draining_also_prevents_save(self):
+    async def test_publisher_snapshot_error_while_draining_keeps_latest_completed_observation(self):
         ready, checking = asyncio.Event(), asyncio.Event()
         calls = 0
         async def publish(_):
@@ -429,10 +437,12 @@ class ProgressiveTests(ProgressiveFixture):
             await callback({'type': 'qualified', 'value': self.value(200)})
             await asyncio.Event().wait()
         store = SharedStore(); store.save = AsyncMock(wraps=store.save)
-        task = asyncio.create_task(self.service(script, store=store).progressive(economic_request(), publish))
+        service = self.service(script, store=store)
+        task = asyncio.create_task(service.progressive(economic_request(), publish))
         await checking.wait(); task.cancel()
         with self.assertRaises(SnapshotChanged): await task
-        store.save.assert_not_called()
+        await self.persisted(service)
+        self.assertEqual(next(iter(store.rows.values()))['quotedOutput'], '200')
 
     async def test_service_close_drains_optional_write_after_quote_returned(self):
         saving, drained = asyncio.Event(), asyncio.Event()
@@ -611,7 +621,7 @@ class StreamTransportTests(ProgressiveFixture):
         self.assertEqual(frames[-1]['value']['quotedOutput'], '200')
         self.assertTrue(all('requestId' in frame for frame in frames))
 
-    async def test_stream_disproof_invalidates_then_ends_with_one_safe_error(self):
+    async def test_stream_snapshot_error_retains_helpers_quote_then_ends_with_one_safe_error(self):
         ready = asyncio.Event()
         async def script(value, callback, **_):
             await callback({'type': 'qualified', 'value': self.value(100)})
@@ -619,10 +629,11 @@ class StreamTransportTests(ProgressiveFixture):
         service = self.service(script)
         task, _, frames, _, published, _ = await self.asgi_stream(service)
         await published.wait(); ready.set(); await asyncio.wait_for(task, 1)
-        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'invalidated', 'error'])
-        self.assertEqual(frames[-2]['context'], self.base['context'])
+        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'error'])
+        self.assertEqual(frames[0]['value']['context'], self.base['context'])
         self.assertNotIn('private context text', json.dumps(frames))
-        self.assertFalse(service.store.rows)
+        await self.persisted(service)
+        self.assertEqual(next(iter(service.store.rows.values()))['quotedOutput'], '100')
         stages = [sample for family in self.stream_app.state.metrics.quote_stages.collect()
                   for sample in family.samples if sample.name.endswith('_total')]
         self.assertEqual({sample.labels['strategy'] for sample in stages
@@ -744,8 +755,13 @@ class StreamTransportTests(ProgressiveFixture):
                     self.assertEqual(row['rpc']['getterReads']['requested'], 3)
                     self.assertEqual(row['rpc']['transport']['rpcCallsStarted'], 2)
                     self.assertEqual(row['rpc']['transport']['completed'], 1)
-                    self.assertNotIn('funding', row)
-                    self.assertFalse(service.store.rows)
+                    if scenario == 'disproof':
+                        self.assertEqual(row['funding'], economic_request()['inputs'])
+                        await self.persisted(service)
+                        self.assertEqual(next(iter(service.store.rows.values()))['quotedOutput'], '100')
+                    else:
+                        self.assertNotIn('funding', row)
+                        self.assertFalse(service.store.rows)
                     self.assertNotIn('private disproof detail', json.dumps(frames))
                     if scenario == 'pre-ready-failure':
                         self.assertEqual(row['producerMetrics'], {'totalMs': 5028.494, 'searchMs': 5000.69,
@@ -753,7 +769,7 @@ class StreamTransportTests(ProgressiveFixture):
                     if scenario != 'pre-ready-cancel':
                         self.assertEqual(frames[-1]['type'], 'error')
                     if scenario == 'disproof':
-                        self.assertEqual(frames[-2]['type'], 'invalidated')
+                        self.assertEqual(frames[-2]['type'], 'qualified')
         finally:
             logger.handlers, logger.level, logger.propagate = previous
 
@@ -868,7 +884,7 @@ class FamilyPersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored['core']['quotedOutput'], '100')
         self.assertEqual(stored['market']['quotedOutput'], '200')
 
-    async def test_producer_disproof_discards_both_family_observations(self):
+    async def test_independent_producer_snapshot_error_keeps_both_helpers_family_observations(self):
         ready = asyncio.Event()
         async def script(request, callback, **options):
             await options['on_family'](self.core)
@@ -882,8 +898,10 @@ class FamilyPersistenceTests(unittest.IsolatedAsyncioTestCase):
         service.store.save = AsyncMock(wraps=service.store.save)
         with self.assertRaises(SnapshotChanged):
             await service.progressive(economic_request(), publish)
-        await self.stored(service)
-        service.store.save.assert_not_called()
+        stored = await self.stored(service)
+        self.assertEqual(set(stored), {'market', 'core'})
+        self.assertEqual(stored['market']['quotedOutput'], '200')
+        self.assertEqual(stored['core']['quotedOutput'], '100')
 
     async def test_one_optional_family_write_failure_does_not_suppress_the_sibling(self):
         from cybergold_candidate.quoter.path_families import quote_path_family

@@ -96,14 +96,14 @@ def attach_reuse_sample(quote):
     return value
 
 
-def arithmetic_estimate(sample, budget):
-    """Clamp this candidate at its observed reference; fees are a breakdown."""
+def arithmetic_estimate(sample, budget, *, expand=False):
+    """Indicative arithmetic only; paid route limits retain their observation."""
     try:
         reference, amount = int(sample['referenceInput']), int(budget)
         if reference <= 0 or amount < 0:
             return None
-        used = min(amount, reference)
-        return {'strategy': 'universal', 'source': 'cached-upper',
+        used = amount if expand else min(amount, reference)
+        return {'strategy': 'universal', 'source': 'cached-lower' if expand else 'cached-upper',
             'amount': str(int(sample['netOutput']) * used // reference),
             'referenceInput': str(used), 'basis': sample['basis'],
             'fees': {name: str(int(sample['fees'][name]) * used // reference) for name in FEE_NAMES}}
@@ -131,19 +131,26 @@ class CachedEconomicEstimates:
             for neighbor in neighbors:
                 quote = neighbor['quote']
                 sample = sample_for_quote(quote)
-                if neighbor['side'] != 'upper' and not (neighbor['side'] == 'lower'
-                        and sample and sample.get('inputLimitObserved')):
+                if neighbor['side'] not in ('lower', 'upper') or sample is None:
                     continue
-                # A known limited lower remains its observed tuple above that
-                # funding; ordinary lower observations are not extrapolated.
-                estimate = arithmetic_estimate(sample, request['amount']) if sample else None
+                # A known path can provide a full-budget advisory estimate.
+                # Paid limitation/source-retention evidence clamps it; merely
+                # retargeting an original-funded replay to a larger request is
+                # not evidence that the route's capacity was exhausted.
+                limited = sample.get('inputLimitObserved') or (
+                    int(sample['referenceInput']) < int(quote['inputs'][0]['amount']))
+                estimate = arithmetic_estimate(sample, request['amount'],
+                    expand=neighbor['side'] == 'lower' and not limited)
                 if estimate is None:
                     continue
+                if int(estimate['referenceInput']) == int(request['amount']):
+                    estimate['fullBudget'] = True
                 previous = packet.get('estimate')
                 rank = (int(estimate['amount']), -int(estimate['referenceInput']))
                 if previous is not None and rank <= (int(previous['amount']), -int(previous['referenceInput'])):
                     continue
-                packet['estimate'] = {**estimate, 'context': deepcopy(quote['context'])}
+                packet['estimate'] = {**estimate, 'context': deepcopy(quote['context']),
+                    **({'routeOrigins': deepcopy(quote['routeOrigins'])} if quote.get('routeOrigins') else {})}
                 if neighbor.get('identity') is not None:
                     packet['estimate']['sourceIdentity'] = neighbor['identity']
                 if quote.get('request', {}).get('inputs'):

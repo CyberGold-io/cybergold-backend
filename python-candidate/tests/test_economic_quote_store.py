@@ -53,7 +53,7 @@ class EconomicQuoteStoreTests(unittest.IsolatedAsyncioTestCase):
         registry.store.database = SimpleNamespace(connection=connection)
         with patch('cybergold_candidate.quoter.store.request_identity', wraps=request_identity) as hashed:
             result = await service.neighbors(request, scope=scope)
-        self.assertEqual(hashed.call_count, 1)
+        self.assertEqual(hashed.call_count, 2)  # Matching header plus its selected payload's L1 point identity.
         self.assertEqual(result, [{'family': 'market', 'side': 'lower', 'identity': scope.identity, 'quote': quote}])
         self.assertEqual(len(executed), 2)
 
@@ -255,6 +255,7 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
                 PRIMARY KEY(chain_id,core_address,namespace,identity))''')
 
     async def asyncTearDown(self):
+        await self.subject.close()
         scope = self.subject.capture_scope(self.request)
         async with self.connection() as conn:
             await conn.execute('DELETE FROM cybergold_uniswap_state WHERE chain_id=%s AND core_address=%s AND namespace=ANY(%s)',
@@ -286,6 +287,10 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
                 (scope.chain, scope.core, scope.namespace+'-sequence', 'commits', json.dumps({'sequence': 1})))
         market, core = self.quote(100000, 200, 'market'), self.quote(100000, 150, 'core')
         await self.save(market)
+        # A warm L1 answer is immediate; its independent SQL feed then merges
+        # the other family's historical point without blocking ordinary work.
+        self.assertEqual(await self.subject.lookup(self.request), market)
+        await self.subject.load_lookup(self.request)
         self.assertEqual(await self.subject.lookup(self.request), old)
         await self.save(core)
         # A newer lower-priced Core observation replaces only that logical
@@ -295,10 +300,149 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([(row['family'], row['side']) for row in neighbors], [('market', 'lower'), ('core', 'lower')])
         self.assertEqual([row['quote'] for row in neighbors], [market, core])
         self.assertEqual([quote_path_family(row['quote']) for row in neighbors], ['market', 'core'])
+        await asyncio.gather(*tuple(self.subject.background))
         async with self.connection() as conn:
             cursor = await conn.execute('SELECT identity FROM cybergold_uniswap_state WHERE namespace=%s', (scope.namespace,))
             self.assertEqual({row['identity'] for row in await cursor.fetchall()},
-                             {scope.identity, scope.identity+':market', scope.identity+':core'})
+                             {scope.identity+':market', scope.identity+':core'})
+
+    async def test_conflicting_sql_aliases_use_newest_sequence_whole_tuple_even_when_output_decreases(self):
+        old = self.quote(100000, 100, 'market', funding=80000)
+        new = self.quote(200000, 80, 'market', funding=80000)
+        scope = self.subject.capture_scope(old['request'])
+        async with self.connection() as conn:
+            for sequence, quote in ((1, old), (2, new)):
+                point = self.subject.capture_scope(quote['request'])
+                await conn.execute('INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)',
+                    (scope.chain, scope.core, scope.namespace, point.identity+':market',
+                     json.dumps({'quote': quote, 'savedSequence': sequence})))
+        self.assertEqual(await self.subject.load_lookup(old['request']), old)
+        neighbors = await self.subject.load_neighbors(old['request'])
+        self.assertEqual([row['quote'] for row in neighbors], [new, new])
+        self.assertEqual(await self.subject.load_lookup(old['request']), new)
+        self.assertEqual(sum(len(rows) for rows in self.subject.memory.values()), 1)
+        self.assertEqual(len(next(iter(self.subject.locations.values()))), 1)
+
+    async def test_paid_disproof_removes_persisted_candidate_and_releases_its_sql_identity_records(self):
+        from cybergold_candidate.quoter.reuse_routes import funded_route_identity
+        quote = self.quote(100000, 100, 'market')
+        await self.save(quote)
+        # Importing an actual SQL row records its alias for legacy cleanup.
+        fresh = EconomicQuoteStore(self.subject.settings, self.registry, limit=1)
+        self.addAsyncCleanup(fresh.close)
+        await asyncio.create_task(fresh.load_lookup(self.request))
+        scope = fresh.capture_scope(self.request)
+        fresh.forget(funded_route_identity(quote), scope=scope)
+        await asyncio.gather(*tuple(fresh.background))
+        await asyncio.sleep(0)
+        self.assertFalse(fresh.locations)
+        self.assertFalse(fresh.retired)
+        self.assertFalse(fresh.known_rows)
+        self.assertIsNone(await fresh.load_lookup(self.request))
+
+    async def test_a_writer_waiting_for_sql_counter_cannot_restore_a_later_paid_disproof(self):
+        from cybergold_candidate.quoter.quote_book import QuoteBook
+        from cybergold_candidate.quoter.reuse_routes import funded_route_identity
+        quote = self.quote(100000, 100, 'market')
+        scope = self.subject.capture_scope(self.request)
+        identity = funded_route_identity(quote)
+        book = QuoteBook(self.request)
+        def paid(frame, version):
+            book.versions[frame['_candidateIdentity']] = version
+            book.observe(frame['value'], identity=frame['_candidateIdentity'])
+        book.on_observation = paid
+        self.subject.register_book(scope, book)
+        self.addCleanup(self.subject.unregister_book, book)
+        self.subject.announce(self.request, {'type': 'candidate-repriced',
+            '_candidateIdentity': identity, 'value': quote}, book, scope=scope)
+        version = book.versions[identity]
+        waiting = asyncio.Event()
+        @asynccontextmanager
+        async def observed_connection():
+            async with self.connection() as conn:
+                async def execute(query, *args):
+                    if query.lstrip().startswith('UPDATE cybergold_uniswap_state'):
+                        waiting.set()
+                    return await conn.execute(query, *args)
+                yield SimpleNamespace(transaction=conn.transaction, execute=execute)
+        self.registry.store.database.connection = observed_connection
+        counter = (scope.chain, scope.core, scope.namespace+'-sequence', 'commits')
+        async with self.connection() as conn:
+            await conn.execute('INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)',
+                               (*counter, json.dumps({'sequence': 0})))
+        async with self.connection() as conn:
+            async with conn.transaction():
+                await conn.execute('SELECT payload FROM cybergold_uniswap_state WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s FOR UPDATE', counter)
+                writing = asyncio.create_task(self.subject.persist(self.request, quote, scope=scope, version=version))
+                await asyncio.wait_for(waiting.wait(), 3)
+                self.subject.announce(self.request, {'type': 'candidate-repriced',
+                    '_candidateIdentity': identity, 'value': None}, book, scope=scope)
+                self.assertIsNone(self.subject.memory_lookup(self.request))
+        self.assertFalse(await asyncio.wait_for(writing, 3))
+        await asyncio.gather(*tuple(self.subject.background))
+        async with self.connection() as conn:
+            cursor = await conn.execute('SELECT payload FROM cybergold_uniswap_state WHERE namespace=%s', (scope.namespace,))
+            self.assertEqual(await cursor.fetchall(), [])
+
+    async def test_evicted_paid_identity_suppresses_an_older_inflight_sql_snapshot_but_its_writer_still_persists(self):
+        from cybergold_candidate.quoter.quote_book import QuoteBook
+        from cybergold_candidate.quoter.reuse_routes import funded_route_identity
+        old, paid_quote = self.quote(100000, 100, 'market'), self.quote(100000, 80, 'market')
+        scope = self.subject.capture_scope(self.request)
+        self.subject.limit = 1
+        captured, read_release, write_waiting = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        @asynccontextmanager
+        async def observed_connection():
+            async with self.connection() as conn:
+                async def execute(query, *args):
+                    if query.lstrip().startswith('UPDATE cybergold_uniswap_state'):
+                        write_waiting.set()
+                    cursor = await conn.execute(query, *args)
+                    if query.lstrip().startswith('SELECT identity,payload') and not captured.is_set():
+                        async def fetchall():
+                            rows = await cursor.fetchall()
+                            captured.set(); await read_release.wait()
+                            return rows
+                        return SimpleNamespace(fetchall=fetchall)
+                    return cursor
+                yield SimpleNamespace(transaction=conn.transaction, execute=execute)
+        self.registry.store.database.connection = observed_connection
+        counter = (scope.chain, scope.core, scope.namespace+'-sequence', 'commits')
+        async with self.connection() as conn:
+            await conn.execute('INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)',
+                (scope.chain, scope.core, scope.namespace, scope.identity+':market', json.dumps({'quote': old, 'savedSequence': 1})))
+            await conn.execute('INSERT INTO cybergold_uniswap_state VALUES (%s,%s,%s,%s,%s::jsonb)',
+                               (*counter, json.dumps({'sequence': 1})))
+        reading = asyncio.create_task(self.subject.load_lookup(self.request))
+        await asyncio.wait_for(captured.wait(), 3)
+        book = QuoteBook(self.request)
+        def paid(frame, version):
+            book.versions[frame['_candidateIdentity']] = version
+            book.observe(frame['value'], identity=frame['_candidateIdentity'])
+        book.on_observation = paid
+        self.subject.register_book(scope, book)
+        identity = funded_route_identity(paid_quote)
+        self.subject.announce(self.request, {'type': 'candidate-repriced',
+            '_candidateIdentity': identity, 'value': paid_quote}, book, scope=scope)
+        async with self.connection() as conn:
+            async with conn.transaction():
+                await conn.execute('SELECT payload FROM cybergold_uniswap_state WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s FOR UPDATE', counter)
+                writing = asyncio.create_task(self.subject.persist(self.request, paid_quote, scope=scope,
+                                                                  version=book.versions[identity]))
+                await asyncio.wait_for(write_waiting.wait(), 3)
+                different = self.quote(200000, 120, 'market')
+                self.subject.remember(different['request'], different)
+                self.subject.unregister_book(book)
+                self.assertIsNone(self.subject.memory_lookup(self.request))
+                self.assertEqual(len(self.subject.memory), 1)
+                self.assertEqual(self.subject.retired[(self.subject.scope_key(scope), identity)]['version'], book.versions[identity])
+                read_release.set()
+                self.assertIsNone(await asyncio.wait_for(reading, 3))
+                self.assertFalse(writing.done())
+        self.assertTrue(await asyncio.wait_for(writing, 3))
+        await asyncio.sleep(0)
+        self.assertFalse(self.subject.retired)
+        self.assertEqual(await asyncio.create_task(self.subject.load_lookup(self.request)), paid_quote)
 
     async def test_limit_one_retains_both_families_and_prunes_the_previous_request_together(self):
         self.subject.limit = 1
@@ -350,18 +494,18 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['estimate']['sourceRequestedInput'], '50000')
         self.assertEqual(result['estimate']['context'], quote['context'])
 
-    async def test_known_limited_lower_beats_a_different_nearest_upper_without_scaling_unknown_lowers(self):
+    async def test_known_limited_lower_beats_a_different_nearest_upper_and_unknown_lower_stays_advisory(self):
         from cybergold_candidate.quoter.reuse_estimate import CachedEconomicEstimates
         limited = self.quote(70000, 8355, 'market', funding=47300)
         limited['searchCoverage'] = {'inputLimitObserved': True}
         nearer = self.quote(50000, 7950, 'market', funding=45000)
-        unknown = self.quote(48000, 9999999, 'core')
+        unknown = self.quote(48000, 100, 'core')
         for quote in (limited, nearer, unknown):
             await self.save(quote)
         requested = {**self.request, 'inputs': [{'currency': USDT, 'amount': '49000'}]}
         neighbors = await self.subject.neighbors(requested)
         self.assertEqual([(row['family'], row['side'], row['quote']['quotedOutput']) for row in neighbors],
-                         [('market', 'lower', '8355'), ('market', 'upper', '7950'), ('core', 'lower', '9999999')])
+                         [('market', 'lower', '8355'), ('market', 'upper', '7950'), ('core', 'lower', '100')])
         result = await CachedEconomicEstimates(self.subject, CORE).get_model({
             'side': 'buy', 'mode': 'exact-in', 'counterToken': USDT,
             'native': False, 'amount': '49000'})

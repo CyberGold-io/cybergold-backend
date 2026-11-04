@@ -8,6 +8,8 @@ from contextlib import aclosing
 from copy import deepcopy
 
 from .evaluate import encode_nomination
+from .reuse_routes import proposal_identity
+from ..recovery_rpc import SnapshotChanged
 
 
 def implicated_core_market_operations(selected, unsettled):
@@ -50,3 +52,50 @@ async def core_market_proposals(quoter, request, selected, block, *, unsettled):
                     else:
                         data['continuations'][position]['route'] = deepcopy(route)
                 yield {'inputs': deepcopy(request['inputs']), 'plan': plan}
+
+
+async def compose_core_market(quoter, request, selected, block, *, unsettled, attempt):
+    """Follow paid whole-plan failures from the changed plan, then try siblings.
+
+    Each iterator nominates only the implicated market leg. A second failing
+    leg expands the changed complete body, preserving funding and Core fields.
+    The owned stack avoids both a Cartesian product and Python recursion depth;
+    a topology is tried once per recovery, while later provider passes remain
+    free to expose new alternatives or retry ordinary failures.
+    """
+    seen = {proposal_identity({'inputs': request['inputs'], 'plan': selected})}
+    stack = [core_market_proposals(quoter, request, selected, block, unsettled=unsettled)]
+    try:
+        while stack:
+            try:
+                proposal = await anext(stack[-1])
+            except StopAsyncIteration:
+                await stack.pop().aclose()
+                continue
+            except SnapshotChanged:
+                raise
+            except Exception:
+                # An ordinary failed child feed does not exhaust its parent
+                # alternatives. Cancellation and state disproof still retain
+                # their own ordinary propagation contracts.
+                await stack.pop().aclose()
+                continue
+            identity = proposal_identity(proposal)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            try:
+                value = await attempt(proposal)
+            except SnapshotChanged:
+                raise
+            except Exception as error:
+                remainder = getattr(error, 'unsettled_intermediate', None)
+                if remainder is not None:
+                    stack.append(core_market_proposals(quoter, request, proposal['plan'], block,
+                                                       unsettled=deepcopy(remainder)))
+            else:
+                if value is not None:
+                    return value
+    finally:
+        for iterator in reversed(stack):
+            await iterator.aclose()

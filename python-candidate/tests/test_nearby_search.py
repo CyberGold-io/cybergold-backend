@@ -18,8 +18,9 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         for source in ('exact', 'lower'):
             with self.subTest(source=source):
-                q, saved, edited, _ = await self.budget_replay_fixture()
+                q, saved, edited, expanded = await self.budget_replay_fixture()
                 q.amm.async_family_offers = AsyncMock(return_value=[])
+                q.route_provider_factory = lambda: []
                 saved['request'] = deepcopy(edited)
                 assets, weights = await q.basis(None)
                 proposal = neighbor_proposals(saved, 40004, assets)[-1]
@@ -32,9 +33,10 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                         error = QuoteFailure('quote-contract-reverted')
                         error.unsettled_intermediate = deepcopy(hint)
                         raise error
-                    result = await original(value, *args, **options)
-                    if options.get('selected') is None:
-                        result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
+                    if options.get('selected') is not None:
+                        return await original(value, *args, **options)
+                    result = deepcopy(expanded)
+                    result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
                     return result
                 q.candidate = candidate
                 recovery = AsyncMock(return_value=[proposal])
@@ -124,6 +126,8 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 saved['request'] = deepcopy(edited)  # Exact key, lower actual funding.
                 saved['searchCoverage']['selectedPhase'] = 'backward-prefix'  # Pre-field canonical observation.
                 saved['plan']['_budget_replay_fixture'] = True
+                q.route_provider_factory = lambda: []
+                q.amm.async_family_offers = AsyncMock(return_value=[])
                 original = q.candidate
                 full_started, both_settled = asyncio.Event(), asyncio.Event()
                 calls, settled = [], []
@@ -146,7 +150,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                             if len(settled) == 2:
                                 both_settled.set()
                     await both_settled.wait()
-                    result = await original(value, *args, **options)
+                    result = deepcopy(expanded)
                     output = int(expanded['quotedOutput']) + 1000 if outcome == 'ordinary-wins' else 1
                     result['quotedOutput'] = str(output)
                     result['estimatedRecipientOutputs'][0]['amount'] = str(output)
@@ -177,20 +181,26 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(result['routeOrigins']['discoveryProviders'], ['uniroute-local', 'uniswap-alpharouter'])
                 self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_lower_neighbor_starts_one_requested_budget_replay_without_repaying_old_funding(self):
+    async def test_lower_neighbor_replays_original_while_full_budget_is_pending(self):
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         q, saved, edited, expanded = await self.budget_replay_fixture()
+        saved['plan']['_budget_replay_fixture'] = True
+        q.route_provider_factory = lambda: []
+        q.amm.async_family_offers = AsyncMock(return_value=[])
         original = q.candidate
-        full_started, fitting_started = asyncio.Event(), asyncio.Event()
+        full_started, fitting_started, release_full, published = (asyncio.Event() for _ in range(4))
+        visible = []
         async def candidate(value, *args, **options):
             if (options.get('selected') or {}).get('_budget_replay_fixture'):
                 if value['inputs'][0]['amount'] == '50005':
                     full_started.set()
-                    return await original(value, *args, **options)
-                fitting_started.set()
-                await asyncio.Event().wait()
-            await full_started.wait()
-            result = await original(value, *args, **options)
+                    await release_full.wait()
+                else:
+                    fitting_started.set()
+                    await full_started.wait()
+                return await original(value, *args, **options)
+            await asyncio.gather(full_started.wait(), fitting_started.wait())
+            result = deepcopy(expanded)
             result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
             return result
         def marked(*args):
@@ -201,49 +211,59 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         async def neighbors():
             return [{'family': quote_path_family(saved), 'side': 'lower',
                      'identity': 'fitting-native-core', 'quote': saved}]
+        async def publish(frame):
+            if frame['type'] == 'qualified':
+                visible.append(deepcopy(frame['value']))
+                if frame['value']['inputs'] == saved['inputs']:
+                    published.set()
         q.candidate = candidate
         with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
             async with asyncio.timeout(2):
-                result = await Quoter.get(q, edited, neighbors=neighbors)
+                task = asyncio.create_task(Quoter.get(q, edited, publish, neighbors=neighbors))
+                try:
+                    await asyncio.gather(full_started.wait(), fitting_started.wait(), published.wait())
+                    self.assertFalse(task.done())
+                    fitting = next(value for value in visible if value['inputs'] == saved['inputs'])
+                    self.assertEqual(fitting['quotedOutput'], saved['quotedOutput'])
+                    release_full.set()
+                    result = await task
+                finally:
+                    release_full.set()
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
         self.assertEqual(result['inputs'], edited['inputs'])
         self.assertEqual(result['quotedOutput'], expanded['quotedOutput'])
-        self.assertFalse(fitting_started.is_set())
         attempts = result['metrics']['nearbySearch']['sources'][0]['attempts']
-        self.assertEqual([row['funding'] for row in attempts], ['50005'])
-        self.assertTrue(attempts[0]['completed'])
+        self.assertCountEqual([row['funding'] for row in attempts], ['50005', '10001'])
+        self.assertTrue(all(row['completed'] for row in attempts))
         self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_fitting_fallback_is_priced_only_after_requested_budget_failure(self):
+    async def test_fitting_and_requested_budget_attempts_start_independently_on_failure(self):
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         for unavailable in (False, True):
             with self.subTest(fitting_replay_unavailable=unavailable):
-                q = Quotes(Engine())
-                sdk = q.engine.quote_sdk_branches
-                async def acquire(branches, *args, **kwargs):
-                    resolved = deepcopy(branches)
-                    for branch in resolved:
-                        for hop in branch['hops']:
-                            hop['pool'] = deepcopy(q.engine.registry.inventory[hop['pool']['id']])
-                    return await sdk(resolved, *args, **kwargs)
-                q.engine.quote_sdk_branches = acquire
-                saved = await q.quote(request())
+                q, saved, edited, expanded = await self.budget_replay_fixture()
                 saved['searchCoverage']['selectedPhase'] = 'capacity-limited'
                 expected = saved['quotedOutput']
                 saved['quotedOutput'] = '999999999999999999999999'
-                edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}
+                saved['plan']['_fitting_fixture'] = True
+                q.route_provider_factory = lambda: []
+                q.amm.async_family_offers = AsyncMock(return_value=[])
                 original, order = q.candidate, []
-                full_started = asyncio.Event()
+                full_started, fitting_started = asyncio.Event(), asyncio.Event()
                 async def candidate(value, *args, **options):
                     if (options.get('selected') or {}).get('_fitting_fixture'):
-                        if value['inputs'][0]['amount'] == '100010':
+                        if value['inputs'][0]['amount'] == edited['inputs'][0]['amount']:
                             order.append('full-budget'); full_started.set()
+                            await fitting_started.wait()
                             raise QuoteFailure('quote-no-route')
-                        order.append('fitting')
+                        order.append('fitting'); fitting_started.set()
+                        await full_started.wait()
                         if unavailable:
                             raise QuoteFailure('quote-no-route')
                         return await original(value, *args, **options)
-                    await full_started.wait()
-                    result = await original(value, *args, **options)
+                    await asyncio.gather(full_started.wait(), fitting_started.wait())
+                    result = deepcopy(expanded)
                     result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
                     return result
                 q.candidate = candidate
@@ -258,10 +278,10 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
                     async with asyncio.timeout(2):
                         result = await Quoter.get(q, edited, neighbors=neighbors)
-                self.assertEqual(order, ['full-budget', 'fitting'])
+                self.assertCountEqual(order, ['full-budget', 'fitting'])
                 self.assertEqual(result['request']['inputs'], edited['inputs'])
                 self.assertEqual(result['quotedOutput'], '1' if unavailable else expected)
-                self.assertEqual(result['inputs'][0]['amount'], '100010' if unavailable else '10001')
+                self.assertEqual(result['inputs'][0]['amount'], '50005' if unavailable else '10001')
                 self.assertNotEqual(result['quotedOutput'], saved['quotedOutput'])
                 self.assertEqual(result['searchCoverage'].get('inputLimitObserved', False), not unavailable)
                 self.assertEqual(q.engine.semaphore._value, 8)
@@ -434,15 +454,16 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             return [{'family': quote_path_family(lower), 'side': 'lower', **{'identity': 'lower', 'quote': lower}}, {'family': quote_path_family(upper), 'side': 'upper', **{'identity': 'upper', 'quote': upper}}]
         value = await q.quote(edited, neighbors=neighbors)
         funded = {int(rows[0]['amount']) for rows in evaluations}
-        self.assertEqual(funded, {20002})
+        self.assertEqual(funded, {10001, 20002})
         self.assertEqual(value['request']['inputs'], edited['inputs'])
         self.assertNotEqual(value['quotedOutput'], upper['quotedOutput'])
         self.assertEqual(sum(int(row['amountIn']) for row in value['plan']['allocations']),
                          int(value['inputs'][0]['amount']))
         metrics = value['metrics']['nearbySearch']
-        # Equivalent lower/upper topology is one initial Helpers proposal.
-        self.assertEqual(metrics['starts'], 1)
-        self.assertEqual(metrics['completed'], 1)
+        # One expanded topology and one distinct fitting original are priced;
+        # lower/upper aliases do not duplicate either funded observation.
+        self.assertEqual(metrics['starts'], 2)
+        self.assertEqual(metrics['completed'], 2)
         self.assertEqual(metrics['sources'][0]['side'], 'lower')
         self.assertEqual(metrics['sources'][0]['aliases'][0]['side'], 'upper')
         self.assertIsNone(value['metrics']['optionalSearch']['randomSeed'])

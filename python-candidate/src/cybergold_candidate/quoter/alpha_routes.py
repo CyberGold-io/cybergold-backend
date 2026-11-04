@@ -1,4 +1,4 @@
-"""Request-owned calculation children; concurrent queries share framed transport.
+"""Engine-owned calculation children; requests own their framed calculations.
 
 Each calculation owns its quote callbacks/private candidate banks. One reader
 routes replies by request identity, so raw finder hints need not wait for an
@@ -6,6 +6,7 @@ older calculation's slow SDK callback. Children have no chain RPC transport.
 """
 import asyncio
 from copy import deepcopy
+from contextvars import copy_context
 import json
 import time
 
@@ -13,10 +14,53 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import engine_work
 from ..search_observations import current_search_observations
 from .bootstrap import ProviderUnavailable
+from .cooperative import QUANTUM
 
 
 class AlphaRouteError(RuntimeError):
     """An ordinary isolated calculation supplier/protocol failure."""
+
+
+class CalculationSession:
+    """One producer's queries and diagnostics on an engine-owned driver."""
+    def __init__(self, driver):
+        self.driver = driver
+        self.name, self.catalog_dependent = driver.name, driver.catalog_dependent
+        self.streams = {}
+        self.counts = {'workerQueries': 0, 'quoteCallbacks': 0,
+                       'quoteCallbackFailures': 0, 'quoteCallbackMs': 0.0}
+
+    @property
+    def diagnostics(self):
+        return {**self.counts, 'quoteCallbackMs': round(self.counts['quoteCallbackMs'], 3)}
+
+    async def discover(self, source, target, amount, block):
+        candidates = []
+        async for batch in self.discover_batches(source, target, amount, block):
+            candidates.extend(batch)
+        return candidates
+
+    async def discover_batches(self, source, target, amount, block):
+        stream = self.driver.discover_batches(source, target, amount, block, counts=self.counts)
+        self.streams[stream] = asyncio.current_task()
+        try:
+            async for batch in stream:
+                yield batch
+        finally:
+            await stream.aclose()
+            self.streams.pop(stream, None)
+
+    async def close(self):
+        # Bootstrap normally drains its feed tasks first. Also own direct
+        # subscribers without stopping calculations belonging to another owner.
+        tasks = {task for task in self.streams.values() if task is not asyncio.current_task()}
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*(stream.aclose() for stream in tuple(self.streams)),
+                             return_exceptions=True)
+        self.streams.clear()
 
 
 class AlphaRoutes:
@@ -47,6 +91,7 @@ class AlphaRoutes:
         process = self.process if process is None else process
         if process is self.process:
             self.process = None
+            self.retired.clear()
         current = asyncio.current_task()
         reader = self.reader if self.reader_process is process else None
         if reader is not None and reader is not current:
@@ -74,6 +119,9 @@ class AlphaRoutes:
         self.closed = True
         await self._stop()
 
+    def session(self):
+        return CalculationSession(self)
+
     async def _start(self):
         # This lock owns only construction and writes, never a calculation.
         if self.closed:
@@ -96,19 +144,29 @@ class AlphaRoutes:
         return self.process
 
     async def _read(self, process):
+        frames = 0
         try:
             while True:
                 line = await process.stdout.readline()
                 if not line:
                     raise AlphaRouteError('Calculation worker exited')
+                frames += 1
+                if frames == QUANTUM:
+                    frames = 0
+                    # A buffered stdout read can complete inline indefinitely.
+                    # Let callbacks and unrelated HTTP work consume their turn.
+                    await asyncio.sleep(0)
                 response = json.loads(line)
                 if response.get('id') in self.retired:
+                    if response.get('operation') == 'cancelled':
+                        self.retired.discard(response['id'])
                     continue  # Late frames from an explicitly cancelled calculation.
                 entry = self.requests.get(response.get('id'))
                 if entry is None or entry['process'] is not process:
                     raise AlphaRouteError('Calculation response differs from request')
                 if response.get('operation') == 'quote':
-                    task = asyncio.create_task(self._answer(response, entry))
+                    task = asyncio.create_task(self._answer(response, entry),
+                                               context=entry['context'].copy())
                     entry['callbacks'].add(task)
                     task.add_done_callback(entry['callbacks'].discard)
                 elif response.get('operation') == 'candidates':
@@ -125,10 +183,15 @@ class AlphaRoutes:
 
     async def _answer(self, response, entry):
         self.quote_callbacks += 1
+        counts = entry['counts']
+        if counts is not None:
+            counts['quoteCallbacks'] += 1
         started = time.perf_counter()
         try:
             result = await self._quote(response, entry['block'], entry['canonical'], (self, response['id']))
             self.quote_callback_failures += result.get('quote') is None
+            if counts is not None:
+                counts['quoteCallbackFailures'] += result.get('quote') is None
             async with self.lock:
                 if not entry['terminal'] and self.requests.get(response['id']) is entry:
                     await self._write(entry['process'], {'id': response['id'], 'operation': 'quoteResult',
@@ -138,7 +201,10 @@ class AlphaRoutes:
         except BaseException as error:
             entry['queue'].put_nowait(error)
         finally:
-            self.quote_callback_ms += (time.perf_counter() - started) * 1000
+            elapsed = (time.perf_counter() - started) * 1000
+            self.quote_callback_ms += elapsed
+            if counts is not None:
+                counts['quoteCallbackMs'] += elapsed
 
     async def discover(self, source, target, amount, block):
         candidates = []
@@ -146,15 +212,18 @@ class AlphaRoutes:
             candidates.extend(batch)
         return candidates
 
-    async def discover_batches(self, source, target, amount, block):
+    async def discover_batches(self, source, target, amount, block, *, counts=None):
         entry, identity = None, None
         try:
             async with self.lock:
                 process = await self._start()
                 self.sequence += 1
+                if counts is not None:
+                    counts['workerQueries'] += 1
                 identity = str(self.sequence)
                 entry = {'process': process, 'queue': asyncio.Queue(), 'callbacks': set(),
-                         'canonical': {}, 'block': block, 'terminal': False}
+                         'canonical': {}, 'block': block, 'terminal': False,
+                         'context': copy_context(), 'counts': counts}
                 self.requests[identity] = entry
                 fields = ('id', 'protocol', 'token0', 'token1', 'feePips', 'lpFee',
                           'tickSpacing', 'hooks', 'poolManager', 'address')
@@ -180,10 +249,11 @@ class AlphaRoutes:
                 for task in callbacks:
                     task.cancel()
                 await asyncio.gather(*callbacks, return_exceptions=True)
-                if not entry['terminal'] and self.process is entry['process']:
-                    if self.requests:
-                        # The child retires this calculation's pending callbacks;
-                        # independently subscribed queries keep their process.
+                if self.process is entry['process']:
+                    if entry['terminal'] or self.requests:
+                        # Callback writes have drained before this ordered
+                        # retirement. Its acknowledgement releases both sides'
+                        # query bookkeeping while sibling calculations continue.
                         try:
                             async with self.lock:
                                 await self._write(entry['process'], {'id': identity, 'operation': 'cancel'})

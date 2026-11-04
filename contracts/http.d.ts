@@ -75,7 +75,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Scalar searches start alongside optional cached offers and retain separate pure-Market and Core-containing family winners; up to four distinct lower/upper cached routes seed current-budget pricing. Latest observations have nullable block coordinates; stored offers retain their original context and cannot replace an already published current result. Caller disconnect cancels and drains only its owned work. */
+        /** @description Subscription-owned selected economic observations are published by the Backend while discovery continues to natural completion. The shared Backend cache supplies early historical observations and lower/upper routes independently per market/Core-containing family. Whole-plan Helpers latest-state repricing replaces a candidate's previous observation in either direction, then the Backend ranks the latest complete candidate tuples and emits its selected result; independent weaker paths are not emitted merely because they are fresh. Fast estimates are separate advisory Backend results. Latest observations have nullable block coordinates. Caller disconnect cancels and drains only its owned work. */
         post: operations["post__api_economic_quotes_stream"];
         delete?: never;
         options?: never;
@@ -1239,6 +1239,16 @@ export interface components {
                 conversions: components["schemas"]["Record<string,Record<string,unknown>>"];
                 body: components["schemas"]["Record<string,unknown>"];
             };
+            /** @description Diagnostic nomination origins; never required to replay or rank a route. */
+            routeOrigins?: {
+                /** @constant */
+                economicEvaluator: "cybergold-quoter";
+                /** @enum {string} */
+                pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                discoveryProviders: string[];
+                conversions: components["schemas"]["Record<string,string[]>"];
+                adapterConversions?: string[];
+            };
             /** @description Measured conversion quantities; these never reduce declared funding by inference. */
             conversionObservations?: {
                 operation: string;
@@ -1391,6 +1401,7 @@ export interface components {
                 };
             };
         };
+        "Record<string,string[]>": Record<string, never>;
         "Record<string,string>": Record<string, never>;
         /** @description Qualified frames contain complete simulated quote observations. */
         EconomicQuoteEvent: ({
@@ -5091,8 +5102,13 @@ export interface components {
                     /** @constant */
                     strategy: "universal";
                     amount: string;
-                    /** @constant */
-                    source: "cached-upper";
+                    /** @enum {string} */
+                    source: "cached-lower" | "cached-upper";
+                    /**
+                     * @description Advisory display covers this request's full budget; never executable.
+                     * @constant
+                     */
+                    fullBudget?: true;
                     referenceInput: string;
                     /** @enum {string} */
                     basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
@@ -5117,6 +5133,15 @@ export interface components {
                     };
                     sourceIdentity?: string;
                     sourceRequestedInput?: string;
+                    routeOrigins?: {
+                        /** @constant */
+                        economicEvaluator: "cybergold-quoter";
+                        /** @enum {string} */
+                        pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                        discoveryProviders: string[];
+                        conversions: components["schemas"]["Record<string,string[]>"];
+                        adapterConversions?: string[];
+                    };
                 };
                 /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
                 budgetRange?: {
@@ -12357,8 +12382,13 @@ export interface components {
                 /** @constant */
                 strategy: "universal";
                 amount: string;
-                /** @constant */
-                source: "cached-upper";
+                /** @enum {string} */
+                source: "cached-lower" | "cached-upper";
+                /**
+                 * @description Advisory display covers this request's full budget; never executable.
+                 * @constant
+                 */
+                fullBudget?: true;
                 referenceInput: string;
                 /** @enum {string} */
                 basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
@@ -12383,6 +12413,15 @@ export interface components {
                 };
                 sourceIdentity?: string;
                 sourceRequestedInput?: string;
+                routeOrigins?: {
+                    /** @constant */
+                    economicEvaluator: "cybergold-quoter";
+                    /** @enum {string} */
+                    pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                    discoveryProviders: string[];
+                    conversions: components["schemas"]["Record<string,string[]>"];
+                    adapterConversions?: string[];
+                };
             };
             /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
             budgetRange?: {

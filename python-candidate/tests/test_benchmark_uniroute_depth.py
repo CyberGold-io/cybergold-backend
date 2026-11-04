@@ -1,10 +1,11 @@
 """Depth experiment integrity: equal fallback and failed/funding comparisons."""
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 import unittest
 
 from benchmark_uniroute_depth import MODES, summary, tools_for_mode
 from test_universal_quote import settings
 from cybergold_candidate.uniswap_api_queue import UniswapApiQueue
+from cybergold_candidate.route_quote_engine import RouteQuoteEngine
 
 
 class DepthComparisonTests(unittest.TestCase):
@@ -42,7 +43,9 @@ class DepthComparisonTests(unittest.TestCase):
         self.assertEqual(comparison['fundingDeltaRaw'], '-1')
 
     def test_all_isolated_modes_keep_equal_custom_fallback_and_no_other_supplier(self):
-        engine = SimpleNamespace(registry=SimpleNamespace(), uniswap_api_queue=UniswapApiQueue())
+        engine = SimpleNamespace(registry=SimpleNamespace(), uniswap_api_queue=UniswapApiQueue(),
+                                 _route_optimizers={})
+        engine.route_optimizer = MethodType(RouteQuoteEngine.route_optimizer, engine)
         for mode in MODES[:-1]:
             tools = tools_for_mode(settings(), engine, mode=mode)
             self.assertEqual([tool.name for tool in tools], ['cybergold-custom', 'uniroute-local'])
