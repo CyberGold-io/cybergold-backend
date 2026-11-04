@@ -6,6 +6,7 @@ pricing methods are implementation details of a canonical forward route.
 import asyncio
 from .route_work_slots import engine_work, PricingSlots, required_state_wait
 from copy import deepcopy
+from .pool_snapshot import copy_pool_snapshot
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -277,7 +278,6 @@ class RouteQuoteEngine:
             raise InvalidPreview('Retained route cannot be resolved.') from error
 
     async def quote_branches(self, branches, mode, amount, block):
-        branches = RouteQuoteEngine.enrich_branches(self, branches)
         value = await self.quote_sdk_branches(branches, mode, amount, block)
         if not value.get('settled', True):
             error = InvalidPreview('Unsettled current-operation intermediate currency.')
@@ -321,7 +321,7 @@ class RouteQuoteEngine:
                 if identity not in canonical:
                     previous = bank_state(canonical, pool)
                     if previous is not None:
-                        canonical[identity] = {**deepcopy(previous), 'id': identity}
+                        canonical[identity] = {**copy_pool_snapshot(previous), 'id': identity}
                     else:
                         # Initial observations suspend arithmetic just like
                         # later SDK tick requests. Keep their subscriptions
@@ -330,7 +330,7 @@ class RouteQuoteEngine:
                             canonical[identity] = (await reads[identity] if reads
                                 else await self.registry.snapshot(pool, block))
                 private = bank_state(candidate, pool)
-                snapshots[identity] = {**deepcopy(private if private is not None else canonical[identity]), 'id': identity}
+                snapshots[identity] = {**copy_pool_snapshot(private if private is not None else canonical[identity]), 'id': identity}
         finally:
             # These subscriptions are owned here; SharedReads preserves other
             # subscribers and cancels a producer only when nobody still needs it.

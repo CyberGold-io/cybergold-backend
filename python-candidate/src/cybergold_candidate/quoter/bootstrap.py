@@ -281,6 +281,10 @@ class RouteBootstrap:
             self._changed.set()
         return True
 
+    def has_query(self, source, target, amount):
+        key = source.lower(), target.lower(), int(amount)
+        return key in self._queries or key in self._completed_offers
+
     def offer_feeds(self, source, target, amount, block, *, path_projection=None,
                     cooperative=False, projection_steps=None):
         """Start all pending tools now; return their separate lazy offer feeds."""
@@ -325,7 +329,11 @@ class RouteBootstrap:
             rows = [(revision, offer) for entry in entries
                     for revision, offer in zip(entry['offer_revisions'], entry['offers'], strict=True)]
             rows.extend(self._completed_offers.get(key, {}).values())
-            result[key] = [deepcopy(offer) for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
+            # Stored branch descriptors are read-only here and copied by each
+            # offer feed before yielding. Snapshot the independently mutable
+            # origins now, avoiding a second eager topology copy per quick pass.
+            result[key] = [{**offer, 'origins': list(offer['origins'])}
+                           for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
         return result
 
     async def _quick_pass(self, callback, offers):

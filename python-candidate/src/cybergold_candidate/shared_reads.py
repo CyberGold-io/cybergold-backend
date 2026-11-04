@@ -94,8 +94,9 @@ class SharedReads:
                             del self.pending[key]
             task.add_done_callback(finished)
         try:
-            if len(selected) == 1 and selected[0][1] is not None:
-                values = [await asyncio.shield(selected[0][1].future)]
+            if len(selected) == 1:
+                _, entry, cached = selected[0]
+                values = [await asyncio.shield(entry.future) if entry is not None else cached]
             else:
                 values = await asyncio.gather(*(asyncio.shield(entry.future)
                     if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))

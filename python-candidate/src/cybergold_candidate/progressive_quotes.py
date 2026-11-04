@@ -25,7 +25,6 @@ async def progressive_quote(service, request, publish, *, refresh=False):
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh, cache=cache)
         neighbors = cache.memory_neighbors() if scalar else []
-        seeds = cache.route_seeds(neighbors) if scalar else []
         # L1 history is ready before SQL or a prior producer's teardown. The
         # book ranks it alongside each subsequent private Helpers observation.
         memory = cache.memory_lookup()
@@ -33,14 +32,18 @@ async def progressive_quote(service, request, publish, *, refresh=False):
         if stored:
             for value in stored:
                 publication._historical(value)
-            publication.queue.put_nowait(('changed', None))
+            # Deliver the ready selection before scheduling a search whose
+            # synchronous prefix could otherwise postpone the first frame.
+            await publication.publish_selected()
+            await asyncio.sleep(0)
+        seeds = cache.route_seeds(neighbors) if scalar else []
+        consumer = asyncio.create_task(publication.run())
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
             seed=previous, seed_lookup=cache.sql_lookup if scalar or refresh else None,
             neighbors=cache.sql_neighbors if scalar else None,
             on_family=publication.observe_family if scalar else None,
             on_candidate=publication.enqueue,
             **({'route_seeds': seeds} if seeds else {})))
-        consumer = asyncio.create_task(publication.run())
         async def historical_offer():
             async def offer(read, *, nearby):
                 try:

@@ -23,3 +23,7 @@ def copy_pool_snapshot(snapshot):
             if key in snapshot:
                 result[key] = [dict(row) for row in snapshot[key]]
         return {key: result[key] for key in snapshot}
+
+
+def copy_pool_bank(bank):
+    return {identity: copy_pool_snapshot(state) for identity, state in bank.items()}

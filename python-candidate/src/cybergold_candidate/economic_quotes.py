@@ -5,7 +5,7 @@ import json
 from fastapi.responses import JSONResponse, Response
 from starlette.requests import ClientDisconnect
 
-from .quote_flow import stage
+from .quote_flow import stage, milestone
 from .basket_preview import InvalidPreview
 from .economic_quote_cache import CacheFeed
 from .quoter.types import EconomicRequest
@@ -203,6 +203,7 @@ async def handle_economic_quote_stream(request, service):
         async def publish(frame):
             nonlocal incumbent
             if frame['type'] == 'qualified':
+                milestone('publication.first_selected')
                 incumbent = deepcopy(frame['value'])
             elif frame['type'] == 'invalidated':
                 incumbent = None
@@ -242,12 +243,15 @@ async def handle_economic_quote_stream(request, service):
                     break
                 with stage('http.encode', kind='cpu'):
                     encoded = json.dumps(frame, separators=(',', ':'))+'\n'
+                request.scope.setdefault('state', {})['quote_frame_type'] = frame['type']
                 yield encoded
         finally:
             if not task.done():
                 task.cancel()
+            milestone('http.cleanup.started')
             with stage('http.cleanup'):
                 await asyncio.gather(task, return_exceptions=True)
+            milestone('http.cleanup.finished')
             observe(lambda: observation.finish('cancelled'))
     return OwnedStreamingResponse.create(events())
 

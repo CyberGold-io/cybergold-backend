@@ -44,15 +44,15 @@
 <text x="256" y="215" class="body">No SDK state needed</text>
 <rect x="440" y="154" width="161" height="77" rx="8" class="node"/>
 <text x="451" y="178" class="heading">Initial topology</text>
-<text x="451" y="198" class="body">first=True nominations</text>
-<text x="451" y="215" class="body">No SDK pricing</text>
+<text x="451" y="198" class="body">Direct / seed connector</text>
+<text x="451" y="215" class="body">Before full graph / SDK</text>
 <rect x="635" y="154" width="157" height="77" rx="8" class="node"/>
 <text x="646" y="178" class="heading">Five suppliers</text>
 <text x="646" y="198" class="body">Per AMM query</text>
 <text x="646" y="215" class="body">SDK market-leg work</text>
 <rect x="50" y="268" width="161" height="65" rx="8" class="node"/>
 <text x="61" y="292" class="heading">Backend quote book</text>
-<text x="61" y="313" class="body">Rank stored candidates</text>
+<text x="61" y="313" class="body">Select before new search</text>
 <rect x="245" y="268" width="161" height="65" rx="8" class="node"/>
 <text x="256" y="292" class="heading">Helpers replay</text>
 <text x="256" y="313" class="body">Known-body priority</text>
@@ -77,7 +77,7 @@
 <text x="61" y="416" class="heading">Selected stream</text>
 <text x="61" y="434" class="heading">frame</text>
 <text x="61" y="458" class="body">Zero new quote RPC</text>
-<text x="61" y="478" class="body">No pricing-permit wait</text>
+<text x="61" y="478" class="body">Yield to delivery first</text>
 <rect x="440" y="466" width="161" height="66" rx="8" class="fresh"/>
 <text x="451" y="489" class="heading">Helpers result</text>
 <text x="451" y="509" class="body">One latest eth_call</text>

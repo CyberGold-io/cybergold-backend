@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 from prometheus_client import CollectorRegistry, Counter, Histogram, Gauge, generate_latest
-from .quote_flow import Flow, flow_scope, stage, STAGES
+from .quote_flow import Flow, flow_scope, stage, milestone, STAGES
 
 PATHS={
     '/api/protocol/config',
@@ -293,10 +293,18 @@ class TelemetryMiddleware:
             def create_flow():
                 nonlocal flow
                 flow=Flow(operation,request_id=request_id,attempt_id=attempt_id,metrics=self.metrics)
+                flow.mark('http.entered')
             observe(create_flow)
+        async def observed_receive():
+            message = await receive()
+            if message['type'] == 'http.disconnect':
+                milestone('http.disconnect')
+            return message
         async def forward(message):
             nonlocal status
+            markers = []
             if message['type']=='http.response.start':
+                markers.append('http.headers')
                 status=message['status']
                 message={**message,'headers':[(key,value) for key,value in message.get('headers',[])
                     if key.lower() not in (b'x-cybergold-request-id',b'x-cybergold-backend-revision')]
@@ -305,12 +313,20 @@ class TelemetryMiddleware:
                     message['headers'].append((b'x-cybergold-backend-revision',self.backend_revision.encode()))
                 if flow is not None:
                     observe(lambda:message['headers'].append((b'server-timing',flow.server_timing().encode('ascii'))))
+            elif message['type']=='http.response.body' and message.get('body'):
+                markers.append('http.first_body')
+                if scope['state'].get('quote_frame_type') == 'qualified':
+                    markers.append('publication.first_selected')
+            for marker in markers:
+                milestone(marker+'.ready')
             with stage('http.send'):
                 await send(message)
+            for marker in markers:
+                milestone(marker+'.sent')
         outcome='failed'
         with flow_scope(flow):
             try:
-                await self.app(scope,receive,forward)
+                await self.app(scope,observed_receive,forward)
                 outcome='succeeded' if status is not None and status < 400 else 'failed'
             except asyncio.CancelledError:
                 outcome='cancelled'

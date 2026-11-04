@@ -27,6 +27,10 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     helpers.permit helpers.rpc rpc.session rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
 _current = ContextVar('quotation_flow', default=None)
+MILESTONES = frozenset('''http.entered http.headers.ready http.headers.sent
+    http.first_body.ready http.first_body.sent http.disconnect
+    publication.first_selected publication.first_selected.ready publication.first_selected.sent
+    http.cleanup.started http.cleanup.finished'''.split())
 
 
 def current_flow():
@@ -54,6 +58,7 @@ class Flow:
         self.metrics = metrics if metrics is not None else parent.metrics if parent else None
         self.sink = sink or (parent.sink if parent else None)
         self.rows, self.links = {}, {}
+        self.milestones = {}
         self.terminal = False
         self.shared_producers = 0
         self.finished_at = None
@@ -75,6 +80,10 @@ class Flow:
             key = owner.flow_id, relation
             self.links[key] = self.links.get(key, 0) + 1
 
+    def mark(self, name):
+        if name in MILESTONES and name not in self.milestones:
+            self.milestones[name] = round((self.clock()-self.started)*1000, 3)
+
     def snapshot(self):
         now = self.clock()
         rows = []
@@ -90,6 +99,7 @@ class Flow:
                 'requestId': self.request_id, 'attemptId': self.attempt_id,
                 'operation': self.operation, 'flowKind': self.kind,
                 'elapsedMs': round((now-self.started)*1000, 3),
+                'milestonesMs': dict(self.milestones),
                 'stages': sorted(rows, key=lambda row: (row['stage'], row['kind'])),
                 'sharedOwners': [{'flowId': owner, 'relation': relation, 'subscriptions': count}
                                  for (owner, relation), count in self.links.items()]}
@@ -150,6 +160,12 @@ def flow_scope(flow):
         yield flow
     finally:
         _current.reset(token)
+
+
+def milestone(name):
+    flow = current_flow()
+    if flow is not None:
+        _safe(lambda: flow.mark(name))
 
 
 @contextmanager
