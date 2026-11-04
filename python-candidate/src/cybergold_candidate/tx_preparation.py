@@ -10,6 +10,7 @@ from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor
 from .quoter.types import EconomicQuote
 from .safe_transaction import Address, UInt
 from .quote_flow import stage
+from .route_work_slots import bootstrap_priority
 
 
 class ExecutionBounds(BaseModel):
@@ -120,8 +121,9 @@ class TransactionPreparation:
                     raise InvalidPreview('Accepted input maximum cannot be met.')
             economic_request = {**selected['request'], 'inputs': deepcopy(selected['inputs'])}
         with stage('preparation.replay'):
-            value = await self.quoter.evaluate_selected(economic_request, selected['plan'],
-                recipient=request['recipient'], minimum=int(minimum), accepted_core=expected)
+            with bootstrap_priority():
+                value = await self.quoter.evaluate_selected(economic_request, selected['plan'],
+                    recipient=request['recipient'], minimum=int(minimum), accepted_core=expected)
         with stage('preparation.compile', kind='cpu'):
             result = compile_execution(value, recipient=request['recipient'], deadline=int(self.now()) + 600,
                                        slippage=request['slippageBps'], minimum=minimum, accepted_core=expected)
