@@ -3,6 +3,7 @@ import asyncio
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
+from .quote_flow import stage
 
 
 _current = ContextVar('candidate_route_work_lease', default=None)
@@ -29,17 +30,22 @@ class PricingSlots:
     def __init__(self, value):
         self._value = value
         self._ordinary, self._priority = deque(), deque()
+        self._spans = {}
 
     def locked(self):
         return self._value == 0
 
-    async def acquire(self):
+    async def acquire(self, span=None):
         if self._value:
             self._value -= 1
+            if span is not None:
+                span.ready()
             return True
         future = asyncio.get_running_loop().create_future()
         queue = self._priority if _bootstrap.get() else self._ordinary
         queue.append(future)
+        if span is not None and span.active:
+            self._spans[future] = span
         try:
             await future
             return True
@@ -48,6 +54,7 @@ class PricingSlots:
                 self.release()
             raise
         finally:
+            self._spans.pop(future, None)
             if future in queue:
                 queue.remove(future)
 
@@ -55,19 +62,27 @@ class PricingSlots:
         for queue in (self._priority, self._ordinary):
             while queue:
                 future = queue.popleft()
+                span = self._spans.pop(future, None)
                 if not future.done():
+                    if span is not None:
+                        span.ready()
                     future.set_result(True)
                     return
         self._value += 1
 
 
 class _EnginePermit:
-    def __init__(self, semaphore):
+    def __init__(self, semaphore, stage_name='pricing.permit'):
         self.semaphore, self.owned = semaphore, False
+        self.stage_name = stage_name
 
     async def acquire(self):
-        await self.semaphore.acquire()
-        self.owned = True
+        with stage(self.stage_name, kind='queue') as span:
+            if isinstance(self.semaphore, PricingSlots):
+                await self.semaphore.acquire(span)
+            else:
+                await self.semaphore.acquire()
+            self.owned = True
 
     def release(self):
         if self.owned:
@@ -137,7 +152,7 @@ def _owned():
 
 
 @asynccontextmanager
-async def engine_work(semaphore):
+async def engine_work(semaphore, *, stage_name='pricing.permit'):
     lease = _owned()
     token = None
     if lease is None or not lease.owned:
@@ -146,7 +161,7 @@ async def engine_work(semaphore):
         lease = _PricingWork()
         lease.owner = asyncio.current_task()
         token = _current.set(lease)
-    permit = _EnginePermit(semaphore)
+    permit = _EnginePermit(semaphore, stage_name)
     try:
         # The standalone scope must close/reset even if its first acquisition
         # is cancelled before or immediately after a semaphore grant.

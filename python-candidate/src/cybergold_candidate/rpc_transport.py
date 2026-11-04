@@ -10,6 +10,7 @@ from .quote_errors import RpcTimeout
 from .rpc_diagnostics import rpc_call
 from .telemetry import rpc_exchange
 from .route_observations import physical_rpc_exchange
+from .quote_flow import stage
 
 
 class _CancellationSafeSessionManager(HTTPSessionManager):
@@ -40,9 +41,10 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
         # the actual HTTP post instead, below shared-read coalescing. Session
         # cache cancellation before the post is not an HTTP attempt.
         kwargs.setdefault('timeout', ClientTimeout(DEFAULT_HTTP_TIMEOUT))
-        session = await self.async_cache_and_return_session(
-            endpoint_uri, request_timeout=kwargs['timeout'])
-        with physical_rpc_exchange(data):
+        with stage('rpc.session'):
+            session = await self.async_cache_and_return_session(
+                endpoint_uri, request_timeout=kwargs['timeout'])
+        with stage('rpc.http'), physical_rpc_exchange(data):
             response = await session.post(endpoint_uri, data=data, **kwargs)
             response.raise_for_status()
             return await response.read()

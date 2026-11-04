@@ -11,10 +11,10 @@ import httpx
 from cybergold_candidate.app import create_app
 from cybergold_candidate.economic_quotes import EconomicQuotes
 from cybergold_candidate.preview_errors import KnownPreviewError
-from cybergold_candidate.progressive_quotes import CanonicalPublication
+from cybergold_candidate.quote_publication import CanonicalPublication
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quoter.provenance import attach_origins
-from cybergold_candidate.quoter.reuse_estimate import CachedEconomicEstimates
+from cybergold_candidate.economic_estimate import CachedEconomicEstimates
 from cybergold_candidate.quoter.reuse_routes import funded_route_identity, neighbor_proposals
 from cybergold_candidate.quoter.store import EconomicQuoteStore
 from test_progressive_economic_quotes import ScriptedQuoter, economic_request

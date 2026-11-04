@@ -111,52 +111,32 @@ def arithmetic_estimate(sample, budget, *, expand=False):
         return None
 
 
-class CachedEconomicEstimates:
-    """DB-only scope/neighbor lookup followed by simple integer arithmetic."""
-    def __init__(self, store, core, *, observe_scope=None):
-        self.store, self.core, self.observe_scope = store, core, observe_scope
-
-    async def get_model(self, request):
-        packet = {'namespace': 'trade', 'intent': deepcopy(request), 'models': []}
-        try:
-            if self.observe_scope is not None:
-                await self.observe_scope()
-            counter = ZERO if request.get('native') else request['counterToken']
-            buy = request['side'] == 'buy'
-            economic = {'intent': 0 if buy else 1,
-                'inputs': [{'currency': counter if buy else self.core, 'amount': request['amount']}],
-                'outputCurrency': self.core if buy else counter}
-            scope = self.store.capture_scope(economic)
-            neighbors = await self.store.neighbors(economic, scope=scope)
-            for neighbor in neighbors:
-                quote = neighbor['quote']
-                sample = sample_for_quote(quote)
-                if neighbor['side'] not in ('lower', 'upper') or sample is None:
-                    continue
-                # A known path can provide a full-budget advisory estimate.
-                # Paid limitation/source-retention evidence clamps it; merely
-                # retargeting an original-funded replay to a larger request is
-                # not evidence that the route's capacity was exhausted.
-                limited = sample.get('inputLimitObserved') or (
-                    int(sample['referenceInput']) < int(quote['inputs'][0]['amount']))
-                estimate = arithmetic_estimate(sample, request['amount'],
-                    expand=neighbor['side'] == 'lower' and not limited)
-                if estimate is None:
-                    continue
-                if int(estimate['referenceInput']) == int(request['amount']):
-                    estimate['fullBudget'] = True
-                previous = packet.get('estimate')
-                rank = (int(estimate['amount']), -int(estimate['referenceInput']))
-                if previous is not None and rank <= (int(previous['amount']), -int(previous['referenceInput'])):
-                    continue
-                packet['estimate'] = {**estimate, 'context': deepcopy(quote['context']),
-                    **({'routeOrigins': deepcopy(quote['routeOrigins'])} if quote.get('routeOrigins') else {})}
-                if neighbor.get('identity') is not None:
-                    packet['estimate']['sourceIdentity'] = neighbor['identity']
-                if quote.get('request', {}).get('inputs'):
-                    packet['estimate']['sourceRequestedInput'] = quote['request']['inputs'][0]['amount']
-        except Exception:
-            # Optional SQL/accounting failure is an empty hint, not permission
-            # to hydrate inventory/models, read a head or call RPC/SDK.
-            pass
-        return packet
+def populate_estimate_packet(packet, request, neighbors):
+    """Rank cached arithmetic into the caller-owned packet, with no IO."""
+    for neighbor in neighbors:
+        quote = neighbor['quote']
+        sample = sample_for_quote(quote)
+        if neighbor['side'] not in ('lower', 'upper') or sample is None:
+            continue
+        # A known path can provide a full-budget advisory estimate.
+        # Paid limitation/source-retention evidence clamps it; merely
+        # retargeting an original-funded replay to a larger request is
+        # not evidence that the route's capacity was exhausted.
+        limited = sample.get('inputLimitObserved') or (
+            int(sample['referenceInput']) < int(quote['inputs'][0]['amount']))
+        estimate = arithmetic_estimate(sample, request['amount'],
+            expand=neighbor['side'] == 'lower' and not limited)
+        if estimate is None:
+            continue
+        if int(estimate['referenceInput']) == int(request['amount']):
+            estimate['fullBudget'] = True
+        previous = packet.get('estimate')
+        rank = (int(estimate['amount']), -int(estimate['referenceInput']))
+        if previous is not None and rank <= (int(previous['amount']), -int(previous['referenceInput'])):
+            continue
+        packet['estimate'] = {**estimate, 'context': deepcopy(quote['context']),
+            **({'routeOrigins': deepcopy(quote['routeOrigins'])} if quote.get('routeOrigins') else {})}
+        if neighbor.get('identity') is not None:
+            packet['estimate']['sourceIdentity'] = neighbor['identity']
+        if quote.get('request', {}).get('inputs'):
+            packet['estimate']['sourceRequestedInput'] = quote['request']['inputs'][0]['amount']

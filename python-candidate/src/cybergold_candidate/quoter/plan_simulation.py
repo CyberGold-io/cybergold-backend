@@ -5,45 +5,20 @@ overridden. Latest observations deliberately make no canonical-block claim;
 transaction preparation performs a fresh latest call with accepted bounds.
 """
 from copy import deepcopy
-from contextlib import asynccontextmanager
-from contextvars import ContextVar
-import json
 
 from eth_utils.abi import collapse_if_tuple
 from web3 import Web3
 
-from ..exact_input_plan import compile_plan
-from ..helpers_execution import ABI, argument
-from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
+from ..helpers_execution import ABI
+from ..market_fee import get_market_fee_rate, quoted_fee
 from ..preview_errors import preview_error
 from ..quote_errors import rpc_failure
 from ..recovery_rpc import abi_value
-from ..shared_reads import SharedReads
-from ..route_work_slots import engine_work
-from ..routing_encoding import ZERO
-from .simulation_funding import funding_overrides, SIMULATION_SENDER
+from ..quote_flow import stage
+from .plan_call import METHOD, compile_call
+from .plan_transport import execute_plan_call
 
 
-METHOD = next(row for row in ABI if row.get('name') == 'executeExactInput')
-EMPTY_PERMIT = {'value': 0, 'deadline': 0, 'v': 0, 'r': '0x'+'00'*32, 's': '0x'+'00'*32}
-_reads = ContextVar('completed_plan_simulations', default=None)
-
-
-@asynccontextmanager
-async def simulation_scope():
-    """Reuse identical completed observations only within this one search."""
-    reads = SharedReads()
-    token = _reads.set(reads)
-    try:
-        yield
-    finally:
-        await reads.close()
-        _reads.reset(token)
-
-
-def funding_bundle(inputs):
-    return {'authorizations': [{'kind': 0, 'permit': EMPTY_PERMIT} for _ in inputs],
-            'permit2': {'permit': {'permitted': [], 'nonce': 0, 'deadline': 0}, 'signature': '0x'}}
 
 
 def wire(value):
@@ -54,43 +29,8 @@ def wire(value):
     return str(value) if isinstance(value, int) else value
 
 
-def executable_body(body, accepted_core=None):
-    """Encode existing Core identities and route bounds without a second price."""
-    body = deepcopy(body)
-    supplied = iter(accepted_core) if accepted_core is not None else None
-    def visit(node):
-        if isinstance(node, list):
-            for row in node:
-                visit(row)
-        elif isinstance(node, dict):
-            if 'expectedOutputs' in node:
-                node['expectedOutputs'] = [deepcopy(next(supplied)) if supplied is not None else
-                    {**{key: row[key] for key in ('kind', 'token', 'id')}, 'minimumAmount': '0'}
-                    for row in node['expectedOutputs']]
-            if 'inputCurrency' in node and 'outputCurrency' in node and 'routes' in node:
-                node['minimumOutput'] = '0'
-            for key, value in node.items():
-                if key != 'expectedOutputs':
-                    visit(value)
-    visit(body)
-    return body
 
 
-def neutralize_buy_fees(request, body, chain):
-    """Buy fees are output arithmetic; sell fees determine actual AMM funding."""
-    if request['intent'] in (0, 1):
-        for branch in body['branches']:
-            if branch['kind'] == 1:
-                rate = get_market_fee_rate(chain, request['inputs'][0]['currency'],
-                                           request['outputCurrency'], 'exact-in')
-                branch['data']['feeCygld'] = str(routed_sell_budget(int(branch['amountIn']), rate)[1]
-                                               if request['intent'] == 1 else 0)
-            elif request['intent'] == 0:
-                for row in branch['data']['continuations']:
-                    row['feeCygld'] = '0'
-    elif request['intent'] == 2:
-        for row in body['continuations']:
-            row['feeCygld'] = '0'
 
 
 class StageProjection:
@@ -249,46 +189,18 @@ class HelpersPlanSimulation:
 
     async def __call__(self, request, selected, *, block=None, pricing=True, minimum=None,
                        accepted_core=None, recipient=None, candidate=None):
-        plan = deepcopy(selected)
-        if pricing:
-            neutralize_buy_fees(request, plan['body'], self.registry.chain)
-        if minimum is None:
-            # Core's share-only redemption accepts zero scalar output. The
-            # contract itself rejects zero minima when positive ERC20 output
-            # exists, and Market branches require a positive scalar minimum.
-            share_only = request['intent'] == 1 and all(branch['kind'] == 0 and all(
-                int(row['kind']) != 0 or int(row.get('amount', row.get('minimumAmount', '0'))) == 0
-                for row in branch['data']['expectedOutputs']) for branch in plan['body']['branches'])
-            minimum = 0 if share_only else 1
-        body = executable_body(plan['body'], accepted_core)
-        compiled = compile_plan({**request, 'recipient': recipient or SIMULATION_SENDER, 'deadline': '0'},
-                                body, minimum if request['intent'] != 3 else 0)
-        args = [argument(value, parameter) for value, parameter in zip(
-            (compiled, funding_bundle(request['inputs'])), METHOD['inputs'], strict=True)]
-        transaction = {'from': SIMULATION_SENDER, 'to': self.helpers,
-                       'data': self.contract.encode_abi('executeExactInput', args=args), 'gasPrice': '0x0'}
-        native = sum(int(row['amount']) for row in request['inputs'] if row['currency'].lower() == ZERO)
-        if native:
-            transaction['value'] = hex(native)
-        tag = {'blockHash': block['hash'], 'requireCanonical': True} if block is not None else 'latest'
+        with stage('plan.compile', kind='cpu'):
+            call = compile_call(request, selected, chain=self.registry.chain, helpers=self.helpers,
+                core=self.core, contract=self.contract, block=block, pricing=pricing,
+                minimum=minimum, accepted_core=accepted_core, recipient=recipient)
         rpc = self.registry.get_rpc()
-        params = [transaction, tag, funding_overrides(request['inputs'], self.helpers, self.core)]
-        async def execute():
-            if self.semaphore is None:
-                response = await rpc.w3.provider.make_request('eth_call', params)
-            else:
-                async with engine_work(self.semaphore):
-                    response = await rpc.w3.provider.make_request('eth_call', params)
-            return {**response, 'observedAt': self.now()}
-        reads = _reads.get() if block is None and pricing else None
-        counts = {'issued': 1, 'coalesced': 0, 'reused': 0}
-        if reads is None:
-            response = await execute()
-        else:
-            async def produce(_keys):
-                return [await execute()]
-            responses, counts = await reads.many([json.dumps(params, sort_keys=True)], produce, retain=True)
-            response = responses[0]
+        response, counts = await execute_plan_call(rpc, call.params, semaphore=self.semaphore,
+            now=self.now, shared=block is None and pricing)
+        with stage('observation.project', kind='cpu'):
+            return self.project(request, call.plan, response, counts, rpc=rpc,
+                tag=call.block_tag, block=block, pricing=pricing, candidate=candidate)
+
+    def project(self, request, plan, response, counts, *, rpc, tag, block, pricing, candidate):
         if 'error' in response:
             error = preview_error(response['error']) or rpc_failure(response['error'])
             data = response['error'].get('data')

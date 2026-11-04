@@ -25,6 +25,8 @@ from .quote_errors import QuoteFailure, rpc_failure
 from .recovery_rpc import RecoveryApiError, SnapshotChanged
 from .rpc_block_context import is_latest, rpc_block_parameter
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
+from .pool_snapshot import copy_pool_descriptor, copy_pool_snapshot, copy_pool_state
+from .quote_flow import stage
 
 ZERO = '0x'+'00'*20
 V2_FACTORY = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'
@@ -57,20 +59,6 @@ EVENTS = {signature.split('(')[0]: topic(signature) for signature in (
     'ProtocolFeeUpdated(bytes32,uint24)', 'SetFeeProtocol(uint8,uint8,uint8,uint8)')}
 V3_SWAP = topic('Swap(address,address,int256,int256,uint160,uint128,int24)')
 V4_SWAP = topic('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)')
-
-
-def copy_pool_snapshot(snapshot):
-    """Own canonical scalar coverage rows and deep-copy all pool metadata.
-
-    Bitmap/tick producers below and their persisted observations contain only
-    scalar row values. Lists and row dictionaries still belong to each caller.
-    """
-    coverage = ('bitmapWords', 'ticks')
-    result = deepcopy({key: value for key, value in snapshot.items() if key not in coverage})
-    for key in coverage:
-        if key in snapshot:
-            result[key] = [dict(row) for row in snapshot[key]]
-    return {key: result[key] for key in snapshot}
 
 
 def observation_storage_id(pool):
@@ -510,7 +498,7 @@ class PoolRegistry:
                     raise
                 except Exception:
                     pass  # Ordinary gap/reorg/read failure uses fresh getters.
-            state = deepcopy(pool)
+            state = copy_pool_descriptor(pool)
             if pool['protocol'] in ('v2', 'v3'):
                 if not state.get('address'):
                     if pool['protocol'] == 'v2':
@@ -561,12 +549,15 @@ class PoolRegistry:
         if local is not None:
             state = copy_pool_snapshot(local)
         elif observations is not None:
-            state = await observations.read(('pool-snapshot', self.chain, key), produce)
+            with stage('state.acquire'):
+                state = await observations.read(('pool-snapshot', self.chain, key), produce)
             observations.pool_states[search_pool_key(self.chain, state)] = copy_pool_snapshot(state)
         elif self.chain == 1 and old and old['context']['blockHash'] == block['hash']:
-            state = deepcopy(old)
+            state = copy_pool_state(old)
         else:
-            state = deepcopy(await self.pending.one(key, produce))
+            with stage('state.acquire'):
+                observed = await self.pending.one(key, produce)
+            state = copy_pool_state(observed)
         state['id'] = pool['id']
         # A shared acquisition stays pure. Each caller owns publication after
         # its accepted boundary, without duplicating event advancement/getters.

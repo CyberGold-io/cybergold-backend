@@ -9,6 +9,7 @@ from .exact_input_plan import ExactAssetAmount, compile_plan
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS, floor
 from .quoter.types import EconomicQuote
 from .safe_transaction import Address, UInt
+from .quote_flow import stage
 
 
 class ExecutionBounds(BaseModel):
@@ -92,34 +93,38 @@ class TransactionPreparation:
     async def prepare(self, payload):
         request = TransactionPreparationRequest.model_validate(payload).model_dump(exclude_none=True)
         if self.observe_scope is not None:
-            await self.observe_scope()
-        selected = request['quote']
-        # Preserve the selected deployment binding. Wallet batches/approvals
-        # captured by the caller must never be silently retargeted to another
-        # Helpers or routing adapter during preparation.
-        if selected['deployment']['helpers'].lower() != self.quoter.helpers.lower():
-            raise InvalidPreview('Selected Helpers deployment changed.')
-        if selected['deployment']['adapter'].lower() != self.quoter.adapter.lower():
-            raise InvalidPreview('Selected routing adapter changed.')
-        accepted = request.get('acceptedBounds', {})
-        # Bind to the displayed observation before current-state replay. Repricing
-        # cannot lower these quantities or enlarge the accepted input vector.
-        minimum = accepted.get('minimumOutput', str(floor(int(selected['quotedOutput']), request['slippageBps'])))
-        expected = (accepted['expectedCoreOutputs'] if 'expectedCoreOutputs' in accepted
-                    else core_bounds(selected, request['slippageBps']))
-        maxima = accepted.get('inputs', selected['inputs'])
-        if len(maxima) != len(selected['inputs']):
-            raise InvalidPreview('Accepted input currencies changed.')
-        for actual, maximum in zip(selected['inputs'], maxima, strict=True):
-            if actual['currency'].lower() != maximum['currency'].lower():
+            with stage('preparation.scope'):
+                await self.observe_scope()
+        with stage('preparation.bounds', kind='cpu'):
+            selected = request['quote']
+            # Preserve the selected deployment binding. Wallet batches/approvals
+            # captured by the caller must never be silently retargeted to another
+            # Helpers or routing adapter during preparation.
+            if selected['deployment']['helpers'].lower() != self.quoter.helpers.lower():
+                raise InvalidPreview('Selected Helpers deployment changed.')
+            if selected['deployment']['adapter'].lower() != self.quoter.adapter.lower():
+                raise InvalidPreview('Selected routing adapter changed.')
+            accepted = request.get('acceptedBounds', {})
+            # Bind to the displayed observation before current-state replay. Repricing
+            # cannot lower these quantities or enlarge the accepted input vector.
+            minimum = accepted.get('minimumOutput', str(floor(int(selected['quotedOutput']), request['slippageBps'])))
+            expected = (accepted['expectedCoreOutputs'] if 'expectedCoreOutputs' in accepted
+                        else core_bounds(selected, request['slippageBps']))
+            maxima = accepted.get('inputs', selected['inputs'])
+            if len(maxima) != len(selected['inputs']):
                 raise InvalidPreview('Accepted input currencies changed.')
-            if int(actual['amount']) > int(maximum['amount']):
-                raise InvalidPreview('Accepted input maximum cannot be met.')
-        economic_request = {**selected['request'], 'inputs': deepcopy(selected['inputs'])}
-        value = await self.quoter.evaluate_selected(economic_request, selected['plan'],
-            recipient=request['recipient'], minimum=int(minimum), accepted_core=expected)
-        result = compile_execution(value, recipient=request['recipient'], deadline=int(self.now()) + 600,
-                                   slippage=request['slippageBps'], minimum=minimum, accepted_core=expected)
+            for actual, maximum in zip(selected['inputs'], maxima, strict=True):
+                if actual['currency'].lower() != maximum['currency'].lower():
+                    raise InvalidPreview('Accepted input currencies changed.')
+                if int(actual['amount']) > int(maximum['amount']):
+                    raise InvalidPreview('Accepted input maximum cannot be met.')
+            economic_request = {**selected['request'], 'inputs': deepcopy(selected['inputs'])}
+        with stage('preparation.replay'):
+            value = await self.quoter.evaluate_selected(economic_request, selected['plan'],
+                recipient=request['recipient'], minimum=int(minimum), accepted_core=expected)
+        with stage('preparation.compile', kind='cpu'):
+            result = compile_execution(value, recipient=request['recipient'], deadline=int(self.now()) + 600,
+                                       slippage=request['slippageBps'], minimum=minimum, accepted_core=expected)
         result['economicQuote'] = value
         result['sender'] = request['sender']
         return result

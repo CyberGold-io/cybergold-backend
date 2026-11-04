@@ -12,7 +12,8 @@ from cybergold_candidate.helpers_execution import ABI
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quoter.amm import PartialPath
 from cybergold_candidate.quoter.contracts import capture_paths
-from cybergold_candidate.quoter.plan_simulation import executable_body, HelpersPlanSimulation
+from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation
+from cybergold_candidate.quoter.plan_call import executable_body
 from cybergold_candidate.quoter.reuse_routes import proposal_identity
 from cybergold_candidate.quoter.route_tools import CandidateFeed, RouteTool
 from quoter_fixture import service, synthetic_pool

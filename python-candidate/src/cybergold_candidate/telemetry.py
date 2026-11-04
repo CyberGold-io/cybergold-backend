@@ -1,6 +1,8 @@
 """Standard logging and Prometheus client, preserving bounded process labels."""
 import json
 import logging
+import asyncio
+import math
 import os
 import re
 import time
@@ -9,8 +11,10 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 from prometheus_client import CollectorRegistry, Counter, Histogram, Gauge, generate_latest
+from .quote_flow import Flow, flow_scope, stage, STAGES
 
 PATHS={
+    '/api/protocol/config',
     '/api/economic-quotes', '/api/economic-quotes/stream', '/api/tx-preparations', '/api/economic-estimates',
     '/api/quotes/universal-exact-input',
     '/api/transaction/revert',
@@ -51,6 +55,11 @@ PATHS={
     '/api/quote-pool-cache','/api/safe','/api/safe/events','/api/faucet','/api/diagnostics',
     '/api/internal/onchain-indexer/reconcile','/api/internal/onchain-indexer/fork-generation',
 }
+FLOW_PATHS = frozenset(path for path in PATHS if path.startswith('/api/quotes/')) | frozenset({
+    '/api/economic-quotes', '/api/economic-quotes/stream', '/api/economic-estimates',
+    '/api/tx-preparations', '/api/protocol/config',
+})
+FLOW_KINDS = frozenset({'request', 'search', 'cache-write', 'configuration', 'other'})
 
 
 def observe(action):
@@ -162,6 +171,26 @@ class Metrics:
         self.quoter_first_plan=histogram('quoter_first_whole_plan_seconds',
             'Producer time to first complete economic plan for new searches; stored lookups excluded.',
             ('operation',),[.01,.05,.1,.25,.5,1,2.5,5,10,30,120])
+        flow_labels=('operation','flow_kind','stage','kind')
+        self.flow_stage_calls=counter('quote_flow_stage_calls_total',
+            'Observed stage calls by bounded stage and outcome; shared owners retain their own flow.',
+            (*flow_labels,'outcome'))
+        self.flow_stage_wall=counter('quote_flow_stage_wall_seconds_total',
+            'Summed inclusive stage wall time; concurrent and nested stage totals overlap.',flow_labels)
+        self.flow_stage_cpu=counter('quote_flow_stage_cpu_seconds_total',
+            'Synchronous stage thread CPU only; no process CPU attribution across awaits.',flow_labels)
+        self.flow_queue_markers=counter('quote_flow_queue_ready_markers_total',
+            'Queue stages with an explicitly observed ready/grant marker; zero is unmeasured coverage.',flow_labels)
+        self.flow_queue_ready=counter('quote_flow_queue_ready_wait_seconds_total',
+            'Queue request to explicit ready/grant marker; absent without an observed marker.',flow_labels)
+        self.flow_queue_resume=counter('quote_flow_queue_resume_seconds_total',
+            'Explicit queue ready/grant marker to waiter resume; includes event-loop scheduling delay.',flow_labels)
+        self.flow_duration=histogram('quote_flow_duration_seconds',
+            'Observed flow lifetime; background owner and HTTP request clocks remain separate.',
+            ('operation','flow_kind','outcome'),[.001,.01,.05,.1,.25,.5,1,2.5,5,10,30,120])
+        self.event_loop_lag=histogram('event_loop_lag_seconds',
+            'Independent process event-loop timer ready-to-resumed delay; not request or CPU time.',
+            (),[.001,.005,.01,.025,.05,.1,.25,.5,1,2.5,5,10,30])
         self.cache_requests=counter('market_cache_requests_total','Market cache requests: hit, miss (including expiry), or coalesced in-flight refresh.',('feed','result'))
         self.shared_market_requests=counter('market_shared_cache_requests_total',
             'Optional Valkey market reads/writes; hits preserve acquisition expiry.',('feed','operation','result'))
@@ -176,6 +205,45 @@ class Metrics:
         # Register unknown unlabelled gauges only after an actual observation.
         # Prometheus client's native default zero would invent initial progress.
         self.indexer_lag=None;self.indexer_observed=None;self.indexer_reconciled=None
+
+    def observe_quote_flow(self, record):
+        def number(value):
+            return value if type(value) in (int,float) and math.isfinite(value) and value >= 0 else None
+        operation=record.get('operation')
+        operation=operation if operation in PATHS else 'unmatched'
+        flow_kind=record.get('flowKind')
+        flow_kind=flow_kind if flow_kind in FLOW_KINDS else 'other'
+        for row in record.get('stages',[]):
+            if not isinstance(row,dict):
+                continue
+            name=row.get('stage')
+            name=name if name in STAGES else 'other'
+            kind=row.get('kind')
+            kind=kind if kind in ('await','cpu','queue') else 'other'
+            labels=(operation,flow_kind,name,kind)
+            for outcome in ('started','completed','failed','cancelled'):
+                value=number(row.get(outcome))
+                if value is not None:
+                    self.flow_stage_calls.labels(*labels,outcome).inc(value)
+            measurements=[(self.flow_stage_wall,'summedWallMs')]
+            if kind=='cpu':
+                measurements.append((self.flow_stage_cpu,'summedCpuMs'))
+            elif kind=='queue':
+                markers=number(row.get('readyMarkers'))
+                if markers is not None:
+                    self.flow_queue_markers.labels(*labels).inc(markers)
+                if markers is not None and markers>0:
+                    measurements.extend([(self.flow_queue_ready,'summedReadyWaitMs'),
+                                         (self.flow_queue_resume,'summedResumeDelayMs')])
+            for metric,key in measurements:
+                value=number(row.get(key))
+                if value is not None:
+                    metric.labels(*labels).inc(value/1000)
+        elapsed=number(record.get('elapsedMs'))
+        if elapsed is not None:
+            outcome=record.get('outcome')
+            outcome=outcome if outcome in ('succeeded','failed','cancelled') else 'other'
+            self.flow_duration.labels(operation,flow_kind,outcome).observe(elapsed/1000)
 
     def _set(self,attribute,suffix,help,value):
         metric=getattr(self,attribute)
@@ -220,6 +288,12 @@ class TelemetryMiddleware:
             scope['state']['attempt_id']=attempt_id
         else:attempt_id=None
         started=time.monotonic();status=None
+        flow=None
+        if operation in FLOW_PATHS:
+            def create_flow():
+                nonlocal flow
+                flow=Flow(operation,request_id=request_id,attempt_id=attempt_id,metrics=self.metrics)
+            observe(create_flow)
         async def forward(message):
             nonlocal status
             if message['type']=='http.response.start':
@@ -229,22 +303,34 @@ class TelemetryMiddleware:
                     +[(b'x-cybergold-request-id',request_id.encode())]}
                 if self.backend_revision:
                     message['headers'].append((b'x-cybergold-backend-revision',self.backend_revision.encode()))
-            await send(message)
-        try:await self.app(scope,receive,forward)
-        except Exception:
-            status=500
-            observe(lambda:logging.getLogger('cybergold.candidate').error(json.dumps({
-                'msg':'unhandled route failure','operation':operation,'requestId':request_id,'component':self.component})))
-            raise
-        finally:
-            if status is not None:
-                route_path=getattr(scope.get('route'),'path',None)
-                operation=route_path if route_path in PATHS else 'unmatched'
-                elapsed=time.monotonic()-started
-                observe(lambda:self.metrics.http_requests.labels(operation,method,str(status)).inc())
-                observe(lambda:self.metrics.http_duration.labels(operation,method).observe(elapsed))
-                record={'msg':'request completed','operation':operation,'method':method,'statusCode':status,
-                    'durationMs':elapsed*1000,'requestId':request_id,'component':self.component}
-                if self.release is not None:record['release']=self.release
-                if attempt_id:record['attemptId']=attempt_id
-                observe(lambda:logging.getLogger('cybergold.candidate').info(json.dumps(record)))
+                if flow is not None:
+                    observe(lambda:message['headers'].append((b'server-timing',flow.server_timing().encode('ascii'))))
+            with stage('http.send'):
+                await send(message)
+        outcome='failed'
+        with flow_scope(flow):
+            try:
+                await self.app(scope,receive,forward)
+                outcome='succeeded' if status is not None and status < 400 else 'failed'
+            except asyncio.CancelledError:
+                outcome='cancelled'
+                raise
+            except Exception:
+                status=500
+                observe(lambda:logging.getLogger('cybergold.candidate').error(json.dumps({
+                    'msg':'unhandled route failure','operation':operation,'requestId':request_id,'component':self.component})))
+                raise
+            finally:
+                if status is not None:
+                    route_path=getattr(scope.get('route'),'path',None)
+                    operation=route_path if route_path in PATHS else 'unmatched'
+                    elapsed=time.monotonic()-started
+                    observe(lambda:self.metrics.http_requests.labels(operation,method,str(status)).inc())
+                    observe(lambda:self.metrics.http_duration.labels(operation,method).observe(elapsed))
+                    record={'msg':'request completed','operation':operation,'method':method,'statusCode':status,
+                        'durationMs':elapsed*1000,'requestId':request_id,'component':self.component}
+                    if self.release is not None:record['release']=self.release
+                    if attempt_id:record['attemptId']=attempt_id
+                    observe(lambda:logging.getLogger('cybergold.candidate').info(json.dumps(record)))
+                if flow is not None:
+                    observe(lambda:flow.finish(outcome))

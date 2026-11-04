@@ -202,11 +202,11 @@ class SchedulingTrace:
                 trace.emit('whole-plan-exit', share=share, order=order, outcome=type(error).__name__)
                 raise
 
-        async def acquire(slots):
+        async def acquire(slots, span=None):
             if slots is trace.slots:
                 trace.emit('engine-permit-wait', free=slots._value,
                     ordinaryQueued=len(slots._ordinary), priorityQueued=len(slots._priority))
-            result = await old_acquire(slots)
+            result = await old_acquire(slots, span)
             if slots is trace.slots:
                 trace.emit('engine-permit-acquired', free=slots._value)
             return result

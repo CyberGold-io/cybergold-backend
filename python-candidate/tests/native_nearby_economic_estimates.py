@@ -14,7 +14,7 @@ from psycopg import sql
 from cybergold_candidate.database import Database
 from cybergold_candidate.fork_recovery import ANCHOR_KEYS, read_generation, set_state
 from cybergold_candidate.protocol_config import ProtocolConfiguration
-from cybergold_candidate.quoter.reuse_estimate import CachedEconomicEstimates
+from cybergold_candidate.economic_estimate import CachedEconomicEstimates
 from cybergold_candidate.quoter.store import EconomicQuoteStore
 from cybergold_candidate.uniswap_state import PoolRegistry, UniswapStore
 from test_economic_quote_store import fixture, CORE, USDT, HELPERS

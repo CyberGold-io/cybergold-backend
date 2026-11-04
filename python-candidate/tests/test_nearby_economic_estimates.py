@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock
 import httpx
 
 from cybergold_candidate.app import create_app
-from cybergold_candidate.quoter.reuse_estimate import (CachedEconomicEstimates, arithmetic_estimate,
+from cybergold_candidate.economic_estimate import CachedEconomicEstimates
+from cybergold_candidate.quoter.reuse_estimate import (arithmetic_estimate,
                                                        attach_reuse_sample, sample_for_quote)
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.route_search import WETH

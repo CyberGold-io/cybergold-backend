@@ -28,6 +28,7 @@ from .uniswap_v4 import tick_prefetch_scope
 from .rpc_block_context import is_latest
 from .wallet_balances import TOKENS
 from .uniswap_api_queue import UniswapApiQueue
+from .quote_flow import stage
 
 _quote_snapshots = ContextVar('route_quote_snapshots', default=None)
 
@@ -68,19 +69,20 @@ class RouteQuoteEngine:
 
     def enrich_branches(self, branches):
         """Attach observed metadata without changing execution identity."""
-        registry = getattr(self, 'registry', None)
-        known = {pool_identity(pool): pool for pool in getattr(registry, 'inventory', {}).values()}
-        result = deepcopy(branches)
-        for branch in result:
-            for hop in branch['hops']:
-                pool = known.get(pool_identity(hop['pool']))
-                if pool is not None:
-                    hop['pool'] = deepcopy(pool)
-                elif hop['pool']['protocol'] == 'v3':
-                    # Absent inventory still has one factory execution identity;
-                    # optional caller/catalog IDs cannot duplicate SDK state.
-                    hop['pool']['id'] = ':'.join(map(str, pool_identity(hop['pool'])))
-        return result
+        with stage('topology.enrich', kind='cpu'):
+            registry = getattr(self, 'registry', None)
+            known = {pool_identity(pool): pool for pool in getattr(registry, 'inventory', {}).values()}
+            result = deepcopy(branches)
+            for branch in result:
+                for hop in branch['hops']:
+                    pool = known.get(pool_identity(hop['pool']))
+                    if pool is not None:
+                        hop['pool'] = deepcopy(pool)
+                    elif hop['pool']['protocol'] == 'v3':
+                        # Absent inventory still has one factory execution identity;
+                        # optional caller/catalog IDs cannot duplicate SDK state.
+                        hop['pool']['id'] = ':'.join(map(str, pool_identity(hop['pool'])))
+            return result
 
     def baseline(self, state, zero_for_one):
         if state['protocol'] == 'v2':

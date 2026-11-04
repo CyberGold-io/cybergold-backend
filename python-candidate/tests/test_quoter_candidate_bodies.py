@@ -7,7 +7,7 @@ from cybergold_candidate.exact_input_plan import compile_plan, CORE_BUY, CORE_SE
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.evaluate import evaluate_candidate
 from cybergold_candidate.quoter.funding import cached_core_funding, measured_funding_proposal
-from cybergold_candidate.quoter.plan_simulation import executable_body
+from cybergold_candidate.quoter.plan_call import executable_body
 from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
 from cybergold_candidate.routing_encoding import ZERO
 from test_quoter_plan_simulation import Provider, Rpc, encoded, measured, stage, CODEC

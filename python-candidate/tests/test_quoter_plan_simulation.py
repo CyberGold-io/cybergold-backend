@@ -13,7 +13,8 @@ from cybergold_candidate.exact_input_plan import CORE_BUY, CORE_SELL, MARKET, SC
 from cybergold_candidate.helpers_execution import ABI
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.amm_adapter import CyberGoldAmmAdapter
-from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, simulation_scope
+from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation
+from cybergold_candidate.quoter.plan_transport import simulation_scope
 from cybergold_candidate.quoter.provenance import attach_origins
 from cybergold_candidate.quoter.simulation_funding import SIMULATION_SENDER
 from cybergold_candidate.quoter.types import EconomicQuote
