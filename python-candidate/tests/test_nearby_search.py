@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from cybergold_candidate.quoter import Quoter
+from cybergold_candidate.quoter.path_families import quote_path_family
 from cybergold_candidate.quoter.search import alongside_bootstrap
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.route_work_slots import PricingSlots, bootstrap_priority, engine_work, required_state_wait
@@ -38,7 +39,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 q.candidate = candidate
                 recovery = AsyncMock(return_value=[proposal])
                 options = {'seed': saved} if source == 'exact' else {
-                    'neighbors': AsyncMock(return_value={'lower': {'quote': saved}})}
+                    'neighbors': AsyncMock(return_value=[{'family': quote_path_family(saved), 'side': 'lower', **{'quote': saved}}])}
                 with patch('cybergold_candidate.quoter.capacity_recovery.recover_selected', recovery):
                     async with asyncio.timeout(2):
                         result = await Quoter.get(q, edited, **options)
@@ -176,23 +177,18 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(result['routeOrigins']['discoveryProviders'], ['uniroute-local', 'uniswap-alpharouter'])
                 self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_lower_neighbor_full_budget_starts_while_fitting_replay_is_blocked(self):
+    async def test_lower_neighbor_starts_one_requested_budget_replay_without_repaying_old_funding(self):
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         q, saved, edited, expanded = await self.budget_replay_fixture()
         original = q.candidate
-        full_started, fitting_started, fitting_drained = (asyncio.Event() for _ in range(3))
+        full_started, fitting_started = asyncio.Event(), asyncio.Event()
         async def candidate(value, *args, **options):
             if (options.get('selected') or {}).get('_budget_replay_fixture'):
                 if value['inputs'][0]['amount'] == '50005':
                     full_started.set()
-                    await fitting_started.wait()
                     return await original(value, *args, **options)
                 fitting_started.set()
-                try:
-                    await full_started.wait()
-                    await asyncio.Event().wait()
-                finally:
-                    fitting_drained.set()
+                await asyncio.Event().wait()
             await full_started.wait()
             result = await original(value, *args, **options)
             result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
@@ -203,21 +199,21 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 row['plan']['_budget_replay_fixture'] = True
             return rows
         async def neighbors():
-            return {'lower': {'identity': 'fitting-native-core', 'quote': saved}}
+            return [{'family': quote_path_family(saved), 'side': 'lower',
+                     'identity': 'fitting-native-core', 'quote': saved}]
         q.candidate = candidate
         with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
             async with asyncio.timeout(2):
                 result = await Quoter.get(q, edited, neighbors=neighbors)
         self.assertEqual(result['inputs'], edited['inputs'])
         self.assertEqual(result['quotedOutput'], expanded['quotedOutput'])
-        self.assertTrue(fitting_drained.is_set())
+        self.assertFalse(fitting_started.is_set())
         attempts = result['metrics']['nearbySearch']['sources'][0]['attempts']
-        self.assertEqual({row['funding'] for row in attempts}, {'10001', '50005'})
-        self.assertTrue(next(row['completed'] for row in attempts if row['funding'] == '50005'))
+        self.assertEqual([row['funding'] for row in attempts], ['50005'])
+        self.assertTrue(attempts[0]['completed'])
         self.assertEqual(q.engine.semaphore._value, 8)
 
-    async def test_fitting_plan_survives_a_parallel_upscale_that_exhausts_selection(self):
-        from cybergold_candidate.quote_budget import current_budget
+    async def test_fitting_fallback_is_priced_only_after_requested_budget_failure(self):
         from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
         for unavailable in (False, True):
             with self.subTest(fitting_replay_unavailable=unavailable):
@@ -231,51 +227,38 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                     return await sdk(resolved, *args, **kwargs)
                 q.engine.quote_sdk_branches = acquire
                 saved = await q.quote(request())
-                saved['searchCoverage']['selectedPhase'] = 'capacity-limited'  # Pre-field canonical observation.
+                saved['searchCoverage']['selectedPhase'] = 'capacity-limited'
                 expected = saved['quotedOutput']
                 saved['quotedOutput'] = '999999999999999999999999'
                 edited = {**request(), 'inputs': [{**request()['inputs'][0], 'amount': '100010'}]}
-                original = q.candidate
-                qualified = asyncio.Event()
-                fitting_settled = asyncio.Event()
-                async def update(frame):
-                    if frame['type'] == 'qualified':
-                        qualified.set()
-                        if frame['value']['quotedOutput'] == expected:
-                            fitting_settled.set()
+                original, order = q.candidate, []
+                full_started = asyncio.Event()
                 async def candidate(value, *args, **options):
                     if (options.get('selected') or {}).get('_fitting_fixture'):
                         if value['inputs'][0]['amount'] == '100010':
-                            # Both calls start independently. Let the fitting
-                            # attempt settle before ending the window; a slow
-                            # expanded call still cannot erase that fallback.
-                            await fitting_settled.wait()
-                            await qualified.wait()
-                            current_budget().finish_selection('best-initial')
-                            return await current_budget().discovery(asyncio.sleep(0))
-                        try:
-                            if unavailable:
-                                raise QuoteFailure('quote-no-route')
-                            return await original(value, *args, **options)
-                        finally:
-                            if unavailable:
-                                fitting_settled.set()
+                            order.append('full-budget'); full_started.set()
+                            raise QuoteFailure('quote-no-route')
+                        order.append('fitting')
+                        if unavailable:
+                            raise QuoteFailure('quote-no-route')
+                        return await original(value, *args, **options)
+                    await full_started.wait()
                     result = await original(value, *args, **options)
-                    # Model an ordinary low-output candidate at the producer
-                    # boundary; this control tests scheduling, not AMM pricing.
-                    result['quotedOutput'] = '1'
-                    result['estimatedRecipientOutputs'][0]['amount'] = '1'
+                    result['quotedOutput'] = result['estimatedRecipientOutputs'][0]['amount'] = '1'
                     return result
                 q.candidate = candidate
                 async def neighbors():
-                    return {'lower': {'identity': 'best-fitting', 'quote': saved}}
+                    return [{'family': quote_path_family(saved), 'side': 'lower',
+                             'identity': 'best-fitting', 'quote': saved}]
                 def marked(*args):
                     rows = neighbor_proposals(*args)
                     for row in rows:
                         row['plan']['_fitting_fixture'] = True
                     return rows
                 with patch('cybergold_candidate.quoter.search.neighbor_proposals', marked):
-                    result = await Quoter.get(q, edited, update, neighbors=neighbors)
+                    async with asyncio.timeout(2):
+                        result = await Quoter.get(q, edited, neighbors=neighbors)
+                self.assertEqual(order, ['full-budget', 'fitting'])
                 self.assertEqual(result['request']['inputs'], edited['inputs'])
                 self.assertEqual(result['quotedOutput'], '1' if unavailable else expected)
                 self.assertEqual(result['inputs'][0]['amount'], '100010' if unavailable else '10001')
@@ -290,7 +273,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 async def neighbors():
                     if source == 'failed':
                         raise OSError('optional database unavailable')
-                    return {} if source == 'absent' else {'upper': {'quote': {}}}
+                    return [] if source == 'absent' else [{'family': quote_path_family({}), 'side': 'upper', **{'quote': {}}}]
                 async def update(frame):
                     frames.append(deepcopy(frame))
                 value = await q.quote(request(), update, neighbors=neighbors)
@@ -314,7 +297,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             return await candidate(*args, **kwargs)
         q.candidate = measured
         async def neighbors():
-            return {'upper': {'identity': 'upper', 'quote': saved}}
+            return [{'family': quote_path_family(saved), 'side': 'upper', **{'identity': 'upper', 'quote': saved}}]
         frames = []
         async def update(frame):
             frames.append(deepcopy(frame))
@@ -372,6 +355,19 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(int(value['quotedOutput']), 0)
             self.assertEqual(q.engine.semaphore._value, 8)
 
+    async def test_independent_optional_cancellation_preserves_no_route_instead_of_cancelling_caller(self):
+        q = Quotes(Engine())
+        q.amm.async_family_offers = AsyncMock(return_value=[])
+        async def no_route(*_, **__):
+            raise QuoteFailure('quote-no-route')
+        async def stopped_lookup():
+            raise asyncio.CancelledError('optional lookup stopped itself')
+        q.candidate = no_route
+        with self.assertRaises(QuoteFailure) as caught:
+            await q.quote(request(), neighbors=stopped_lookup)
+        self.assertEqual(caught.exception.code, 'quote-no-route')
+        self.assertEqual(asyncio.current_task().cancelling(), 0)
+
     async def test_lookup_overlaps_sdk_preparation_and_cancellation_drains_both(self):
         q = Quotes(Engine())
         lookup, preparing, lookup_drained, preparation_drained = (asyncio.Event() for _ in range(4))
@@ -407,7 +403,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
         q.engine.block.assert_not_awaited()
         self.assertFalse(any(row[0] == 'canonical' for row in q.engine.calls))
 
-    async def test_upper_and_lower_are_fresh_full_candidates_plus_fitting_funding(self):
+    async def test_equivalent_lower_upper_routes_share_one_requested_budget_replay(self):
         q = Quotes(Engine())
         # The small independent formula engine normally embeds its reserves
         # in route refs. Resolve stripped blueprints from the current registry,
@@ -435,28 +431,27 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.03)
         q.candidate = measured; q.discover = delayed_discovery
         async def neighbors():
-            return {'lower': {'identity': 'lower', 'quote': lower},
-                    'upper': {'identity': 'upper', 'quote': upper}}
+            return [{'family': quote_path_family(lower), 'side': 'lower', **{'identity': 'lower', 'quote': lower}}, {'family': quote_path_family(upper), 'side': 'upper', **{'identity': 'upper', 'quote': upper}}]
         value = await q.quote(edited, neighbors=neighbors)
         funded = {int(rows[0]['amount']) for rows in evaluations}
-        self.assertEqual(funded, {10001, 20002})
+        self.assertEqual(funded, {20002})
         self.assertEqual(value['request']['inputs'], edited['inputs'])
         self.assertNotEqual(value['quotedOutput'], upper['quotedOutput'])
         self.assertEqual(sum(int(row['amountIn']) for row in value['plan']['allocations']),
                          int(value['inputs'][0]['amount']))
         metrics = value['metrics']['nearbySearch']
-        # Both optional offers remain observable, including retry opportunity
-        # after a failure. The real Helpers simulator owns physical coalescing.
-        self.assertEqual(metrics['starts'], 4)
-        self.assertEqual(metrics['completed'], 4)
-        self.assertEqual({row['side'] for row in metrics['sources']}, {'upper', 'lower'})
+        # Equivalent lower/upper topology is one initial Helpers proposal.
+        self.assertEqual(metrics['starts'], 1)
+        self.assertEqual(metrics['completed'], 1)
+        self.assertEqual(metrics['sources'][0]['side'], 'lower')
+        self.assertEqual(metrics['sources'][0]['aliases'][0]['side'], 'upper')
         self.assertIsNone(value['metrics']['optionalSearch']['randomSeed'])
         self.assertTrue(all('elapsedMs' in row for source in metrics['sources'] for row in source['attempts']))
 
     async def test_unusable_blueprint_does_not_remove_an_ordinary_winner(self):
         q = Quotes(Engine())
         async def neighbors():
-            return {'upper': {'identity': 'old', 'quote': {}}}
+            return [{'family': quote_path_family({}), 'side': 'upper', **{'identity': 'old', 'quote': {}}}]
         value = await q.quote(request(), neighbors=neighbors)
         self.assertGreater(int(value['quotedOutput']), 0)
         self.assertNotEqual(value['searchCoverage']['selectedPhase'], 'nearby-upper')
@@ -468,7 +463,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 raise QuoteFailure('quote-no-route')
             q.candidate = no_route
             async def neighbors():
-                return {'upper': {'identity': 'legacy', 'quote': saved}}
+                return [{'family': quote_path_family(saved), 'side': 'upper', **{'identity': 'legacy', 'quote': saved}}]
             with self.assertRaises(QuoteFailure) as caught:
                 await q.quote(request(), neighbors=neighbors)
             self.assertEqual(caught.exception.code, 'quote-no-route')
@@ -481,7 +476,7 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
             raise QuoteFailure('rpc-rate-limit')
         q.candidate = no_route
         async def neighbors():
-            return {'upper': {'identity': 'legacy', 'quote': saved}}
+            return [{'family': quote_path_family(saved), 'side': 'upper', **{'identity': 'legacy', 'quote': saved}}]
         with self.assertRaises(QuoteFailure) as caught:
             await q.quote(request(), neighbors=neighbors)
         self.assertEqual(caught.exception.code, 'rpc-rate-limit')

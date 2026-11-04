@@ -61,6 +61,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
 python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_core_market_segments.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_api_queue.py
 python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniroute_routes.py
@@ -74,6 +75,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_reuse_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_nearby_search.py
+python-candidate/.venv/bin/python python-candidate/tests/test_path_family_search.py
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identity.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py

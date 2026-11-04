@@ -11,6 +11,7 @@ import time
 
 from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import engine_work
+from ..search_observations import current_search_observations
 from .bootstrap import ProviderUnavailable
 
 
@@ -126,7 +127,7 @@ class AlphaRoutes:
         self.quote_callbacks += 1
         started = time.perf_counter()
         try:
-            result = await self._quote(response, entry['block'], entry['canonical'])
+            result = await self._quote(response, entry['block'], entry['canonical'], (self, response['id']))
             self.quote_callback_failures += result.get('quote') is None
             async with self.lock:
                 if not entry['terminal'] and self.requests.get(response['id']) is entry:
@@ -193,20 +194,29 @@ class AlphaRoutes:
                     else:
                         await self._stop(entry['process'])
 
-    async def _quote(self, request, block, canonical):
+    async def _quote(self, request, block, canonical, scope=None):
         amount, mode = int(request['amount']), request['mode']
         branches = [{'amountIn': row['amountIn'],
                      'hops': [hop for hop in row['hops'] if 'pool' in hop]}
                     for row in request['branches']]
-        try:
-            if all(not row['hops'] for row in branches):
-                return {'quote': str(amount)}
+        if all(not row['hops'] for row in branches):
+            return {'quote': str(amount)}
+        async def calculate():
             async with engine_work(self.engine.semaphore):
                 value = await self.engine.quote_sdk_branches(branches, mode, amount, block,
                     candidate={}, canonical=canonical)
             quote = (str(value['amountOut' if mode == 'exactIn' else 'amountIn'])
                      if value['fullyFilled'] and value['settled'] else None)
             return {'quote': quote}
+        try:
+            shared = current_search_observations()
+            if shared is not None and scope is not None:
+                # The framed calculation owns one immutable baseline. Preserve
+                # every percentage answer while sharing identical rounded work.
+                key = ('route-tool-callback', scope, mode, amount,
+                       json.dumps(branches, sort_keys=True, separators=(',', ':')))
+                return await shared.read(key, calculate)
+            return await calculate()
         except SnapshotChanged:
             raise
         except Exception:

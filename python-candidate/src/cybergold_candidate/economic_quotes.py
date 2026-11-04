@@ -10,6 +10,9 @@ from .quoter.types import EconomicRequest
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.dormant_routes import with_dormant_routes
 from .quoter.ranking import prefer_completed
+from .quoter.path_families import quote_path_family
+from .quoter.provenance import merge_origins
+from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
 
@@ -95,34 +98,77 @@ class CacheFeed:
         self.service, self.request = service, request
         self.preparing = service._own(service._capture_scope(request))
         self.transferred = False
+        self.completed = {}
+        self.reads = {}
 
     async def scope(self):
         return await asyncio.shield(self.preparing)
 
-    async def lookup(self):
+    async def _read(self, name, missing):
+        if name not in self.reads:
+            async def read():
+                try:
+                    scope = await self.scope()
+                    return (await getattr(self.service.store, name)(self.request, scope=scope)
+                            if scope is not None else missing)
+                except Exception:
+                    return missing
+            self.reads[name] = self.service._own(read())
+        # The historical publisher and current search share this observation;
+        # cancelling either waiter does not cancel its sibling's SQL reader.
         try:
-            scope = await self.scope()
-            return await self.service.store.lookup(self.request, scope=scope) if scope is not None else None
-        except Exception:
-            return None
+            return deepcopy(await asyncio.shield(self.reads[name]))
+        except asyncio.CancelledError:
+            if asyncio.current_task().cancelling():
+                raise
+            # An independently cancelled optional reader is a cache miss. It
+            # does not transfer its cancellation to a live quote subscriber.
+            return deepcopy(missing)
+
+    async def lookup(self):
+        return await self._read('lookup', None)
 
     async def neighbors(self):
-        try:
-            scope = await self.scope()
-            return (await self.service.store.neighbors(self.request, scope=scope)
-                    if scope is not None else {'lower': None, 'upper': None})
-        except Exception:
-            return {'lower': None, 'upper': None}
+        return await self._read('neighbors', [])
+
+    def remember(self, value):
+        family = quote_path_family(value)
+        previous = self.completed.get(family)
+        if prefer_completed(value, previous, scalar=self.request['intent'] in (0, 1),
+                            basket=self.request['intent'] >= 2):
+            self.completed[family] = deepcopy(value)
+        else:
+            merge_origins(previous, value)
+            if (previous['inputs'] == value['inputs'] and previous['quotedOutput'] == value['quotedOutput']
+                    and value.get('metrics') is not None):
+                previous['metrics'] = deepcopy(value['metrics'])
+
+    async def observe_family(self, value):
+        # Helpers completed this value. Capturing a losing path family must not
+        # publish a worse incumbent or wait for SQL on the producer path.
+        self.remember(value)
 
     def save(self, value):
-        self.transferred = True
-        self.service._own(self._save(deepcopy(value)))
+        self.remember(value)
+        self.flush()
 
-    async def _save(self, value):
+    def flush(self):
+        if not self.completed:
+            return
+        values = [attach_reuse_sample(value) for value in self.completed.values()]
+        self.completed = {}
+        self.transferred = True
+        self.service._own(self._save(values))
+
+    async def _save(self, values):
         try:
             scope = await self.scope()
             if scope is not None:
-                await self.service.store.save(self.request, value, scope=scope)
+                for value in values:
+                    try:
+                        await self.service.store.save(self.request, value, scope=scope)
+                    except Exception:
+                        pass  # One optional family write cannot suppress its sibling.
         except Exception:
             pass  # Optional storage cannot revoke a completed Helpers result.
         finally:
@@ -134,6 +180,11 @@ class CacheFeed:
         await asyncio.gather(self.preparing, return_exceptions=True)
 
     async def close(self):
+        reads = tuple(self.reads.values())
+        for task in reads:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*reads, return_exceptions=True)
         if not self.transferred:
             await self._close_scope()
 
@@ -173,46 +224,49 @@ class EconomicQuotes:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def cached_offer(self, request, previous, scope):
+    async def cached_offer(self, request, previous, scope, *, neighbors=None):
         """Offer the better complete stored tuple, preserving its observation.
 
         An old poor exact-budget row must not mask a better fitting quote.
-        This remains a DB-only historical lookup. A scalar offer below the
-        requested budget seeds ordinary optimization as well as Refresh.
+        This remains a DB-only historical lookup. Scalar offers seed ordinary
+        optimization of both path families as well as explicit Refresh.
         """
         offered = previous
         if request['intent'] in (0, 1):
             try:
-                lower = (await self.store.neighbors(request, scope=scope)).get('lower')
-                if lower and prefer_completed(lower['quote'], previous, scalar=True):
-                    offered = {**deepcopy(lower['quote']), 'request': deepcopy(request)}
+                rows = (await self.store.neighbors(request, scope=scope)) if neighbors is None else neighbors
+                for neighbor in rows:
+                    if neighbor['side'] == 'lower' and prefer_completed(neighbor['quote'], offered, scalar=True):
+                        offered = {**deepcopy(neighbor['quote']), 'request': deepcopy(request)}
             except Exception:
                 pass  # Optional neighbor failure leaves the exact cache hit.
+        if offered is None:
+            return None
         offered = with_dormant_routes(offered, getattr(self.quoter.engine.registry, 'seed', None))
         return {**attach_reuse_sample(offered), 'observation': {'source': 'stored', 'refresh': False}}
-
-    @staticmethod
-    def unfilled_budget(request, quote):
-        """An existing smaller-funded plan still needs the requested-amount try."""
-        return request['intent'] in (0, 1) and int(quote['inputs'][0]['amount']) < int(request['inputs'][0]['amount'])
 
     async def get(self, request, *, refresh=False):
         request = EconomicRequest.model_validate(request).model_dump()
         cache = self.cache_feed(request)
+        scalar = request['intent'] in (0, 1)
         try:
-            # A complete funded cache hit remains immediate. Smaller-funded
-            # hits supply topology to the ordinary requested-budget search.
-            previous = await cache.lookup() if not refresh else None
+            # Scalar JSON waits for current pricing, so no historical SQL read
+            # belongs ahead of its producer. Its two optional feeds start with
+            # exploration. Basket cache behavior remains unchanged.
+            previous = await cache.lookup() if not scalar and not refresh else None
             if previous is not None:
-                offered = await self.cached_offer(request, previous, await cache.scope())
-                if not self.unfilled_budget(request, offered):
-                    return offered
+                return await self.cached_offer(request, previous, await cache.scope())
             value = attach_reuse_sample(await self.quoter.quote(request, seed=previous,
-                seed_lookup=cache.lookup if refresh else None,
-                neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
+                seed_lookup=cache.lookup if scalar or refresh else None,
+                neighbors=cache.neighbors if scalar else None,
+                on_family=cache.observe_family if scalar else None))
             cache.save(value)
             return {**value, 'observation': {'source': 'search', 'refresh': refresh}}
+        except SnapshotChanged:
+            cache.completed.clear()
+            raise
         finally:
+            cache.flush()
             await cache.close()
 
     async def progressive(self, request, publish, *, refresh=False):

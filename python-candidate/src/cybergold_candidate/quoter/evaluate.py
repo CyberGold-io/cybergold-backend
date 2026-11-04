@@ -8,6 +8,7 @@ from ..quote_errors import QuoteFailure
 from ..routing_encoding import split_runtime, weighted_routes
 from .contracts import path_operation, path_nomination
 from .reuse_routes import _amounts
+from .market_segments import observed_market_amount
 
 CORE_SHARES = (0, 25, 50, 75, 100)
 
@@ -25,6 +26,11 @@ async def nominate_conversion(self, source, target, amount, block, *, market=Fal
         candidate = await anext(candidates, None)
     if candidate is None:
         raise QuoteFailure('quote-no-route')
+    return encode_nomination(source, target, candidate)
+
+
+def encode_nomination(source, target, candidate):
+    """Encode an offered route, preserving the common adapter's split semantics."""
     branches, origins = candidate
     branches = deepcopy(branches)
     physical_source = source
@@ -90,9 +96,12 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
 
         async def convert(source, target, lot, operation, *, market=False, topology=False, optional=False):
             nonlocal input_limit_observed
-            if first or topology:
+            observed = (observed_market_amount(request, share, order, operation, source, target, None)
+                        if topology else None)
+            nomination_amount = observed if observed is not None else lot
+            if first or (topology and observed is None):
                 try:
-                    route, chosen = await nominate_conversion(self, source, target, lot, block, market=market)
+                    route, chosen = await nominate_conversion(self, source, target, nomination_amount, block, market=market)
                 except QuoteFailure as error:
                     if not optional or error.code != 'quote-no-route':
                         raise
@@ -103,11 +112,16 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
             else:
                 chosen = {}
                 with path_operation(operation, int(operation.split(':')[0]), 0):
-                    pending = self.conversion(source, target, lot, block, bank, canonical, first=False,
+                    pending = self.conversion(source, target, nomination_amount, block, bank, canonical, first=False,
                                               market=market, capture=chosen)
                     route, _, _ = await budget.discovery(pending) if budget and selection else await pending
-                conversion_funding[operation] = chosen.pop('_funding', lot)
-                input_limit_observed |= conversion_funding[operation] < lot
+                if topology:
+                    # The SDK ranks routes at a preceding Helpers observation.
+                    # It cannot resize a lot that Core produces in execution.
+                    chosen.pop('_funding', None)
+                else:
+                    conversion_funding[operation] = chosen.pop('_funding', lot)
+                    input_limit_observed |= conversion_funding[operation] < lot
                 chosen.pop('_observation', None)
             recorded[operation] = deepcopy(chosen)
             return route

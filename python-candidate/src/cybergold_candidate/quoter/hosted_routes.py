@@ -8,6 +8,8 @@ the local Helpers simulation prices them against the execution chain.
 """
 import asyncio
 from copy import deepcopy
+import json
+from itertools import chain as chained
 
 from web3 import Web3
 
@@ -16,13 +18,16 @@ import httpx
 from ..pool_producer import PoolIdentifier, PoolProducer
 from ..protocol_config import configured_address
 from ..route_observations import api_exchange, origin_scope, record_api_status
+from ..route_work_slots import engine_work
+from ..search_observations import current_search_observations
 from ..uniswap_api_queue import retry_after_seconds
 from ..uniswap_routes import pool_identity, v3_branches, v4_pool_id
 from ..uniswap_state import POOL_MANAGER
 from ..route_search import WETH
 from ..routing_encoding import ZERO
 from .bootstrap import ProviderUnavailable
-from .discovery import paths, route_candidates
+from .discovery import path_steps, route_candidates
+from .cooperative import QUANTUM, async_finish
 
 
 QUOTE_URL = 'https://trade-api.gateway.uniswap.org/v1/quote'
@@ -273,14 +278,47 @@ class UniswapApiProvider:
         return {'nominationChainId': 1 if execution == 31338 else execution,
                 'executionChainId': execution}
 
+    async def _market_input(self, prefix, amount, block):
+        """Explore the foreign AMM segment at its local prefix's output units.
+
+        The API never knows the fork-only Core token. This SDK observation is
+        a nomination quantity only; the complete composed plan still receives
+        its independent Helpers price. Other suppliers/publication do not await
+        this provider's exploratory work.
+        """
+        async def price():
+            async with engine_work(self.engine.semaphore):
+                value = await self.engine.quote_sdk_branches(
+                    [{'amountIn': str(amount), 'hops': prefix}], 'exactIn', int(amount), block,
+                    candidate={}, canonical={})
+            return int(value['amountOut'])
+        shared = current_search_observations()
+        if shared is None:
+            return await price()
+        key = ('hosted-market-prefix', int(self.engine.registry.chain), int(amount),
+               tuple((pool_identity(hop['pool']), hop['zeroForOne']) for hop in prefix),
+               json.dumps(block, sort_keys=True))
+        return await shared.read(key, price)
+
     async def discover(self, source, target, amount, block):
+        candidates, attribution = [], {'engine': 'unverified', 'evidence': 'not-disclosed'}
+        async for batch in self.discover_batches(source, target, amount, block):
+            candidates.extend(batch)
+            attribution = batch.engine_attribution
+        return HostedCandidates(candidates, attribution)
+
+    async def discover_batches(self, source, target, amount, block):
         if not self.api_key:
             raise ProviderUnavailable('Uniswap API key is not configured')
         registry = self.engine.registry
+        funding = int(amount)
         source, target, prefix, suffix = market_segment(registry, source, target)
         if source.lower() == target.lower():
-            return HostedCandidates([[{'amountIn': str(amount), 'hops': prefix + suffix}]],
+            yield HostedCandidates([[{'amountIn': str(amount), 'hops': prefix + suffix}]],
                 {'engine': 'unverified', 'evidence': 'not-disclosed'})
+            return
+        if prefix:
+            amount = await self._market_input(prefix, funding, block)
         # The existing Sandbox is a Mainnet fork. Only topology acquisition uses
         # its parent; local pool identities and execution always retain 31338.
         chain = 1 if registry.chain == 31338 else registry.chain
@@ -316,11 +354,28 @@ class UniswapApiProvider:
         except (KeyError, TypeError, ValueError, ZeroDivisionError):
             # Optional split proportions cannot retract ordinary structured paths.
             nominees = []
-        nominees.extend(route_candidates(paths(list(pools.values()), source, target,
-            max_hops=3-len(prefix)-len(suffix)), int(amount)))
-        candidates = [[{**branch, 'hops': deepcopy(prefix) + branch['hops'] + deepcopy(suffix)}
-                       for branch in nominee] for nominee in nominees]
-        return HostedCandidates(candidates, observed_engine(document))
+        routes = await async_finish(path_steps(list(pools.values()), source, target,
+            max_hops=3-len(prefix)-len(suffix)))
+        attribution = observed_engine(document)
+        ordinary = route_candidates(routes, funding)
+        candidates = chained(nominees, ordinary)
+        batch, emitted = [], False
+        try:
+            for index, nominee in enumerate(candidates, 1):
+                batch.append([{**branch, 'hops': deepcopy(prefix) + branch['hops'] + deepcopy(suffix)}
+                              for branch in nominee])
+                if not emitted and len(batch) == QUANTUM:
+                    yield HostedCandidates(batch, attribution)
+                    emitted, batch = True, []
+                # Yield computation without announcing every split chunk as
+                # a new whole-plan search revision. One completed tail retains
+                # every remaining nomination after the first ready cohort.
+                if index % QUANTUM == 0:
+                    await asyncio.sleep(0)
+            if batch or not emitted:
+                yield HostedCandidates(batch, attribution)
+        finally:
+            ordinary.close()
 
     async def close(self):
         await asyncio.gather(*(client.aclose() for client in tuple(self.clients)))

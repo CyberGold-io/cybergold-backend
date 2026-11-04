@@ -105,7 +105,8 @@ class TransactionPreparation:
         # Bind to the displayed observation before current-state replay. Repricing
         # cannot lower these quantities or enlarge the accepted input vector.
         minimum = accepted.get('minimumOutput', str(floor(int(selected['quotedOutput']), request['slippageBps'])))
-        expected = accepted.get('expectedCoreOutputs', core_bounds(selected, request['slippageBps']))
+        expected = (accepted['expectedCoreOutputs'] if 'expectedCoreOutputs' in accepted
+                    else core_bounds(selected, request['slippageBps']))
         maxima = accepted.get('inputs', selected['inputs'])
         if len(maxima) != len(selected['inputs']):
             raise InvalidPreview('Accepted input currencies changed.')

@@ -21,6 +21,7 @@ from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
+from .quote_history import block_key
 from .quote_errors import QuoteFailure, public_quote_error
 from .rpc_diagnostics import bind_quote_error, quote_failure_context
 from .fast_trade_estimates import FastTradeEstimates, model_estimate
@@ -256,7 +257,7 @@ class TradeQuotes:
             context = {'chainId': int(self.settings.NEXT_PUBLIC_CHAIN_ID), 'blockNumber': str(block['number']),
                        'blockHash': block['hash'], 'observedAt': self.core.now()}
             self.history.ensure_state(self.core.routes.rpc, block, context)
-            task = self.history.tasks.get(('state', block['hash'].lower()))
+            task = self.history.tasks.get(('state', block_key(block)))
             if task:
                 await asyncio.shield(task)
         async def market_model():
@@ -272,14 +273,23 @@ class TradeQuotes:
         if request['mode'] == 'exact-in' and cached_estimates is not None:
             return await cached_estimates.get_model(request)
         request = await self.resolve(request)
+        def ready_packet():
+            packet = self.packet(request)
+            if packet.get('budgetRange') and packet.get('estimate'):
+                return packet
+            if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol'))
+                   for row in packet['models']) and packet['models']:
+                return packet
+            return None
+        packet = ready_packet()
+        if packet is not None:
+            return packet
         registry = getattr(self.market, 'registry', None)
         if registry is not None:
             await registry.ensure_loaded(wait=True)
-        packet = self.packet(request)
-        if packet.get('budgetRange') and packet.get('estimate'):
-            return packet
-        if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol')) for row in packet['models']) and packet['models']:
-            return packet
+            packet = ready_packet()
+            if packet is not None:
+                return packet
         # Cold model acquisition reuses the providers' lightweight baselines;
         # warm display is RPC-free and exact search never waits for this work.
         if self.core.routes.rpc is None:

@@ -128,7 +128,7 @@ async def reconstruct_measured(quoter, value, block, assets, weights, observatio
 
 def measured_funding_proposal(value, chain):
     """Return (funded request, complete body), without a replay or network tail."""
-    request, plan = value['request'], deepcopy(value['plan'])
+    request, plan = value['request'], value['plan']
     if request['intent'] not in (0, 1):
         return None
     if request['intent'] == 1 and any(row['kind'] != 1 for row in plan['allocations']):
@@ -142,12 +142,13 @@ def measured_funding_proposal(value, chain):
         if not chosen or not row or chosen['inputCurrency'].lower() != payment:
             return amount
         return min(amount, int(row['consumedInput']))
-    for index, (allocation, branch) in enumerate(zip(plan['allocations'], plan['body']['branches'], strict=True)):
+    nominations = []
+    for index, (_, branch) in enumerate(zip(plan['allocations'], plan['body']['branches'], strict=True)):
+        acquisitions = None
         if branch['kind'] == 0:
-            acquisitions = branch['data']['acquisitions']
-            for asset_index, row in enumerate(acquisitions):
-                row['amountIn'] = str(consumed(f'{index}:acquire:{asset_index}', int(row['amountIn'])))
-            amount = sum(int(row['amountIn']) for row in acquisitions)
+            acquisitions = [consumed(f'{index}:acquire:{asset_index}', int(row['amountIn']))
+                            for asset_index, row in enumerate(branch['data']['acquisitions'])]
+            amount = sum(acquisitions)
         elif request['intent'] == 1:
             original = int(branch['amountIn'])
             routed = consumed(f'{index}:market', original - int(branch['data']['feeCygld']))
@@ -157,9 +158,18 @@ def measured_funding_proposal(value, chain):
             amount = consumed(f'{index}:market', int(branch['amountIn']))
         if amount <= 0:
             return None
-        allocation['amountIn'] = branch['amountIn'] = str(amount)
-    total = sum(int(row['amountIn']) for row in plan['allocations'])
+        nominations.append((amount, acquisitions))
+    total = sum(amount for amount, _ in nominations)
     if total >= int(value['inputs'][0]['amount']):
         return None
+    # Most complete observations consume their funding. Only an actual
+    # smaller-funded nomination needs a privately owned execution body.
+    plan = deepcopy(plan)
+    for allocation, branch, (amount, acquisitions) in zip(
+            plan['allocations'], plan['body']['branches'], nominations, strict=True):
+        allocation['amountIn'] = branch['amountIn'] = str(amount)
+        if acquisitions is not None:
+            for row, acquired in zip(branch['data']['acquisitions'], acquisitions, strict=True):
+                row['amountIn'] = str(acquired)
     funded = {**request, 'inputs': [{**value['inputs'][0], 'amount': str(total)}]}
     return funded, plan

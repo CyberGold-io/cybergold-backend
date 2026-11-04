@@ -156,7 +156,7 @@ class CachedApiTests(unittest.IsolatedAsyncioTestCase):
         engines = Engines()
         quote = quote_sample()
         store = SimpleNamespace(capture_scope=lambda _request: 'existing-scope',
-            neighbors=AsyncMock(return_value={'lower': None, 'upper': {'identity': 'one', 'quote': quote} if upper else None}))
+            neighbors=AsyncMock(return_value=[{'family': 'market', 'side': 'upper', 'identity': 'one', 'quote': quote}] if upper else []))
         observe = AsyncMock()
         engines.quotes.cached_estimates = CachedEconomicEstimates(store, CORE, observe_scope=observe)
         engines.quotes.resolve = AsyncMock(side_effect=AssertionError('no live model/adapter acquisition'))
@@ -195,6 +195,42 @@ class CachedApiTests(unittest.IsolatedAsyncioTestCase):
                 engines.market.head.assert_not_called()
                 engines.quotes.acquire_models.assert_not_called()
                 self.assertEqual((engines.heads, engines.models, engines.core_calls, engines.market_calls), (0, 0, [], []))
+
+    async def test_both_family_uppers_compete_as_whole_arithmetic_hints(self):
+        engines, store, _, core = self.fixture()
+        market = quote_sample(quotedOutput='500')
+        core['searchCoverage'] = {'inputLimitObserved': True}
+        core['context']['observedAt'] = 'core-observation'
+        store.neighbors.return_value = [
+            {'family': 'market', 'side': 'upper', 'identity': 'market-upper', 'quote': market},
+            {'family': 'core', 'side': 'upper', 'identity': 'core-upper', 'quote': core},
+            {'family': 'market', 'side': 'lower', 'identity': 'ignored-lower',
+             'quote': quote_sample(quotedOutput='999999999999999999999')}]
+        result = await engines.quotes.get_model(trade_request(amount='900'))
+        estimate = result['estimate']
+        self.assertEqual(estimate['amount'], '999')
+        self.assertEqual(estimate['referenceInput'], '600')
+        self.assertEqual(estimate['context'], core['context'])
+        self.assertEqual(estimate['fees'], core['fees'])
+        self.assertEqual(estimate['sourceIdentity'], 'core-upper')
+        self.assertEqual(estimate['sourceRequestedInput'], '1000')
+        self.assertEqual((engines.heads, engines.models, engines.core_calls, engines.market_calls), (0, 0, [], []))
+
+    async def test_invalid_family_hint_does_not_hide_a_valid_sibling_and_ties_use_less_input(self):
+        engines, store, _, valid = self.fixture()
+        invalid = quote_sample(quotedOutput='broken')
+        less_input = quote_sample(inputs=[{'currency': USDT, 'amount': '500'}],
+                                  estimatedRetainedInputCharges=[])
+        for candidate in (invalid, less_input):
+            with self.subTest(candidate=candidate['quotedOutput']):
+                store.neighbors.return_value = [
+                    {'family': 'market', 'side': 'upper', 'identity': 'market-upper', 'quote': valid},
+                    {'family': 'core', 'side': 'upper', 'identity': 'core-upper', 'quote': candidate}]
+                result = await engines.quotes.get_model(trade_request(amount='900'))
+                self.assertEqual(result['estimate']['amount'], '999')
+                self.assertEqual(result['estimate']['sourceIdentity'],
+                                 'market-upper' if candidate is invalid else 'core-upper')
+                self.assertEqual(result['estimate']['referenceInput'], '600' if candidate is invalid else '500')
 
     async def test_native_and_sell_adapter_match_economic_request(self):
         engines, store, _, _ = self.fixture(upper=False)

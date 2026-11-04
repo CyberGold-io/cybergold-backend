@@ -58,7 +58,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Fully funded stored offers retain their original context; smaller-funded offers seed ordinary requested-budget optimization. Explicit refresh searches current state using saved topology. Execution guards and lifetime are bound during unsigned preparation. */
+        /** @description Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Scalar requests search both pure-Market and Core-containing path families, seeding up to four distinct lower/upper cached routes at the requested budget; JSON waits for natural completion. Direct basket requests retain their existing stored-offer behavior. Execution guards and lifetime are bound during unsigned preparation. */
         post: operations["post__api_economic_quotes"];
         delete?: never;
         options?: never;
@@ -75,7 +75,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Latest observations have nullable block coordinates; stored offers retain their original context. Caller disconnect cancels and drains only its owned work. */
+        /** @description Subscription-owned complete economic incumbents are published after whole-plan Helpers simulation while discovery continues to natural completion. Scalar searches start alongside optional cached offers and retain separate pure-Market and Core-containing family winners; up to four distinct lower/upper cached routes seed current-budget pricing. Latest observations have nullable block coordinates; stored offers retain their original context and cannot replace an already published current result. Caller disconnect cancels and drains only its owned work. */
         post: operations["post__api_economic_quotes_stream"];
         delete?: never;
         options?: never;

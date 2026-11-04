@@ -12,6 +12,8 @@ from cybergold_candidate.app import create_app
 from cybergold_candidate.economic_quotes import EconomicQuotes
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quoter.store import EconomicQuoteStore
+from cybergold_candidate.quoter.path_families import quote_path_family
+from cybergold_candidate.quoter.ranking import prefer_completed
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from test_universal_quote import Engine, Quotes, request, BLOCK, CORE, PAXG, OTHER, USER
 
@@ -19,6 +21,7 @@ from test_universal_quote import Engine, Quotes, request, BLOCK, CORE, PAXG, OTH
 class SharedStore:
     def __init__(self):
         self.rows = {}
+        self.family_rows = {}
 
     def capture_scope(self, value):
         return str(value)
@@ -26,8 +29,18 @@ class SharedStore:
     async def lookup(self, value, *, scope):
         return deepcopy(self.rows.get(scope))
 
+    async def neighbors(self, value, *, scope):
+        return [{'family': family, 'side': 'lower', 'identity': str(scope)+':'+family, 'quote': deepcopy(quote)}
+                for family, quote in self.family_rows.get(scope, {}).items()]
+
     async def save(self, value, quote, *, scope):
-        self.rows[scope] = deepcopy(quote)
+        self.family_rows.setdefault(scope, {})[quote_path_family(quote)] = deepcopy(quote)
+        best = None
+        for value in self.family_rows[scope].values():
+            if prefer_completed(value, best, scalar=quote['request']['intent'] in (0, 1),
+                                basket=quote['request']['intent'] >= 2):
+                best = value
+        self.rows[scope] = deepcopy(best)
         return True
 
 
@@ -57,7 +70,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         # smaller-funded complete tuple; its funding still fits the new input.
         smaller['request'] = {**small_request, 'inputs': [{**small_request['inputs'][0], 'amount': '100010'}]}
         before = deepcopy(smaller)
-        store.neighbors = AsyncMock(return_value={'lower': {'quote': smaller}})
+        store.neighbors = AsyncMock(return_value=[{'family': quote_path_family(smaller), 'side': 'lower', 'quote': smaller}])
         quoter.quote = AsyncMock(side_effect=AssertionError('Cache selection must not reprice'))
         offered = await quotes.cached_offer(maximum, previous, store.capture_scope(maximum))
         self.assertEqual(offered['request'], maximum)
@@ -78,7 +91,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         poor['quotedOutput'] = '1'
         poor['estimatedRecipientOutputs'][0]['amount'] = '1'
         await store.save(large_request, poor, scope=store.capture_scope(large_request))
-        store.neighbors = AsyncMock(return_value={'lower': {'quote': small}})
+        store.neighbors = AsyncMock(return_value=[{'family': quote_path_family(small), 'side': 'lower', 'quote': small}])
         retained = deepcopy(store.rows)
         quoter.quote = AsyncMock(side_effect=AssertionError('Stored offer must not search'))
         block = quoter.engine.block
@@ -113,17 +126,29 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 lower = deepcopy(old)
                 lower['quotedOutput'] = str(int(old['quotedOutput']) + 1)
                 lower['plan']['body']['known_floor_marker'] = True
-                store.neighbors = AsyncMock(return_value={'lower': {'quote': lower}})
+                store.neighbors = AsyncMock(return_value=[{'family': quote_path_family(lower), 'side': 'lower', 'quote': lower}])
+                historical_delivered = asyncio.Event()
                 async def optimize(value, callback=None, **options):
                     self.assertEqual(value, maximum)
-                    self.assertEqual(options['seed']['inputs'], old['inputs'])
-                    self.assertEqual(options['seed']['plan'], old['plan'])
-                    self.assertEqual((await options['neighbors']())['lower']['quote']['plan'], lower['plan'])
-                    self.assertIsNone(options.get('seed_lookup'))
+                    seeded = await options['seed_lookup']()
+                    self.assertEqual(seeded['inputs'], old['inputs'])
+                    self.assertEqual(seeded['plan'], old['plan'])
+                    self.assertEqual((await options['neighbors']())[0]['quote']['plan'], lower['plan'])
+                    self.assertIsNone(options.get('seed'))
                     if callback:
+                        await historical_delivered.wait()
                         await callback({'type': 'qualified', 'value': deepcopy(full)})
                     return deepcopy(full)
                 quoter.quote = AsyncMock(side_effect=optimize)
+                progressive = quotes.progressive
+                async def observed_progressive(value, publish, **options):
+                    async def delivered(frame):
+                        await publish(frame)
+                        if (frame['type'] == 'qualified' and frame['value']['observation']['source'] == 'stored'
+                                and frame['value']['plan'] == lower['plan']):
+                            historical_delivered.set()
+                    return await progressive(value, delivered, **options)
+                quotes.progressive = observed_progressive
                 app = create_app(economic_quotes=quotes)
                 endpoint = '/api/economic-quotes' + ('/stream' if streamed else '')
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
@@ -132,8 +157,10 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 if streamed:
                     frames = [json.loads(line) for line in response.text.splitlines()]
                     qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
-                    self.assertEqual(qualified[0]['plan'], lower['plan'])
-                    self.assertEqual(qualified[0]['observation']['source'], 'stored')
+                    stored = [value for value in qualified if value['observation']['source'] == 'stored']
+                    self.assertEqual(stored[-1]['plan'], lower['plan'])
+                    self.assertEqual([int(value['quotedOutput']) for value in stored],
+                                     sorted(int(value['quotedOutput']) for value in stored))
                     self.assertEqual(qualified[-1]['inputs'], maximum['inputs'])
                     result = next(frame['value'] for frame in frames if frame['type'] == 'complete')
                 else:
@@ -143,17 +170,32 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['observation'], {'source': 'search', 'refresh': False})
                 quoter.quote.assert_awaited_once()
 
-    async def test_cached_floor_failure_is_optional_but_cancellation_propagates(self):
+    async def test_optional_cache_reader_failure_does_not_cancel_fresh_search_but_caller_cancellation_propagates(self):
         store = SharedStore()
         quoter, quotes = service(store)
+        self.addAsyncCleanup(quotes.close)
         value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
         saved = await quoter.quote(value)
         await store.save(value, saved, scope=store.capture_scope(value))
-        store.neighbors = AsyncMock(side_effect=OSError('Optional SQL unavailable'))
-        self.assertEqual((await quotes.get(value))['quotedOutput'], saved['quotedOutput'])
-        store.neighbors.side_effect = asyncio.CancelledError()
+        for error in (OSError('Optional SQL unavailable'), asyncio.CancelledError()):
+            with self.subTest(reader_error=type(error).__name__):
+                store.neighbors = AsyncMock(side_effect=error)
+                result = await quotes.get(value)
+                self.assertEqual(result['quotedOutput'], saved['quotedOutput'])
+                self.assertEqual(result['observation']['source'], 'search')
+        started, drained = asyncio.Event(), asyncio.Event()
+        async def held(*args, **options):
+            try:
+                started.set()
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+        quoter.quote = held
+        task = asyncio.create_task(quotes.get(value))
+        await started.wait(); task.cancel()
         with self.assertRaises(asyncio.CancelledError):
-            await quotes.get(value)
+            await task
+        self.assertTrue(drained.is_set())
 
     async def test_missing_accepted_residual_is_ordinary_400_with_exact_private_failure_evidence(self):
         quoter, _ = service(SharedStore())
@@ -188,6 +230,20 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         store = SharedStore()
         quoter, quotes = service(store)
         value = {'intent': 0, 'inputs': [{'currency': PAXG, 'amount': '1000'}], 'outputCurrency': CORE}
+        async def current_snapshot(pool, _block):
+            # Reusable cached topology contains PoolRefs, never historical
+            # reserves. The fixture reader must resolve current inventory.
+            return deepcopy(quoter.engine.registry.inventory[pool['id']])
+        quoter.engine.registry.snapshot = current_snapshot
+        from cybergold_candidate.uniswap_routes import pool_identity
+        sdk = quoter.engine.quote_sdk_branches
+        async def current_sdk(*args, **options):
+            # Like the real SDK worker, this component oracle starts a private
+            # bank from its separately acquired immutable observations.
+            for state in options['canonical'].values():
+                options['candidate'].setdefault(pool_identity(state), deepcopy(state))
+            return await sdk(*args, **options)
+        quoter.engine.quote_sdk_branches = current_sdk
         async def preview(mode, payload, block):
             self.assertEqual(mode, 'issue-exact-in')
             return {'netCygldOut': '1000', 'amountsInExact': payload['maximumAmountsIn'],
@@ -195,7 +251,8 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                     'fees': {'protocolFeeCygld': '0', 'helperFeeCygld': '0'}}
         quoter.preview = preview
         historical = await quoter.candidate(value, 100, 'core-first', BLOCK, [PAXG, OTHER], [1, 1])
-        historical['plan']['_fixture_saved_seed'] = True
+        for chosen in historical['plan']['conversions'].values():
+            chosen['discoveryOrigins'] = ['fixture-legacy-seed']
         historical['plan']['conversions'] = {key: row for key, row in historical['plan']['conversions'].items()
                                            if ':residual:' not in key}
         for row, asset in zip(historical['plan']['body']['branches'][0]['data']['continuations'], (PAXG, OTHER)):
@@ -205,7 +262,10 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         seed_offered = asyncio.Event()
         candidate = quoter.candidate
         async def hold_ordinary(*args, **kwargs):
-            if not (kwargs.get('selected') or {}).get('_fixture_saved_seed'):
+            selected = kwargs.get('selected') or {}
+            retained = any('fixture-legacy-seed' in chosen.get('discoveryOrigins', [])
+                           for chosen in selected.get('conversions', {}).values())
+            if not retained:
                 await seed_offered.wait()
             return await candidate(*args, **kwargs)
         quoter.candidate = hold_ordinary
@@ -213,10 +273,11 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
             frames.append(deepcopy(frame))
             if frame['type'] == 'qualified':
                 seed_offered.set()
-        await quotes.progressive(value, publish, refresh=True)
+        async with asyncio.timeout(2):
+            await quotes.progressive(value, publish, refresh=True)
         qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
         self.assertTrue(qualified)
-        self.assertEqual(qualified[0]['searchCoverage']['selectedPhase'], 'saved-plan')
+        self.assertEqual(qualified[0]['searchCoverage']['selectedPhase'], 'nearby-lower')
         self.assertIn('0:residual:0', qualified[0]['plan']['conversions'])
         self.assertIn('0:residual:1', qualified[0]['plan']['conversions'])
 
@@ -271,7 +332,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         quotes = EconomicQuotes(quoter, store, observe_scope=observe)
         value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
         first = await quotes.get(value)
-        self.assertEqual((await quotes.get(value))['observation']['source'], 'stored')
+        self.assertEqual((await quotes.get(value))['observation']['source'], 'search')
         before = len(quoter.evaluated)
         generation['value'] = 'two'
         replacement = await quotes.get(value)
@@ -282,7 +343,7 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                          {'generation:one:economic-quotes', 'generation:two:economic-quotes'})
         self.assertEqual(first['request'], replacement['request'])
 
-    async def test_second_api_client_uses_original_saved_quote_without_head_read(self):
+    async def test_second_api_client_reprices_original_saved_routes_without_head_read(self):
         store = SharedStore()
         first, a = service(store)
         second, b = service(store)
@@ -296,13 +357,12 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
             cached = await client_b.post('/api/economic-quotes', json={**value, 'deadline': 'ignored', 'recipient': 'ignored'})
             self.assertEqual(cached.status_code, 200, cached.text)
         measured, reused = initial.json(), cached.json()
-        self.assertEqual(reused['context'], measured['context'])
-        self.assertEqual(reused['plan'], measured['plan'])
         self.assertEqual(reused['quotedOutput'], measured['quotedOutput'])
-        self.assertEqual(reused['observation']['source'], 'stored')
+        self.assertEqual(reused['inputs'], measured['inputs'])
+        self.assertEqual(reused['observation']['source'], 'search')
         second.engine.block.assert_not_called()
         self.assertTrue(first.evaluated)
-        self.assertFalse(second.evaluated)
+        self.assertTrue(second.evaluated)
 
     async def test_refresh_replays_seed_and_failed_refresh_keeps_saved_success(self):
         store = SharedStore()
@@ -331,10 +391,11 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(QuoteFailure):
             await quotes.get(value, refresh=True)
         self.assertEqual(store.rows, saved)
+        quoter.quote = quote  # The ordinary caller still performs fresh search.
         retained = await quotes.get(value)
         # A successful refresh may improve the original quote. A later failure
         # must retain that latest successful economic tuple.
-        for field in ('quotedOutput', 'inputs', 'plan', 'context', 'fees', 'routeOrigins'):
+        for field in ('quotedOutput', 'inputs', 'plan', 'fees', 'routeOrigins'):
             self.assertEqual(retained.get(field), refreshed.get(field))
         self.assertEqual(len(recorded), 1)
 

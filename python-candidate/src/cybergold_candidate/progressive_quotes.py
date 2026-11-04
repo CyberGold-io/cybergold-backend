@@ -20,6 +20,7 @@ class CanonicalPublication:
         self.refresh = refresh
         self.queue = asyncio.Queue()
         self.best = None
+        self.historical_best = None
         self.closed = False
         self.context = None
         self.disproof = None
@@ -45,6 +46,21 @@ class CanonicalPublication:
     async def run(self):
         while (item := await self.queue.get()) is not None:
             kind, value = item
+            if kind == 'stored':
+                # The optional historical read may finish after current
+                # Helpers pricing. It never holds or replaces that result.
+                if self.best is None and not self.closed:
+                    if prefer_completed(value, self.historical_best,
+                                        scalar=self.request['intent'] in (0, 1),
+                                        basket=self.request['intent'] >= 2):
+                        self.historical_best = value
+                        await self.publish({'type': 'qualified', 'value': deepcopy(value)})
+                    else:
+                        previous_limit = input_limit_observed(self.historical_best)
+                        merge_origins(self.historical_best, value)
+                        if not previous_limit and input_limit_observed(self.historical_best):
+                            await self.publish({'type': 'qualified', 'value': deepcopy(self.historical_best)})
+                continue
             if kind == 'upper-replay-settled':
                 if not self.closed:
                     await self.publish({'type': kind})
@@ -69,20 +85,42 @@ class CanonicalPublication:
 async def progressive_quote(service, request, publish, *, refresh=False):
     request = EconomicRequest.model_validate(request).model_dump()
     cache = service.cache_feed(request)
+    scalar = request['intent'] in (0, 1)
     try:
-        previous = await cache.lookup() if not refresh else None
+        previous = await cache.lookup() if not scalar and not refresh else None
         if previous is not None:
             offered = await service.cached_offer(request, previous, await cache.scope())
             await publish({'type': 'qualified', 'value': deepcopy(offered)})
-            if not service.unfilled_budget(request, offered):
-                return offered
+            return offered
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
-            seed=previous, seed_lookup=cache.lookup if refresh else None,
-            neighbors=cache.neighbors if request['intent'] in (0, 1) else None))
+            seed=previous, seed_lookup=cache.lookup if scalar or refresh else None,
+            neighbors=cache.neighbors if scalar else None,
+            on_family=cache.observe_family if scalar else None))
         consumer = asyncio.create_task(publication.run())
+        async def historical_offer():
+            async def offer(read, *, nearby):
+                try:
+                    value = await read()
+                    offered = await service.cached_offer(request, None if nearby else value, await cache.scope(),
+                                                         neighbors=value if nearby else [])
+                    if offered is not None:
+                        publication.queue.put_nowait(('stored', deepcopy(offered)))
+                except Exception:
+                    pass  # Optional historical input cannot reject current pricing.
+            readers = (asyncio.create_task(offer(cache.lookup, nearby=False)),
+                       asyncio.create_task(offer(cache.neighbors, nearby=True)))
+            try:
+                await asyncio.gather(*readers)
+            finally:
+                for reader in readers:
+                    if not reader.done():
+                        reader.cancel()
+                await asyncio.gather(*readers, return_exceptions=True)
+        historical = (asyncio.create_task(historical_offer()) if scalar and not refresh else None)
         tasks = (producer, consumer)
+        owned = (*tasks, historical) if historical is not None else tasks
         terminal = None
         try:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -97,13 +135,14 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             await consumer
         finally:
             publication.closed = True
-            for task in tasks:
+            for task in owned:
                 if not task.done():
                     task.cancel()
-            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+            outcomes = await asyncio.gather(*owned, return_exceptions=True)
             disproof = publication.disproof or next((error for error in outcomes
                                                      if isinstance(error, SnapshotChanged)), None)
             if disproof is not None:
+                cache.completed.clear()
                 if publication.context is not None:
                     disproof.economic_context = deepcopy(publication.context)
                 raise disproof
@@ -118,6 +157,7 @@ async def progressive_quote(service, request, publish, *, refresh=False):
                 cache.save(publication.best)
         return deepcopy(publication.best)
     finally:
+        cache.flush()
         await cache.close()
 
 

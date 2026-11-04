@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 import httpx
 from eth_abi.exceptions import DecodingError
@@ -16,7 +17,8 @@ from cybergold_candidate.trade_quote import (PAXG, ZERO, TradeQuotes, core_reque
     economics, model_estimate)
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.protocol_facts import ABI as FACTS_ABI
-from cybergold_candidate.quote_history import QuoteHistory
+from cybergold_candidate.quote_history import QuoteHistory, block_key, observation_context
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 from cybergold_candidate.issuance_capacity import ABI as CAPACITY_ABI, read_capacity
 from cybergold_candidate.route_search import RouteSearchRpc
 from web3 import AsyncWeb3
@@ -654,6 +656,96 @@ class TradeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(warm['estimate'], cold['estimate'])
         self.assertEqual((engines.heads, engines.models, len(acquisitions)), (1, 1, 1))
 
+    async def test_latest_cold_model_awaits_one_core_job_while_market_starts_independently(self):
+        for failed in (None, 'core', 'market'):
+            with self.subTest(failed=failed):
+                engines = self.engines()
+                history = QuoteHistory(SETTINGS)
+                self.addAsyncCleanup(history.close)
+                engines.core.history = engines.quotes.history = history
+                engines.core.now = lambda: CONTEXT['observedAt']
+                engines.market.head = AsyncMock(return_value=deepcopy(LATEST_BLOCK))
+                core_started, market_started, release = (asyncio.Event() for _ in range(3))
+                state = {'assets': [PAXG], 'weights': ['1000000'], 'conversions': [str(10**18)],
+                    'issueFee': '1000', 'helperFee': '1000', 'redeemFee': '1000', 'supply': '100000',
+                    'maxSupply': '10000000', 'effectiveCap': '10000000', 'available': ['100000'],
+                    'recoveryShares': [], 'recoveryValues': [],
+                    'descriptors': [{'kind': 0, 'token': PAXG, 'id': '0'}]}
+                acquired = []
+                async def acquire(_rpc, block, context, epoch):
+                    acquired.append(deepcopy(block)); core_started.set()
+                    await release.wait()
+                    if failed == 'core': raise OSError('optional Core model unavailable')
+                    history.states[block_key(block)] = {'state': deepcopy(state), 'context': observation_context(context)}
+                async def market(value, *, block):
+                    self.assertEqual(block, LATEST_BLOCK)
+                    market_started.set()
+                    if failed == 'market': raise OSError('optional Market model unavailable')
+                    return {**engines.packet(value), 'routes': [{'route': {}}]}
+                history.acquire_state, engines.market.get_model = acquire, market
+                value = {key: row for key, row in request(mode='exact-out').items()
+                         if key not in ('recipient', 'deadline')}
+                operation = asyncio.create_task(engines.quotes.get_model(value))
+                try:
+                    await asyncio.wait_for(asyncio.gather(core_started.wait(), market_started.wait()), 1)
+                    self.assertFalse(operation.done(), 'the already-started Core model is still held')
+                    self.assertIn(('state', None), history.tasks)
+                    release.set()
+                    result = await asyncio.wait_for(operation, 1)
+                    models = {row['strategy']: row['value'] for row in result['models']}
+                    self.assertEqual(bool(models.get('core', {}).get('protocol')), failed != 'core')
+                    self.assertEqual(bool(models.get('market', {}).get('routes')), failed != 'market')
+                    if failed != 'core':
+                        self.assertEqual(models['core']['protocol']['state'], state)
+                        self.assertEqual(models['core']['protocol']['context']['blockHash'], None)
+                    self.assertEqual(acquired, [LATEST_BLOCK])
+                    engines.market.head.assert_awaited_once()
+                finally:
+                    release.set()
+                    if not operation.done(): operation.cancel()
+                    await asyncio.gather(operation, return_exceptions=True)
+
+    async def test_warm_legacy_model_skips_inventory_wait_but_resolution_and_cold_hydration_remain(self):
+        engines = self.engines()
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def ensure_loaded(*, wait=False):
+            self.assertTrue(wait)
+            entered.set(); await release.wait()
+        hydration = AsyncMock(side_effect=ensure_loaded)
+        engines.market.registry = SimpleNamespace(ensure_loaded=hydration)
+        cached = {'routes': [{'route': {}}]}
+        engines.market.packet = lambda value: {**engines.packet(value), **deepcopy(cached)}
+        resolve = engines.quotes.request_resolver
+        reset = False
+        async def resolved(value):
+            if reset:
+                # The existing resolver/observer owns generation resets. A
+                # warm check must see the model after that observation.
+                cached['routes'] = []
+            return await resolve(value)
+        engines.quotes.request_resolver = AsyncMock(side_effect=resolved)
+        value = {key: row for key, row in request(mode='exact-out').items()
+                 if key not in ('recipient', 'deadline')}
+        warm = await asyncio.wait_for(engines.quotes.get_model(value), 1)
+        self.assertEqual(warm['models'][0]['value']['routes'], [{'route': {}}])
+        hydration.assert_not_awaited()
+        self.assertEqual((engines.heads, engines.models), (0, 0))
+        engines.quotes.request_resolver.assert_awaited_once()
+        reset = True
+        operation = asyncio.create_task(engines.quotes.get_model(value))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            self.assertFalse(operation.done())
+            self.assertEqual((engines.heads, engines.models), (0, 0))
+            release.set()
+            await asyncio.wait_for(operation, 1)
+            hydration.assert_awaited_once_with(wait=True)
+            self.assertEqual((engines.heads, engines.models), (1, 1))
+            self.assertEqual(engines.quotes.request_resolver.await_count, 2)
+        finally:
+            release.set()
+            if not operation.done(): operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
     async def test_retained_core_never_starts_blocked_market_model(self):
         engines = self.engines()
         initial = await engines.quotes.get(request(), lambda _: asyncio.sleep(0))

@@ -10,6 +10,8 @@ import json
 
 from ..market_fee import get_market_fee_rate
 from ..protocol_config import configured_address
+from .path_families import PATH_FAMILIES, quote_path_family
+from .ranking import prefer_completed
 
 
 @dataclass(frozen=True)
@@ -64,88 +66,125 @@ class EconomicQuoteStore:
                                   json.dumps(deployment, sort_keys=True, separators=(',', ':')))
 
     async def neighbors(self, request, *, scope=None):
-        """Project bounded headers, then retrieve only the selected neighbors.
+        """Return lower/upper completed observations independently per path family.
 
-        The lower candidate is the best observed output whose funding fits the budget;
-        a nearer but poor quote must not hide it. The upper remains nearest
-        for the existing arithmetic hint and downscaled replay. The captured
-        identity preserves deployment/configuration family without a head or
-        new freshness rule. Historical outputs only order fresh replay work.
+        Lower means the best observed output funded within the new budget,
+        including an exact request or a larger historical maximum. Upper stays
+        the nearest strictly larger historical maximum for downscaled replay.
+        Only the at-most-four selected complete payloads leave optional SQL.
         """
-        empty = {'lower': None, 'upper': None}
         if self.store is None:
-            return empty
+            return []
         try:
             normalized = normalized_economic_request(request)
             if normalized['intent'] not in (0, 1) or len(normalized['inputs']) != 1:
-                return empty
+                return []
             selected = scope or self.capture_scope(request)
             deployment = json.loads(selected.deployment)
             budget = int(normalized['inputs'][0]['amount'])
-            family = {**normalized, 'inputs': [{'currency': normalized['inputs'][0]['currency']}]}
+            intent = {**normalized, 'inputs': [{'currency': normalized['inputs'][0]['currency']}]}
             await self.store.prepare()
             async with self.store.database.connection() as connection:
-                cursor = await connection.execute('''SELECT identity,
+                cursor = await connection.execute('''WITH recent AS (
+                    SELECT split_part(identity, ':', 1) AS point
+                    FROM cybergold_uniswap_state
+                    WHERE chain_id=%s AND core_address=%s AND namespace=%s
+                    GROUP BY point
+                    ORDER BY MAX((payload->>'savedSequence')::bigint) DESC, point LIMIT %s
+                ) SELECT identity,
                     payload->'quote'->'request' AS request,
                     payload->'quote'->>'quotedOutput' AS quoted_output,
                     payload->'quote'->'inputs'->0->>'amount' AS funded_input,
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(COALESCE(
+                            payload->'quote'->'plan'->'body'->'branches', '[]'::jsonb)) AS branch
+                        WHERE branch->>'kind'='0' AND (branch->>'amountIn')::numeric > 0
+                    ) THEN 'core' ELSE 'market' END AS path_family,
                     (payload->>'savedSequence')::bigint AS sequence
                     FROM cybergold_uniswap_state
                     WHERE chain_id=%s AND core_address=%s AND namespace=%s
-                    ORDER BY (payload->>'savedSequence')::bigint DESC, identity LIMIT %s''',
-                    (selected.chain, selected.core, selected.namespace, self.limit))
+                    AND split_part(identity, ':', 1) IN (SELECT point FROM recent)
+                    ORDER BY (payload->>'savedSequence')::bigint DESC, identity''',
+                    (selected.chain, selected.core, selected.namespace, self.limit,
+                     selected.chain, selected.core, selected.namespace))
                 headers = await cursor.fetchall()
-                chosen = {}
+                chosen = {family: {} for family in PATH_FAMILIES}
+                points = set()
                 for row in headers:
                     try:
                         candidate = normalized_economic_request(row['request'])
                         if len(candidate['inputs']) != 1:
                             continue
-                        candidate_family = {**candidate, 'inputs': [{'currency': candidate['inputs'][0]['currency']}]}
-                        if candidate_family != family or request_identity(candidate, deployment) != row['identity']:
+                        candidate_intent = {**candidate, 'inputs': [{'currency': candidate['inputs'][0]['currency']}]}
+                        if candidate_intent != intent:
                             continue
+                        family = row.get('path_family', 'market')
+                        identity = request_identity(candidate, deployment)
+                        if row['identity'] not in (identity, identity+':'+family):
+                            continue
+                        # Old single-winner and new per-family rows can name
+                        # the same logical point. Their producer sequence keeps
+                        # the existing most-recent overwrite semantics.
+                        point = (identity, family)
+                        if point in points:
+                            continue
+                        points.add(point)
                         amount = int(candidate['inputs'][0]['amount'])
-                        if amount == budget:
-                            continue
-                        # A quote requested with a larger maximum can still
-                        # fit this budget. Use its actual declared funding,
-                        # falling back to the request for older stored headers.
                         funded = int(row.get('funded_input') or amount)
                         output = int(row['quoted_output'])
-                        lower = chosen.get('lower')
+                        lower = chosen[family].get('lower')
                         rank = (output, -funded, -abs(amount-budget))
                         if funded <= budget and (lower is None or rank > lower[3]):
-                            chosen['lower'] = (amount, row['identity'], output, rank)
-                        upper = chosen.get('upper')
-                        if amount > budget and (upper is None or amount < upper[0]):
-                            chosen['upper'] = (amount, row['identity'], output)
+                            chosen[family]['lower'] = (amount, row['identity'], output, rank)
+                        upper = chosen[family].get('upper')
+                        if amount > budget and (upper is None or amount < upper[0]
+                                or amount == upper[0] and (output, -funded) > (upper[2], -upper[3])):
+                            chosen[family]['upper'] = (amount, row['identity'], output, funded)
                     except (KeyError, TypeError, ValueError, AttributeError):
                         continue
-                if not chosen:
-                    return empty
+                projected = [(family, side, chosen[family][side][1]) for family in PATH_FAMILIES
+                             for side in ('lower', 'upper') if side in chosen[family]]
+                identities = list(dict.fromkeys(identity for _, _, identity in projected))
+                if not identities:
+                    return []
                 cursor = await connection.execute('''SELECT identity, payload->'quote' AS quote
                     FROM cybergold_uniswap_state WHERE chain_id=%s AND core_address=%s
                     AND namespace=%s AND identity=ANY(%s)''',
-                    (selected.chain, selected.core, selected.namespace,
-                     list(dict.fromkeys(row[1] for row in chosen.values()))))
+                    (selected.chain, selected.core, selected.namespace, identities))
                 quotes = {row['identity']: row['quote'] for row in await cursor.fetchall()}
-                return {side: {'identity': chosen[side][1], 'quote': deepcopy(quotes[chosen[side][1]])}
-                        if side in chosen and chosen[side][1] in quotes else None for side in empty}
+                result = []
+                for family, side, identity in projected:
+                    if identity in quotes:
+                        result.append({'family': family, 'side': side, 'identity': identity,
+                                       'quote': deepcopy(quotes[identity])})
+                return result
         except Exception:
-            return empty
+            return []
 
     async def lookup(self, request, *, scope=None):
         if self.store is None:
             return None
         try:
             selected = scope or self.capture_scope(request)
+            scalar = request['intent'] in (0, 1)
+            identities = ([selected.identity, *(selected.identity+':'+family for family in PATH_FAMILIES)]
+                          if scalar else [selected.identity])
             await self.store.prepare()
             async with self.store.database.connection() as connection:
                 cursor = await connection.execute('''SELECT payload FROM cybergold_uniswap_state
-                    WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=%s''',
-                    (selected.chain, selected.core, selected.namespace, selected.identity))
-                row = await cursor.fetchone()
-                return deepcopy(row['payload']['quote']) if row else None
+                    WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity=ANY(%s)
+                    ORDER BY (payload->>'savedSequence')::bigint DESC, identity''',
+                    (selected.chain, selected.core, selected.namespace, identities))
+                best, families = None, set()
+                for row in await cursor.fetchall():
+                    value = row['payload']['quote']
+                    family = quote_path_family(value)
+                    if family in families:
+                        continue
+                    families.add(family)
+                    if prefer_completed(value, best, scalar=scalar, basket=request['intent'] >= 2):
+                        best = value
+                return deepcopy(best)
         except Exception:
             # Optional cache availability never rejects ordinary search.
             return None
@@ -155,6 +194,8 @@ class EconomicQuoteStore:
             return False
         try:
             selected = scope or self.capture_scope(request)
+            identity = (selected.identity+':'+quote_path_family(quote)
+                        if request['intent'] in (0, 1) else selected.identity)
             encoded = json.dumps(deepcopy(quote))
             await self.store.prepare()
             async with self.store.database.connection() as connection:
@@ -176,12 +217,15 @@ class EconomicQuoteStore:
                             'savedSequence', %s::bigint, 'savedAt', clock_timestamp()))
                         ON CONFLICT(chain_id,core_address,namespace,identity)
                         DO UPDATE SET payload=EXCLUDED.payload''',
-                        (selected.chain, selected.core, selected.namespace, selected.identity, encoded, sequence))
+                        (selected.chain, selected.core, selected.namespace, identity, encoded, sequence))
                     await connection.execute('''DELETE FROM cybergold_uniswap_state
-                        WHERE chain_id=%s AND core_address=%s AND namespace=%s AND identity IN (
-                            SELECT identity FROM cybergold_uniswap_state
+                        WHERE chain_id=%s AND core_address=%s AND namespace=%s
+                        AND split_part(identity, ':', 1) IN (
+                            SELECT split_part(identity, ':', 1) AS point
+                            FROM cybergold_uniswap_state
                             WHERE chain_id=%s AND core_address=%s AND namespace=%s
-                            ORDER BY (payload->>'savedSequence')::bigint DESC, identity
+                            GROUP BY point
+                            ORDER BY MAX((payload->>'savedSequence')::bigint) DESC, point
                             OFFSET %s)''',
                         (selected.chain, selected.core, selected.namespace,
                          selected.chain, selected.core, selected.namespace, self.limit))
