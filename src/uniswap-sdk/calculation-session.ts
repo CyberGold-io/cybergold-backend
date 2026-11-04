@@ -17,6 +17,10 @@ export function createCalculationSession(calculate: Calculation, reply: (value: 
       if (frame.operation === 'cancel') {
         const request = requests.get(frame.id);
         if (request) retire(request);
+        requests.delete(frame.id);
+        // Python drains this query's callback writers before cancel. No late
+        // quoteResult can follow it, and retired calculations cannot publish.
+        reply({ id: frame.id, operation: 'cancelled' });
         return true;
       }
       if (frame.operation === 'quoteResult') {

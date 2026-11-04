@@ -181,6 +181,9 @@ class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
         script = '''import json, sys
 for line in sys.stdin:
     request = json.loads(line)
+    if request.get('operation') == 'cancel':
+        print(json.dumps({'id': request['id'], 'operation': 'cancelled'}), flush=True)
+        continue
     if request['id'] == '1':
         print(json.dumps({'id': '1', 'operation': 'quote', 'quoteId': '1:1',
             'mode': 'exactIn', 'amount': '1000', 'branches': [{'amountIn': '1000',

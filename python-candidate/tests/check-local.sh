@@ -62,8 +62,11 @@ python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute
 python-candidate/.venv/bin/python python-candidate/tests/test_probe_hosted_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hosted_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_core_market_segments.py
+python-candidate/.venv/bin/python python-candidate/tests/test_core_market_composition.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_api_queue.py
 python-candidate/.venv/bin/python python-candidate/tests/test_alpha_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_optimizer_sessions.py
+python-candidate/.venv/bin/python python-candidate/tests/test_connector_refill.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniroute_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_observations.py
 python-candidate/.venv/bin/python python-candidate/tests/test_v3_bitmap_batch.py
@@ -79,6 +82,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_path_family_search
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identity.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
+python-candidate/.venv/bin/python python-candidate/tests/test_sdk_simulation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_latest_uniswap_state.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py
 python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_estimates.py
@@ -91,6 +95,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_search_observation
 python-candidate/.venv/bin/python python-candidate/tests/test_search_read_fanout.py
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
+python-candidate/.venv/bin/python python-candidate/tests/test_retained_economic_routes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_cache_parallel.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py

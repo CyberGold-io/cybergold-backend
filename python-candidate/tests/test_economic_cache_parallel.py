@@ -9,12 +9,13 @@ import weakref
 from cybergold_candidate.economic_quotes import EconomicQuotes
 from cybergold_candidate.progressive_quotes import CanonicalPublication
 from cybergold_candidate.quoter.reuse_estimate import attach_reuse_sample
+from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
 from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context
 from cybergold_candidate.quoter.provenance import attach_origins
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from test_economic_quote_api import SharedStore
 from test_progressive_economic_quotes import economic_request, ScriptedQuoter
-from test_universal_quote import Quotes, Engine, BLOCK
+from test_universal_quote import Quotes, Engine, BLOCK, PAXG, OTHER
 
 
 class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
@@ -144,15 +145,10 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
         service = self.service(script)
         async def lookup(*_, **__):
             await release.wait()
+            offered.set()
             return deepcopy(old)
         service.store.lookup = AsyncMock(side_effect=lookup)
         service.store.neighbors = AsyncMock(return_value=[])
-        cached_offer = service.cached_offer
-        async def observed_offer(*args, **options):
-            value = await cached_offer(*args, **options)
-            offered.set()
-            return value
-        service.cached_offer = observed_offer
         frames = []
         async def publish(frame):
             frames.append(deepcopy(frame)); ready.set()
@@ -171,6 +167,10 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
                 drained = {name: asyncio.Event() for name in entered}
                 fresh_release, delivered = asyncio.Event(), asyncio.Queue()
                 exact, lower, core, fresh = (deepcopy(self.value) for _ in range(4))
+                lower.update(neighbor_proposals(lower, int(lower['inputs'][0]['amount'])-1, [PAXG, OTHER])[-1])
+                core = await Quotes(Engine()).candidate(self.request, 100, 'core-first', BLOCK,
+                                                       [PAXG, OTHER], [500000, 500000])
+                attach_origins(core)
                 for quote, output, observation in ((exact, '100', 'exact'), (lower, '110', 'lower'),
                                                    (core, '120', 'core'), (fresh, '130', 'current')):
                     quote['quotedOutput'] = output
@@ -305,7 +305,7 @@ class ParallelCacheTests(unittest.IsolatedAsyncioTestCase):
                     neighbors_done.set()
                     return [{'family': 'market', 'side': 'lower', 'quote': deepcopy(self.value)}]
                 store.lookup, store.neighbors = lookup, neighbors
-                async def script(_request, **kwargs):
+                async def script(_request, callback=None, **kwargs):
                     seed, nearby = await asyncio.gather(kwargs['seed_lookup'](), kwargs['neighbors']())
                     self.assertIsNone(seed)
                     self.assertEqual(nearby[0]['quote']['plan'], self.value['plan'])

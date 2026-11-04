@@ -6,80 +6,126 @@ use latest simulation observations without additional block verification.
 import asyncio
 from copy import deepcopy
 
-from .quoter.ranking import prefer_completed
-from .quoter.provenance import merge_origins
-from .quoter.reuse_estimate import attach_reuse_sample, input_limit_observed
 from .quoter.types import EconomicRequest
+from .quoter.reuse_routes import funded_route_identity
+from .quoter.quote_book import QuoteBook
 from .recovery_rpc import SnapshotChanged
-from .telemetry import observe
+from .quote_errors import QuoteFailure
 
 
 class CanonicalPublication:
-    def __init__(self, quoter, request, publish, *, refresh=False):
+    def __init__(self, quoter, request, publish, *, refresh=False, cache=None):
         self.quoter, self.request, self.publish = quoter, request, publish
-        self.refresh = refresh
+        self.refresh, self.cache = refresh, cache
         self.queue = asyncio.Queue()
+        registry = getattr(getattr(quoter, 'engine', None), 'registry', None)
+        self.book = QuoteBook(request, refresh=refresh, seed=getattr(registry, 'seed', None))
         self.best = None
-        self.historical_best = None
         self.closed = False
-        self.context = None
-        self.disproof = None
+        self.private_observations = False
+        self.context = self.disproof = None
+        self.book.on_observation = self._accept_observation
+        self.book.on_history = self._accept_history
+        if cache is not None:
+            cache.bind(self.book)
 
-    def preferred(self, value):
-        return prefer_completed(value, self.best, scalar=self.request['intent'] in (0, 1),
-                                basket=self.request['intent'] >= 2)
+    def _current(self, frame):
+        frame = {**frame, '_candidateIdentity': frame.get('_candidateIdentity') or funded_route_identity(frame['value'])}
+        if self.cache is not None:
+            self.cache.announce(frame)
+        else:
+            self._accept_observation(frame, max(self.book.versions.values(), default=0) + 1)
+
+    def _accept_observation(self, frame, version):
+        if frame.get('type') == 'candidate-repriced':
+            self.private_observations = True
+        value, identity = frame['value'], frame['_candidateIdentity']
+        replaces = frame.get('_replacesIdentity')
+        self.book.versions[identity] = version
+        if replaces is not None:
+            self.book.versions[replaces] = version
+        previous = self.book.winner()
+        self.book.observe(value, identity=identity, replaces=replaces)
+        if self.cache is not None:
+            if replaces is not None:
+                self.cache.forget_pending(replaces)
+            if value is None:
+                self.cache.forget_pending(identity)
+        if value is not None:
+            self.context = deepcopy(value['context'])
+        elif previous is not None:
+            self.disproof = deepcopy(previous['context'])
+        self._remember_families()
+        self.queue.put_nowait(('changed', None))
+
+    def _accept_history(self, value, sequence):
+        if self.book.observe(value, current=False, sequence=sequence):
+            self.queue.put_nowait(('changed', None))
+
+    def _historical(self, value):
+        try:
+            observation = self.cache.historical_observation(value) if self.cache is not None else (value, None)
+            if observation is not None:
+                self.book.observe(observation[0], current=False, sequence=observation[1])
+        except (KeyError, TypeError, ValueError):
+            pass  # An incomplete old cache row cannot interrupt ordinary search.
+
+    def _remember_families(self):
+        if self.cache is not None:
+            for value, current in self.book.family_values().values():
+                if current:
+                    self.cache.remember(value, version=self.book.versions.get(funded_route_identity(value)))
+
+    async def observe_family(self, value):
+        if funded_route_identity(value) not in self.book.observed:
+            await self.enqueue({'type': 'candidate-repriced', 'value': value})
 
     async def enqueue(self, frame):
-        # This callback executes in candidate work. Do not put canonical RPC,
-        # transport backpressure or SQL awaits on that producer critical path.
         if self.closed:
             return
-        if frame['type'] == 'qualified':
-            value = deepcopy(frame['value'])
-            self.context = deepcopy(value['context'])
-            self.queue.put_nowait(('candidate', value))
+        if frame['type'] == 'candidate-repriced':
+            self._current(frame)
+        elif frame['type'] == 'qualified':
+            # Legacy/scripted producers retain their ordinary callback. Real
+            # Quoter observations enter through the private on_candidate hook.
+            previous = self.book.rows.get(funded_route_identity(frame['value']))
+            if previous is None or previous[0] != frame['value']:
+                self._current(frame)
+            self.queue.put_nowait(('changed', None))
         elif frame['type'] == 'upper-replay-settled':
-            # Ordered behind the upper candidate's canonical publication. The
-            # display hint is not a quote and needs no additional chain read.
             self.queue.put_nowait(('upper-replay-settled', None))
 
     async def run(self):
         while (item := await self.queue.get()) is not None:
             kind, value = item
-            if kind == 'stored':
-                # The optional historical read may finish after current
-                # Helpers pricing. It never holds or replaces that result.
-                if self.best is None and not self.closed:
-                    if prefer_completed(value, self.historical_best,
-                                        scalar=self.request['intent'] in (0, 1),
-                                        basket=self.request['intent'] >= 2):
-                        self.historical_best = value
-                        await self.publish({'type': 'qualified', 'value': deepcopy(value)})
-                    else:
-                        previous_limit = input_limit_observed(self.historical_best)
-                        merge_origins(self.historical_best, value)
-                        if not previous_limit and input_limit_observed(self.historical_best):
-                            await self.publish({'type': 'qualified', 'value': deepcopy(self.historical_best)})
-                continue
-            if kind == 'upper-replay-settled':
-                if not self.closed:
-                    await self.publish({'type': kind})
-                continue
             if self.closed:
                 continue
-            if kind == 'terminal' and self.best is not None:
-                previous_limit = input_limit_observed(self.best)
-                merge_origins(self.best, value)
-                if not previous_limit and input_limit_observed(self.best):
-                    # Equivalent terminal economics can add a paid limitation
-                    # observation. Deliver the whole winner via the same owned
-                    # publication path before the transport's complete frame.
-                    await self.publish({'type': 'qualified', 'value': deepcopy(self.best)})
-            if not self.preferred(value):
+            if kind == 'upper-replay-settled':
+                await self.publish({'type': kind})
                 continue
-            self.best = {**attach_reuse_sample(value),
-                         'observation': {'source': 'search', 'refresh': self.refresh}}
-            await self.publish({'type': 'qualified', 'value': deepcopy(self.best)})
+            if kind == 'stored':
+                self._historical(value)
+            elif kind == 'stored-batch':
+                for observation in value:
+                    self._historical(observation)
+            elif kind == 'candidate':
+                self._current({'value': value})
+            elif kind == 'terminal':
+                if not self.private_observations or funded_route_identity(value) not in self.book.observed:
+                    self._current({'value': value})
+                else:
+                    self.book.finish(value)
+                self._remember_families()
+            winner = self.book.winner()
+            if winner == self.best and not (winner is None and self.disproof is not None):
+                continue
+            previous, self.best = self.best, winner
+            if winner is not None:
+                await self.publish({'type': 'qualified', 'value': deepcopy(winner)})
+            elif previous is not None or self.disproof is not None:
+                await self.publish({'type': 'invalidated', 'context': deepcopy(
+                    previous['context'] if previous is not None else self.disproof)})
+                self.disproof = None
 
 
 async def progressive_quote(service, request, publish, *, refresh=False):
@@ -93,68 +139,69 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             await publish({'type': 'qualified', 'value': deepcopy(offered)})
             return offered
 
-        publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh)
+        publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh, cache=cache)
+        neighbors = cache.memory_neighbors() if scalar else []
+        seeds = cache.route_seeds(neighbors) if scalar else []
+        # L1 history is ready before SQL or a prior producer's teardown. The
+        # book ranks it alongside each subsequent private Helpers observation.
+        memory = cache.memory_lookup()
+        stored = ([memory] if memory is not None else []) + [row['quote'] for row in neighbors]
+        if stored:
+            for value in stored:
+                publication._historical(value)
+            publication.queue.put_nowait(('changed', None))
         producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
-            seed=previous, seed_lookup=cache.lookup if scalar or refresh else None,
-            neighbors=cache.neighbors if scalar else None,
-            on_family=cache.observe_family if scalar else None))
+            seed=previous, seed_lookup=cache.sql_lookup if scalar or refresh else None,
+            neighbors=cache.sql_neighbors if scalar else None,
+            on_family=publication.observe_family if scalar else None,
+            on_candidate=publication.enqueue,
+            **({'route_seeds': seeds} if seeds else {})))
         consumer = asyncio.create_task(publication.run())
         async def historical_offer():
             async def offer(read, *, nearby):
                 try:
                     value = await read()
-                    offered = await service.cached_offer(request, None if nearby else value, await cache.scope(),
-                                                         neighbors=value if nearby else [])
-                    if offered is not None:
-                        publication.queue.put_nowait(('stored', deepcopy(offered)))
+                    values = [row['quote'] for row in value] if nearby else [value]
+                    publication.queue.put_nowait(('stored-batch', [quote for quote in values if quote is not None]))
                 except Exception:
-                    pass  # Optional historical input cannot reject current pricing.
-            readers = (asyncio.create_task(offer(cache.lookup, nearby=False)),
-                       asyncio.create_task(offer(cache.neighbors, nearby=True)))
+                    pass
+            readers = (asyncio.create_task(offer(cache.sql_lookup, nearby=False)),
+                       asyncio.create_task(offer(cache.sql_neighbors, nearby=True)))
             try:
                 await asyncio.gather(*readers)
             finally:
                 for reader in readers:
-                    if not reader.done():
-                        reader.cancel()
+                    if not reader.done(): reader.cancel()
                 await asyncio.gather(*readers, return_exceptions=True)
-        historical = (asyncio.create_task(historical_offer()) if scalar and not refresh else None)
-        tasks = (producer, consumer)
-        owned = (*tasks, historical) if historical is not None else tasks
-        terminal = None
+        historical = asyncio.create_task(historical_offer()) if scalar else None
+        owned = (producer, consumer, historical) if historical is not None else (producer, consumer)
         try:
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait((producer, consumer), return_when=asyncio.FIRST_COMPLETED)
             if consumer in done:
-                # Publisher errors remain owned by this request and cancel
-                # pricing; optional storage cannot conceal a transport failure.
                 await consumer
-            terminal = await producer
-            # The returned winner completed its Helpers execution simulation.
+            try:
+                terminal = await producer
+            except Exception:
+                # Deliver any already-observed winner or paid empty-book
+                # invalidation before the ordinary producer error frame.
+                publication.queue.put_nowait(None)
+                await consumer
+                raise
             publication.queue.put_nowait(('terminal', deepcopy(terminal)))
             publication.queue.put_nowait(None)
             await consumer
         finally:
             publication.closed = True
             for task in owned:
-                if not task.done():
-                    task.cancel()
+                if not task.done(): task.cancel()
             outcomes = await asyncio.gather(*owned, return_exceptions=True)
-            disproof = publication.disproof or next((error for error in outcomes
-                                                     if isinstance(error, SnapshotChanged)), None)
+            disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
             if disproof is not None:
-                cache.completed.clear()
                 if publication.context is not None:
                     disproof.economic_context = deepcopy(publication.context)
                 raise disproof
-            if publication.best is not None:
-                if terminal is not None:
-                    # A terminal tie can carry additional nomination origins.
-                    merge_origins(publication.best, terminal)
-                if terminal is not None and terminal.get('metrics') is not None:
-                    publication.best['metrics'] = deepcopy(terminal['metrics'])
-                # The service owns the optional write after all producer and
-                # publication outcomes were drained. Delivery never waits SQL.
-                cache.save(publication.best)
+        if publication.best is None:
+            raise QuoteFailure('quote-no-route')
         return deepcopy(publication.best)
     finally:
         cache.flush()

@@ -19,6 +19,7 @@ from .recovery_rpc import SnapshotChanged
 from .rpc_diagnostics import route_count, route_legs, route_leg_started, route_leg_finished
 from .route_scheduler import schedule_routes, raise_snapshot_disproof
 from .sdk_worker import SdkWorker, MissingPoolState
+from .sdk_simulation import simulate_sdk
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
     pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
     market_anchor, LEGACY_V3_ADAPTERS)
@@ -48,13 +49,22 @@ class RouteQuoteEngine:
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
         self.semaphore = PricingSlots(8)
+        self._route_optimizers = {}
         self.uniswap_api_queue = UniswapApiQueue(
             int(getattr(settings, 'CYBERGOLD_UNISWAP_API_RPS', None) or 6))
 
     async def close(self):
         self.uniswap_api_queue.close()
+        await asyncio.gather(*(driver.close() for driver in self._route_optimizers.values()))
+        self._route_optimizers.clear()
         await self.shared.close()
         await self.sdk.close()
+
+    def route_optimizer(self, provider):
+        """Construct each local driver lazily; searches own only its sessions."""
+        if provider not in self._route_optimizers:
+            self._route_optimizers[provider] = provider(self)
+        return self._route_optimizers[provider]
 
     def enrich_branches(self, branches):
         """Attach observed metadata without changing execution identity."""
@@ -208,9 +218,10 @@ class RouteQuoteEngine:
                 pending.add(asyncio.create_task(v2(pair)))
                 for fee in (100, 500, 3000, 10000):
                     pending.add(asyncio.create_task(v3(pair, fee)))
-                if len(pending) >= 32:
-                    await asyncio.gather(*pending)
-                    pending.clear()
+                while len(pending) >= 32:
+                    done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                    await asyncio.gather(*done)
+                    pending.difference_update(done)
             await asyncio.gather(*pending)
         finally:
             for task in pending:
@@ -356,7 +367,7 @@ class RouteQuoteEngine:
         # completed swaps. The existing producer budget still owns every fill.
         while True:
             try:
-                value = await self.sdk.request(payload, on_state=acquire)
+                value = await simulate_sdk(self, payload, acquire)
                 if candidate is not None:
                     # Compact postState carries only changing fields. Keep
                     # canonical coverage in this isolated candidate bank.

@@ -6,6 +6,7 @@ import unittest
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.path_families import quote_path_family
 from cybergold_candidate.quoter.reuse_routes import neighbor_proposals, proposal_identity
+from cybergold_candidate.quoter.reuse_routes import funded_route_identity
 from cybergold_candidate.quote_errors import QuoteFailure
 from test_universal_quote import Quotes, Engine, CORE, PAXG, OTHER, WETH, BLOCK
 
@@ -57,7 +58,61 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
             for family, side, quote in [('market','lower',lower_market),('market','upper',upper_market),
                                         ('core','lower',lower_core),('core','upper',upper_core)]]
 
-    async def test_four_distinct_family_neighbors_start_together_and_capture_global_losers(self):
+    async def test_private_reprice_and_disproof_never_enter_legacy_update_callback(self):
+        from unittest.mock import AsyncMock
+        q = quoter()
+        rows = await self.rows(q)
+        original = q.candidate
+        async def candidate(funding, *args, **options):
+            selected = options.get('selected')
+            if selected is None:
+                raise QuoteFailure('quote-no-route')
+            if funding['inputs'][0]['amount'] == '10000' and selected['allocations'][0]['kind'] == 1:
+                raise QuoteFailure('quote-contract-reverted')
+            return await original(funding, *args, **options)
+        q.candidate = candidate
+        q.amm.async_family_offers = AsyncMock(return_value=[])
+        frames = []
+        async def update(frame): frames.append(deepcopy(frame))
+        async def neighbors(): return deepcopy(rows)
+        async with asyncio.timeout(3):
+            await Quoter.get(q, request(20000), update, neighbors=neighbors)
+        self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
+        self.assertTrue(all(frame['type'] in ('qualified', 'upper-replay-settled') for frame in frames))
+        self.assertTrue(all(not any(key.startswith('_candidate') or key == '_replacesIdentity'
+                                   for key in frame) for frame in frames))
+
+    async def test_private_observer_receives_each_paid_original_and_expansion_before_ranking(self):
+        from unittest.mock import AsyncMock
+        q = quoter()
+        rows = await self.rows(q)
+        original = q.candidate
+        async def candidate(funding, *args, **options):
+            if options.get('selected') is None:
+                raise QuoteFailure('quote-no-route')
+            return await original(funding, *args, **options)
+        q.candidate = candidate
+        q.amm.async_family_offers = AsyncMock(return_value=[])
+        frames = []
+        async def observed(frame):
+            frames.append(deepcopy(frame))
+        async def neighbors():
+            return deepcopy(rows)
+        async with asyncio.timeout(3):
+            value = await Quoter.get(q, request(20000), neighbors=neighbors, on_candidate=observed)
+        self.assertEqual(len(frames), 6)
+        self.assertTrue(all(frame['type'] == 'candidate-repriced' for frame in frames))
+        self.assertCountEqual([frame['value']['inputs'][0]['amount'] for frame in frames],
+                              ['20000'] * 4 + ['10000'] * 2)
+        self.assertEqual(len({frame['_candidateIdentity'] for frame in frames}), 6)
+        self.assertTrue(all(frame['_candidateIdentity'] == funded_route_identity(frame['value'])
+                            for frame in frames))
+        self.assertEqual(int(value['quotedOutput']), max(int(frame['value']['quotedOutput']) for frame in frames))
+        self.assertTrue(any(int(frame['value']['quotedOutput']) < int(value['quotedOutput']) for frame in frames),
+                        'paid losing observations must reach the private observer too')
+        self.assertEqual(q.engine.semaphore._value, 8)
+
+    async def test_four_topologies_replay_fitting_originals_and_capture_global_losers(self):
         for cancelled in (False, True):
             with self.subTest(cancelled=cancelled):
                 q = quoter()
@@ -72,7 +127,7 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
                     result = await original(funding, *args, **options)
                     key = proposal_identity({'inputs': funding['inputs'], 'plan': options['selected']})
                     paid[key] = {'value': result, 'release': asyncio.Event()}
-                    if len(paid) == 4:
+                    if len(paid) == 6:
                         entered.set()
                     try:
                         await paid[key]['release'].wait()
@@ -100,8 +155,9 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
                         seed=rows[0]['quote'], on_family=family))
                     try:
                         await entered.wait()
-                        self.assertEqual(len(paid), 4)
-                        self.assertTrue(all(row['value']['inputs'] == target['inputs'] for row in paid.values()))
+                        self.assertEqual(len(paid), 6)
+                        self.assertCountEqual([row['value']['inputs'][0]['amount'] for row in paid.values()],
+                                              ['20000'] * 4 + ['10000'] * 2)
                         ordered = sorted(paid.values(), key=lambda row: int(row['value']['quotedOutput']), reverse=True)
                         winner = ordered[0]
                         winner['release'].set()
@@ -122,7 +178,7 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
                             task.cancel()
                             with self.assertRaises(asyncio.CancelledError):
                                 await task
-                            self.assertEqual(len(cancelled_calls), 2)
+                            self.assertEqual(len(cancelled_calls), len(paid) - 2)
                         else:
                             for row in ordered:
                                 row['release'].set()
@@ -216,7 +272,7 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
         async def candidate(funding, *args, **options):
             if options.get('selected') is None:
                 raise QuoteFailure('quote-no-route')
-            calls.append(deepcopy(options['selected']))
+            calls.append({'funding': deepcopy(funding['inputs']), 'plan': deepcopy(options['selected'])})
             return await original(funding, *args, **options)
         q.candidate = candidate
         from unittest.mock import AsyncMock
@@ -226,7 +282,8 @@ class PathFamilySearchTests(unittest.IsolatedAsyncioTestCase):
                     for side,quote in [('lower',lower),('upper',upper)]]
         async with asyncio.timeout(3):
             value = await Quoter.get(q, request(20000, 1), neighbors=neighbors)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 2)
+        self.assertCountEqual([row['funding'][0]['amount'] for row in calls], ['10000', '20000'])
         self.assertEqual(value['inputs'], request(20000, 1)['inputs'])
         self.assertEqual(len(value['metrics']['nearbySearch']['sources']), 1)
         self.assertEqual(len(value['metrics']['nearbySearch']['sources'][0]['aliases']), 1)

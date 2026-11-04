@@ -125,7 +125,10 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
                 await store.save(maximum, old, scope=store.capture_scope(maximum))
                 lower = deepcopy(old)
                 lower['quotedOutput'] = str(int(old['quotedOutput']) + 1)
-                lower['plan']['body']['known_floor_marker'] = True
+                from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+                from cybergold_candidate.quoter.dormant_routes import with_dormant_routes
+                lower.update(neighbor_proposals(lower, int(lower['inputs'][0]['amount']) - 1, [PAXG, OTHER])[-1])
+                lower = with_dormant_routes(lower, quoter.engine.registry.seed)
                 store.neighbors = AsyncMock(return_value=[{'family': quote_path_family(lower), 'side': 'lower', 'quote': lower}])
                 historical_delivered = asyncio.Event()
                 async def optimize(value, callback=None, **options):
@@ -271,13 +274,15 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         quoter.candidate = hold_ordinary
         async def publish(frame):
             frames.append(deepcopy(frame))
-            if frame['type'] == 'qualified':
+            if frame['type'] == 'qualified' and frame['value']['observation']['source'] == 'search':
                 seed_offered.set()
         async with asyncio.timeout(2):
             await quotes.progressive(value, publish, refresh=True)
         qualified = [frame['value'] for frame in frames if frame['type'] == 'qualified']
         self.assertTrue(qualified)
-        self.assertEqual(qualified[0]['searchCoverage']['selectedPhase'], 'nearby-lower')
+        current = [quote for quote in qualified if quote['observation']['source'] == 'search']
+        self.assertTrue(current)
+        self.assertEqual(current[0]['searchCoverage']['selectedPhase'], 'nearby-lower')
         self.assertIn('0:residual:0', qualified[0]['plan']['conversions'])
         self.assertIn('0:residual:1', qualified[0]['plan']['conversions'])
 
@@ -323,9 +328,9 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
             registry.store.scope = 'generation:' + generation['value'] + ':'
         class MemoryScopeStore(EconomicQuoteStore):
             rows = {}
-            async def lookup(self, value, *, scope):
+            async def load_lookup(self, value, *, scope):
                 return deepcopy(self.rows.get(scope))
-            async def save(self, value, quote, *, scope):
+            async def persist(self, value, quote, *, scope, version=None):
                 self.rows[scope] = deepcopy(quote)
                 return True
         store = MemoryScopeStore(quoter.settings, registry)
@@ -373,14 +378,14 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         recorded = deepcopy(store.rows)
         quote = quoter.quote
         seeds = []
-        async def measured(req, **kwargs):
+        async def measured(req, callback=None, **kwargs):
             lookup = kwargs.get('seed_lookup')
             async def observed_lookup():
                 seed = await lookup()
                 seeds.append(seed)
                 return seed
             kwargs['seed_lookup'] = observed_lookup
-            return await quote(req, **kwargs)
+            return await quote(req, callback, **kwargs)
         quoter.quote = measured
         refreshed = await quotes.get(value, refresh=True)
         self.assertEqual(refreshed['observation'], {'source': 'search', 'refresh': True})

@@ -4,7 +4,7 @@ doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
-last_reviewed: 2026-11-01
+last_reviewed: 2026-11-04
 canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
@@ -73,8 +73,9 @@ This comparison does not discover smaller funding by itself.
 
 ## Shared historical quotes and explicit Refresh
 
-The existing PostgreSQL infrastructure stores one last successfully committed
-whole quote per normalized economic request and configuration scope. Scope
+The shared Backend store keeps two family slots per normalized scalar request:
+pure Market and Market with Core. PostgreSQL persists whole observations and
+process memory makes new completed observations available immediately. Scope
 includes chain/Core/Helpers/adapter, fork generation and static fee-affecting
 runtime policy. It excludes head, recipient, execution deadline and tolerance.
 Mutable onchain Core/helper fees belong to the quote's observed block, like
@@ -83,18 +84,30 @@ a different shared lookup key.
 
 An ordinary matching request can return the stored quote and its original
 context. It is a historical observation, not a freshly executable transaction.
-The new namespace is bounded to 4,096 economic records per existing
-chain/Core/generation scope, with whole-record saves and oldest-save pruning.
+The existing 4,096-point bound and oldest-save pruning remain; a scalar point
+can contain both family records.
 Concurrent saves do not mix plan/output/context fields. Cache read/write errors
 leave ordinary search and preparation available.
 
-`refresh: true` bypasses using the stored quote as the answer. The Quoter may
-replay its semantic plan with its saved funding as a seed, but must evaluate at
-the current state. Saved funding must fit the requested budgets and, for direct
-basket redemption, the current supply-derived funding ceiling.
-Search success replaces the complete saved record. Search failure leaves the
-previous record intact and is returned as a failed Refresh. Browser display
-copies can retain that previous observation while showing the error.
+Scalar ordinary requests and Refresh replay known funded paths while new
+exploration and requested-budget reconstruction run concurrently. Original
+funding must fit the current request. Larger cached paths can still nominate
+budget-fitting reconstructed bodies. These private Backend seeds never travel
+through a public client route-seed API. Completed Helpers observations enter
+shared memory and begin independent SQL persistence before producer teardown.
+
+Each same-funded executable path's successful reprice replaces its entire old
+observation, whether output rises, falls or stays equal. The Backend ranks the
+latest observations across independent paths and publishes its selected tuple.
+A weaker independent path stays silent. A concrete paid Helpers disproof
+removes its candidate; an unrelated SDK or transport error cannot disprove a
+completed Helpers quote. Late SQL reads cannot restore superseded observations.
+
+The Frontend displays Backend-selected quotes and advisory estimates. It keeps
+only the current request's display/capture state, including same-owner Refresh,
+and execution preparation state. It does not rank candidates, seed discovery,
+reuse whole quotes across requests, or restore quote economics from browser
+storage. Fast estimates and reusable route history belong to the shared Backend.
 
 ## Search and selected-plan preparation
 
@@ -110,9 +123,9 @@ order before the regular lazy feeds. An older detailed pass can continue while
 new hints qualify. Every regular feed remains available; quick passes do not
 prove exhaustive selection within a batch. Neither first-result nor detailed
 custom improvements wait for a provider tail. Feeds can publish incremental
-batches; each batch uses those same arrival and ownership rules. The original
-5/15-second search clock, eight pricing slots and whole-plan comparator still
-bound this work. Initial canonical pool observations release owned pricing
+batches; each batch uses those same arrival and ownership rules. Search runs
+to natural completion or caller cancellation with the existing eight pricing
+slots and whole-plan comparator. Initial pool observations release owned pricing
 permits while waiting, just like later SDK state requests, and reacquire them
 before SDK arithmetic. Shared read subscriptions retain their existing owners.
 
@@ -137,7 +150,7 @@ follow-up behind in-flight work. It never waits for or cancels the shared
 database load. The optional dependency marker affects cache invalidation only;
 hosted API requests do not repeat for local catalog growth. Display/scalar
 changes and physical aliases do not change the graph identity. Refresh work
-uses the same selection clock, and detached callbacks start no work after
+uses the same search owner, and detached callbacks start no work after
 selection stops or the owner closes.
 
 Both pure-Market and Market+Core plans call that AMM adapter. Tools search only
@@ -154,7 +167,9 @@ Remote amounts, prices, recipient, minimum and calldata never become execution
 terms. AlphaRouter's percentage/split selection uses canonical Python SDK quote
 callbacks with zero gas for nomination; whole-plan fees and ranking remain here.
 Selected-plan preparation starts no supplier discovery. All supplier tasks,
-HTTP clients and calculation children are owned and drained by their search.
+HTTP tasks and calculation requests are owned and drained by their search.
+Lazy AlphaRouter/UniRoute local worker processes belong to the engine and are
+reused across searches, with copied per-request context and independent cleanup.
 
 The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
 `CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
@@ -167,7 +182,7 @@ BaseQuoteStrategy, QuoteBestSplitFinder, RouteQuoteAllocator and
 SimpleQuoteSelector produce deeper split batches through canonical callbacks.
 Local model/service wiring, zero-gas nomination and source pins are documented
 in `vendor/uniroute-public`. The default 5% grid searches two-branch splits;
-all stitched nominations reach whole-plan evaluation under the original clock.
+all stitched nominations reach whole-plan evaluation under their search owner.
 Upstream shared-pool restrictions do not exclude raw/custom alternatives.
 These are published components with local wiring, not the private full UniRoute
 service. `uniroute-api` uses the
@@ -202,15 +217,14 @@ affects ranking. These sources nominate routes; they do not change which
 economic plan wins.
 
 The first-result and detailed passes, eight scalar allocation/order choices,
-Core previews and private ordered pool replay remain. The comparison window
-is five seconds. Only if no usable whole plan exists can search continue for
-up to ten more seconds; its first usable result then ends selection. A
+Core construction and private ordered pool replay remain. Complete Helpers
+quotes publish while exploration continues, without a global quote cutoff. A
 zero-output conversion tries its existing alternatives, while an all-zero
 conversion retains its ordinary outcome. Optional full-budget scalar Market
 routes from the same tool feeds are interleaved by currency/protocol family through the existing route
 scheduler. Ordinary quick/detailed/Core/mixed/split jobs remain concurrent.
-Added work has 16 route starts per search and the scheduler's eight pricing
-slots; failed optional work leaves ordinary candidates available. There is no
+The scheduler retains eight pricing slots; failed optional work leaves ordinary
+candidates available. There is no
 new provider-call rejection quota or global early-stop rule.
 
 Cold bootstrap uses fixed family order. With a supplied saved plan, optional
@@ -220,14 +234,11 @@ seeds release exploration too. The plan is repriced at the current context;
 its saved numeric output is never trusted. Higher output can use more funding
 within budget; equal output can win only with lower declared funding.
 
-Conservative fee-adjusted spot bounds prune only unpriced independent,
-acyclic, zero-hook Market paths whose upper output is strictly below an exact
-incumbent. Unknown bounds and output ties continue pricing. Bounds do not stop
-Core, mixed, split or undiscovered work, and do not change the selection clock.
-Pruning follows the active fair family order rather than sorting by the bound.
-Runtime bounds use the same request-local base observations as exact replay;
-a newer same-hash Sandbox registry publication cannot replace that base. A
-path whose base is not acquired yet has an unknown bound and prices normally.
+SDK-head bounds cannot disprove the output of a latest Helpers simulation.
+Supplier topologies remain eligible for complete execution simulation; pricing
+slots bound concurrency and a failed attempt does not consume a global
+candidate allowance. SDK arithmetic nominates or reconstructs paths rather
+than qualifying the final quote.
 
 An intermediate partial fill can provide an optional linear-prefix proposal:
 invert the preceding distinct-pool hops with exact-output SDK arithmetic at
@@ -324,8 +335,9 @@ Router remains execution infrastructure behind the routing adapter.
 ## Measurements and remaining qualification
 
 Completed searches expose producer time to first whole plan, search duration,
-total duration and selection reason. Final canonical verification belongs to
-total/finalization time, rather than search duration. Safe operation evidence
+total duration and selection reason. Quotation uses latest simulation without
+extra header/canonicality calls. Execution preparation separately simulates the
+captured plan for execution. Safe operation evidence
 distinguishes Quoter search/lookup, Fast Estimator and Transaction Preparation.
 Stored quote metrics describe its original search, not the latency of a later
 lookup. Client HTTP and browser journey times remain separate.

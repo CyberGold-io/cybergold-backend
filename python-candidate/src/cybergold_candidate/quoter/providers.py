@@ -5,10 +5,10 @@ from .route_tools import PendingRouteTool
 
 
 def route_providers(settings, engine):
-    # Keep the optimizer's process owned by this search. No process/key is
-    # needed to construct the API runtime or to replay a selected transaction.
+    # Each search owns its framed calculations; healthy local children remain
+    # with the engine. Construction starts neither a process nor an API call.
     from .alpha_routes import AlphaRoutes
     from .uniroute_routes import UnirouteLocal
-    return [CustomRoutes(engine.registry), PendingRouteTool(AlphaRoutes(engine)),
-            PendingRouteTool(UnirouteLocal(engine)), PendingRouteTool(UniRouteApiProvider(engine, settings)),
+    return [CustomRoutes(engine.registry), PendingRouteTool(engine.route_optimizer(AlphaRoutes).session()),
+            PendingRouteTool(engine.route_optimizer(UnirouteLocal).session()), PendingRouteTool(UniRouteApiProvider(engine, settings)),
             PendingRouteTool(UniswapApiProvider(engine, settings, guidestar=True))]

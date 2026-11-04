@@ -22,7 +22,7 @@ from ..protocol_config import configured_address
 from ..quote_budget import budget_entry, current_budget, SearchStopped, budget_context, QuoteBudget
 from ..quote_errors import QuoteFailure, public_quote_error, rpc_failure
 from ..recovery_rpc import SnapshotChanged
-from ..preview_errors import preview_error
+from ..preview_errors import KnownPreviewError, preview_error
 from ..routing_encoding import ZERO, ROUTING_ENCODING, weighted_routes, split_runtime
 from ..route_search import WETH
 from ..route_work_slots import bootstrap_priority
@@ -38,7 +38,7 @@ from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import measured_funding_proposal, cached_core_funding
-from .reuse_routes import neighbor_proposals, proposal_identity
+from .reuse_routes import neighbor_proposals, proposal_identity, funded_route_identity
 from .path_families import quote_path_family
 from .market_segments import market_segment_entry, observe_market_segments, observed_market_revision
 from .bootstrap import RouteBootstrap, bootstrap_scope, current_bootstrap
@@ -251,13 +251,14 @@ class Quoter:
 
     @budget_entry
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
-                  seed_lookup=None, on_family=None):
+                  seed_lookup=None, on_family=None, route_seeds=None, on_candidate=None):
         observations = RouteObservations()
         with route_observation_scope(observations):
             try:
                 result = await self._produce(request, on_update, core_only=core_only,
                                              seed=seed, neighbors=neighbors, seed_lookup=seed_lookup,
-                                             on_family=on_family)
+                                             on_family=on_family, route_seeds=route_seeds,
+                                             on_candidate=on_candidate)
             except (Exception, asyncio.CancelledError) as error:
                 error.quoter_metrics = {**self.producer_metrics(current_budget()),
                     **getattr(error, 'quoter_metrics', {}),
@@ -269,9 +270,9 @@ class Quoter:
         return attach_origins(result)
 
     async def _produce(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
-                       seed_lookup=None, on_family=None):
+                       seed_lookup=None, on_family=None, route_seeds=None, on_candidate=None):
         budget = current_budget()
-        # The SQL feed starts alongside head/basis acquisition. Its caller
+        # The SQL feed starts alongside construction-state preparation. Its caller
         # captures the existing scope; this task never owns a second search.
         async def lookup_neighbors():
             try:
@@ -291,7 +292,8 @@ class Quoter:
             async with simulation_scope(), search_observation_scope():
                 result = await budget.produce(self._get(request, on_update, core_only=core_only,
                                                        seed=seed, neighbor_task=neighbor_task,
-                                                       seed_task=seed_task, on_family=on_family))
+                                                       seed_task=seed_task, on_family=on_family,
+                                                       route_seeds=route_seeds, on_candidate=on_candidate))
         except Exception as error:
             # Private diagnostic evidence preserves the public error contract.
             # In particular, exhaustion can still return quote-no-route while
@@ -372,7 +374,7 @@ class Quoter:
 
     @market_segment_entry
     async def _get(self, request, on_update=None, *, core_only=False, seed=None, neighbor_task=None,
-                   seed_task=None, on_family=None):
+                   seed_task=None, on_family=None, route_seeds=None, on_candidate=None):
         request = self.normalise_request(request)
         budget = current_budget()
         registry = self.engine.registry
@@ -427,6 +429,7 @@ class Quoter:
         session = SearchSession(self.exploration_seed if self.exploration_seed is not None else randbits(64))
         reconstructions = set()
         repair_started = set()
+        core_repairs = {}
         def reconstruct_later(operation):
             async def owned():
                 try:
@@ -448,7 +451,7 @@ class Quoter:
             return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
-                           failure_sink=None, limited_funding=None):
+                           failure_sink=None, limited_funding=None, retained=False):
             nonlocal best
             record_error = remember_failure if failure_sink is None else failure_sink.append
             try:
@@ -457,8 +460,9 @@ class Quoter:
                     return
                 funding = default_funding if funding is None else funding
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
-                funded_request, selected = cached_core_funding(
-                    funded_request, self.core_state_cache.value, selected)
+                if not retained:
+                    funded_request, selected = cached_core_funding(
+                        funded_request, self.core_state_cache.value, selected)
                 try:
                     async def produce_candidate():
                         return await self.candidate(funded_request, share, order, block, assets, weights,
@@ -500,7 +504,7 @@ class Quoter:
                     scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
                 improves = prefer_completed(value, best,
                     scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
-                if family_improves or improves:
+                if on_candidate is not None or family_improves or improves:
                     if not budget.qualified():
                         return
                     value['searchCoverage']['selectedPhase'] = phase or ('saved-plan' if selected is not None
@@ -511,13 +515,20 @@ class Quoter:
                     if measured is not None:
                         discovery_metrics.update(physicalRpc=measured.metrics, apiRequests=measured.api_metrics)
                     value.setdefault('metrics', {})['routeDiscovery'] = discovery_metrics
+                if on_candidate is not None:
+                    # The serving Backend owns reconciliation with previously
+                    # known paths. Every paid whole observation updates that
+                    # candidate, including downward/equal repricing and losers.
+                    await on_candidate({'type': 'candidate-repriced',
+                        '_candidateIdentity': funded_route_identity(value), 'value': value})
                 if family_improves:
                     family_best[family] = value
                     if on_family:
                         await on_family(deepcopy(value))
                 if improves:
                     best = value
-                    if on_update: await on_update({'type': 'qualified', 'value': value})
+                    if on_update and on_candidate is None:
+                        await on_update({'type': 'qualified', 'value': value})
                 # A lower-funding body is a new proposal. Price it alongside
                 # normal search, rather than adding a network tail afterward.
                 proposal = measured_funding_proposal(value, registry.chain) if not core_only else None
@@ -561,10 +572,12 @@ class Quoter:
                     recover_funding = identity not in repair_started
                     repair_started.add(identity)
                     unsettled = deepcopy(error.unsettled_intermediate)
-                    from .core_market_recovery import core_market_proposals, implicated_core_market_operations
+                    from .core_market_recovery import compose_core_market, implicated_core_market_operations
                     async def repair():
                         from .capacity_recovery import recover_selected
                         async def attempt(proposal):
+                            repair_started.add(proposal_identity(proposal))
+                            session.repairs += 1
                             try:
                                 return await evaluate(share, order, False, selected=proposal['plan'],
                                     funding=proposal['inputs'], phase='core-market-bootstrap', partial=True)
@@ -572,19 +585,14 @@ class Quoter:
                                 raise
                             except Exception as error:
                                 record_error(error)
-                        async with aclosing(core_market_proposals(
-                                self, failed_request, failed, block, unsettled=unsettled)) as alternatives:
-                            async for proposal in alternatives:
-                                identity = proposal_identity(proposal)
-                                if identity in repair_started:
-                                    continue
-                                repair_started.add(identity)
-                                session.repairs += 1
-                                # One complete observation unlocks normal
-                                # amount-sensitive ranking. Independent search
-                                # and supplier arrivals remain live meanwhile.
-                                if await attempt(proposal) is not None:
-                                    return
+                                raise
+                        # A paid second-leg failure belongs to the changed
+                        # complete body. Feed it back before returning to this
+                        # parent's alternatives; successful observations still
+                        # publish before normal actual-lot exploration.
+                        if await compose_core_market(self, failed_request, failed, block,
+                                unsettled=unsettled, attempt=attempt) is not None:
+                            return
                         proposals = (await budget.discovery(recover_selected(
                             self, failed_request, failed, block, observations, unsettled=unsettled))
                             if recover_funding else [])
@@ -592,7 +600,14 @@ class Quoter:
                             session.repairs += 1
                             await evaluate(share, order, False, selected=proposal['plan'],
                                 funding=proposal['inputs'], phase='backward-prefix')
-                    task = reconstruct_later(repair())
+                    # Concurrent producers of the same failed topology share
+                    # its recovery owner. A later provider revision may expose
+                    # new alternatives and receives its own recovery pass.
+                    repair_key = (identity, unsettled['currency'].lower(),
+                                  route_bootstrap.revision if route_bootstrap else 0)
+                    task = core_repairs.get(repair_key)
+                    if task is None:
+                        task = core_repairs[repair_key] = reconstruct_later(repair())
                     if selected is None and implicated_core_market_operations(failed, unsettled):
                         # Ordinary Core topology bootstrap can start supplier
                         # cohorts. Existing cached/backward replay keeps its
@@ -650,8 +665,14 @@ class Quoter:
                                 return
                             await evaluate(100, 'core-first', False, selected=proposal['plan'],
                                 funding=proposal['inputs'], phase='saved-plan-budget')
-                        retained = evaluate(100, 'core-first', False, selected=offered['plan'], funding=funding,
-                            limited_funding=funding if input_limit_observed(offered) else None)
+                        async def retained_seed():
+                            errors = []
+                            value = await evaluate(100, 'core-first', False,
+                                selected=offered['plan'], funding=funding, retained=True,
+                                failure_sink=errors,
+                                limited_funding=funding if input_limit_observed(offered) else None)
+                            await repriced_source(offered, value, errors)
+                        retained = retained_seed()
                         if request['intent'] in (0, 1) and int(funding[0]['amount']) < int(maxima[0]['amount']):
                             # The exact request key can retain a smaller-funded
                             # winner. Start its full-budget topology replay now,
@@ -680,6 +701,21 @@ class Quoter:
                         await evaluate(100, 'core-first', True, funding=funding, phase='capacity-limited')
                 except Exception as error:
                     remember_failure(error)
+            async def repriced_source(source, value, errors):
+                """Update one retained identity from its own paid observation."""
+                callback = on_candidate
+                disproof = next((error for error in errors if isinstance(error, KnownPreviewError) or
+                    isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted'), None)
+                if callback is None or value is None and disproof is None:
+                    return
+                original = funded_route_identity(source)
+                actual = funded_route_identity(value) if value is not None else original
+                if on_candidate is not None and value is not None and actual == original:
+                    return  # The ordinary paid observation already updated it.
+                await callback({'type': 'candidate-repriced', '_candidateIdentity': actual,
+                    '_replacesIdentity': original, 'value': deepcopy(value),
+                    **({'code': public_quote_error(disproof)['code']} if value is None else {})})
+
             async def nearby():
                 if neighbor_task is None or request['intent'] not in (0, 1):
                     return
@@ -702,6 +738,8 @@ class Quoter:
                         if identity in jobs:
                             job = jobs[identity]
                             job['upper'] |= row['side'] == 'upper'
+                            if int(row['quote']['inputs'][0]['amount']) <= int(request['inputs'][0]['amount']):
+                                job['retained'][funded_route_identity(row['quote'])] = row['quote']
                             job['source'].setdefault('aliases', []).append({key: source[key]
                                 for key in ('side', 'family', 'identity')})
                             # Equivalent cached topologies keep every original
@@ -718,27 +756,33 @@ class Quoter:
                             source['referenceBasis'] = basis
                         neighbor_metrics['sources'].append(source)
                         jobs[identity] = {'source': source, 'proposal': proposal,
-                            'fallback': proposals[0] if len(proposals) > 1 else None,
+                            'retained': {},
                             'quote': row['quote'], 'upper': row['side'] == 'upper'}
+                        if int(row['quote']['inputs'][0]['amount']) <= int(request['inputs'][0]['amount']):
+                            jobs[identity]['retained'][funded_route_identity(row['quote'])] = row['quote']
                     except Exception as error:
                         source['failureCode'] = public_quote_error(error)['code']
                         neighbor_metrics['sources'].append(source)
 
                 async def replay_job(job):
                     source = job['source']
-                    async def attempt(proposal):
+                    async def attempt(proposal, retained=None):
                         observation = {'funding': proposal['inputs'][0]['amount']}
                         source['attempts'].append(observation)
                         neighbor_metrics['starts'] += 1
                         started = asyncio.get_running_loop().time()
                         try:
                             errors = []
+                            previous = retained if retained is not None else job['quote']
                             with bootstrap_priority():
                                 value = await evaluate(100, 'core-first', False,
                                     selected=proposal['plan'], funding=proposal['inputs'],
                                     phase='nearby-'+source['side'], failure_sink=errors,
-                                    limited_funding=job['quote']['inputs']
-                                        if input_limit_observed(job['quote']) else None)
+                                    limited_funding=previous['inputs']
+                                        if input_limit_observed(previous) else None,
+                                    retained=retained is not None)
+                            if retained is not None:
+                                await repriced_source(retained, value, errors)
                             observation['completed'] = value is not None
                             neighbor_metrics['completed'] += value is not None
                             if errors:
@@ -747,12 +791,11 @@ class Quoter:
                         finally:
                             observation['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
                     async def replay():
-                        value = await attempt(job['proposal'])
-                        if value is None and job['fallback'] is not None:
-                            # A failed expansion may still have a fitting
-                            # complete route. Pay that fallback only on failure;
-                            # initial seeding prices at most four distinct plans.
-                            await attempt(job['fallback'])
+                        original = job['retained']
+                        expanded = funded_route_identity(job['proposal'])
+                        await owned_reads(attempt(job['proposal'], original.get(expanded)), *(
+                            attempt({'plan': quote['plan'], 'inputs': quote['inputs']}, quote)
+                            for identity, quote in original.items() if identity != expanded))
                     await wait_reconstruction(reconstruct_later(replay()))
 
                 async def upper():
@@ -765,6 +808,57 @@ class Quoter:
                             await on_update({'type': 'upper-replay-settled'})
                 await owned_reads(upper(), owned_reads(*(
                     replay_job(job) for job in jobs.values() if not job['upper'])))
+
+            async def retained_routes():
+                # The shared Backend cache has these complete semantic paths. Do
+                # not wait for the previous owner's drain/optional SQL commit
+                # or require SDK state to execute their fitting funded bodies.
+                if request['intent'] not in (0, 1) or not route_seeds:
+                    return
+                jobs = {}
+                maximum = request['inputs'][0]
+                for seed in route_seeds:
+                    try:
+                        funding = seed['inputs']
+                        # Reuse the existing seed's exact budget/currency
+                        # boundary; no source/provenance property is required.
+                        if len(funding) != 1 or funding[0]['currency'].lower() != maximum['currency'].lower():
+                            continue
+                        identity = proposal_identity({'inputs': funding, 'plan': seed['plan']})
+                        job = jobs.setdefault(identity, {'seed': seed, 'ids': []})
+                        if seed.get('id') is not None:
+                            job['ids'].append(seed['id'])
+                    except Exception as error:
+                        remember_failure(error)
+
+                async def replay(job):
+                    seed, errors = job['seed'], []
+                    if int(seed['inputs'][0]['amount']) > int(maximum['amount']):
+                        return  # The same upper topology still expands below.
+                    value = await evaluate(100, 'core-first', False, selected=seed['plan'],
+                        funding=seed['inputs'], phase='retained-route-replay',
+                        failure_sink=errors, retained=True,
+                        limited_funding=seed['inputs'] if input_limit_observed(seed) else None)
+                    await repriced_source(seed, value, errors)
+
+                async def expand(job):
+                    seed = job['seed']
+                    if int(seed['inputs'][0]['amount']) == int(maximum['amount']):
+                        return
+                    try:
+                        # Retain the already-fitting observation while this
+                        # same topology tries to consume the current budget.
+                        # Arithmetic reconstructs a body, never its price.
+                        proposal = neighbor_proposals({**seed, 'request': request},
+                                                      int(maximum['amount']), assets)[-1]
+                        await evaluate(100, 'core-first', False, selected=proposal['plan'],
+                            funding=proposal['inputs'], phase='retained-route-budget', retained=True)
+                    except SnapshotChanged:
+                        raise
+                    except Exception as error:
+                        remember_failure(error)
+
+                await owned_reads(*(operation(job) for job in jobs.values() for operation in (replay, expand)))
             async def ordinary_body():
                 ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
                     observations=observations, seeded=seed is not None, core_only=core_only), limited(),
@@ -777,7 +871,8 @@ class Quoter:
             async def ordinary_search():
                 # Saved plans, Market construction, and Core preparation have
                 # separate inputs and start independently.
-                await alongside_bootstrap(ordinary_body(), seeded(), incumbent=lambda: best)
+                await owned_reads(retained_routes(),
+                    alongside_bootstrap(ordinary_body(), seeded(), incumbent=lambda: best))
 
             async def provider_arrival():
                 # Late AMM nominations receive the same optional family and
