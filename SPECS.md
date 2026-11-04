@@ -149,6 +149,8 @@ These are demand-started per market segment, not all queried globally at HTTP
 ingress. AlphaRouter and UniRoute local can emit topology hints before deeper
 optimization finishes. Their engine-owned child processes are reused but are
 started lazily. The generic SDK arithmetic child is also reused and lazy.
+Initial custom-prefix nominations contribute to their supplier's candidate
+count and first-candidate time; lazy-feed reads remain a separate measurement.
 
 Hosted adapters use Uniswap Trading API endpoints. Their labels do not prove
 which undocumented server algorithm ran. Recorded response evidence determines
@@ -271,11 +273,14 @@ None is a prerequisite for the first displayed quote.
   entry does not measure socket arrival or earlier server scheduling.
 - Proxy records separate headers-to-first-downstream-pull from that pull's
   first-read wait, and record upstream cancellation cleanup separately.
-- The App's page-local `cybergold:quote-latency` events record input/Refresh,
+- The App's page-local `cybergold:quote-latency` events record native amount edits/Refresh,
   stream dispatch/headers/bytes/parsed selection and the first validated display
   committed to the DOM. Input timing includes debounce. Initial display can use
   the navigation clock. Arithmetic overlays do not count as validated display;
   Refresh retains its clock until the replacement request's selection appears.
+  An automatic request restart updates the tracked visible owner even when its
+  repeated display event is suppressed. MAX/token-selection changes do not
+  restart this measurement.
   These observations send no additional telemetry request and measure no paint.
 
 ## Implementation map
@@ -306,6 +311,14 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-04 - Independent review corrections
+
+- Include initial custom-prefix nominations in supplier candidate counts and
+  first-candidate timing, with a regression for the separate lazy-feed counters.
+- Keep the App's tracked visible request current after automatic stream restarts
+  so a later Refresh waits for its own replacement. Add unit/browser regressions
+  and clarify the native-input clock's coverage.
 
 ### 2026-11-04 - Authorized latency improvements
 

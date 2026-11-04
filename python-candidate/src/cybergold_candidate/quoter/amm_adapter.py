@@ -168,7 +168,10 @@ class CyberGoldAmmAdapter:
         if linear_only:
             feeds = [linear_prefix(feed) for feed in feeds]
         ordinary = round_robin(feeds)
-        if initial_custom and (bootstrap is None or any(isinstance(provider, CustomRoutes) for _, provider in bootstrap.providers)):
+        initial_provider = (next((provider for _, provider in bootstrap.providers
+                                  if isinstance(provider, CustomRoutes)), None)
+                            if initial_custom and bootstrap is not None else None)
+        if initial_custom and (bootstrap is None or initial_provider is not None):
             def initial_then(remaining):
                 try:
                     routes = []
@@ -180,6 +183,8 @@ class CyberGoldAmmAdapter:
                     routes = yield from sort_steps(routes,
                         key=lambda route: route_priority(route, pool_identity(registry.seed)))
                     for route in routes:
+                        if bootstrap is not None:
+                            bootstrap.observe_initial_candidate(query, initial_provider)
                         yield [{'amountIn': str(amount), 'hops': route}], ['cybergold-custom']
                     yield from remaining
                 finally:

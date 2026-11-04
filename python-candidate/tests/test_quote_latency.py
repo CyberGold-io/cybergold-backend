@@ -23,6 +23,32 @@ from test_quoter_topology_reuse import pool, A, B, C, D, BLOCK
 
 
 class ReadyFirstTests(ProgressiveFixture):
+    async def test_initial_seed_is_in_supplier_first_candidate_accounting(self):
+        rows = [pool(A, B, 10, 'v3'), pool(B, C, 11, 'v3')]
+        registry = SimpleNamespace(inventory={row['id']: row for row in rows}, seed=rows[1])
+        adapter = CyberGoldAmmAdapter(SimpleNamespace(registry=registry), C)
+        session = RouteBootstrap([CustomRoutes(registry)], catalog=registry)
+        session._elapsed_ms = lambda: 12.5
+        try:
+            with bootstrap_scope(session):
+                nominations = adapter.nominations(A, C, 100, BLOCK, market=True, first=True)
+                first = next(nominations)
+                metrics = session.metrics['providers']['cybergold-custom']
+                self.assertEqual(first[1], ['cybergold-custom'])
+                self.assertEqual(metrics['candidates'], 1)
+                self.assertEqual(metrics['firstCandidateMs'], 12.5)
+                self.assertEqual(metrics['feedReads'], 0)
+                self.assertEqual(session.revision, 0)
+                session._elapsed_ms = lambda: 30
+                self.assertEqual(list(nominations), [])
+                metrics = session.metrics['providers']['cybergold-custom']
+                self.assertEqual(metrics['candidates'], 2)
+                self.assertEqual(metrics['firstCandidateMs'], 12.5)
+                self.assertEqual(metrics['feedReads'], 1)
+                self.assertEqual(session.revision, 0)
+        finally:
+            await session.close()
+
     async def test_selected_send_disconnect_and_owned_cleanup_have_separate_milestones(self):
         started, disconnected = asyncio.Event(), asyncio.Event()
         now, records = [0.0], []
