@@ -8,7 +8,7 @@ retention; they never subtract retained principal from the user's gross spend.
 """
 import asyncio
 import json
-from contextlib import aclosing
+from contextlib import aclosing, nullcontext
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import combinations
@@ -465,8 +465,12 @@ class Quoter:
                         funded_request, self.core_state_cache.value, selected)
                 try:
                     async def produce_candidate():
-                        return await self.candidate(funded_request, share, order, block, assets, weights,
-                            first=first, observations=observations, selected=selected)
+                        # A cached body uses the same finite bootstrap lane as
+                        # SQL neighbors. Scope it to Helpers so later recovery
+                        # and SDK exploration retain their ordinary priority.
+                        with bootstrap_priority() if retained else nullcontext():
+                            return await self.candidate(funded_request, share, order, block, assets, weights,
+                                first=first, observations=observations, selected=selected)
                     shared = current_search_observations()
                     if selected is None and shared is not None:
                         identity = ('complete-candidate', share, order, first,
