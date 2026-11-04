@@ -227,12 +227,13 @@ The scheduler retains eight pricing slots; failed optional work leaves ordinary
 candidates available. There is no
 new provider-call rejection quota or global early-stop rule.
 
-Cold bootstrap uses fixed family order. With a supplied saved plan, optional
-exploration waits for its replay attempt, then uses a request-local random
-seed; ordinary work does not wait. Malformed, unavailable or budget-ineligible
-seeds release exploration too. The plan is repriced at the current context;
-its saved numeric output is never trusted. Higher output can use more funding
-within budget; equal output can win only with lower declared funding.
+Cold bootstrap uses fixed family order. Known funded-path replay, budget
+reconstruction and ordinary exploration start independently. Explicitly seeded
+optional exploration can use a request-local random order; ordinary work does
+not wait for SQL history or replay. Historical numbers remain advisory
+observations; new proposals are priced through latest Helpers simulation.
+Higher output can use more funding within budget; equal output can win with
+lower declared funding.
 
 SDK-head bounds cannot disprove the output of a latest Helpers simulation.
 Supplier topologies remain eligible for complete execution simulation; pricing
