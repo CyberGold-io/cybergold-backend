@@ -5,14 +5,13 @@ import json
 from fastapi.responses import JSONResponse, Response
 from starlette.requests import ClientDisconnect
 
+from .quote_flow import stage
 from .basket_preview import InvalidPreview
+from .economic_quote_cache import CacheFeed
 from .quoter.types import EconomicRequest
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.dormant_routes import with_dormant_routes
 from .quoter.ranking import prefer_completed
-from .quoter.path_families import quote_path_family
-from .quoter.provenance import merge_origins
-from .quoter.reuse_routes import funded_route_identity
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
@@ -65,7 +64,8 @@ async def observed_json(request, intent, execute, *, kind, source, phase, invali
         observe(lambda: observation.finish('succeeded', strategy='universal' if kind != 'fast-estimator' else 'none',
             frame={'value': result, 'economicEvidence': evidence(work,
                 operationKind=kind, resultSource=source, operationPhase=phase)}))
-        return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+        with stage('http.encode', kind='cpu'):
+            return JSONResponse(result, headers={'Cache-Control': 'no-store'})
 
 
 async def request_operation(request, execute):
@@ -73,212 +73,29 @@ async def request_operation(request, execute):
     async def disconnected():
         while (await request.receive())['type'] != 'http.disconnect':
             pass
-    operation = asyncio.create_task(execute())
+    waiting = None
+    async def execute_operation():
+        try:
+            with stage('http.operation'):
+                return await execute()
+        finally:
+            if waiting is not None:
+                waiting.ready()
+    operation = asyncio.create_task(execute_operation())
     caller = asyncio.create_task(disconnected())
     try:
-        done, _ = await asyncio.wait((operation, caller), return_when=asyncio.FIRST_COMPLETED)
-        if operation in done:
-            return await operation
-        await caller
-        raise ClientDisconnect()
+        with stage('http.await_result', kind='queue') as waiting:
+            done, _ = await asyncio.wait((operation, caller), return_when=asyncio.FIRST_COMPLETED)
+            if operation in done:
+                return await operation
+            await caller
+            raise ClientDisconnect()
     finally:
-        for task in (operation, caller):
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(operation, caller, return_exceptions=True)
-
-
-class CacheFeed:
-    """One operation owns its SQL feeds; completed observations enter L1 now."""
-    def __init__(self, service, request):
-        self.service, self.request = service, request
-        self.preparing = service._own(service._capture_scope(request))
-        self.transferred = False
-        self.completed, self.pending, self.reads = {}, {}, {}
-        self.saving = None
-        self.book = None
-        self.closed = False
-
-    def local_scope(self, request=None):
-        try:
-            return self.service.store.capture_scope(request or self.request)
-        except Exception:
-            return None
-
-    def bind(self, book):
-        self.book = book
-        register = getattr(self.service.store, 'register_book', None)
-        scope = self.local_scope()
-        if register is not None and scope is not None:
-            register(scope, book)
-        def prepared(task):
-            if not self.closed and register is not None and not task.cancelled():
-                scope = task.result()
-                if scope is not None:
-                    register(scope, book)
-        self.preparing.add_done_callback(prepared)
-
-    def memory_lookup(self):
-        read = getattr(self.service.store, 'memory_lookup', None)
-        scope = self.local_scope()
-        return read(self.request, scope=scope) if read is not None and scope is not None else None
-
-    def memory_neighbors(self):
-        read = getattr(self.service.store, 'memory_neighbors', None)
-        scope = self.local_scope()
-        return read(self.request, scope=scope) if read is not None and scope is not None else []
-
-    def historical_observation(self, value):
-        canonical = getattr(self.service.store, 'historical_observation', None)
-        scope = self.local_scope()
-        return canonical(scope, value) if canonical is not None and scope is not None else (value, None)
-
-    def route_seeds(self, neighbors=None):
-        rows, seen = [], set()
-        for row in self.memory_neighbors() if neighbors is None else neighbors:
-            quote = row['quote']
-            identity = funded_route_identity(quote)
-            if identity not in seen:
-                seen.add(identity)
-                rows.append(deepcopy(quote))
-        return rows
-
-    async def scope(self):
-        return await asyncio.shield(self.preparing)
-
-    async def _read(self, name, missing):
-        if name not in self.reads:
-            async def read():
-                try:
-                    scope = await self.scope()
-                    operation = getattr(self.service.store, 'load_'+name, None) or getattr(self.service.store, name)
-                    return await operation(self.request, scope=scope) if scope is not None else missing
-                except Exception:
-                    return missing
-            self.reads[name] = self.service._own(read())
-            track = getattr(self.service.store, 'track_io', None)
-            if track is not None:
-                track(self.reads[name])
-        try:
-            return deepcopy(await asyncio.shield(self.reads[name]))
-        except asyncio.CancelledError:
-            if asyncio.current_task().cancelling():
-                raise
-            return deepcopy(missing)
-
-    async def sql_lookup(self):
-        return await self._read('lookup', None)
-
-    async def sql_neighbors(self):
-        return await self._read('neighbors', [])
-
-    async def lookup(self):
-        memory = self.memory_lookup()
-        return memory if memory is not None else await self.sql_lookup()
-
-    async def neighbors(self):
-        return self.memory_neighbors() or await self.sql_neighbors()
-
-    def forget(self, identity):
-        scope = self.local_scope()
-        forget = getattr(self.service.store, 'forget', None)
-        if forget is not None and scope is not None:
-            forget(identity, scope=scope)
-        self.forget_pending(identity)
-
-    def forget_pending(self, identity):
-        for family, value in list(self.completed.items()):
-            if funded_route_identity(value) == identity:
-                self.completed.pop(family, None)
-                self.pending.pop(family, None)
-
-    def announce(self, frame):
-        scope = self.local_scope()
-        announce = getattr(self.service.store, 'announce', None)
-        if announce is not None and scope is not None:
-            announce(self.request, frame, self.book, scope=scope)
-        else:
-            version = max(self.book.versions.values(), default=0) + 1
-            self.book.on_observation(frame, version)
-
-    def remember(self, value, *, version=None):
-        family, identity = quote_path_family(value), funded_route_identity(value)
-        previous = self.completed.get(family)
-        if previous == value:
-            return
-        request = value.get('request', self.request)
-        scope = self.local_scope(request)
-        remember = getattr(self.service.store, 'remember', None)
-        if remember is not None and scope is not None:
-            if version is not None:
-                if version < self.service.store.latest_version(scope, identity):
-                    return
-                remember(request, value, scope=scope, version=version)
-            else:
-                remember(request, value, scope=scope)
-        same = previous is not None and funded_route_identity(previous) == identity
-        if same or prefer_completed(value, previous, scalar=self.request['intent'] in (0, 1),
-                                     basket=self.request['intent'] >= 2):
-            self.completed[family] = deepcopy(value)
-            self.pending[family] = (deepcopy(value), version)
-            self.flush()
-        else:
-            merge_origins(previous, value)
-
-    async def observe_family(self, value):
-        self.remember(value)
-
-    def save(self, value):
-        self.remember(value)
-
-    def flush(self):
-        if self.pending and (self.saving is None or self.saving.done()):
-            self.transferred = True
-            self.saving = self.service._own(self._save())
-            track = getattr(self.service.store, 'track_io', None)
-            if track is not None:
-                track(self.saving)
-
-    async def _save(self):
-        try:
-            scope = await self.scope()
-            if scope is not None:
-                while self.pending:
-                    values, self.pending = list(self.pending.values()), {}
-                    for value, version in values:
-                        try:
-                            request = value.get('request', self.request)
-                            selected = (self.service.store.point_scope(scope, request)
-                                        if hasattr(self.service.store, 'point_scope') else scope)
-                            write = getattr(self.service.store, 'persist', None)
-                            if write is not None:
-                                await write(request, attach_reuse_sample(value), scope=selected, version=version)
-                            else:
-                                await self.service.store.save(request, attach_reuse_sample(value), scope=selected)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        finally:
-            await self._close_scope()
-
-    async def _close_scope(self):
-        if not self.preparing.done():
-            self.preparing.cancel()
-        await asyncio.gather(self.preparing, return_exceptions=True)
-
-    async def close(self):
-        self.closed = True
-        unregister = getattr(self.service.store, 'unregister_book', None)
-        if unregister is not None and self.book is not None:
-            unregister(self.book)
-        reads = tuple(self.reads.values())
-        for task in reads:
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(*reads, return_exceptions=True)
-        if not self.transferred:
-            await self._close_scope()
+        with stage('http.cleanup'):
+            for task in (operation, caller):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(operation, caller, return_exceptions=True)
 
 
 class EconomicQuotes:
@@ -352,7 +169,8 @@ class EconomicQuotes:
 
 async def handle_economic_quote(request, service):
     try:
-        payload = await request.json()
+        with stage('http.parse'):
+            payload = await request.json()
         refresh = payload.get('refresh', False)
         if not isinstance(refresh, bool):
             raise ValueError('refresh must be boolean')
@@ -368,7 +186,8 @@ async def handle_economic_quote_stream(request, service):
     from .progressive_quotes import OwnedStreamingResponse
     from .recovery_rpc import SnapshotChanged
     try:
-        payload = await request.json()
+        with stage('http.parse'):
+            payload = await request.json()
         refresh = payload.get('refresh', False)
         if not isinstance(refresh, bool):
             raise ValueError('refresh must be boolean')
@@ -416,12 +235,19 @@ async def handle_economic_quote_stream(request, service):
                     queue.put_nowait(None)
         task = asyncio.create_task(produce())
         try:
-            while (frame := await queue.get()) is not None:
-                yield json.dumps(frame, separators=(',', ':'))+'\n'
+            while True:
+                with stage('publication.queue', kind='queue'):
+                    frame = await queue.get()
+                if frame is None:
+                    break
+                with stage('http.encode', kind='cpu'):
+                    encoded = json.dumps(frame, separators=(',', ':'))+'\n'
+                yield encoded
         finally:
             if not task.done():
                 task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            with stage('http.cleanup'):
+                await asyncio.gather(task, return_exceptions=True)
             observe(lambda: observation.finish('cancelled'))
     return OwnedStreamingResponse.create(events())
 
@@ -429,7 +255,8 @@ async def handle_economic_quote_stream(request, service):
 async def handle_tx_preparation(request, service):
     from .tx_preparation import TransactionPreparationRequest
     try:
-        value = TransactionPreparationRequest.model_validate(await request.json()).model_dump(exclude_none=True)
+        with stage('http.parse'):
+            value = TransactionPreparationRequest.model_validate(await request.json()).model_dump(exclude_none=True)
     except (ValueError, TypeError):
         return JSONResponse({'error': 'Invalid transaction preparation request.'}, status_code=400,
                             headers={'Cache-Control': 'no-store'})
@@ -440,7 +267,8 @@ async def handle_tx_preparation(request, service):
 async def handle_economic_estimate(request, service):
     from .trade_quote import TradeModelRequest, validate
     try:
-        value = TradeModelRequest.model_validate(await request.json()).model_dump()
+        with stage('http.parse'):
+            value = TradeModelRequest.model_validate(await request.json()).model_dump()
         validate(value, model=True)
     except (ValueError, TypeError):
         return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400,

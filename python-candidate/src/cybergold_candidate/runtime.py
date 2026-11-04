@@ -106,13 +106,16 @@ def create_configured_app(settings=None, database=None, client=None):
     uniswap_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None
     async def configuration_generation():
         from .fork_recovery import read_generation
-        async with database.connection() as connection:
-            stored = await read_generation(connection, core.lower())
+        from .quote_flow import stage
+        with stage('metadata.generation'):
+            async with database.connection() as connection:
+                stored = await read_generation(connection, core.lower())
         generation = stored['anchor']['generation'] if stored else None
-        await history.observe_generation(generation)
-        await market_quotes.observe_generation(generation)
-        await universal_quotes.core_state_cache.observe_generation(generation)
-        await configuration.observe_generation(generation)
+        with stage('metadata.observers'):
+            await history.observe_generation(generation)
+            await market_quotes.observe_generation(generation)
+            await universal_quotes.core_state_cache.observe_generation(generation)
+            await configuration.observe_generation(generation)
         return generation
     configuration_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None
     configuration = ProtocolConfiguration(settings, configuration_store,
@@ -152,7 +155,7 @@ def create_configured_app(settings=None, database=None, client=None):
                                      observe_scope=observe_quote_scope)
     market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
-    from .quoter.reuse_estimate import CachedEconomicEstimates
+    from .economic_estimate import CachedEconomicEstimates
     trade_quotes.cached_estimates = CachedEconomicEstimates(economic_quotes.store, universal_quotes.core,
                                                            observe_scope=observe_quote_scope)
     trade_quotes.universal_quotes = universal_quotes

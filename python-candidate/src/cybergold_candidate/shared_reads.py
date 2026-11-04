@@ -3,6 +3,8 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from .quote_flow import current_flow, link_owner, retain_shared_producer, release_shared_producer
+
 
 def discard_pool_observation(rpc, call, block):
     """A failed typed decode must not retain its raw successful RPC envelope."""
@@ -17,6 +19,7 @@ class PendingRead:
     future: asyncio.Future
     users: int = 0
     task: asyncio.Task | None = None
+    owner_flow: object = None
 
 
 class SharedReads:
@@ -64,20 +67,23 @@ class SharedReads:
                 continue
             entry = self.pending.get(key)
             if entry is None:
-                entry = PendingRead(asyncio.get_running_loop().create_future())
+                entry = PendingRead(asyncio.get_running_loop().create_future(), owner_flow=current_flow())
                 self.pending[key] = entry
                 new.append((key, entry))
                 counts['issued'] += 1
             else:
                 counts['coalesced'] += 1
+                link_owner(entry.owner_flow, 'shared-read')
             entry.users += 1
             selected.append((key, entry, None))
         if new:
             task = asyncio.create_task(self._produce(new, produce, retain))
+            flow = retain_shared_producer()
             for _, entry in new:
                 entry.task = task
             self.groups[task] = new
             def finished(done):
+                release_shared_producer(flow)
                 entries = self.groups.pop(done, ())
                 if done.cancelled():
                     # A producer cancelled before its first turn cannot run

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import weakref
 
 from cybergold_candidate.economic_quotes import EconomicQuotes
-from cybergold_candidate.progressive_quotes import CanonicalPublication
+from cybergold_candidate.quote_publication import CanonicalPublication
 from cybergold_candidate.quoter.reuse_estimate import attach_reuse_sample
 from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
 from cybergold_candidate.quote_budget import QuoteBudget, SearchStopped, budget_context

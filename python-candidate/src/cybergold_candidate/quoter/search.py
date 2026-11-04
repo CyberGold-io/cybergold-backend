@@ -16,6 +16,7 @@ from secrets import randbits
 
 from web3 import Web3
 
+from ..quote_flow import flow_entry, stage
 from ..basket_preview import BasketPreviewRpc, InvalidPreview
 from .types import EconomicRequest
 from ..protocol_config import configured_address
@@ -250,15 +251,17 @@ class Quoter:
         return deepcopy(LATEST_BLOCK)
 
     @budget_entry
+    @flow_entry('search')
     async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
                   seed_lookup=None, on_family=None, route_seeds=None, on_candidate=None):
         observations = RouteObservations()
         with route_observation_scope(observations):
             try:
-                result = await self._produce(request, on_update, core_only=core_only,
-                                             seed=seed, neighbors=neighbors, seed_lookup=seed_lookup,
-                                             on_family=on_family, route_seeds=route_seeds,
-                                             on_candidate=on_candidate)
+                with stage('search.run'):
+                    result = await self._produce(request, on_update, core_only=core_only,
+                                                 seed=seed, neighbors=neighbors, seed_lookup=seed_lookup,
+                                                 on_family=on_family, route_seeds=route_seeds,
+                                                 on_candidate=on_candidate)
             except (Exception, asyncio.CancelledError) as error:
                 error.quoter_metrics = {**self.producer_metrics(current_budget()),
                     **getattr(error, 'quoter_metrics', {}),
@@ -288,7 +291,7 @@ class Quoter:
                 return None
         seed_task = asyncio.create_task(lookup_seed()) if seed_lookup is not None else None
         try:
-            from .plan_simulation import simulation_scope
+            from .plan_transport import simulation_scope
             async with simulation_scope(), search_observation_scope():
                 result = await budget.produce(self._get(request, on_update, core_only=core_only,
                                                        seed=seed, neighbor_task=neighbor_task,
@@ -305,7 +308,8 @@ class Quoter:
             for task in lookups:
                 if not task.done():
                     task.cancel()
-            await asyncio.gather(*lookups, return_exceptions=True)
+            with stage('search.cleanup'):
+                await asyncio.gather(*lookups, return_exceptions=True)
         result['metrics'] = {**(result.get('metrics') or {}), **self.producer_metrics(budget)}
         return result
 

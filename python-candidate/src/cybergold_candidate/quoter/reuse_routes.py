@@ -30,7 +30,7 @@ def funded_route_identity(value):
 
 def proposal_identity(proposal):
     """One resized execution topology, independent of diagnostic enrichment."""
-    from .plan_simulation import executable_body
+    from .plan_call import executable_body
     proposal = {**proposal, 'plan': {**proposal['plan'],
         'body': executable_body(proposal['plan']['body'])}}
     def execution(value):

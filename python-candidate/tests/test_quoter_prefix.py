@@ -171,7 +171,7 @@ class PrefixTests(unittest.IsolatedAsyncioTestCase):
     async def test_native_prefix_amount_is_proposed_without_sdk_fill_certification(self):
         from cybergold_candidate.exact_input_plan import compile_plan
         from cybergold_candidate.quoter.contracts import PathTrace, HopTrace
-        from cybergold_candidate.quoter.plan_simulation import executable_body
+        from cybergold_candidate.quoter.plan_call import executable_body
         from cybergold_candidate.routing_encoding import ZERO
         pools = [synthetic_pool(WETH, PAXG, 501, 'v2'), synthetic_pool(PAXG, CORE, 502, 'v2')]
         hops = [{'pool': pool, 'zeroForOne': source.lower() == pool['token0']['address'].lower()}

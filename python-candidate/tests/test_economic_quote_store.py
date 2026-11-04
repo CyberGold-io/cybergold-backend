@@ -471,7 +471,7 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len({row['identity'] for row in neighbors}), 4)
 
     async def test_partial_quote_retains_both_neighbor_roles_and_its_limited_upper_estimate(self):
-        from cybergold_candidate.quoter.reuse_estimate import CachedEconomicEstimates
+        from cybergold_candidate.economic_estimate import CachedEconomicEstimates
         quote = self.quote(50000, 8355, 'market', funding=47300)
         quote['searchCoverage'] = {'inputLimitObserved': True}
         await self.save(quote)
@@ -495,7 +495,7 @@ class EconomicQuoteFamilyPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['estimate']['context'], quote['context'])
 
     async def test_known_limited_lower_beats_a_different_nearest_upper_and_unknown_lower_stays_advisory(self):
-        from cybergold_candidate.quoter.reuse_estimate import CachedEconomicEstimates
+        from cybergold_candidate.economic_estimate import CachedEconomicEstimates
         limited = self.quote(70000, 8355, 'market', funding=47300)
         limited['searchCoverage'] = {'inputLimitObserved': True}
         nearer = self.quote(50000, 7950, 'market', funding=45000)
