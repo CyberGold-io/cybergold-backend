@@ -96,6 +96,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_search_read_fanout
 python-candidate/.venv/bin/python python-candidate/tests/test_capacity_limited_baskets.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_api.py
 python-candidate/.venv/bin/python python-candidate/tests/test_retained_economic_routes.py
+python-candidate/.venv/bin/python python-candidate/tests/test_retained_bootstrap_priority.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_cache_parallel.py
 python-candidate/.venv/bin/python python-candidate/tests/test_progressive_economic_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_observability.py
