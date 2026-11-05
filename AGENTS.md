@@ -21,3 +21,8 @@ The workspace `AGENTS.md` also applies to this repository.
   existing workplan organization. Link to them instead of copying proposals
   into `SPECS.md` or its current-process diagrams.
 - Analysis and measurements do not themselves authorize implementation changes.
+
+## Browser verification
+
+- Use Codex's built-in browser for browser-based Sandbox verification,
+  test-profile inspection and performance observations.
