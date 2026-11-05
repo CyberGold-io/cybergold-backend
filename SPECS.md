@@ -344,6 +344,27 @@ was observed or prepared.
   restart this measurement.
   These observations send no additional telemetry request and measure no paint.
 
+## Tests
+
+All test suites, including suites run on servers, must leave the public shared
+Sandbox fork unchanged throughout setup, execution and cleanup. Public Sandbox
+checks are read-only. A dedicated test wallet does not make the shared fork an
+isolated test environment.
+
+State-changing test setup and execution belong to an owned disposable fork and
+its attached test runtime. Funding, approvals, bootstrap purchases and trades
+must not target the public shared fork. Cleanup must not reset or revert that
+fork, including as a way to undo earlier test transactions.
+
+A sequential suite may execute multiple transactions against one owned fork,
+allowing its state to evolve between cases. Independent cases may restore a
+baseline on their owned fork. A separate fork for every case is not required.
+Protocol, liquidity, funding, authorization and transport failures remain
+ordinary local test outcomes with their original reasons retained.
+
+This is the required test boundary. Runner implementation and installed
+compliance are recorded separately in the Ops test workplan.
+
 ## Implementation map
 
 Paths below are relative to `python-candidate/src/cybergold_candidate/`.
@@ -373,6 +394,15 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-05 - Public Sandbox test isolation requirement
+
+- Require all suites, including server-run tests, to leave the public shared
+  Sandbox fork unchanged during setup, execution and cleanup.
+- Keep state-changing tests on owned disposable forks, with sequential state
+  evolution or independent baseline restoration as appropriate.
+- Keep ordinary local failures and separate installed-runner compliance from
+  this requirement. No Backend runtime or current-process diagram changes.
 
 ### 2026-11-05 - Measured Core residual-retention alternative
 
