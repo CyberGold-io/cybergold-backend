@@ -179,6 +179,26 @@ market + Core plans use this complete execution boundary. One such call
 measures all encoded market/Core actions in their actual order, including
 shared-pool effects. It is not one external RPC per market leg.
 
+Simulation funding changes only the synthetic payer's native balance,
+input-token balances and Helpers allowances. Core total supply, reserves,
+pool state and contract code retain their ordinary chain state. A qualified
+quote is therefore a whole-plan execution observation under simulation funding;
+it does not prove the real wallet can fund or authorize that plan. A stored
+observation proves its recorded simulation, not execution at the current head.
+Only encoded actions are exercised: a pure-market CYGLD sale does not establish
+Core-redemption coverage.
+
+Protocol shortages remain distinct from wallet funding failures. Core checks
+`InsufficientCygldSupply` against the gross CYGLD burn. Its exact-input
+redemption calculates current outputs, rejects unmet minima with
+`RedemptionOutputBelowMinimum`, and rejects an all-zero settlement with
+`RedemptionNoOutput` before burning. Helpers validates the projected vector
+before calling Core and can reject an all-zero quote with
+`CoreRedemptionResultMismatch`. Core's exact-output solver instead uses
+`InsufficientReserveBalance` or `InsufficientRecoveryShares` when a positive
+requested minimum exceeds the available resource. These paths do not imply
+one generic reserve-error selector for every Helpers-routed redemption failure.
+
 Compilation, transport/sharing and result projection are separate modules.
 Identical calls within the simulation scope can share a physical result.
 Consequently a subscriber can observe zero additional physical calls while
@@ -198,6 +218,12 @@ priority lane; initial ordinary proposals use ordinary admission. SDK state
 waits release their pricing lease. Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
+
+Both admission lanes retain FIFO order. A cancelled waiter is removed by its
+future identity in constant time, without scanning the lane; a grant cancelled
+before its owner resumes returns its permit. The eight-slot limit bounds held
+pricing permits. Parked candidate tasks remain owned and are drained when their
+producer stops.
 
 Candidate banks and SDK payloads retain private mutable pool state. Their
 snapshot copier owns the scalar tick/bitmap rows and deep-copies other metadata.
@@ -255,10 +281,20 @@ existing bootstrap priority covers this selected replay. Wallet signing,
 authorization/gas and submission follow in their respective execution flows.
 None is a prerequisite for the first displayed quote.
 
+The replay keeps the accepted input maxima and output minima; repricing cannot
+relax them. It still uses synthetic-payer simulation funding. Real wallet
+balances and authorization, later market/Core state, output minima and
+transaction settlement can fail through their ordinary errors after a quote
+was observed or prepared.
+
 ## Diagnostics describe their own clocks
 
 - Request and producer IDs link shared work without merging subscriber clocks.
 - Stage wall/CPU/queue measurements are separate; nested totals overlap.
+- An await stage does not sample CPU. In particular, `http.cleanup` measures
+  the stream owner's wait for its producer to drain; zero CPU in that row does
+  not establish idle time. The narrower `search.cleanup` rows measure the
+  simulation-sharing and seed-lookup drains, not every nested search owner.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
 - Proxy timings begin inside the Next handler, not at the browser input event.
@@ -311,6 +347,17 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-05 - Pricing cancellation and qualification boundaries
+
+- Remove cancelled pricing waiters by future identity, preserving ordinary and
+  bootstrap FIFO admission, readiness timing, permit return and owned drains.
+- Clarify the eight held-permit boundary and the scope of cleanup wall/CPU
+  diagnostics. Add focused cancellation, FIFO and eight-owner regressions.
+- Clarify synthetic-payer funding, recorded versus current execution, encoded
+  Core coverage, distinct supply/minimum/reserve errors and the accepted bounds
+  retained by selected-plan replay.
+- Process dependencies and the current-process diagrams are unchanged.
 
 ### 2026-11-04 - Independent review corrections
 
