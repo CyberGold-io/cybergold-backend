@@ -76,6 +76,15 @@ The Next proxy forwards the stream without collecting the complete search
 result. Its JSON endpoints collect the upstream JSON body before returning it;
 this difference does not turn the quote stream into a buffered JSON request.
 
+Backend emits `X-Accel-Buffering: no` for its NDJSON responses. The App sets
+that header independently on its fixed streaming proxy responses, even when
+it is absent from the upstream headers. Each response asks its receiving proxy
+to avoid buffering; this is not a public-delivery measurement. Nginx can
+[apply the response header](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)
+and [omit it when forwarding](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_hide_header),
+and proxy configuration can disable processing of that control. Header
+presence or absence at a later hop does not establish when bytes were flushed.
+
 ## Step 2: consult validated history and start work together
 
 For scalar intents (`0`: token to CYGLD; `1`: CYGLD to token), the Backend:
@@ -306,7 +315,9 @@ was observed or prepared.
 - Backend flow records retain first-occurrence `milestonesMs` for middleware
   entry, headers and first body ready/sent, first selected frame ready/sent,
   disconnect and stream cleanup. These are Backend-local clocks; middleware
-  entry does not measure socket arrival or earlier server scheduling.
+  entry does not measure socket arrival or earlier server scheduling. A `sent`
+  milestone records completion of the ASGI `send` call, not receipt by a proxy,
+  a public client or the browser.
 - Proxy records separate headers-to-first-downstream-pull from that pull's
   first-read wait, and record upstream cancellation cleanup separately.
 - The App's page-local `cybergold:quote-latency` events record native amount edits/Refresh,
@@ -341,12 +352,20 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 
 App context is implemented in `app/[locale]/page.tsx`,
 `app/hooks/flows/quotes/useEconomicQuote.ts`, `app/utils/economicQuoteSearch.ts`,
-`app/utils/quoteStream.ts` and `app/server/backend-transport-observation.ts`
-in the reviewed App revision.
+`app/utils/quoteStream.ts`, `app/server/backend-client.ts` and
+`app/server/backend-transport-observation.ts` in the reviewed App revision.
 The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-05 - Streaming controls at each proxy hop
+
+- Set the App's fixed streaming proxy response header independently of the
+  upstream header, retaining Backend's existing NDJSON buffering-control header.
+- Clarify that proxy controls and completed ASGI sends do not establish public
+  flush or client receipt. Performance observations remain in Ops workplans.
+- Process dependencies and the current-process diagrams are unchanged.
 
 ### 2026-11-05 - Pricing cancellation and qualification boundaries
 
