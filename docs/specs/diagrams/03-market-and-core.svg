@@ -40,7 +40,7 @@
 <text x="57" y="405" class="body-large">No Core issue or redeem action</text>
 <rect x="450" y="339" width="350" height="95" rx="8" class="node"/>
 <text x="465" y="363" class="heading">Market + Core plan</text>
-<text x="465" y="385" class="body">Issue: AMM acquisitions → Core → AMM residuals</text>
+<text x="465" y="385" class="body">Issue: AMM acquisitions → Core → residual handling</text>
 <text x="465" y="405" class="body">Redeem: Core → AMM output conversions</text>
 <path d="M217 434 V453 H625 V434" class="bus"/>
 <path d="M421 453 V478" class="line"/><polygon points="421.00,478.00 418.00,471.00 424.00,471.00" fill="#3e596d"/><circle cx="421" cy="465" r="10" class="step"/><text x="421" y="465" class="step-text">3</text>

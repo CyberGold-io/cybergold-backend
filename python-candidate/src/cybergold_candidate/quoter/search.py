@@ -39,6 +39,7 @@ from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import measured_funding_proposal, cached_core_funding
+from .residual_retention import residual_retention_proposal
 from .reuse_routes import neighbor_proposals, proposal_identity, funded_route_identity
 from .path_families import quote_path_family
 from .market_segments import market_segment_entry, observe_market_segments, observed_market_revision
@@ -241,7 +242,7 @@ class Quoter:
         except QuoteFailure as error:
             # Preserve construction inputs only for optional failed-plan
             # exploration. Successful quotes still take one Helpers call.
-            if getattr(error, 'unsettled_intermediate', None) is not None:
+            if error.code == 'quote-contract-reverted' or getattr(error, 'unsettled_intermediate', None) is not None:
                 error.candidate_plan = value['plan']
                 error.candidate_inputs = value['inputs']
             raise
@@ -434,6 +435,7 @@ class Quoter:
         reconstructions = set()
         repair_started = set()
         core_repairs = {}
+        residual_retention_jobs = {}
         def reconstruct_later(operation):
             async def owned():
                 try:
@@ -573,6 +575,19 @@ class Quoter:
                     raise
                 record_error(error)
                 failed = selected if selected is not None else getattr(error, 'candidate_plan', None)
+                if failed is not None and isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted':
+                    failed_request = {**funded_request,
+                        'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}
+                    proposal = residual_retention_proposal(failed_request, failed)
+                    if proposal is not None:
+                        identity = proposal_identity(proposal)
+                        task = residual_retention_jobs.get(identity)
+                        if task is None:
+                            task = residual_retention_jobs[identity] = reconstruct_later(evaluate(
+                                share, order, False, selected=proposal['plan'], funding=proposal['inputs'],
+                                phase='residual-retention'))
+                        if selected is None:
+                            await wait_reconstruction(task)
                 if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
                     failed_request = {**funded_request,
                         'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}

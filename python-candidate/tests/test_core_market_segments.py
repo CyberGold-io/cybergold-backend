@@ -293,7 +293,8 @@ class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn((OTHER.lower(), CORE.lower(), int(residual['fundedInput'])), queries)
         self.assertEqual(len(value['plan']['conversions']['0:residual:1']['branches'][0]['hops']), 3)
         repaired = next(plan for plan in attempts
-                        if len(plan['conversions']['0:residual:1']['branches'][0]['hops']) == 3)
+                        if plan['conversions']['0:residual:1']['branches']
+                        and len(plan['conversions']['0:residual:1']['branches'][0]['hops']) == 3)
         self.assertEqual(attempts[0]['body']['branches'][0]['data']['acquisitions'],
                          repaired['body']['branches'][0]['data']['acquisitions'])
 
