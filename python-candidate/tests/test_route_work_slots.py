@@ -32,6 +32,85 @@ async def until(predicate):
 
 
 class RouteWorkSlotsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_waiter_cancellation_does_not_scan_other_future_identities(self):
+        comparisons = 0
+        class CountedFuture(asyncio.Future):
+            __hash__ = asyncio.Future.__hash__
+            def __eq__(self, other):
+                nonlocal comparisons
+                comparisons += 1
+                return self is other
+
+        slots = work.PricingSlots(0)
+        loop = asyncio.get_running_loop()
+        count = 512
+        with patch.object(loop, 'create_future', side_effect=lambda: CountedFuture(loop=loop)):
+            tasks = [asyncio.create_task(slots.acquire()) for _ in range(count)]
+            await asyncio.sleep(0)
+        self.assertEqual(len(slots._ordinary), count)
+        # An arbitrary cancellation order must not search each other waiter.
+        for index in range(count):
+            tasks[index * 257 % count].cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self.assertLess(comparisons, count * 2)
+        self.assertEqual((slots._value, len(slots._ordinary), len(slots._spans)), (0, 0, 0))
+
+    async def test_cancelled_waiters_preserve_fifo_in_both_admission_lanes(self):
+        slots = work.PricingSlots(0)
+        order = []
+        async def waiter(lane, index):
+            async def enter():
+                async with work.engine_work(slots):
+                    order.append((lane, index))
+            if lane == 'priority':
+                with work.bootstrap_priority():
+                    await enter()
+            else:
+                await enter()
+        tasks = {(lane, index): asyncio.create_task(waiter(lane, index))
+                 for lane in ('ordinary', 'priority') for index in range(12)}
+        await until(lambda: len(slots._ordinary) == len(slots._priority) == 12)
+        removed = (11, 0, 6)
+        cancelled = [tasks[lane, index] for index in removed for lane in ('priority', 'ordinary')]
+        for task in cancelled:
+            task.cancel()
+        await asyncio.gather(*cancelled, return_exceptions=True)
+        self.assertEqual((slots._value, len(slots._ordinary), len(slots._priority)), (0, 9, 9))
+        slots.release()
+        await asyncio.gather(*tasks.values(), return_exceptions=True)
+        self.assertEqual(order, [(lane, index) for lane in ('priority', 'ordinary')
+                                 for index in range(12) if index not in removed])
+        self.assertEqual((slots._value, len(slots._ordinary), len(slots._priority), len(slots._spans)),
+                         (1, 0, 0, 0))
+
+    async def test_cancelling_queued_pricing_work_preserves_eight_active_owners(self):
+        slots = work.PricingSlots(8)
+        active, peaks = set(), []
+        release = asyncio.Event()
+        async def waiter(index):
+            async with work.engine_work(slots):
+                active.add(index)
+                peaks.append(len(active))
+                try:
+                    await release.wait()
+                finally:
+                    active.remove(index)
+        tasks = [asyncio.create_task(waiter(index)) for index in range(128)]
+        try:
+            await until(lambda: len(active) == 8 and len(slots._ordinary) == 120)
+            for task in reversed(tasks[8:]):
+                task.cancel()
+            await asyncio.gather(*tasks[8:], return_exceptions=True)
+            self.assertEqual((active, slots._value, len(slots._ordinary)), (set(range(8)), 0, 0))
+            release.set()
+            await asyncio.gather(*tasks[:8])
+            self.assertEqual((max(peaks), active, slots._value), (8, set(), 8))
+            self.assertFalse(slots._spans)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def test_standalone_scope_yields_only_its_original_engine_permit(self):
         semaphore=asyncio.Semaphore(1)
         self.assertIsNone(work._current.get())

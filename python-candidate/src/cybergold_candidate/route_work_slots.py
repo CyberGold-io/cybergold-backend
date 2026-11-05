@@ -1,6 +1,6 @@
 """Task-owned pricing permits, released only at required-state suspension."""
 import asyncio
-from collections import deque
+from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from .quote_flow import stage
@@ -25,11 +25,12 @@ class PricingSlots:
 
     Existing running work is never preempted. Only ready cached bootstrap work
     precedes waiting ordinary work; neither lane reserves idle capacity or
-    waits for a cache supplier. Cancelled grants return their permit.
+    waits for a cache supplier. Waiters unlink by identity in constant time;
+    cancelled grants return their permit.
     """
     def __init__(self, value):
         self._value = value
-        self._ordinary, self._priority = deque(), deque()
+        self._ordinary, self._priority = OrderedDict(), OrderedDict()
         self._spans = {}
 
     def locked(self):
@@ -43,7 +44,7 @@ class PricingSlots:
             return True
         future = asyncio.get_running_loop().create_future()
         queue = self._priority if _bootstrap.get() else self._ordinary
-        queue.append(future)
+        queue[future] = None
         if span is not None and span.active:
             self._spans[future] = span
         try:
@@ -55,13 +56,12 @@ class PricingSlots:
             raise
         finally:
             self._spans.pop(future, None)
-            if future in queue:
-                queue.remove(future)
+            queue.pop(future, None)
 
     def release(self):
         for queue in (self._priority, self._ordinary):
             while queue:
-                future = queue.popleft()
+                future, _ = queue.popitem(last=False)
                 span = self._spans.pop(future, None)
                 if not future.done():
                     if span is not None:
