@@ -1,5 +1,6 @@
 """Nearby cache work at the actual search ownership and candidate boundary."""
 import asyncio
+from collections import Counter
 from copy import deepcopy
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -15,7 +16,8 @@ from test_universal_quote import Engine, Quotes, request
 
 class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
     async def test_exact_and_neighbor_budget_failures_feed_the_shared_backward_repair(self):
-        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals
+        from cybergold_candidate.quoter.reuse_routes import neighbor_proposals, funded_route_identity
+        from cybergold_candidate.quoter.residual_retention import residual_retention_proposal
         for source in ('exact', 'lower'):
             with self.subTest(source=source):
                 q, saved, edited, expanded = await self.budget_replay_fixture()
@@ -50,11 +52,21 @@ class NearbySearchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result['request'], edited)
                 self.assertEqual(result['searchCoverage']['selectedPhase'], 'backward-prefix')
                 self.assertTrue(result['searchCoverage']['inputLimitObserved'])
-                recovery.assert_awaited_once()
-                self.assertEqual(recovery.await_args.args[1]['inputs'], edited['inputs'])
-                self.assertEqual(recovery.await_args.kwargs['unsettled'], hint)
-                self.assertEqual(sum(int(row['amountIn']) for row in
-                    recovery.await_args.args[2]['allocations']), 50005)
+                # The stub rejects both the routed full-budget body and its
+                # distinct retained-residual alternative. Each failed body
+                # owns one backward repair; neither may suppress the other.
+                self.assertEqual(recovery.await_count, 2)
+                retained = residual_retention_proposal(edited, expanded['plan'])
+                expected = Counter([funded_route_identity(expanded), funded_route_identity(retained)])
+                self.assertEqual(len(expected), 2)
+                identities = Counter()
+                for failure in recovery.await_args_list:
+                    failed_request, failed_plan = failure.args[1:3]
+                    identities[funded_route_identity({'inputs': failed_request['inputs'], 'plan': failed_plan})] += 1
+                    self.assertEqual(failed_request['inputs'], edited['inputs'])
+                    self.assertEqual(failure.kwargs['unsettled'], hint)
+                    self.assertEqual(sum(int(row['amountIn']) for row in failed_plan['allocations']), 50005)
+                self.assertEqual(identities, expected)
                 self.assertEqual(result['routeOrigins']['discoveryProviders'],
                     ['uniroute-local', 'uniswap-alpharouter'])
 
