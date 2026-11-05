@@ -130,6 +130,17 @@ There are concurrent ways to obtain a complete proposal:
 - **Continued exploration:** detailed SDK simulation, alternative allocations,
   router hints, residual handling and repairs propose further complete plans.
 
+After a Core-issuance whole plan receives a generic Helpers contract rejection,
+search can nominate one distinct body that retains actual basket residuals
+instead of routing them to CYGLD. Its acquisitions, allocations and funded
+inputs are unchanged. Empty asset-to-Core continuation templates return the
+complete residual input through the existing adapter; Helpers measures it as a
+retained charge, without adding residual AMM output. This alternative requires
+another whole Helpers observation before selection. Contract-rejected bodies
+keep their ordinary error/invalidation handling and residual-route exploration.
+Transport failures and typed protocol errors do not trigger this alternative.
+Selected-plan preparation replays the accepted body without substituting it.
+
 Core construction fields are prepared independently. A pure-market proposal
 does not need the Core basket basis. A newly constructed Core-containing
 proposal needs its real basket assets/weights or output identities to encode
@@ -345,6 +356,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Backend ranking and publication | `quote_publication.py`, `quoter/quote_book.py`, `quoter/ranking.py` |
 | Retained families/reconstruction | `quoter/reuse_routes.py`, `quoter/path_families.py`, `quoter/reuse_estimate.py` |
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |
+| Core residual-retention alternative | `quoter/residual_retention.py`, `quoter/search.py` |
 | Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |
 | Local/hosted workers and API pacing | `quoter/alpha_routes.py`, `quoter/hosted_routes.py`, `sdk_worker.py`, `uniswap_api_queue.py` |
 | Complete Helpers evaluation | `quoter/plan_call.py`, `quoter/plan_transport.py`, `quoter/plan_simulation.py` |
@@ -361,6 +373,18 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-05 - Measured Core residual-retention alternative
+
+- Offer one distinct retained-residual body after a generic Core-issuance
+  Helpers contract rejection, using the existing owned reconstruction lifecycle.
+- Keep input funding, acquisitions, branch allocations, ordinary routed
+  exploration and Helpers qualification. No transport retry, typed protocol
+  error substitution or selected-plan substitution is introduced.
+- Keep explicit empty continuation descriptors through measurement and replay,
+  so returned plans disclose retention without claiming residual AMM hops.
+- Update diagram 03's issuance label from AMM residuals to residual handling
+  and regenerate the linked current-process PDF; diagrams 01 and 02 are unchanged.
 
 ### 2026-11-05 - Reuse initial topology across shared query consumers
 
