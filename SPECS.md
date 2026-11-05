@@ -6,7 +6,7 @@ explicit authorization under [AGENTS.md](AGENTS.md), together with the
 corresponding implementation and diagram updates.
 
 The initial review describes Backend Dev `8b8a64ac7ce2f0faa46d42653615d2f8aee1c930`.
-The App consumer observations describe App Dev
+The initial App consumer review describes App Dev
 `1b0bc8d761f6d891547c3c224792bdc3e01d2d7c`. These references identify the
 reviewed implementation; they are not runtime admission conditions.
 
@@ -82,8 +82,10 @@ For scalar intents (`0`: token to CYGLD; `1`: CYGLD to token), the Backend:
 
 1. Captures the operation's available local cache scope.
 2. Offers fitting exact and neighboring in-memory observations to its quote book.
-3. Starts retained-route replay, ordinary search and the publication consumer.
-4. Recovers metadata/SQL scope and optional persisted history concurrently.
+3. Publishes the book's available stored winner and yields to delivery before
+   copying route seeds or scheduling new search work.
+4. Starts retained-route replay, ordinary search and the publication consumer.
+5. Recovers metadata/SQL scope and optional persisted history concurrently.
 
 The in-memory history path does not await SQL recovery, SDK pricing or a new
 chain read. Publishing an already validated history observation adds no new
@@ -107,8 +109,12 @@ There are concurrent ways to obtain a complete proposal:
 - **Retained path:** reuse a known whole-plan topology and evaluate it with the
   appropriate funding. It does not need rediscovery or SDK pool snapshots.
 - **Initial constructed path:** the initial `first=True` grid nominates AMM
-  topology, constructs a whole plan and proceeds to Helpers. This first pass
-  deliberately bypasses SDK amount-pricing.
+  topology, constructs a whole plan and proceeds to Helpers. When custom
+  discovery is enabled, direct pools and a single connector beside the current
+  seed are tried before the full custom graph walk. The adapter retains its
+  native/anchor rules, encoding checks and ordinary later discovery. This first
+  pass deliberately bypasses SDK amount-pricing. The shortcut applies only to a
+  segment query's first pass, leaving later ready-offer ordering intact.
 - **Continued exploration:** detailed SDK simulation, alternative allocations,
   router hints, residual handling and repairs propose further complete plans.
 
@@ -121,10 +127,10 @@ state is warmed independently, cached and invalidated through the implemented
 generation/event mechanisms; missing fields are coalesced and independent
 reads can run concurrently.
 
-Custom discovery currently walks and sorts its reachable single-path graph
-before yielding the first single route. It has cooperative checkpoints, while
-split enumeration remains lazy. These are current computation dependencies,
-not an assertion that every first route comes from that full graph walk.
+Ordinary custom discovery walks and sorts its reachable single-path graph;
+the initial short-path prefix above does not await that walk. Both have
+cooperative checkpoints, while split enumeration remains lazy. Initial prefix
+duplicates are reconciled with the normal nominations by the same route identity.
 
 ## Step 4: use route suppliers for the market legs
 
@@ -143,6 +149,8 @@ These are demand-started per market segment, not all queried globally at HTTP
 ingress. AlphaRouter and UniRoute local can emit topology hints before deeper
 optimization finishes. Their engine-owned child processes are reused but are
 started lazily. The generic SDK arithmetic child is also reused and lazy.
+Initial custom-prefix nominations contribute to their supplier's candidate
+count and first-candidate time; lazy-feed reads remain a separate measurement.
 
 Hosted adapters use Uniswap Trading API endpoints. Their labels do not prove
 which undocumented server algorithm ran. Recorded response evidence determines
@@ -190,6 +198,13 @@ priority lane; initial ordinary proposals use ordinary admission. SDK state
 waits release their pricing lease. Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
+
+Candidate banks and SDK payloads retain private mutable pool state. Their
+snapshot copier owns the scalar tick/bitmap rows and deep-copies other metadata.
+Quick-pass topology descriptors are copied when offered to a consumer; the
+ready-list snapshot separately copies mutable origins. A retained single shared
+read returns directly without scheduling a timer task. These changes do not
+alter simulation inputs, the eight-slot capacity or shared-read subscriber ownership.
 
 ## Step 6: select, publish and display
 
@@ -252,6 +267,21 @@ None is a prerequisite for the first displayed quote.
 - App diagnostics start at the selected flow's loading transition, after token
   debounce and any earlier page prerequisites. Confirmed DOM identifies the
   selected presentation, not its age or a measured browser paint time.
+- Backend flow records retain first-occurrence `milestonesMs` for middleware
+  entry, headers and first body ready/sent, first selected frame ready/sent,
+  disconnect and stream cleanup. These are Backend-local clocks; middleware
+  entry does not measure socket arrival or earlier server scheduling.
+- Proxy records separate headers-to-first-downstream-pull from that pull's
+  first-read wait, and record upstream cancellation cleanup separately.
+- The App's page-local `cybergold:quote-latency` events record native amount edits/Refresh,
+  stream dispatch/headers/bytes/parsed selection and the first validated display
+  committed to the DOM. Input timing includes debounce. Initial display can use
+  the navigation clock. Arithmetic overlays do not count as validated display;
+  Refresh retains its clock until the replacement request's selection appears.
+  An automatic request restart updates the tracked visible owner even when its
+  repeated display event is suppressed. MAX/token-selection changes do not
+  restart this measurement.
+  These observations send no additional telemetry request and measure no paint.
 
 ## Implementation map
 
@@ -277,3 +307,34 @@ App context is implemented in `app/[locale]/page.tsx`,
 `app/hooks/flows/quotes/useEconomicQuote.ts`, `app/utils/economicQuoteSearch.ts`,
 `app/utils/quoteStream.ts` and `app/server/backend-transport-observation.ts`
 in the reviewed App revision.
+The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
+and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
+
+## Change history
+
+### 2026-11-04 - Independent review corrections
+
+- Include initial custom-prefix nominations in supplier candidate counts and
+  first-candidate timing, with a regression for the separate lazy-feed counters.
+- Keep the App's tracked visible request current after automatic stream restarts
+  so a later Refresh waits for its own replacement. Add unit/browser regressions
+  and clarify the native-input clock's coverage.
+
+### 2026-11-04 - Authorized latency improvements
+
+- Publish an available in-memory winner before route-seed copies and new search
+  scheduling, with a cooperative yield for delivery.
+- Try direct/seed-connector topology before the full initial custom graph walk,
+  retaining ordinary later routes, ranking and Helpers validation.
+- Reduce repeated snapshot/topology copies and timer tasks for retained reads,
+  preserving private candidate state and existing shared-work ownership.
+- Add Backend send/disconnect/cleanup milestones, proxy pull/cancel timings and
+  App input-to-DOM timing that excludes arithmetic overlays.
+- Update the affected process diagram and its PDF. The Ops latency workplan
+  records authorization, controlled comparisons and qualification; runtime
+  performance targets remain there.
+
+### 2026-11-04 - Initial specification
+
+- Document the implemented quotation flow at Backend `8b8a64ac` and the App
+  consumer at `1b0bc8d7`, with three current-process diagrams and their PDF.

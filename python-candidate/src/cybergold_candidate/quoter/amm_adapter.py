@@ -12,11 +12,12 @@ from ..quote_errors import QuoteFailure, public_quote_error
 from ..recovery_rpc import SnapshotChanged
 from ..routing_encoding import weighted_routes, split_runtime
 from ..uniswap_routes import pool_identity
+from ..pool_snapshot import copy_pool_bank
 from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_steps
 from .custom_routes import CustomRoutes
 from .contracts import path_nomination, capture_paths
-from .discovery import current_topology, route_identity
+from .discovery import current_topology, route_identity, seeded_path_steps
 from .route_tools import RouteQuery, round_robin
 from .cooperative import CHECKPOINT, close, values, async_values, async_finish, finish, sort_steps
 from .amm import PartialPath
@@ -128,6 +129,7 @@ class CyberGoldAmmAdapter:
     def nomination_steps(self, source, target, amount, block, *, market=False, first=False, linear_only=False):
         registry = self.engine.registry
         bootstrap = current_bootstrap()
+        initial_custom = first and (bootstrap is None or not bootstrap.has_query(source, target, amount))
         query = RouteQuery(source, target, int(amount), block)
         anchor = pool_identity(registry.seed) if market else None
         def project_paths(routes):
@@ -165,7 +167,30 @@ class CyberGoldAmmAdapter:
             feeds = [prioritize_steps(feed, registry) for feed in feeds]
         if linear_only:
             feeds = [linear_prefix(feed) for feed in feeds]
-        return adapt_steps(round_robin(feeds), source, self.core, market=market, anchor=anchor)
+        ordinary = round_robin(feeds)
+        initial_provider = (next((provider for _, provider in bootstrap.providers
+                                  if isinstance(provider, CustomRoutes)), None)
+                            if initial_custom and bootstrap is not None else None)
+        if initial_custom and (bootstrap is None or initial_provider is not None):
+            def initial_then(remaining):
+                try:
+                    routes = []
+                    for route in seeded_path_steps(list(registry.inventory.values()), registry.seed, source, target):
+                        if route is CHECKPOINT:
+                            yield route
+                        else:
+                            routes.append(route)
+                    routes = yield from sort_steps(routes,
+                        key=lambda route: route_priority(route, pool_identity(registry.seed)))
+                    for route in routes:
+                        if bootstrap is not None:
+                            bootstrap.observe_initial_candidate(query, initial_provider)
+                        yield [{'amountIn': str(amount), 'hops': route}], ['cybergold-custom']
+                    yield from remaining
+                finally:
+                    close(remaining)
+            ordinary = initial_then(ordinary)
+        return adapt_steps(ordinary, source, self.core, market=market, anchor=anchor)
 
     def family_offers(self, source, target, amount, block):
         return finish(self.family_steps(source, target, amount, block))
@@ -230,7 +255,7 @@ class CyberGoldAmmAdapter:
                             row['hops'] = row['hops'][1:]
                     routes = weighted_routes(normalized)
                     async def replay(funding):
-                        trial = deepcopy(bank)
+                        trial = copy_pool_bank(bank)
                         output, consumed, retained = 0, 0, []
                         for row, funded in zip(normalized, split_runtime(funding, routes), strict=True):
                             row['amountIn'] = str(funded)

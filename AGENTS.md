@@ -14,6 +14,8 @@ The workspace `AGENTS.md` also applies to this repository.
 - Once authorized, update the implementation, `SPECS.md` and affected diagram
   dependencies together. Do not document proposed behavior as implemented or
   leave changed behavior undocumented.
+- Record every change to `SPECS.md` and the implementation it mirrors in a
+  log or history section of `SPECS.md`, as part of the same coordinated change.
 - Keep improvement proposals, performance targets not implemented as contracts,
   experiments and implementation workplans in `cybergold-ops/docs`, using its
   existing workplan organization. Link to them instead of copying proposals

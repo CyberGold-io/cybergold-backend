@@ -52,6 +52,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_integration.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_telemetry.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_scheduling.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quote_latency.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_module_boundaries.py
 python-candidate/.venv/bin/python python-candidate/tests/test_universal_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.py

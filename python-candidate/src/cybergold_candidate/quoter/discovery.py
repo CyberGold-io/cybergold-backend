@@ -190,6 +190,45 @@ def route_identity(route):
                  else (hop['kind'], hop['currencyOut'].lower()) for hop in route)
 
 
+def seeded_path_steps(pools, seed, source, target, weth=WETH):
+    """Direct pools and one connector beside the seed, before the full walk.
+
+    These are a subset of ordinary discovery. No pool state or price is read,
+    and the consuming adapter still validates/filters each nomination.
+    """
+    unique = {}
+    for pool in pools:
+        yield CHECKPOINT
+        identity = pool_identity(pool)
+        if identity not in unique or pool.get('address'):
+            unique[identity] = pool
+    source, target, weth = source.lower(), target.lower(), weth.lower()
+    start, end = weth if source == ZERO else source, weth if target == ZERO else target
+    prefix = [{'kind': 'wrap', 'currencyOut': weth}] if source == ZERO else []
+    suffix = [{'kind': 'unwrap', 'currencyOut': ZERO}] if target == ZERO else []
+    anchor = unique.get(pool_identity(seed))
+    def hop(pool, currency):
+        return {'pool': pool, 'zeroForOne': currency == pool['token0']['address'].lower()}
+    for pool in unique.values():
+        yield CHECKPOINT
+        if pool.get('hooks', ZERO).lower() != ZERO:
+            continue
+        tokens = {pool['token0']['address'].lower(), pool['token1']['address'].lower()}
+        if start in tokens and opposite(pool, start) == end:
+            yield prefix + [hop(pool, start)] + suffix
+        if anchor is None or pool is anchor or anchor.get('hooks', ZERO).lower() != ZERO:
+            continue
+        anchored = {anchor['token0']['address'].lower(), anchor['token1']['address'].lower()}
+        if end in anchored and start in tokens:
+            middle = opposite(pool, start)
+            if middle != start and middle != end and middle in anchored and opposite(anchor, middle) == end:
+                yield prefix + [hop(pool, start), hop(anchor, middle)] + suffix
+        if start in anchored and end in tokens:
+            middle = opposite(anchor, start)
+            if middle != start and middle != end and middle in tokens and opposite(pool, middle) == end:
+                yield prefix + [hop(anchor, start), hop(pool, middle)] + suffix
+
+
 def families(registry, source, target, core):
     anchor = pool_identity(registry.seed)
     groups = defaultdict(list)

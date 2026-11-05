@@ -118,16 +118,19 @@ class CanonicalPublication:
                 else:
                     self.book.finish(value)
                 self._remember_families()
-            with stage('publication.reconcile', kind='cpu'):
-                winner = self.book.winner()
-                if winner == self.best and not (winner is None and self.disproof is not None):
-                    continue
-                previous, self.best = self.best, winner
-            if winner is not None:
-                with stage('publication.publish', kind='await'):
-                    await self.publish({'type': 'qualified', 'value': deepcopy(winner)})
-            elif previous is not None or self.disproof is not None:
-                with stage('publication.publish', kind='await'):
-                    await self.publish({'type': 'invalidated', 'context': deepcopy(
-                        previous['context'] if previous is not None else self.disproof)})
-                self.disproof = None
+            await self.publish_selected()
+
+    async def publish_selected(self):
+        with stage('publication.reconcile', kind='cpu'):
+            winner = self.book.winner()
+            if winner == self.best and not (winner is None and self.disproof is not None):
+                return
+            previous, self.best = self.best, winner
+        if winner is not None:
+            with stage('publication.publish', kind='await'):
+                await self.publish({'type': 'qualified', 'value': deepcopy(winner)})
+        elif previous is not None or self.disproof is not None:
+            with stage('publication.publish', kind='await'):
+                await self.publish({'type': 'invalidated', 'context': deepcopy(
+                    previous['context'] if previous is not None else self.disproof)})
+            self.disproof = None

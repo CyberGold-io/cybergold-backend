@@ -3,6 +3,7 @@ import asyncio
 import os
 import shlex
 from copy import deepcopy
+from .pool_snapshot import copy_pool_snapshot
 from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
 from .route_work_slots import required_state_wait
 from .quote_flow import stage
@@ -33,7 +34,10 @@ class SdkWorker:
         self.sequence = 0
 
     async def request(self, payload, on_state=None):
-        payload = deepcopy(payload)
+        pools = payload.get('pools')
+        payload = deepcopy({key: value for key, value in payload.items() if key != 'pools'})
+        if pools is not None:
+            payload['pools'] = [copy_pool_snapshot(pool) for pool in pools]
         observation = quote_sdk_session(payload)
         process = request_id = None
         terminal, coverage = False, None
