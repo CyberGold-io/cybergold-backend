@@ -281,9 +281,10 @@ class RouteBootstrap:
             self._changed.set()
         return True
 
-    def has_query(self, source, target, amount):
+    def has_ready_offers(self, source, target, amount):
         key = source.lower(), target.lower(), int(amount)
-        return key in self._queries or key in self._completed_offers
+        return bool(self._completed_offers.get(key) or
+                    any(entry['offers'] for entry in self._queries.get(key, ())))
 
     def observe_initial_candidate(self, query, provider):
         """Account for the adapter's initial topology before its lazy feed."""

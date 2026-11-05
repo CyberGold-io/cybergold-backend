@@ -122,8 +122,11 @@ There are concurrent ways to obtain a complete proposal:
   discovery is enabled, direct pools and a single connector beside the current
   seed are tried before the full custom graph walk. The adapter retains its
   native/anchor rules, encoding checks and ordinary later discovery. This first
-  pass deliberately bypasses SDK amount-pricing. The shortcut applies only to a
-  segment query's first pass, leaving later ready-offer ordering intact.
+  pass deliberately bypasses SDK amount-pricing. Repeated initial consumers of
+  the same segment can reuse that short prefix while its registered query has
+  no ready supplier or completed-topology offer. Query registration alone does
+  not force a later initial whole-plan consumer through the full graph. Actual
+  ready offers retain their existing precedence.
 - **Continued exploration:** detailed SDK simulation, alternative allocations,
   router hints, residual handling and repairs propose further complete plans.
 
@@ -358,6 +361,15 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-05 - Reuse initial topology across shared query consumers
+
+- Distinguish a registered segment query from an available supplier/completed
+  topology offer. Repeated initial whole-plan consumers can reuse the existing
+  short prefix instead of waiting for the full custom graph.
+- Preserve ready-offer order, query/provider ownership, ordinary later graph
+  coverage, Helpers qualification and the existing eight-permit admission.
+- Process dependencies and the current-process diagrams are unchanged.
 
 ### 2026-11-05 - Streaming controls at each proxy hop
 

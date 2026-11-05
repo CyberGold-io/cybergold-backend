@@ -129,7 +129,9 @@ class CyberGoldAmmAdapter:
     def nomination_steps(self, source, target, amount, block, *, market=False, first=False, linear_only=False):
         registry = self.engine.registry
         bootstrap = current_bootstrap()
-        initial_custom = first and (bootstrap is None or not bootstrap.has_query(source, target, amount))
+        # A registered query may have no ready hint for this consumer yet.
+        # Reuse the short prefix until actual supplier/completed offers exist.
+        initial_custom = first and (bootstrap is None or not bootstrap.has_ready_offers(source, target, amount))
         query = RouteQuery(source, target, int(amount), block)
         anchor = pool_identity(registry.seed) if market else None
         def project_paths(routes):
