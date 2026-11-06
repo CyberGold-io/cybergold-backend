@@ -3,7 +3,7 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from .quote_flow import current_flow, link_owner, retain_shared_producer, release_shared_producer
+from .quote_flow import current_flow, link_owner, retain_shared_producer, release_shared_producer, stage
 
 
 def discard_pool_observation(rpc, call, block):
@@ -131,5 +131,7 @@ class SharedReads:
         tasks = tuple(self.groups)
         for task in tasks:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        self.completed.clear()
+        with stage('sharing.settle'):
+            await asyncio.gather(*tasks, return_exceptions=True)
+        with stage('sharing.clear', kind='cpu'):
+            self.completed.clear()

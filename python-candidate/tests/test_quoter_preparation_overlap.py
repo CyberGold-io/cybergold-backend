@@ -10,6 +10,7 @@ from cybergold_candidate.quoter.bootstrap import current_bootstrap
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
 from cybergold_candidate.quoter.route_tools import PendingRouteTool
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
+from cybergold_candidate.quote_flow import Flow, flow_scope
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, settings, fixture_plan_simulator
 
@@ -118,11 +119,15 @@ def seed():
 class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
     async def test_market_seed_qualifies_with_basis_held_and_is_evaluated_once(self):
         q, entered, drained = Fixture(), asyncio.Event(), asyncio.Event()
+        settling, release = asyncio.Event(), asyncio.Event()
+        flow = Flow('/api/economic-quotes/stream')
         async def basis(_):
             entered.set()
             try:
                 await asyncio.Event().wait()
             finally:
+                settling.set()
+                await release.wait()
                 drained.set()
         q.basis_reader = basis
         budget = QuoteBudget()
@@ -132,9 +137,26 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(drained.is_set())
             await q.seed_completed.wait()
             budget.finish_selection('best-initial')
-        with budget_context(budget):
+        with budget_context(budget), flow_scope(flow):
             async with asyncio.timeout(1):
-                value = await q.get(REQUEST, update, seed=seed())
+                task = asyncio.create_task(q.get(REQUEST, update, seed=seed()))
+                try:
+                    await settling.wait()
+                    owner = task.quote_flow
+                    while True:
+                        snapshot = {row['stage']:row for row in owner.snapshot()['stages']}
+                        if any(snapshot.get(name,{}).get('inFlight') for name in (
+                                'discovery.owners.settle','discovery.providers.settle',
+                                'discovery.providers.close','search.preparation.settle')):
+                            break
+                        await asyncio.sleep(0)
+                    self.assertFalse(task.done(),'ready Market result still owns preparation cancellation')
+                    release.set()
+                    value = await task
+                finally:
+                    release.set()
+                    if not task.done():task.cancel()
+                    await asyncio.gather(task,return_exceptions=True)
         self.assertEqual(value['quotedInput'], '10000')
         self.assertGreater(int(value['quotedOutput']), 0)
         self.assertEqual(len(q.seed_calls), 1)
@@ -144,6 +166,11 @@ class PreparationOverlapTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(q.previews)
         self.assertTrue(drained.is_set())
         self.assertEqual((q.rpc.heads, q.rpc.verifications), (0, 0))
+        snapshot = {row['stage']:row for row in owner.snapshot()['stages']}
+        for name in ('search.preparation.settle','search.reconstruction.settle','sharing.settle'):
+            self.assertGreaterEqual(snapshot[name]['completed'],1)
+            self.assertEqual(snapshot[name]['summedCpuMs'],0)
+        self.assertTrue(all(row['inFlight']==0 for row in snapshot.values()))
 
     async def test_market_and_suppliers_start_early_while_core_grid_receives_real_weights(self):
         q, release = Fixture(), asyncio.Event()
