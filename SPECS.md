@@ -318,6 +318,12 @@ was observed or prepared.
   the stream owner's wait for its producer to drain; zero CPU in that row does
   not establish idle time. The narrower `search.cleanup` rows measure the
   simulation-sharing and seed-lookup drains, not every nested search owner.
+  Separate closing rows measure Bootstrap owner/provider settlement and
+  provider/feed closure, search reconstruction/preparation settlement, and
+  shared-read settlement. Synchronous topology and shared-read memo clears
+  have CPU rows. These rows preserve the same cancellation ownership, drain
+  order, errors and deadlines; inclusive/nested wall totals overlap. They do
+  not identify GC, process-wide CPU, scheduling delay or every finalizer.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
 - Proxy timings begin inside the Next handler, not at the browser input event.
@@ -394,6 +400,17 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-06 - Closing-boundary observations
+
+- Add fixed closing spans for Bootstrap owners/provider feeds, search
+  reconstruction/preparation tasks and shared reads, including the shared-read
+  close before simulation-sharing cleanup. Measure synchronous clears with
+  separate CPU spans.
+- Preserve cancellation, owned-task drain order, errors, ranking and deadlines.
+  Keep existing `search.cleanup` meaning and independent flow origins; no GC
+  or process-wide CPU attribution is introduced.
+- Current-process diagrams and source ownership are unchanged.
 
 ### 2026-11-05 - Public Sandbox test isolation requirement
 

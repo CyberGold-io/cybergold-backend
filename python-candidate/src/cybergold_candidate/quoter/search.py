@@ -930,12 +930,14 @@ class Quoter:
         finally:
             for task in tuple(reconstructions):
                 task.cancel()
-            await asyncio.gather(*tuple(reconstructions), return_exceptions=True)
+            with stage('search.reconstruction.settle'):
+                await asyncio.gather(*tuple(reconstructions), return_exceptions=True)
             preparation_error = None
             if preparation is not None:
                 if not preparation.done():
                     preparation.cancel()
-                outcome, = await asyncio.gather(preparation, return_exceptions=True)
+                with stage('search.preparation.settle'):
+                    outcome, = await asyncio.gather(preparation, return_exceptions=True)
                 if isinstance(outcome, SnapshotChanged):
                     preparation_error = outcome
                 elif isinstance(outcome, Exception):

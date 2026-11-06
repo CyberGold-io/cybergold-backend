@@ -9,6 +9,7 @@ from cybergold_candidate.economic_quotes import request_operation
 from cybergold_candidate.quote_flow import Flow, flow_scope
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.quoter.plan_transport import simulation_scope
+from cybergold_candidate.quoter.bootstrap import RouteBootstrap
 from test_quoter_plan_simulation import fixture, market, encoded, measured, stage, WETH, CORE
 
 
@@ -23,6 +24,131 @@ def rows(flow):
 
 
 class QuoteFlowIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_shared_close_waits_for_owned_cancellation_before_measuring_memo_cpu(self):
+        clock, cpu = [0.0], [0.0]
+        flow = Flow('/api/economic-quotes/stream', clock=lambda:clock[0], cpu_clock=lambda:cpu[0])
+        bank = SharedReads()
+        entered, settling, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class Memo(dict):
+            def clear(self):
+                clock[0] += .25
+                cpu[0] += .125
+                super().clear()
+        bank.completed = Memo({'ready':'retained-value'})
+        async def produce():
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                clock[0], cpu[0] = 1.0, 1.0
+                settling.set()
+                await release.wait()
+        reader = closer = None
+        try:
+            with flow_scope(flow):
+                reader = asyncio.create_task(bank.one('held-read', produce))
+                await until(entered.is_set)
+                closer = asyncio.create_task(bank.close())
+            await until(settling.is_set)
+            snapshot = rows(flow)
+            self.assertEqual(snapshot['sharing.settle','await']['inFlight'],1)
+            self.assertNotIn(('sharing.clear','cpu'),snapshot)
+            self.assertFalse(closer.done(),'close still owns the cancelled physical read')
+            clock[0] = 3.0
+            release.set()
+            await closer
+            with self.assertRaises(asyncio.CancelledError):await reader
+            snapshot = rows(flow)
+            self.assertEqual(snapshot['sharing.settle','await']['summedWallMs'],3000)
+            self.assertEqual(snapshot['sharing.settle','await']['summedCpuMs'],0)
+            self.assertEqual(snapshot['sharing.clear','cpu']['summedWallMs'],250)
+            self.assertEqual(snapshot['sharing.clear','cpu']['summedCpuMs'],125)
+            self.assertEqual((bank.pending,bank.groups,bank.completed),({},{},{}))
+            self.assertTrue(all(row['inFlight']==0 for row in snapshot.values()))
+        finally:
+            release.set()
+            for task in (reader,closer):
+                if task is not None and not task.done():task.cancel()
+            await asyncio.gather(*(task for task in (reader,closer)if task is not None),return_exceptions=True)
+            await bank.close()
+
+    async def test_bootstrap_cancellation_keeps_owner_provider_and_close_drains_in_order(self):
+        clock, cpu, trace = [0.0], [0.0], []
+        flow = Flow('/api/economic-quotes/stream', clock=lambda:clock[0], cpu_clock=lambda:cpu[0])
+        ordinary_started, provider_started = asyncio.Event(), asyncio.Event()
+        owner_settling, provider_settling, provider_closing = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        owner_release, provider_release, close_release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        class Provider:
+            name = 'controlled-provider'
+            async def discover(self,*_args):
+                provider_started.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    trace.append('provider-settle')
+                    provider_settling.set()
+                    await provider_release.wait()
+            async def close(self):
+                trace.append('provider-close')
+                provider_closing.set()
+                await close_release.wait()
+        async def ordinary():
+            ordinary_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                trace.append('owner-settle')
+                owner_settling.set()
+                await owner_release.wait()
+        async def reevaluate():pass
+        bootstrap, task = None, None
+        try:
+            with flow_scope(flow):
+                bootstrap = RouteBootstrap([Provider()])
+                clear = bootstrap.topology.clear
+                def clear_topology():
+                    trace.append('topology-clear')
+                    clock[0] += .25
+                    cpu[0] += .125
+                    clear()
+                with patch.object(bootstrap.topology,'clear',side_effect=clear_topology):
+                    bootstrap.offers(WETH,CORE,100,{})
+                    task = asyncio.create_task(bootstrap.run(ordinary(),reevaluate))
+                    await until(ordinary_started.is_set)
+                    await until(provider_started.is_set)
+                    clock[0] = 1.0
+                    task.cancel()
+                    await until(owner_settling.is_set)
+                    self.assertEqual(rows(flow)['discovery.owners.settle','await']['inFlight'],1)
+                    self.assertFalse(provider_settling.is_set())
+                    clock[0] = 2.0
+                    owner_release.set()
+                    await until(provider_settling.is_set)
+                    self.assertEqual(rows(flow)['discovery.providers.settle','await']['inFlight'],1)
+                    self.assertFalse(provider_closing.is_set())
+                    clock[0] = 3.0
+                    provider_release.set()
+                    await until(provider_closing.is_set)
+                    self.assertEqual(rows(flow)['discovery.providers.close','await']['inFlight'],1)
+                    self.assertFalse(task.done(),'caller cancellation still owns provider close')
+                    clock[0] = 4.0
+                    close_release.set()
+                    with self.assertRaises(asyncio.CancelledError):await task
+            snapshot = rows(flow)
+            for name in ('discovery.owners.settle','discovery.providers.settle','discovery.providers.close'):
+                self.assertEqual(snapshot[name,'await']['summedWallMs'],1000)
+                self.assertEqual(snapshot[name,'await']['summedCpuMs'],0)
+            self.assertEqual(snapshot['discovery.clear','cpu']['summedWallMs'],250)
+            self.assertEqual(snapshot['discovery.clear','cpu']['summedCpuMs'],125)
+            self.assertEqual(trace,['owner-settle','provider-settle','provider-close','topology-clear'])
+            self.assertTrue(all(task.done() for task in bootstrap._tasks))
+            self.assertTrue(all(row['inFlight']==0 for row in snapshot.values()))
+        finally:
+            owner_release.set();provider_release.set();close_release.set()
+            if task is not None and not task.done():task.cancel()
+            if task is not None:await asyncio.gather(task,return_exceptions=True)
+            if bootstrap is not None:await bootstrap.close()
+
     async def test_result_ready_closes_before_held_receive_cleanup_and_preserves_result(self):
         clock = [0.0]
         flow = Flow('/api/economic-estimates',clock=lambda:clock[0],cpu_clock=lambda:0)

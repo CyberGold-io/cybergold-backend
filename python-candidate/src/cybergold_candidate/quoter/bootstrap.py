@@ -12,6 +12,7 @@ from copy import deepcopy
 from inspect import isawaitable, iscoroutine
 
 from ..quote_budget import SearchStopped, current_budget
+from ..quote_flow import stage
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
@@ -544,7 +545,8 @@ class RouteBootstrap:
             for task in owned:
                 if not task.done():
                     task.cancel()
-            outcomes = await asyncio.gather(*owned, return_exceptions=True)
+            with stage('discovery.owners.settle'):
+                outcomes = await asyncio.gather(*owned, return_exceptions=True)
             try:
                 await self.close()
             except SnapshotChanged as error:
@@ -557,33 +559,36 @@ class RouteBootstrap:
         for task in self._tasks:
             if not task.done():
                 task.cancel()
-        outcomes = await asyncio.gather(*self._tasks, return_exceptions=True)
-        for entries in self._queries.values():
-            for entry in entries:
-                operation = entry['feed'].pending if entry.get('feed') is not None else None
-                if iscoroutine(operation):
-                    # A task cancelled before its first turn never awaited the
-                    # feed's coroutine. Close that owned pending object too.
-                    operation.close()
-                updates = getattr(entry['feed'], 'updates', None) if entry.get('feed') is not None else None
-                close = getattr(updates, 'aclose', None)
+        with stage('discovery.providers.settle'):
+            outcomes = await asyncio.gather(*self._tasks, return_exceptions=True)
+        with stage('discovery.providers.close'):
+            for entries in self._queries.values():
+                for entry in entries:
+                    operation = entry['feed'].pending if entry.get('feed') is not None else None
+                    if iscoroutine(operation):
+                        # A task cancelled before its first turn never awaited the
+                        # feed's coroutine. Close that owned pending object too.
+                        operation.close()
+                    updates = getattr(entry['feed'], 'updates', None) if entry.get('feed') is not None else None
+                    close = getattr(updates, 'aclose', None)
+                    if close is not None:
+                        try:
+                            await close()
+                        except BaseException as error:
+                            outcomes.append(error)
+            async def close_provider(provider):
+                close = getattr(provider, 'close', None)
                 if close is not None:
-                    try:
-                        await close()
-                    except BaseException as error:
-                        outcomes.append(error)
-        async def close_provider(provider):
-            close = getattr(provider, 'close', None)
-            if close is not None:
-                value = close()
-                if isawaitable(value):
-                    await value
-        outcomes.extend(await asyncio.gather(*(close_provider(provider) for provider in self._owners),
-                                            return_exceptions=True))
+                    value = close()
+                    if isawaitable(value):
+                        await value
+            outcomes.extend(await asyncio.gather(*(close_provider(provider) for provider in self._owners),
+                                                return_exceptions=True))
         self._close_errors = [error for error in outcomes if isinstance(error, Exception)
                               and (self.nomination_only or not isinstance(error, SnapshotChanged))]
         self._finished_ms = self._elapsed_ms()
-        self.topology.clear()
+        with stage('discovery.clear', kind='cpu'):
+            self.topology.clear()
         disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
         if disproof is not None and not self.nomination_only:
             raise disproof
