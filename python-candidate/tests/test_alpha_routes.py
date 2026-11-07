@@ -6,11 +6,12 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
-from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError
+from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError, drain_retired_callbacks
 from cybergold_candidate.quoter.bootstrap import ProviderUnavailable
 from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.route_work_slots import PricingSlots
 from cybergold_candidate.search_observations import search_observation_scope
 
 
@@ -304,6 +305,162 @@ class CallbackObservationTests(unittest.IsolatedAsyncioTestCase):
     def request(self, amount=1000):
         return {'mode': 'exactIn', 'amount': str(amount),
                 'branches': [{'amountIn': str(amount), 'hops': [{'pool': pool(), 'zeroForOne': True}]}]}
+
+    def owned_callback(self, provider, identity):
+        entry = {'process': object(), 'queue': asyncio.Queue(), 'callbacks': set(),
+                 'canonical': {}, 'block': BLOCK, 'terminal': False, 'counts': None}
+        provider.requests[identity] = entry
+        response = {**self.request(), 'id':identity, 'quoteId':identity+':quote'}
+        task = asyncio.create_task(provider._answer(response, entry))
+        entry['callbacks'].add(task)
+        task.add_done_callback(entry['callbacks'].discard)
+        return entry, task
+
+    async def test_retired_queued_callback_returns_grant_to_active_sibling_without_sdk_work(self):
+        for retirement in ('removed', 'replaced'):
+            with self.subTest(retirement=retirement):
+                engine = Engine()
+                engine.semaphore = PricingSlots(8)
+                provider = AlphaRoutes(engine)
+                provider._write = AsyncMock()
+                held, tasks = 0, []
+                async with search_observation_scope() as observations:
+                    try:
+                        for _ in range(8):
+                            await engine.semaphore.acquire()
+                            held += 1
+                        retired, first = self.owned_callback(provider, 'retired')
+                        active, sibling = self.owned_callback(provider, 'active')
+                        tasks.extend((first, sibling))
+                        async with asyncio.timeout(1):
+                            while len(engine.semaphore._ordinary) != 2:
+                                await asyncio.sleep(0)
+                        self.assertEqual(engine.calls, [])
+                        provider.requests.pop('retired')
+                        replacement = object()
+                        if retirement == 'replaced':
+                            provider.requests['retired'] = replacement
+                        engine.semaphore.release()
+                        held -= 1
+                        with self.assertRaises(asyncio.CancelledError):
+                            await asyncio.wait_for(first, 1)
+                        await asyncio.wait_for(sibling, 1)
+                        self.assertEqual(len(engine.calls), 1)
+                        self.assertIs(engine.calls[0][5], active['canonical'])
+                        provider._write.assert_awaited_once_with(active['process'],
+                            {'id':'active','operation':'quoteResult','quoteId':'active:quote',
+                             'result':{'quote':'2000'}})
+                        self.assertTrue(retired['queue'].empty())
+                        self.assertTrue(first.done() and sibling.done())
+                        await asyncio.sleep(0)  # Run their registered set-discard callbacks.
+                        self.assertFalse(retired['callbacks'] or active['callbacks'])
+                        if retirement == 'replaced':
+                            self.assertIs(provider.requests['retired'], replacement)
+                        self.assertFalse(observations.reads.pending or observations.reads.groups)
+                    finally:
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                        for _ in range(held):
+                            engine.semaphore.release()
+                self.assertEqual(engine.semaphore._value, 8)
+                self.assertFalse(engine.semaphore._ordinary or engine.semaphore._priority)
+
+    async def test_immediate_grant_for_retired_owner_cancels_but_ownerless_calls_keep_behavior(self):
+        engine = Engine()
+        engine.semaphore = PricingSlots(8)
+        provider = AlphaRoutes(engine)
+        provider._write = AsyncMock()
+        entry, task = self.owned_callback(provider, 'retired')
+        provider.requests.pop('retired')
+        async with search_observation_scope():
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertEqual(engine.calls, [])
+            provider._write.assert_not_awaited()
+            self.assertTrue(entry['queue'].empty())
+            # No id or registered owner is required by the existing direct API.
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}), {'quote':'2000'})
+        self.assertEqual(len(engine.calls), 1)
+        self.assertEqual(engine.semaphore._value, 8)
+        self.assertFalse(entry['callbacks'] or engine.semaphore._ordinary)
+
+    async def test_retirement_leaves_started_work_owned_until_callback_drain_finishes(self):
+        engine = Engine()
+        engine.semaphore = PricingSlots(8)
+        entered, finalizing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        calls = []
+        async def quote(*args, **_options):
+            calls.append(args)
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                finalizing.set()
+                await release.wait()
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        provider._write = AsyncMock()
+        closing = None
+        async with search_observation_scope() as observations:
+            entry, task = self.owned_callback(provider, 'started')
+            try:
+                await asyncio.wait_for(entered.wait(), 1)
+                provider.requests.pop('started')
+                provider.retired.add('started')
+                await asyncio.sleep(0)
+                self.assertFalse(finalizing.is_set())
+                self.assertEqual(len(calls), 1)
+                closing = asyncio.create_task(drain_retired_callbacks((task,)))
+                await asyncio.wait_for(finalizing.wait(), 1)
+                self.assertFalse(closing.done())
+                self.assertEqual(engine.semaphore._value, 7)
+                self.assertFalse(observations.reads.pending)
+                self.assertEqual(len(observations.reads.groups), 1)
+                release.set()
+                outcomes = await asyncio.wait_for(closing, 1)
+                self.assertEqual(len(outcomes), 1)
+                self.assertIsInstance(outcomes[0], asyncio.CancelledError)
+                self.assertFalse(entry['callbacks'] or observations.reads.groups)
+                provider._write.assert_not_awaited()
+            finally:
+                release.set()
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                if closing is not None:
+                    await asyncio.gather(closing, return_exceptions=True)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_active_owned_callback_keeps_ordinary_failure_retry_and_snapshot_disproof(self):
+        for error in (OSError('ordinary observation failure'), SnapshotChanged('context changed')):
+            with self.subTest(error=type(error).__name__):
+                engine = Engine()
+                engine.semaphore = PricingSlots(8)
+                original = engine.quote_sdk_branches
+                attempts = 0
+                async def quote(*args, **options):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        raise error
+                    return await original(*args, **options)
+                engine.quote_sdk_branches = quote
+                provider = AlphaRoutes(engine)
+                owner = {}
+                provider.requests['active'] = owner
+                request = {**self.request(), 'id':'active'}
+                async with search_observation_scope():
+                    if isinstance(error, SnapshotChanged):
+                        with self.assertRaises(SnapshotChanged) as caught:
+                            await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner)
+                        self.assertIs(caught.exception, error)
+                    else:
+                        self.assertEqual(await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner),
+                                         {'quote':None})
+                    self.assertEqual(await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner),
+                                     {'quote':'2000'})
+                self.assertEqual(attempts, 2)
+                self.assertEqual(engine.semaphore._value, 8)
 
     async def test_equal_callbacks_share_work_but_preserve_answers_and_query_scope(self):
         engine = Engine()

@@ -218,7 +218,8 @@ class AlphaRoutes:
             counts['quoteCallbacks'] += 1
         started = time.perf_counter()
         try:
-            result = await self._quote(response, entry['block'], entry['canonical'], (self, response['id']))
+            result = await self._quote(response, entry['block'], entry['canonical'],
+                                       (self, response['id']), owner=entry)
             self.quote_callback_failures += result.get('quote') is None
             if counts is not None:
                 counts['quoteCallbackFailures'] += result.get('quote') is None
@@ -292,7 +293,7 @@ class AlphaRoutes:
                     else:
                         await self._stop(entry['process'])
 
-    async def _quote(self, request, block, canonical, scope=None):
+    async def _quote(self, request, block, canonical, scope=None, *, owner=None):
         amount, mode = int(request['amount']), request['mode']
         branches = [{'amountIn': row['amountIn'],
                      'hops': [hop for hop in row['hops'] if 'pool' in hop]}
@@ -301,6 +302,11 @@ class AlphaRoutes:
             return {'quote': str(amount)}
         async def calculate():
             async with engine_work(self.engine.semaphore):
+                # Cooperative retirement can return slots before all queued
+                # callbacks receive cancellation. Retired queries own no new
+                # calculation; already-started work still drains normally.
+                if owner is not None and self.requests.get(request['id']) is not owner:
+                    raise asyncio.CancelledError('Calculation query retired before pricing')
                 value = await self.engine.quote_sdk_branches(branches, mode, amount, block,
                     candidate={}, canonical=canonical)
             quote = (str(value['amountOut' if mode == 'exactIn' else 'amountIn'])

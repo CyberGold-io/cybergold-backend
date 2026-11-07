@@ -69,10 +69,10 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         q.discover = discover
         entered, release, qualified = asyncio.Event(), asyncio.Event(), asyncio.Event()
         class Local(UnirouteLocal):
-            async def _quote(self, *args):
+            async def _quote(self, *args, **kwargs):
                 entered.set()
                 await release.wait()
-                return await super()._quote(*args)
+                return await super()._quote(*args, **kwargs)
         local = Local(q.engine)
         q.route_provider_factory = lambda: [PendingRouteTool(local)]
         request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '10000'}], 'outputCurrency': CORE}
@@ -121,10 +121,10 @@ class ParallelQuoterTests(unittest.IsolatedAsyncioTestCase):
         q.discover = discover
         entered, release, linear_ready = asyncio.Event(), asyncio.Event(), asyncio.Event()
         class Local(UnirouteLocal):
-            async def _quote(self, *args):
+            async def _quote(self, *args, **kwargs):
                 entered.set()
                 await release.wait()
-                return await super()._quote(*args)
+                return await super()._quote(*args, **kwargs)
         local = Local(q.engine)
         q.route_provider_factory = lambda: [PendingRouteTool(local)]
         request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '25000'}], 'outputCurrency': CORE}

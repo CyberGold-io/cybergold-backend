@@ -267,6 +267,13 @@ chunks with explicit checkpoints. The drain remains owned until complete even
 if its caller is cancelled again. Callback outcomes retain their original order;
 the closing query keeps its existing outcome handling. The separate worker-stop
 path retains its existing cancellation and error ordering.
+Each framed callback rechecks its existing query-entry identity at its initial
+engine-permit grant. If the query has retired, it
+finishes through cancellation before starting fresh SDK pricing. Already-started
+SDK work remains owned and drains normally. This closes the gap in which
+cooperative cancellation can release slots before every queued callback has
+received cancellation. Active-query answers, shared-read ownership and the
+eight-permit capacity remain unchanged; no callback/route cap is added.
 
 ## Step 6: select, publish and display
 
@@ -439,6 +446,17 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-07 - Stop fresh callback pricing after query retirement
+
+- Carry the framed callback's existing query owner to its initial pricing
+  boundary and recheck that exact identity after obtaining an engine permit.
+  A retired query cancels there instead of starting fresh SDK arithmetic while
+  its other callbacks are still being cooperatively drained.
+- Preserve active-query answers, existing eight-permit admission, owned cleanup
+  of already-started work, subscriber sharing and ordinary errors. No route or
+  callback limit, GC policy, timer, deadline or worker protocol changes.
+  Current-process diagrams remain accurate and unchanged.
 
 ### 2026-11-07 - Observe process GC callback spans with existing loop lag
 
