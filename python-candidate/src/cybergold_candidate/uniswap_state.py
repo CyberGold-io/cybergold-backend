@@ -584,7 +584,7 @@ class PoolRegistry:
         normalized_requests = [{**row, **{name: identity for name in ('poolId', 'id') if name in row}}
                                for row in requests]
         key = ('tick-fill', generation, block['hash'],
-               json.dumps(canonical_observation(snapshot), sort_keys=True),
+               json.dumps({**snapshot, 'id': identity}, sort_keys=True),
                json.dumps(normalized_requests, sort_keys=True))
         async def produce():
             return await self._extend_ticks(snapshot, requests, block, generation)
@@ -662,8 +662,8 @@ class PoolRegistry:
                 key = search_pool_key(self.chain, pool)
                 baseline = search_pool_state(self.chain, pool)
                 if baseline is not None:
-                    observations.pool_states[key] = {**copy_pool_snapshot(baseline),
-                        'bitmapWords': deepcopy(result['bitmapWords']), 'ticks': deepcopy(result['ticks'])}
+                    observations.pool_states[key] = copy_pool_snapshot({**baseline,
+                        'bitmapWords': result['bitmapWords'], 'ticks': result['ticks']})
         if generation == self.generation and not latest:
             self.publish_observation(result)
         return result

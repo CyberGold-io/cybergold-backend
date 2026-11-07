@@ -84,6 +84,54 @@ class SearchObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(registry.observed, {})
         store.save.assert_not_called()
 
+    async def test_latest_coverage_replacement_keeps_baseline_scalars_metadata_and_rows_independent(self):
+        for prior_coverage in (False, True):
+            with self.subTest(prior_coverage=prior_coverage):
+                registry, rpc, store = fixtures.LatestStateTests.registry(self)
+                async with search_observation_scope() as observations:
+                    initial = await registry.snapshot(pool(), LATEST_BLOCK)
+                    key, = observations.pool_states
+                    baseline = deepcopy(initial)
+                    baseline['nestedUnknown'] = {'rows':[{'value':'baseline metadata'}]}
+                    if prior_coverage:
+                        baseline['ticks'] = [{'index':0,'liquidityGross':'7','liquidityNet':'3','extraScalar':True}]
+                        baseline['bitmapWords'] = [{'wordPosition':0,'bitmap':'1','extraScalar':None}]
+                    else:
+                        baseline.pop('ticks', None)
+                        baseline.pop('bitmapWords', None)
+                    observations.pool_states[key] = baseline
+                    private = deepcopy(baseline)
+                    private.update(liquidity='999', tick=200)
+                    private['nestedUnknown']['rows'][0]['value'] = 'private metadata'
+                    private.setdefault('ticks', []).append(
+                        {'index':120,'liquidityGross':'9','liquidityNet':'-2','extraScalar':'keep tick'})
+                    private.setdefault('bitmapWords', []).append(
+                        {'wordPosition':1,'bitmap':'2','extraScalar':'keep word'})
+                    before = deepcopy(baseline)
+                    calls = len(rpc.calls)
+                    result = await registry.extend_ticks(private, [], LATEST_BLOCK)
+                    retained = observations.pool_states[key]
+                    self.assertEqual(len(rpc.calls), calls)
+                    self.assertEqual((result['liquidity'],result['tick']), ('999',200))
+                    self.assertEqual((retained['liquidity'],retained['tick']),
+                                     (baseline['liquidity'],baseline['tick']))
+                    self.assertEqual(baseline, before)
+                    self.assertEqual(list(retained), list({**baseline,'bitmapWords':[],'ticks':[]}))
+                    for field in ('ticks','bitmapWords'):
+                        self.assertEqual(retained[field], result[field])
+                        self.assertEqual(result[field], private[field])
+                    self.assertEqual(retained['nestedUnknown'], before['nestedUnknown'])
+                    records = [private, result, retained]
+                    for index, record in enumerate(records):
+                        record['nestedUnknown']['rows'][0]['value'] = str(index)
+                        record['ticks'][-1]['extraScalar'] = index
+                        record['bitmapWords'][-1]['extraScalar'] = index
+                    self.assertEqual([row['nestedUnknown']['rows'][0]['value'] for row in records], ['0','1','2'])
+                    self.assertEqual([row['ticks'][-1]['extraScalar'] for row in records], [0,1,2])
+                    self.assertEqual([row['bitmapWords'][-1]['extraScalar'] for row in records], [0,1,2])
+                    self.assertEqual(baseline, before)
+                store.save.assert_not_called()
+
     async def test_concurrent_disjoint_coverage_is_reused_together(self):
         registry, rpc, _ = fixtures.LatestStateTests.registry(self)
         ordinary = rpc.read_function

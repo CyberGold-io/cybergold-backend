@@ -252,6 +252,10 @@ set containing every parked candidate. Per-leg admission retains round-robin ord
 
 Candidate banks and SDK payloads retain private mutable pool state. Their
 snapshot copier owns the scalar tick/bitmap rows and deep-copies other metadata.
+Tick-fill coalescing serializes its already-owned snapshot with the normalized
+observation identity without another snapshot copy. Latest search-baseline
+coverage is replaced before one owned snapshot copy, preserving the baseline
+scalars and independent metadata and coverage rows.
 Quick-pass topology descriptors are copied when offered to a consumer; the
 ready-list snapshot separately copies mutable origins. A retained single shared
 read returns directly without scheduling a timer task. Multi-key reads carry
@@ -446,6 +450,18 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-07 - Avoid discarded tick-fill snapshot copies
+
+- Serialize the already-owned tick-fill snapshot with its normalized observed
+  identity without copying that complete snapshot solely for the key.
+- Replace latest search-baseline coverage before copying it once with the
+  existing scalar-row snapshot copier, rather than copying old coverage and
+  immediately overwriting it with recursively copied replacement lists.
+- Preserve exact coalescing identity, baseline scalars, metadata and scalar-row
+  ownership, fresh latest reads, generations, cancellation and ordinary errors.
+  Candidate-bank and SDK-worker payload copies remain. No limits, policies,
+  timers or qualification gates change; current-process diagrams remain accurate.
 
 ### 2026-11-07 - Stop fresh callback pricing after query retirement
 

@@ -1,16 +1,18 @@
 """Canonical snapshot copy ownership controls."""
 import asyncio
 from copy import deepcopy
+import json
 from pathlib import Path
 import sys
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from cybergold_candidate.uniswap_state import PoolRegistry, copy_pool_snapshot, merge_pool_coverage
+from cybergold_candidate.uniswap_state import (PoolRegistry, canonical_observation,
+    copy_pool_snapshot, merge_pool_coverage)
 from test_uniswap_market import A, BLOCK, POOL, TickFillRpc
 
 
@@ -40,6 +42,73 @@ class SnapshotCopyTests(unittest.TestCase):
 
 
 class SnapshotPersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tick_fill_key_preserves_exact_canonical_content_and_alias_sharing(self):
+        for protocol in ('v2', 'v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                registry = PoolRegistry(SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338',
+                    NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A), rpc=SimpleNamespace(close=AsyncMock()))
+                self.addAsyncCleanup(registry.close)
+                source = _reuse_snapshot(0, 0)
+                source.update(protocol=protocol, address='0x'+'aB'*20)
+                if protocol == 'v4':
+                    source.update(id='0x'+'ab'*32, poolManager='0x'+'4'*40)
+                alias = deepcopy(source)
+                if protocol != 'v4':
+                    alias['id'] = 'another-catalog-alias'
+                canonical = canonical_observation(source)
+                requests = [{'poolId':source['id'], 'id':source['id'],
+                             'wordPositions':[0], 'ticks':[0]}]
+                alias_requests = [{**requests[0], 'poolId':alias['id'], 'id':alias['id']}]
+                entered, release = asyncio.Event(), asyncio.Event()
+                produced, tasks = [], []
+                async def produce(snapshot, _requests, _block, _generation):
+                    produced.append(snapshot)
+                    entered.set()
+                    await release.wait()
+                    return snapshot
+                with patch.object(registry, '_extend_ticks', side_effect=produce):
+                    try:
+                        tasks.append(asyncio.create_task(registry.extend_ticks(source, requests, BLOCK)))
+                        await asyncio.wait_for(entered.wait(), 1)
+                        tasks.append(asyncio.create_task(registry.extend_ticks(alias, alias_requests, BLOCK)))
+                        async with asyncio.timeout(1):
+                            while not any(entry.users == 2 for entry in registry.pending.pending.values()):
+                                await asyncio.sleep(0)
+                        key, = registry.pending.pending
+                        self.assertEqual(key, ('tick-fill', registry.generation, BLOCK['hash'],
+                            json.dumps(canonical, sort_keys=True), json.dumps([
+                                {'poolId':canonical['id'], 'id':canonical['id'],
+                                 'wordPositions':[0], 'ticks':[0]}], sort_keys=True)))
+                        # Both metadata and coverage remain part of equivalence;
+                        # neither may accidentally join this in-flight producer.
+                        metadata, coverage = deepcopy(alias), deepcopy(alias)
+                        metadata['nestedUnknown']['rows'][0]['value'] = 'different metadata'
+                        coverage['ticks'][0]['liquidityNet'] = '-4'
+                        tasks.extend(asyncio.create_task(registry.extend_ticks(value, alias_requests, BLOCK))
+                                     for value in (metadata, coverage))
+                        async with asyncio.timeout(1):
+                            while len(produced) != 3:
+                                await asyncio.sleep(0)
+                        self.assertEqual(len(registry.pending.pending), 3)
+                        source['nestedUnknown']['rows'][0]['value'] = 'caller mutation during fill'
+                        source['ticks'][0]['liquidityGross'] = 'caller mutation during fill'
+                        release.set()
+                        first, second, _, _ = await asyncio.gather(*tasks)
+                        self.assertEqual(first['id'], source['id'])
+                        self.assertEqual(second['id'], alias['id'])
+                        self.assertEqual(first['nestedUnknown'], alias['nestedUnknown'])
+                        self.assertEqual(first['ticks'], alias['ticks'])
+                        first['nestedUnknown']['rows'][0]['value'] = 'one subscriber'
+                        first['ticks'][0]['liquidityGross'] = 'one subscriber'
+                        self.assertEqual(second['nestedUnknown']['rows'][0]['value'], 'original')
+                        self.assertEqual(second['ticks'][0]['liquidityGross'], '7')
+                        self.assertFalse(registry.pending.pending or registry.pending.groups)
+                    finally:
+                        release.set()
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+
     async def test_input_shared_consumers_observed_and_persistence_are_independent(self):
         rpc = TickFillRpc()
         registry = PoolRegistry(SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1',
