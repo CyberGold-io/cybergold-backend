@@ -354,22 +354,31 @@ was observed or prepared.
 
 All test suites, including suites run on servers, must leave the public shared
 Sandbox fork unchanged throughout setup, execution and cleanup. Public Sandbox
-checks are read-only. A dedicated test wallet does not make the shared fork an
-isolated test environment.
+quote and latency checks are read-only and retain their actual observations.
 
-State-changing test setup and execution belong to an owned disposable fork and
-its attached test runtime. Funding, approvals, bootstrap purchases and trades
-must not target the public shared fork. Cleanup must not reset or revert that
-fork, including as a way to undo earlier test transactions.
+Regular transaction regression profiles exercise mocked browser flows with
+synthetic wallet responses, transaction hashes and receipts. They start only a
+local App test runtime; they do not start a chain, import wallet secrets, fund
+accounts, create real signatures or submit transactions. Mocked quote, balance,
+preparation and receipt responses belong to that UI fixture, not to the live
+quote-latency cohort. A synthetic pass proves the asserted UI behavior, not
+mining, actual balances, protocol reserves, economic settlement or execution
+quality. Synthetic hashes and mocked receipts must be identified as such.
 
-A sequential suite may execute multiple transactions against one owned fork,
-allowing its state to evolve between cases. Independent cases may restore a
-baseline on their owned fork. A separate fork for every case is not required.
-Protocol, liquidity, funding, authorization and transport failures remain
-ordinary local test outcomes with their original reasons retained.
+Real wallet/chain qualification is a separate explicit opt-in operation, not an
+automatic regression profile. Its state-changing setup and execution belong to
+an owned disposable fork and attached test runtime. Funding, approvals,
+bootstrap purchases and trades must not target the public shared fork. Cleanup
+must not reset or revert that fork, including to undo earlier test transactions.
+A dedicated wallet alone does not isolate a chain. Sequential real-qualification
+cases may share one owned fork whose state evolves; independent cases may
+restore their owned baseline. A separate fork per case is not required.
+Ordinary real-qualification failures retain their original reasons; mocked
+results cannot substitute for that evidence.
 
-This is the required test boundary. Runner implementation and installed
-compliance are recorded separately in the Ops test workplan.
+Runner implementation and installed selection are recorded separately in the
+Ops test workplan. These test contracts change no Backend quote ranking,
+Helpers pricing, transaction preparation or current-process diagram.
 
 ## Implementation map
 
@@ -400,6 +409,17 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-07 - Restore synthetic regular transaction regressions
+
+- Under the owner's explicit authorization, regular transaction profiles return
+  to synthetic wallet responses/hashes and mocked receipts, with no funding,
+  real signing/submission or fork startup. The App synthetic runner and Ops
+  profile dispatch implement this coordinated test behavior.
+- Keep live read-only quote/latency evidence separate; synthetic UI outcomes
+  establish no mined receipt, balance, reserve or economic-execution proof.
+- Keep any real wallet/chain qualification separately opt-in and owned; preserve
+  the shared Sandbox no-write boundary. No Backend runtime or diagram change.
 
 ### 2026-11-06 - Closing-boundary observations
 
