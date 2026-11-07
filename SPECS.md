@@ -246,14 +246,27 @@ Both admission lanes retain FIFO order. A cancelled waiter is removed by its
 future identity in constant time, without scanning the lane; a grant cancelled
 before its owner resumes returns its permit. The eight-slot limit bounds held
 pricing permits. Parked candidate tasks remain owned and are drained when their
-producer stops.
+producer stops. Completion notifications are registered once per owned task;
+completion and released capacity wake the scheduler without rebuilding a wait
+set containing every parked candidate. Per-leg admission retains round-robin order.
 
 Candidate banks and SDK payloads retain private mutable pool state. Their
 snapshot copier owns the scalar tick/bitmap rows and deep-copies other metadata.
 Quick-pass topology descriptors are copied when offered to a consumer; the
 ready-list snapshot separately copies mutable origins. A retained single shared
-read returns directly without scheduling a timer task. These changes do not
-alter simulation inputs, the eight-slot capacity or shared-read subscriber ownership.
+read returns directly without scheduling a timer task. Multi-key reads carry
+completed values directly to their original positions and gather only pending
+futures. An entirely completed multi-key read retains one cooperative checkpoint.
+These changes do not alter simulation inputs, the eight-slot capacity or
+shared-read subscriber ownership.
+
+When an AlphaRoutes query closes, its identity is removed and retired before
+its owned callbacks are cancelled. That callback cancellation proceeds in the
+existing 64-item cooperative quantum, followed by gathering every callback in
+chunks with explicit checkpoints. The drain remains owned until complete even
+if its caller is cancelled again. Callback outcomes retain their original order;
+the closing query keeps its existing outcome handling. The separate worker-stop
+path retains its existing cancellation and error ordering.
 
 ## Step 6: select, publish and display
 
@@ -409,6 +422,19 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-07 - Reduce owned quotation bookkeeping and cooperate during callback close
+
+- Replace repeated all-active scheduler waits with completion notifications,
+  preserving round-robin feed admission, eight held permits, parked work ownership,
+  context-disproof handling and complete cleanup.
+- Avoid per-cache-hit timer tasks for multi-key shared reads; preserve original
+  positions, pending subscription ownership and one all-cached cooperative checkpoint.
+- Cancel and gather retired AlphaRoutes query callbacks in the existing 64-item
+  quantum, with an owned drain through repeated caller cancellation. Preserve the
+  separate worker-stop path and ordinary result/error handling.
+- Current-process diagrams remain accurate: route families, provider dependencies,
+  ownership and engine capacity are unchanged. No new cap, deadline or test gate.
 
 ### 2026-11-07 - Restore synthetic regular transaction regressions
 
