@@ -337,6 +337,23 @@ was observed or prepared.
   have CPU rows. These rows preserve the same cancellation ownership, drain
   order, errors and deadlines; inclusive/nested wall totals overlap. They do
   not identify GC, process-wide CPU, scheduling delay or every finalizer.
+- The independent event-loop monitor keeps its existing 100 ms sampling and
+  lag-event threshold. While its lifecycle is active, a best-effort process GC
+  callback observes completed collection spans by generation. Existing lag
+  events can include count, wall-span and process-CPU-during-span differences
+  since the previous loop measurement, including measurements that emitted no
+  log. Immutable cumulative snapshots are never reset by logging. A whole
+  collection span is charged when its stop callback is observed; it can cross
+  the measurement boundary. Process CPU includes all process threads during
+  that callback span and is not exclusive GC function CPU, a quote's CPU, or a
+  partition of loop lag. Missing/zero observations do not prove absence of GC.
+  No collected-object references or values are retained. The monitor registers
+  one owned callback and removes that exact callback on close; ordinary
+  observation failures do not replace quote, startup or shutdown behavior.
+  GC policy, thresholds, enabled state and scheduling controls remain unchanged;
+  no collection is manually triggered. Extra observation allocations may affect
+  automatic collection timing, and overhead is unmeasured. No extra timer, log
+  gate or quote gate is added.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
 - Proxy timings begin inside the Next handler, not at the browser input event.
@@ -422,6 +439,20 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-07 - Observe process GC callback spans with existing loop lag
+
+- Add best-effort per-generation completed GC callback-span differences to
+  existing loop-lag events, using immutable cumulative snapshots and the
+  previous loop measurement rather than the previous emitted log row.
+- Label wall and process CPU measured during collection spans without claiming
+  exclusive GC CPU, a request owner or a causal partition of loop lag. Charge
+  whole spans at completion and preserve missing/zero-observation limits.
+- Own registration/removal through the existing monitor lifecycle; contain
+  ordinary observation failures and retain GC policy/scheduling controls, quote
+  behavior, sample/log thresholds and deadlines. Extra observation allocations
+  may affect automatic collection timing; overhead is unmeasured.
+  Current-process diagrams remain accurate and unchanged.
 
 ### 2026-11-07 - Reduce owned quotation bookkeeping and cooperate during callback close
 
