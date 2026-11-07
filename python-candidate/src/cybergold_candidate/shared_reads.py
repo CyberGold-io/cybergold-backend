@@ -97,9 +97,17 @@ class SharedReads:
             if len(selected) == 1:
                 _, entry, cached = selected[0]
                 values = [await asyncio.shield(entry.future) if entry is not None else cached]
+            elif selected:
+                pending = [asyncio.shield(entry.future) for _, entry, _ in selected if entry is not None]
+                if pending:
+                    resolved = iter(await asyncio.gather(*pending))
+                    values = [next(resolved) if entry is not None else cached for _, entry, cached in selected]
+                else:
+                    # Preserve multi-key cooperation without one Task per hit.
+                    await asyncio.sleep(0)
+                    values = [cached for _, _, cached in selected]
             else:
-                values = await asyncio.gather(*(asyncio.shield(entry.future)
-                    if entry else asyncio.sleep(0, result=value) for _, entry, value in selected))
+                values = []
             return values, counts
         finally:
             tasks = set()

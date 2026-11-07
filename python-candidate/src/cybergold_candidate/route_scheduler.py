@@ -26,8 +26,17 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
     """
     feeds, pending_next, ready, active = [], {}, {}, set()
     slots, changed = asyncio.Semaphore(limit), asyncio.Event()
-    capacity = None
-    discovery = asyncio.create_task(discover()) if discover is not None else None
+    notifications = set()
+
+    def completed(task):
+        notifications.add(task)
+        changed.set()
+
+    def watch(task):
+        task.add_done_callback(completed)
+        return task
+
+    discovery = watch(asyncio.create_task(discover())) if discover is not None else None
     expanded = discovery is None
     cursor = 0
 
@@ -41,7 +50,7 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
 
     def next_candidate(index):
         if feeds[index] is not None and index not in pending_next and index not in ready:
-            pending_next[index] = asyncio.create_task(advance(feeds[index]))
+            pending_next[index] = watch(asyncio.create_task(advance(feeds[index])))
 
     async def close_feeds():
         for task in pending_next.values():
@@ -73,32 +82,27 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
                         lease = CandidateWork(slots, changed)
                         task = asyncio.create_task(run_candidate(lease, evaluate, index, candidate))
                         task.add_done_callback(lambda _task, owned=lease: owned.close())
-                        active.add(task)
+                        active.add(watch(task))
                         next_candidate(index)
                         cursor = (index + 1) % len(feeds)
                         break
-            waiters = active | set(pending_next.values())
-            if discovery is not None and not expanded:
-                waiters.add(discovery)
-            if not waiters:
+            if not active and not pending_next and (discovery is None or expanded):
                 break
-            if active:
-                if capacity is None:
-                    changed.clear()
-                    capacity = asyncio.create_task(changed.wait())
-                waiters.add(capacity)
-            done, _ = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
-            if capacity in done:
-                await capacity
-                capacity = None
-            completed = active & done
-            if completed:
-                outcomes = await asyncio.gather(*completed, return_exceptions=True)
+            # Completion callbacks are registered once. A released pricing lease
+            # uses the same wakeup, without rescanning every parked candidate.
+            if changed.is_set():
+                await asyncio.sleep(0)
+            await changed.wait()
+            changed.clear()
+            done, notifications = notifications, set()
+            finished = active & done
+            if finished:
+                outcomes = await asyncio.gather(*finished, return_exceptions=True)
                 raise_snapshot_disproof(outcomes)
                 for outcome in outcomes:
                     if isinstance(outcome, BaseException):
                         raise outcome
-                active.difference_update(completed)
+                active.difference_update(finished)
                 if on_completed:
                     await on_completed()
             if discovery is not None and not expanded and discovery in done:
@@ -120,14 +124,11 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
         freeze_quote_work(error)
         raise
     finally:
-        if capacity is not None:
-            capacity.cancel()
         for task in active:
             task.cancel()
         if discovery is not None:
             discovery.cancel()
-        outcomes = await asyncio.gather(*active, *([capacity] if capacity is not None else []),
-                                        *([discovery] if discovery is not None else []),
+        outcomes = await asyncio.gather(*active, *([discovery] if discovery is not None else []),
                                         return_exceptions=True)
         try:
             await close_feeds()

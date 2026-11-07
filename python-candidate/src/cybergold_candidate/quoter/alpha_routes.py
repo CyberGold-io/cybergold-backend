@@ -21,6 +21,36 @@ class AlphaRouteError(RuntimeError):
     """An ordinary isolated calculation supplier/protocol failure."""
 
 
+async def drain_retired_callbacks(callbacks):
+    """Cooperate only after the query's identity can no longer publish writes."""
+    if not callbacks:
+        return []
+
+    async def drain():
+        for start in range(0, len(callbacks), QUANTUM):
+            for task in callbacks[start:start + QUANTUM]:
+                task.cancel()
+            await asyncio.sleep(0)
+        outcomes = []
+        for start in range(0, len(callbacks), QUANTUM):
+            outcomes.extend(await asyncio.gather(*callbacks[start:start + QUANTUM], return_exceptions=True))
+            # An already-done gather may finish inline; keep the checkpoint.
+            await asyncio.sleep(0)
+        return outcomes
+
+    owned = asyncio.create_task(drain())
+    cancellation = None
+    while not owned.done():
+        try:
+            await asyncio.shield(owned)
+        except asyncio.CancelledError as error:
+            cancellation = error
+    outcomes = owned.result()
+    if cancellation is not None:
+        raise cancellation
+    return outcomes
+
+
 class CalculationSession:
     """One producer's queries and diagnostics on an engine-owned driver."""
     def __init__(self, driver):
@@ -246,9 +276,7 @@ class AlphaRoutes:
                 self.requests.pop(identity, None)
                 self.retired.add(identity)
                 callbacks = tuple(entry['callbacks'])
-                for task in callbacks:
-                    task.cancel()
-                await asyncio.gather(*callbacks, return_exceptions=True)
+                await drain_retired_callbacks(callbacks)
                 if self.process is entry['process']:
                     if entry['terminal'] or self.requests:
                         # Callback writes have drained before this ordered

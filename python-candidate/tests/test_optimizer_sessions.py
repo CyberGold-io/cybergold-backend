@@ -7,11 +7,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
 
-from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError
+from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError, drain_retired_callbacks
 from cybergold_candidate.quoter.cooperative import QUANTUM
 from cybergold_candidate.quoter.providers import route_providers
 from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
+from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.search_observations import current_search_observations, search_observation_scope
 from cybergold_candidate.shared_reads import SharedReads
 from test_alpha_routes import A, B, C, BLOCK, Engine, pool
@@ -206,6 +207,176 @@ for line in sys.stdin:
         await asyncio.wait_for(engine.close(), 1)
         self.assertIsNotNone(child.returncode)
         self.assertFalse(driver.retired or driver.requests)
+
+    async def test_retired_callback_close_yields_without_writes_or_blocking_sibling(self):
+        driver = AlphaRoutes(Engine())
+        process = SimpleNamespace()
+        driver.process = process
+        driver._start = AsyncMock(return_value=process)
+        count = QUANTUM * 2 + 3
+        entered, cancelled = set(), set()
+        started, all_cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        callbacks, writes = [], []
+
+        async def quote(response, *_args):
+            entered.add(response['quoteId'])
+            if len(entered) == count:
+                started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.add(response['quoteId'])
+                if len(cancelled) == count:
+                    all_cancelled.set()
+                # A callback completing during close still cannot publish a
+                # response for the now-retired identity.
+                await release.wait()
+                return {'quote': '42'}
+
+        async def write(_process, value):
+            writes.append(value)
+            if value.get('operation') == 'cancel':
+                return
+            entry = driver.requests[value['id']]
+            if value['amount'] == '1':
+                for index in range(count):
+                    task = asyncio.create_task(driver._answer(
+                        {'id': value['id'], 'quoteId': index}, entry))
+                    entry['callbacks'].add(task)
+                    task.add_done_callback(entry['callbacks'].discard)
+                    callbacks.append(task)
+                await started.wait()
+                entry['queue'].put_nowait({'operation': 'candidates', 'candidates': []})
+            else:
+                entry['queue'].put_nowait({'operation': 'candidates', 'candidates': [{'sibling': True}]})
+
+        driver._quote, driver._write = quote, write
+        left = driver.discover_batches(A, C, 1, BLOCK)
+        right = driver.discover_batches(A, C, 2, BLOCK)
+        closing = None
+        try:
+            self.assertEqual(await anext(left), [])
+            left_entry = driver.requests['1']
+            closing = asyncio.create_task(left.aclose())
+            async with asyncio.timeout(1):
+                while not any(task.cancelling() for task in callbacks):
+                    await asyncio.sleep(0)
+            self.assertLess(sum(bool(task.cancelling()) for task in callbacks), count)
+            self.assertNotIn('1', driver.requests)
+            self.assertIn('1', driver.retired)
+            self.assertFalse(left_entry['terminal'])
+            self.assertFalse(closing.done())
+            # This is another real calculation on the same driver, while the
+            # old query's callback finalizers remain held.
+            self.assertEqual(await anext(right), [{'sibling': True}])
+            await asyncio.wait_for(all_cancelled.wait(), 1)
+            self.assertFalse(closing.done())
+            release.set()
+            await closing
+            self.assertTrue(all(task.done() for task in callbacks))
+            self.assertFalse(left_entry['callbacks'])
+            self.assertFalse(any(row.get('operation') == 'quoteResult' for row in writes))
+            self.assertIn('2', driver.requests)
+            self.assertIn({'id': '1', 'operation': 'cancel'}, writes)
+            right_entry = driver.requests['2']
+            right_entry['terminal'] = True
+            right_entry['queue'].put_nowait({'candidates': []})
+            self.assertEqual(await anext(right), [])
+            with self.assertRaises(StopAsyncIteration):
+                await anext(right)
+            self.assertFalse(driver.requests)
+        finally:
+            release.set()
+            if closing is not None:
+                await asyncio.gather(closing, return_exceptions=True)
+            await left.aclose()
+            if '2' in driver.requests:
+                driver.requests['2']['terminal'] = True
+            await right.aclose()
+
+    async def test_repeated_caller_cancel_keeps_every_retired_callback_owned(self):
+        count = QUANTUM * 2 + 3
+        entered, cancelled = set(), set()
+        all_entered, all_cancelled = asyncio.Event(), asyncio.Event()
+        release = asyncio.Event()
+
+        async def callback(index):
+            entered.add(index)
+            if len(entered) == count:
+                all_entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.add(index)
+                if len(cancelled) == count:
+                    all_cancelled.set()
+                await release.wait()
+
+        callbacks = tuple(asyncio.create_task(callback(index)) for index in range(count))
+        closing = None
+        try:
+            await all_entered.wait()
+            closing = asyncio.create_task(drain_retired_callbacks(callbacks))
+            async with asyncio.timeout(1):
+                while not any(task.cancelling() for task in callbacks):
+                    await asyncio.sleep(0)
+            self.assertLess(sum(bool(task.cancelling()) for task in callbacks), count)
+            closing.cancel('first caller cancellation')
+            await asyncio.sleep(0)
+            closing.cancel('second caller cancellation')
+            # The first chunk cannot finish until release. Reaching every
+            # callback proves later chunks are cancelled before any gather wait.
+            await asyncio.wait_for(all_cancelled.wait(), 1)
+            self.assertFalse(closing.done())
+            self.assertTrue(all(not task.done() for task in callbacks))
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await closing
+            self.assertTrue(all(task.cancelled() for task in callbacks))
+        finally:
+            release.set()
+            if closing is not None:
+                await asyncio.gather(closing, return_exceptions=True)
+            for task in callbacks:
+                task.cancel()
+            await asyncio.gather(*callbacks, return_exceptions=True)
+
+    async def test_done_callback_chunks_cooperate_and_preserve_outcome_order(self):
+        loop = asyncio.get_running_loop()
+        reads, observed = [], []
+        count = QUANTUM * 2 + 3
+
+        class Completed(asyncio.Future):
+            def result(self):
+                reads.append(self)
+                if len(reads) == 1:
+                    loop.call_soon(lambda: observed.append(len(reads)))
+                return super().result()
+
+        callbacks = tuple(Completed() for _ in range(count))
+        ordinary = RuntimeError('ordinary callback error')
+        disproof = SnapshotChanged('callback context changed')
+        expected = list(range(count))
+        for index, future in enumerate(callbacks):
+            if index == 1:
+                future.set_exception(ordinary)
+                expected[index] = ordinary
+            elif index == 2:
+                future.set_exception(disproof)
+                expected[index] = disproof
+            elif index == 3:
+                future.cancel()
+            else:
+                future.set_result(index)
+        outcomes = await drain_retired_callbacks(callbacks)
+        self.assertTrue(observed)
+        self.assertGreater(observed[0], 0)
+        self.assertLess(observed[0], len(reads))
+        self.assertEqual(outcomes[:3], expected[:3])
+        self.assertIsInstance(outcomes[3], asyncio.CancelledError)
+        self.assertEqual(outcomes[4:], expected[4:])
+        self.assertTrue(all(future.done() for future in callbacks))
+        self.assertEqual(await drain_retired_callbacks(()), [])
 
 
 if __name__ == '__main__':

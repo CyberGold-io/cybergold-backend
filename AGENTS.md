@@ -26,3 +26,13 @@ The workspace `AGENTS.md` also applies to this repository.
 
 - Use Codex's built-in browser for browser-based Sandbox verification,
   test-profile inspection and performance observations.
+
+## GitHub operations
+
+- GitHub CLI (`gh`) is an approved tool for owner-authorized repository work,
+  including pull-request creation/updates, check inspection and normal PR merges.
+- If a connector lacks the operation or returns an integration-permission error,
+  use the existing authenticated CLI for the same authorized scope. Do not ask
+  for additional approval solely because the CLI is chosen.
+- Existing branch rules, required checks and tool approval restrictions still
+  apply.
