@@ -218,7 +218,7 @@ for line in sys.stdin:
         started, all_cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
         callbacks, writes = [], []
 
-        async def quote(response, *_args):
+        async def quote(response, *_args, **_options):
             entered.add(response['quoteId'])
             if len(entered) == count:
                 started.set()
