@@ -217,6 +217,7 @@ for line in sys.stdin:
         entered, cancelled = set(), set()
         started, all_cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
         callbacks, writes = [], []
+        process.stdin = SimpleNamespace(write=lambda raw: writes.append(json.loads(raw)))
 
         async def quote(response, *_args, **_options):
             entered.add(response['quoteId'])
@@ -378,6 +379,224 @@ for line in sys.stdin:
         self.assertTrue(all(future.done() for future in callbacks))
         self.assertEqual(await drain_retired_callbacks(()), [])
 
+
+class _CalculationPipe:
+    """Controlled complete JSONL writes and a real AlphaRoutes reader."""
+    def __init__(self):
+        self.stdin = self
+        self.stdout = asyncio.StreamReader()
+        self.returncode = None
+        self.frames, self.raw_frames, self.drains = [], [], []
+        self.last_write = None
+        self.block_result_for = None
+        self.drain_entered, self.release_drain = asyncio.Event(), asyncio.Event()
+        self.exited = asyncio.Event()
+        self.killed = self.waited = False
+        self.enqueue_error = None
+
+    def emit(self, frame):
+        self.stdout.feed_data((json.dumps(frame) + '\n').encode())
+
+    def write(self, raw):
+        frame = json.loads(raw)
+        if self.enqueue_error is not None and frame == {'id': '1', 'operation': 'cancel'}:
+            raise self.enqueue_error
+        self.raw_frames.append(raw)
+        self.frames.append(frame)
+        self.last_write = frame
+        if 'pools' in frame:
+            self.emit({'id': frame['id'], 'operation': 'candidates',
+                       'candidates': [{'query': frame['amount']}]})
+
+    async def drain(self):
+        frame = self.last_write
+        self.drains.append(frame)
+        if frame.get('operation') == 'quoteResult' and frame['id'] == self.block_result_for:
+            self.drain_entered.set()
+            await self.release_drain.wait()
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+        self.exited.set()
+        self.stdout.feed_eof()
+
+    async def wait(self):
+        self.waited = True
+        await self.exited.wait()
+        return self.returncode
+
+
+class FinalCancelEnqueueTests(unittest.IsolatedAsyncioTestCase):
+    def fixture(self):
+        process = _CalculationPipe()
+        driver = AlphaRoutes(Engine())
+        # Process construction is not under test. Use the actual reader,
+        # CalculationSessions, callback pricing and retirement around fake IO.
+        driver.process = driver.reader_process = process
+        driver.reader = asyncio.create_task(driver._read(process))
+        fixture = SimpleNamespace(driver=driver, process=process, sessions=[], tasks=[],
+                                  releases=[process.release_drain], batches={})
+        self.addAsyncCleanup(self.finish_fixture, fixture)
+        return fixture
+
+    async def finish_fixture(self, fixture):
+        for release in fixture.releases:
+            release.set()
+        for task in fixture.tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*fixture.tasks, return_exceptions=True)
+        await asyncio.gather(*(session.close() for session in fixture.sessions), return_exceptions=True)
+        await fixture.driver.close()
+        self.assertFalse(fixture.driver.requests)
+        self.assertEqual(fixture.driver.engine.semaphore._value, 8)
+
+    def start_owner(self, fixture, amount):
+        session = fixture.driver.session()
+        fixture.sessions.append(session)
+        fixture.batches[amount] = []
+        async def consume():
+            async with search_observation_scope():
+                async for batch in session.discover_batches(A, C, amount, BLOCK):
+                    fixture.batches[amount].append(batch)
+            return fixture.batches[amount]
+        task = asyncio.create_task(consume())
+        fixture.tasks.append(task)
+        return session, task
+
+    async def until(self, predicate):
+        async with asyncio.timeout(1):
+            while not predicate():
+                await asyncio.sleep(0)
+
+    def emit_quote(self, fixture, identity, quote_id, amount):
+        fixture.process.emit({'id': identity, 'operation': 'quote', 'quoteId': quote_id,
+            'mode': 'exactIn', 'amount': str(amount),
+            'branches': [{'amountIn': str(amount), 'hops': [{'pool': pool(), 'zeroForOne': True}]}]})
+
+    async def test_final_cancel_owns_callbacks_but_does_not_wait_for_sibling_write(self):
+        fixture = self.fixture()
+        driver, process = fixture.driver, fixture.process
+        process.block_result_for = '2'
+        entered, finalizing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        fixture.releases.append(release)
+        original = driver.engine.quote_sdk_branches
+        async def quote(branches, mode, amount, block, **options):
+            if amount == 12:
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    finalizing.set()
+                    await release.wait()
+            return await original(branches, mode, amount, block, **options)
+        driver.engine.quote_sdk_branches = quote
+        left, left_owner = self.start_owner(fixture, 1)
+        await self.until(lambda: bool(fixture.batches[1]))
+        right, right_owner = self.start_owner(fixture, 2)
+        await self.until(lambda: bool(fixture.batches[2]))
+        self.emit_quote(fixture, '1', 'A-result', 11)
+        await self.until(lambda: any(row.get('quoteId') == 'A-result' for row in process.frames))
+        self.emit_quote(fixture, '1', 'A-finalizer', 12)
+        await asyncio.wait_for(entered.wait(), 1)
+        self.emit_quote(fixture, '2', 'B-result', 22)
+        await asyncio.wait_for(process.drain_entered.wait(), 1)
+        left_entry = driver.requests['1']
+        closing = asyncio.create_task(left.close())
+        fixture.tasks.append(closing)
+        await asyncio.wait_for(finalizing.wait(), 1)
+        self.assertNotIn('1', driver.requests)
+        self.assertIn('1', driver.retired)
+        self.assertTrue(left_entry['callbacks'])
+        self.assertFalse(closing.done())
+        self.assertNotIn({'id': '1', 'operation': 'cancel'}, process.frames)
+        release.set()
+        # B still owns the active-write lock and has not finished its drain.
+        # The old final-cancel path hangs here despite A's completed callbacks.
+        await asyncio.wait_for(asyncio.shield(closing), 1)
+        self.assertTrue(left_owner.cancelled())
+        self.assertFalse(left_entry['callbacks'])
+        self.assertTrue(driver.lock.locked())
+        self.assertFalse(process.release_drain.is_set())
+        self.assertFalse(right_owner.done())
+        cancel = {'id': '1', 'operation': 'cancel'}
+        self.assertIn(cancel, process.frames)
+        self.assertNotIn(cancel, process.drains)
+        a_result = next(row for row in process.frames if row.get('quoteId') == 'A-result')
+        b_result = next(row for row in process.frames if row.get('quoteId') == 'B-result')
+        self.assertEqual(a_result['result'], {'quote': '22'})
+        self.assertEqual(b_result['result'], {'quote': '44'})
+        self.assertLess(process.frames.index(a_result), process.frames.index(cancel))
+        self.assertLess(process.frames.index(b_result), process.frames.index(cancel))
+        self.assertFalse(any(row.get('quoteId') == 'A-finalizer' for row in process.frames))
+        for raw in process.raw_frames:
+            self.assertTrue(raw.endswith(b'\n'))
+            self.assertEqual(raw.count(b'\n'), 1)
+            self.assertIsInstance(json.loads(raw), dict)
+        # Reader ordering gives a barrier after the late A frame, then after ACK.
+        callbacks_before = driver.quote_callbacks
+        self.emit_quote(fixture, '1', 'late-A', 99)
+        process.emit({'id': '2', 'operation': 'candidates', 'candidates': [{'progress': 1}]})
+        await self.until(lambda: len(fixture.batches[2]) == 2)
+        self.assertEqual(driver.quote_callbacks, callbacks_before)
+        self.assertIn('1', driver.retired)
+        process.emit({'id': '1', 'operation': 'cancelled'})
+        process.emit({'id': '2', 'operation': 'candidates', 'candidates': [{'progress': 2}]})
+        await self.until(lambda: len(fixture.batches[2]) == 3)
+        self.assertNotIn('1', driver.retired)
+        self.assertIn('2', driver.requests)
+        self.assertIs(driver.process, process)
+        self.assertFalse(process.killed)
+        process.release_drain.set()
+        await self.until(lambda: not driver.requests['2']['callbacks'])
+        process.emit({'id': '2', 'candidates': [{'final': 'B'}]})
+        self.assertEqual(await asyncio.wait_for(right_owner, 1), [
+            [{'query': '2'}], [{'progress': 1}], [{'progress': 2}], [{'final': 'B'}]])
+        await right.close()
+        self.assertEqual(driver.engine.semaphore._value, 8)
+        self.assertFalse(driver.requests)
+
+    async def test_synchronous_cancel_write_failure_fans_out_without_replacing_cancellation(self):
+        fixture = self.fixture()
+        driver, process = fixture.driver, fixture.process
+        left, left_owner = self.start_owner(fixture, 1)
+        await self.until(lambda: bool(fixture.batches[1]))
+        _, right_owner = self.start_owner(fixture, 2)
+        await self.until(lambda: bool(fixture.batches[2]))
+        failure = BrokenPipeError('controlled cancel enqueue failure')
+        process.enqueue_error = failure
+        await asyncio.wait_for(left.close(), 1)
+        self.assertTrue(left_owner.cancelled())
+        with self.assertRaises(BrokenPipeError) as raised:
+            await asyncio.wait_for(right_owner, 1)
+        self.assertIs(raised.exception, failure)
+        self.assertTrue(process.killed and process.waited)
+        self.assertIsNone(driver.process)
+        self.assertFalse(driver.requests)
+
+    async def test_reader_owns_connection_loss_after_cancel_enqueue_returns(self):
+        fixture = self.fixture()
+        driver, process = fixture.driver, fixture.process
+        left, left_owner = self.start_owner(fixture, 1)
+        await self.until(lambda: bool(fixture.batches[1]))
+        _, right_owner = self.start_owner(fixture, 2)
+        await self.until(lambda: bool(fixture.batches[2]))
+        await asyncio.wait_for(left.close(), 1)
+        self.assertTrue(left_owner.cancelled())
+        self.assertFalse(right_owner.done())
+        self.assertIn({'id': '1', 'operation': 'cancel'}, process.frames)
+        self.assertIn('1', driver.retired)
+        self.assertFalse(process.killed)
+        # Successful enqueue was no delivery/liveness proof. A later EOF is
+        # observed through the unchanged engine-owned reader/error fanout.
+        process.stdout.feed_eof()
+        with self.assertRaisesRegex(AlphaRouteError, 'Calculation worker exited'):
+            await asyncio.wait_for(right_owner, 1)
+        self.assertTrue(left_owner.cancelled())
+        self.assertTrue(process.killed and process.waited)
+        self.assertIsNone(driver.process)
+        self.assertFalse(driver.requests)
 
 if __name__ == '__main__':
     unittest.main()

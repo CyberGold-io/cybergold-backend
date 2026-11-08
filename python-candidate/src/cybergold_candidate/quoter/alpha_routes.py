@@ -280,12 +280,13 @@ class AlphaRoutes:
                 await drain_retired_callbacks(callbacks)
                 if self.process is entry['process']:
                     if entry['terminal'] or self.requests:
-                        # Callback writes have drained before this ordered
-                        # retirement. Its acknowledgement releases both sides'
-                        # query bookkeeping while sibling calculations continue.
+                        # Callback writers have drained. Append one complete
+                        # frame without waiting for sibling transport writes;
+                        # retired filtering remains until acknowledgement.
                         try:
-                            async with self.lock:
-                                await self._write(entry['process'], {'id': identity, 'operation': 'cancel'})
+                            entry['process'].stdin.write((json.dumps(
+                                {'id': identity, 'operation': 'cancel'},
+                                separators=(',', ':')) + '\n').encode())
                         except Exception as error:
                             # A broken shared transport retires its subscribers;
                             # it does not replace the closing query's own outcome.

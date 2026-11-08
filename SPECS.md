@@ -279,6 +279,18 @@ cooperative cancellation can release slots before every queued callback has
 received cancellation. Active-query answers, shared-read ownership and the
 eight-permit capacity remain unchanged; no callback/route cap is added.
 
+After all of a closing query's callback writers drain, the existing keep-worker
+branch enqueues its complete cancel JSONL frame synchronously. That enqueue does
+not acquire the shared active-write lock or await transport backpressure, worker
+consumption or acknowledgement. Retired-frame filtering remains until the
+reader consumes the acknowledgement or the process stops. Enqueue success is
+not physical-stop or delivery proof. Synchronous write errors still stop the
+broken shared transport and fan out its ordinary error without replacing the
+closing query's outcome. Asynchronous connection-loss detection can occur later
+through the existing reader or a later drained write. The last-active
+nonterminal query still follows the existing child stop/reap path; active query
+and quote-result writes keep their existing lock and drain behavior.
+
 ## Step 6: select, publish and display
 
 The Backend quote book ranks complete observations that fit the request. A
@@ -450,6 +462,20 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-08 - Enqueue final calculation retirement without sibling backpressure
+
+- After the existing owned callback drain, enqueue the final complete cancel
+  frame without acquiring the shared write lock or awaiting its transport
+  drain. A closing query no longer waits at that site for a sibling's blocked
+  active write. Keep retired filtering and acknowledgement bookkeeping.
+- Preserve active query/result writes, synchronous broken-transport error fanout,
+  owned callback settlement and the existing last-active nonterminal child stop.
+  Enqueue is not delivery or physical-stop proof; asynchronous transport failure
+  can be detected later by the existing reader or a later drained write.
+- No background task, route/callback cap, timeout, deadline, GC policy, worker
+  protocol or qualification gate is added. Current-process diagrams remain
+  accurate and unchanged.
 
 ### 2026-11-07 - Avoid discarded tick-fill snapshot copies
 
