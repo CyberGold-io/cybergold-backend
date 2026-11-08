@@ -1,0 +1,44 @@
+[
+  {
+    "name": "one ETH to point nine",
+    "sample": {"referenceInput":"1000000000000000000","netOutput":"12345678901234567890","fees":{"coreProtocolFeeCygld":"5000000000000000","coreHelpersFeeCygld":"2500000000000000","marketFeeCygld":"1000000000000000"},"basis":"observed-nonretained"},
+    "budget":"900000000000000000",
+    "expected":{"amount":"11111111011111111101","referenceInput":"900000000000000000","fees":{"coreProtocolFeeCygld":"4500000000000000","coreHelpersFeeCygld":"2250000000000000","marketFeeCygld":"900000000000000"}}
+  },
+  {
+    "name": "point six consumed with point nine budget plateaus",
+    "sample":{"referenceInput":"600","netOutput":"999","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"7"},"basis":"observed-nonretained"},
+    "budget":"900",
+    "expected":{"amount":"999","referenceInput":"600","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"7"}}
+  },
+  {
+    "name":"point six consumed with point three budget",
+    "sample":{"referenceInput":"600","netOutput":"999","fees":{"coreProtocolFeeCygld":"3","coreHelpersFeeCygld":"1","marketFeeCygld":"7"},"basis":"observed-nonretained"},
+    "budget":"300",
+    "expected":{"amount":"499","referenceInput":"300","fees":{"coreProtocolFeeCygld":"1","coreHelpersFeeCygld":"0","marketFeeCygld":"3"}}
+  },
+  {
+    "name":"pure Market sale reference includes cached rounded input fee",
+    "sample":{"referenceInput":"601","netOutput":"1001","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"1"},"basis":"market-sale-consumed"},
+    "budget":"601",
+    "expected":{"amount":"1001","referenceInput":"601","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"1"}}
+  },
+  {
+    "name":"one raw unit threshold is still approximate",
+    "sample":{"referenceInput":"3","netOutput":"2","fees":{"coreProtocolFeeCygld":"1","coreHelpersFeeCygld":"1","marketFeeCygld":"1"},"basis":"funded-input-approximation"},
+    "budget":"1",
+    "expected":{"amount":"0","referenceInput":"1","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"0"}}
+  },
+  {
+    "name":"zero consumption has no denominator",
+    "sample":{"referenceInput":"0","netOutput":"2","fees":{"coreProtocolFeeCygld":"1","coreHelpersFeeCygld":"1","marketFeeCygld":"1"},"basis":"observed-nonretained"},
+    "budget":"1",
+    "expected":null
+  },
+  {
+    "name":"zero edited budget",
+    "sample":{"referenceInput":"3","netOutput":"2","fees":{"coreProtocolFeeCygld":"1","coreHelpersFeeCygld":"1","marketFeeCygld":"1"},"basis":"observed-nonretained"},
+    "budget":"0",
+    "expected":{"amount":"0","referenceInput":"0","fees":{"coreProtocolFeeCygld":"0","coreHelpersFeeCygld":"0","marketFeeCygld":"0"}}
+  }
+]

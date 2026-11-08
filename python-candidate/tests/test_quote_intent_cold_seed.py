@@ -10,7 +10,7 @@ from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.sdk_worker import SdkWorkerError
 from cybergold_candidate.uniswap_routes import candidate_branches
 from cybergold_candidate.uniswap_state import PoolRegistry
-from test_quote_intent import service, request, ASSET_A, ASSET_B, ASSET_C, WETH
+from test_quote_intent import service, request, ASSET_A, ASSET_B, ASSET_C, WETH, pinned_get
 from test_unified_route_pipeline import (PipelineFixtureRpc, ProgrammablePipelineSdk,
     install_programmable_sdk_snapshot, SETTINGS)
 
@@ -163,7 +163,7 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
         state.budget = QuoteBudget()
         async def run():
             with budget_context(state.budget):
-                return await state.budget.produce(intent.get(request('redeem-exact-out', native), publish))
+                return await state.budget.produce(pinned_get(intent, request('redeem-exact-out', native), publish))
         state.task = asyncio.create_task(run())
         async def cleanup():
             state.task.cancel()
@@ -200,6 +200,16 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
 
     async def test_cold_qualification_uses_completed_slots_before_more_than_eight_held_tails(self):
         state = self.fixture(saturated=True, hold_seed=True)
+        active_sdk = 0
+        sdk_request = state.engine.sdk.request
+        async def observed_sdk(*args, **kwargs):
+            nonlocal active_sdk
+            active_sdk += 1
+            try:
+                return await sdk_request(*args, **kwargs)
+            finally:
+                active_sdk -= 1
+        state.engine.sdk.request = observed_sdk
         await self.ready(state.seed)
         # A real Helpers read can still be pending after complete seed quotes.
         # The scheduler must retain that completion's free pricing slots for
@@ -214,17 +224,22 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 list(state.registry.inventory.values()), asset, WETH, 'exactOut', 100)])
         self.assertGreater(6+graph_count, 8)
         # Qualification used the completed slots first. Continuing exploration
-        # may now fill them with these held SDK/typed candidates.
+        # holds SDK jobs and initial state reads; parked reads do not consume
+        # pricing capacity. Count the actual held work, rather than requiring
+        # those RPC waits to fill all eight arithmetic permits.
         await self.ready(state.rpc.typed)
         await self.ready(state.rpc.tail)
         async with asyncio.timeout(2):
-            while state.engine.semaphore._value:
+            while active_sdk + len(state.registry.pending.pending) <= 8:
                 await asyncio.sleep(0)
+        self.assertLessEqual(active_sdk, 8)
+        self.assertFalse(state.task.done())
         self.assertTrue(state.budget.ready)
         self.assertEqual(state.modes, ['exact-out'])
         state.budget.finish_selection('best-initial')
         result = await asyncio.wait_for(state.task, 2)
         self.assertEqual(result['preview']['minimumAmountOut'], '200')
+        self.assertEqual(active_sdk, 0)
         self.assertEqual(state.engine.semaphore._value, 8)
         self.assertEqual(state.registry.pending.pending, {})
 
@@ -373,7 +388,7 @@ class ActualSdkColdSeedQualification(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def run():
             with budget_context(budget):
-                return await budget.produce(intent.get(request('redeem-exact-out'), publish))
+                return await budget.produce(pinned_get(intent, request('redeem-exact-out'), publish))
         task = asyncio.create_task(run())
         try:
             await asyncio.wait_for(qualified.wait(), sdk.timeout)
@@ -381,7 +396,10 @@ class ActualSdkColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(discovery.is_set())
             self.assertTrue(tail.is_set())
             self.assertFalse(release.is_set())
-            self.assertLess(budget.first_qualified, budget.initial)
+            self.assertIsNotNone(budget.first_qualified)
+            self.assertIsNone(budget.initial)
+            self.assertIsNone(budget.deadline)
+            self.assertFalse(task.done())
             self.assertEqual(first['initialPreview']['grossCygldIn'], '102')
             self.assertEqual((first['executionAmount'], first['preview']['minimumAmountOut']), ('104', '202'))
             self.assertEqual([leg['inputAmount'] for leg in first['quotes']], ['52', '52'])

@@ -1,19 +1,88 @@
 """Task-owned pricing permits, released only at required-state suspension."""
 import asyncio
-from contextlib import asynccontextmanager
+from collections import OrderedDict
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
+from .quote_flow import stage
 
 
 _current = ContextVar('candidate_route_work_lease', default=None)
+_bootstrap = ContextVar('cached_route_bootstrap', default=False)
+
+
+@contextmanager
+def bootstrap_priority():
+    """Ready finite saved-route work gets the next free engine permit."""
+    token = _bootstrap.set(True)
+    try:
+        yield
+    finally:
+        _bootstrap.reset(token)
+
+
+class PricingSlots:
+    """The same engine capacity, with FIFO queues inside two admission lanes.
+
+    Existing running work is never preempted. Only ready cached bootstrap work
+    precedes waiting ordinary work; neither lane reserves idle capacity or
+    waits for a cache supplier. Waiters unlink by identity in constant time;
+    cancelled grants return their permit.
+    """
+    def __init__(self, value):
+        self._value = value
+        self._ordinary, self._priority = OrderedDict(), OrderedDict()
+        self._spans = {}
+
+    def locked(self):
+        return self._value == 0
+
+    async def acquire(self, span=None):
+        if self._value:
+            self._value -= 1
+            if span is not None:
+                span.ready()
+            return True
+        future = asyncio.get_running_loop().create_future()
+        queue = self._priority if _bootstrap.get() else self._ordinary
+        queue[future] = None
+        if span is not None and span.active:
+            self._spans[future] = span
+        try:
+            await future
+            return True
+        except asyncio.CancelledError:
+            if future.done() and not future.cancelled():
+                self.release()
+            raise
+        finally:
+            self._spans.pop(future, None)
+            queue.pop(future, None)
+
+    def release(self):
+        for queue in (self._priority, self._ordinary):
+            while queue:
+                future, _ = queue.popitem(last=False)
+                span = self._spans.pop(future, None)
+                if not future.done():
+                    if span is not None:
+                        span.ready()
+                    future.set_result(True)
+                    return
+        self._value += 1
 
 
 class _EnginePermit:
-    def __init__(self, semaphore):
+    def __init__(self, semaphore, stage_name='pricing.permit'):
         self.semaphore, self.owned = semaphore, False
+        self.stage_name = stage_name
 
     async def acquire(self):
-        await self.semaphore.acquire()
-        self.owned = True
+        with stage(self.stage_name, kind='queue') as span:
+            if isinstance(self.semaphore, PricingSlots):
+                await self.semaphore.acquire(span)
+            else:
+                await self.semaphore.acquire()
+            self.owned = True
 
     def release(self):
         if self.owned:
@@ -83,7 +152,7 @@ def _owned():
 
 
 @asynccontextmanager
-async def engine_work(semaphore):
+async def engine_work(semaphore, *, stage_name='pricing.permit'):
     lease = _owned()
     token = None
     if lease is None or not lease.owned:
@@ -92,7 +161,7 @@ async def engine_work(semaphore):
         lease = _PricingWork()
         lease.owner = asyncio.current_task()
         token = _current.set(lease)
-    permit = _EnginePermit(semaphore)
+    permit = _EnginePermit(semaphore, stage_name)
     try:
         # The standalone scope must close/reset even if its first acquisition
         # is cancelled before or immediately after a semaphore grant.

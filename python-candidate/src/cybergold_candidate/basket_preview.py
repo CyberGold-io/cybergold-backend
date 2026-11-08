@@ -1,4 +1,4 @@
-"""The four Swap basket previews, read from configured Helpers at one block."""
+"""The four Swap basket previews, read directly from latest Helpers state."""
 import asyncio
 from datetime import datetime, timezone
 import json
@@ -12,6 +12,7 @@ from web3 import AsyncWeb3, Web3
 
 from .recovery_rpc import RecoveryRpc, abi_value
 from .rpc_transport import rpc_provider
+from .rpc_block_context import LATEST_BLOCK, rpc_block_parameter
 from .preview_errors import preview_error, KnownPreviewError, zero_amount_issue_error
 from .issuance_capacity import read_supply_capacity, exhausted_capacity_error
 from .quote_errors import rpc_failure, public_quote_error
@@ -103,7 +104,7 @@ class BasketPreviewRpc(RecoveryRpc):
 
     async def preview(self, mode, data, block):
         response = await self.w3.provider.make_request('eth_call', [
-            {'to': self.helpers, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
+            {'to': self.helpers, 'data': data}, rpc_block_parameter(block)])
         if 'error' in response:
             _, arguments = self.contract.decode_function_input(data)
             known = preview_error(response['error'], mode=mode, arguments=arguments)
@@ -131,12 +132,10 @@ class BasketPreview:
         data = self.rpc.encode(request)
         # Reuse the existing API RPC operation deadline and cancellation policy.
         async with asyncio.timeout(15):
-            block = await self.rpc.block(None)
-            result = await self.rpc.preview(request['mode'], data, block)
-            await self.rpc.assert_canonical(block)
+            result = await self.rpc.preview(request['mode'], data, LATEST_BLOCK)
             response = {'mode': request['mode'], 'helpers': self.rpc.helpers,
-                    'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                                'blockHash': block['hash'], 'observedAt': self.now()}, 'result': result}
+                    'context': {'chainId': self.rpc.chain_id, 'blockNumber': None,
+                                'blockHash': None, 'blockTag': 'latest', 'observedAt': self.now()}, 'result': result}
             if self.history:
                 response['basketModel'] = self.history.protocol_model()
             return response

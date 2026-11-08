@@ -76,10 +76,10 @@ class IssueCandidateUpdates(unittest.IsolatedAsyncioTestCase):
             if probe is not None and probe.row.get('executionAmount') == expected \
                     and probe.row['outcome'] in ('qualified', 'not-improved'):
                 trace.later_done.set()
-        budget = QuoteBudget()  # Existing 5 + 10 second policy, unchanged.
+        budget = QuoteBudget()  # Natural completion; this test explicitly ends its held tail.
         async def run():
             with budget_context(budget):
-                return await budget.produce(intent.get(fixture.request('issue-exact-in'), trace.emit))
+                return await budget.produce(fixture.pinned_get(intent, fixture.request('issue-exact-in'), trace.emit))
         with patch.object(coordinator, 'provider_qualification_finish', observed):
             operation = asyncio.create_task(run())
             try:
@@ -133,7 +133,7 @@ class IssueCandidateUpdates(unittest.IsolatedAsyncioTestCase):
         budget = QuoteBudget()
         async def run():
             with budget_context(budget):
-                return await budget.produce(intent.get(fixture.request('issue-exact-in'), trace.emit))
+                return await budget.produce(fixture.pinned_get(intent, fixture.request('issue-exact-in'), trace.emit))
         operation = asyncio.create_task(run())
         try:
             await asyncio.wait_for(trace.later_started.wait(), 2)

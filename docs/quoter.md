@@ -4,7 +4,7 @@ doc_type: architecture
 status: active
 owner: backend-maintainer
 created: 2026-10-26
-last_reviewed: 2026-10-27
+last_reviewed: 2026-11-04
 canonical_for: Quoter economic API, selected-plan preparation and observation reuse
 ---
 
@@ -46,9 +46,14 @@ the returned redemption basket through the existing authoritative previews.
 The original request remains the budget; unused funding is never acquired.
 
 These amounts come from protocol state and integer preview calculations, not
-blind smaller-amount probes. Scalar acquisition and Market whole-plan funding
-reconstruction remain separate work: subtracting retained amounts is not that
-algorithm.
+blind smaller-amount probes. After ordinary scalar selection, the Quoter can
+replay its winner and reconstruct payer-source acquisition/Market lots from
+actual consumption. It preserves productive mixed branches in execution order,
+solves exactly representable split weights and sale fees, then replays one
+smaller-funded proposal. The ordinary output-first comparator chooses the
+result. Other-currency retention is not subtracted from payer funding. A
+reduction requiring branch deletion or an unrepresentable split retains the
+original plan. This is one construction, not a minimum-funding solver.
 
 `conversionObservations` records each evaluated conversion's input/output
 currencies, funded input, simulated consumed input and output. Consumption is
@@ -68,8 +73,9 @@ This comparison does not discover smaller funding by itself.
 
 ## Shared historical quotes and explicit Refresh
 
-The existing PostgreSQL infrastructure stores one last successfully committed
-whole quote per normalized economic request and configuration scope. Scope
+The shared Backend store keeps two family slots per normalized scalar request:
+pure Market and Market with Core. PostgreSQL persists whole observations and
+process memory makes new completed observations available immediately. Scope
 includes chain/Core/Helpers/adapter, fork generation and static fee-affecting
 runtime policy. It excludes head, recipient, execution deadline and tolerance.
 Mutable onchain Core/helper fees belong to the quote's observed block, like
@@ -78,29 +84,171 @@ a different shared lookup key.
 
 An ordinary matching request can return the stored quote and its original
 context. It is a historical observation, not a freshly executable transaction.
-The new namespace is bounded to 4,096 economic records per existing
-chain/Core/generation scope, with whole-record saves and oldest-save pruning.
+The existing 4,096-point bound and oldest-save pruning remain; a scalar point
+can contain both family records.
 Concurrent saves do not mix plan/output/context fields. Cache read/write errors
 leave ordinary search and preparation available.
 
-`refresh: true` bypasses using the stored quote as the answer. The Quoter may
-replay its semantic plan with its saved funding as a seed, but must evaluate at
-the current state. Saved funding must fit the requested budgets and, for direct
-basket redemption, the current supply-derived funding ceiling.
-Search success replaces the complete saved record. Search failure leaves the
-previous record intact and is returned as a failed Refresh. Browser display
-copies can retain that previous observation while showing the error.
+Scalar ordinary requests and Refresh replay known funded paths while new
+exploration and requested-budget reconstruction run concurrently. Original
+funding must fit the current request. Larger cached paths can still nominate
+budget-fitting reconstructed bodies. These private Backend seeds never travel
+through a public client route-seed API. Completed Helpers observations enter
+shared memory and begin independent SQL persistence before producer teardown.
+
+Each same-funded executable path's successful reprice replaces its entire old
+observation, whether output rises, falls or stays equal. The Backend ranks the
+latest observations across independent paths and publishes its selected tuple.
+A weaker independent path stays silent. A concrete paid Helpers disproof
+removes its candidate; an unrelated SDK or transport error cannot disprove a
+completed Helpers quote. Late SQL reads cannot restore superseded observations.
+
+The Frontend displays Backend-selected quotes and advisory estimates. It keeps
+only the current request's display/capture state, including same-owner Refresh,
+and execution preparation state. It does not rank candidates, seed discovery,
+reuse whole quotes across requests, or restore quote economics from browser
+storage. Fast estimates and reusable route history belong to the shared Backend.
 
 ## Search and selected-plan preparation
 
+Production fresh searches use one `RouteQuery` / `CandidateFeed` API for
+`CustomRoutes`, AlphaRouter, `uniroute-local`, `uniroute-api` and Guidestar.
+Immediate custom candidates remain lazy; pending sources start together when
+the conversion pair and amount are known. `CyberGoldAmmAdapter` consumes their
+available nominations fairly and returns independently. New hints wake a
+separate detailed whole-plan pass and optional family/prefix work using the
+same search session. Each observed publication revision also starts an owned
+quick whole-plan pass, trying already available nominations in latest-publication
+order before the regular lazy feeds. An older detailed pass can continue while
+new hints qualify. Every regular feed remains available; quick passes do not
+prove exhaustive selection within a batch. Neither first-result nor detailed
+custom improvements wait for a provider tail. Feeds can publish incremental
+batches; each batch uses those same arrival and ownership rules. Search runs
+to natural completion or caller cancellation with the existing eight pricing
+slots and whole-plan comparator. Initial pool observations release owned pricing
+permits while waiting, just like later SDK state requests, and reacquire them
+before SDK arithmetic. Shared read subscriptions retain their existing owners.
+
+Completed path prefixes also join the shared feed. Ordered SDK replay publishes
+their topology with the original source, actual branch funding and inherited
+discovery origins, including prefixes of optional selected Market routes. This
+can bootstrap a Core acquisition while another route still awaits state. The
+receiving plan normalizes and reprices that topology against its own private
+bank; no quote output, fee or simulated post-state is shared. Request-local
+semantic deduplication prevents replay/arrival feedback, and merging origins
+alone starts no economic work. All completed hints remain stored; arrivals wake
+reevaluation for existing query dependencies, while a future query reads its
+stored hints immediately. Internal publication order is separate from that
+notification revision. The ordinary feeds remain available. Publication uses
+the existing search owner and stops with it; preparation outside that scope
+starts no discovery.
+
+Local graph-dependent tools also invalidate their nomination cache when the
+canonical physical catalog changes. The session observes existing connector
+and persisted-catalog completion signals, retains old offers, and coalesces a
+follow-up behind in-flight work. It never waits for or cancels the shared
+database load. The optional dependency marker affects cache invalidation only;
+hosted API requests do not repeat for local catalog growth. Display/scalar
+changes and physical aliases do not change the graph identity. Refresh work
+uses the same search owner, and detached callbacks start no work after
+selection stops or the owner closes.
+
+Both pure-Market and Market+Core plans call that AMM adapter. Tools search only
+the AMM segments: they receive no Core preview, basket, fee or economic intent
+work. The Quoter composes their canonically replayed segments with Core
+issuance/redemption and compares complete economic plans. Market anchoring,
+quick-pass seed preference, native funding and split rounding belong to the
+adapter. Its raw-path projection runs before custom split construction, without
+changing query sharing or the generic provider's independent path coverage.
+
+Hints are reconstructed through the existing connected-path producer, including
+native/WETH transitions, and replayed against each candidate's private pool bank.
+Remote amounts, prices, recipient, minimum and calldata never become execution
+terms. AlphaRouter's percentage/split selection uses canonical Python SDK quote
+callbacks with zero gas for nomination; whole-plan fees and ranking remain here.
+Selected-plan preparation starts no supplier discovery. All supplier tasks,
+HTTP tasks and calculation requests are owned and drained by their search.
+Lazy AlphaRouter/UniRoute local worker processes belong to the engine and are
+reused across searches, with copied per-request context and independent cleanup.
+
+The private optional `CYBERGOLD_UNISWAP_API_KEY` enables hosted requests;
+`CYBERGOLD_UNISWAP_API_SWAPPER` defaults to Helpers. Missing account access or
+ordinary API/AlphaRouter failures leave local discovery available. Actual chain
+IDs are retained: the upstream AlphaRouter configuration and Guidestar beta
+do not support Sandbox 31338 as Mainnet. The wired local UniRoute components retain
+actual chain 31338 and the existing three-physical-hop/native transition rules.
+The unchanged published RouteFinder emits raw hints before DeepQuoteStrategy,
+BaseQuoteStrategy, QuoteBestSplitFinder, RouteQuoteAllocator and
+SimpleQuoteSelector produce deeper split batches through canonical callbacks.
+Local model/service wiring, zero-gas nomination and source pins are documented
+in `vendor/uniroute-public`. The default 5% grid searches two-branch splits;
+all stitched nominations reach whole-plan evaluation under their search owner.
+Upstream shared-pool restrictions do not exclude raw/custom alternatives.
+These are published components with local wiring, not the private full UniRoute
+service. `uniroute-api` uses the
+standard Trading API path; no documented engine selector exists. Response
+evidence records UniRoute/Guidestar/unverified backend attribution separately
+from that integration-source name, without requiring it to use a candidate.
+Internal `metrics.routeDiscovery` records provider outcomes, nomination and
+completion/cancellation timing, incremental batches, worker queries, canonical
+callback counts/failures/elapsed time, reevaluation, physical RPC HTTP attempts and
+hosted API requests separately. Physical counts sit below coalescing: one
+shared POST is charged once to its first issuing owner; a JSON-RPC batch records
+one envelope and its members. A Multicall `eth_call` remains one member, without
+claiming a count of its inner functions. Elapsed transport times can overlap;
+their sum is not the producer's wall time. No credential, URL, parameters or
+supplier error text is recorded.
+Common replay/Core/canonicality RPC belongs to `cybergold-quoter`; the pure
+custom graph enumerator is not falsely charged for those reads. Explicit
+supplier callbacks and API identity acquisition retain their own issuer tags.
+
+Selected conversions retain `discoveryOrigins`; `routeOrigins` summarizes the
+whole quote's nominators separately from its canonical CyberGold evaluator.
+Equivalent later nominations can enrich origin metadata without replacing an
+economic tie. The existing whole-JSON cache retains those origins and the
+original measured performance. Stored responses/logs label those measurements
+historical, rather than fresh work. Progressive publication preserves later
+equivalent origins through its final returned/cached quote. Prefix repair and
+neighboring-amount topology reuse preserve their input route's optional source
+metadata. Dormant zero-residual Core bindings record adapter composition
+separately, without inventing an AMM nominator. Missing or malformed
+origin metadata never prevents selected-plan replay, changes a cache key or
+affects ranking. These sources nominate routes; they do not change which
+economic plan wins.
+
 The first-result and detailed passes, eight scalar allocation/order choices,
-Core previews and private ordered pool replay remain. The comparison window
-is five seconds. Only if no usable whole plan exists can search continue for
-up to ten more seconds; its first usable result then ends selection. A
+Core construction and private ordered pool replay remain. Complete Helpers
+quotes publish while exploration continues, without a global quote cutoff. A
 zero-output conversion tries its existing alternatives, while an all-zero
-conversion retains its ordinary outcome. No progressive scheduler, V3 bitmap
-batching policy is enabled by this migration. The direct basket funding
-construction above does not reconstruct scalar Market acquisition paths.
+conversion retains its ordinary outcome. Optional full-budget scalar Market
+routes from the same tool feeds are interleaved by currency/protocol family through the existing route
+scheduler. Ordinary quick/detailed/Core/mixed/split jobs remain concurrent.
+The scheduler retains eight pricing slots; failed optional work leaves ordinary
+candidates available. There is no
+new provider-call rejection quota or global early-stop rule.
+
+Cold bootstrap uses fixed family order. Known funded-path replay, budget
+reconstruction and ordinary exploration start independently. Explicitly seeded
+optional exploration can use a request-local random order; ordinary work does
+not wait for SQL history or replay. Historical numbers remain advisory
+observations; new proposals are priced through latest Helpers simulation.
+Higher output can use more funding within budget; equal output can win with
+lower declared funding.
+
+SDK-head bounds cannot disprove the output of a latest Helpers simulation.
+Supplier topologies remain eligible for complete execution simulation; pricing
+slots bound concurrency and a failed attempt does not consume a global
+candidate allowance. SDK arithmetic nominates or reconstructs paths rather
+than qualifying the final quote.
+
+An intermediate partial fill can provide an optional linear-prefix proposal:
+invert the preceding distinct-pool hops with exact-output SDK arithmetic at
+their actual pre-states, then forward-replay a smaller-funded exact-input plan.
+The repair runs sequentially under its parent task ownership and spends a
+second optional start. No incomplete path becomes a quote. Shared/repeated
+pools, split/Core coupling, hooks and native-prefix repairs retain ordinary
+behavior. Execution and accepted bounds still use the existing exact-input
+format.
 
 Transaction Preparation replays the selected routes and allocations through
 `quoter.evaluate`; it does not discover a replacement route. It binds scalar
@@ -156,6 +304,30 @@ without changing its header: fresh same-header acquisitions still replace
 state and old samples remain advisory. The raw RPC LRU remains 4,096 entries
 total across block hashes per API process, without a head-change purge or TTL.
 
+When the SDK traverses an empty V3 bitmap word with zero active liquidity,
+optional acquisition reads the next 31 directional words in one hash-pinned
+Multicall3 batch, clipped to valid tick limits. Demanded reads and successful
+coverage survive optional batch failures. The SDK still traverses every word
+and initialized tick; no arithmetic jump is introduced. Existing V4 prefetch
+and shared-read subscriber cancellation remain in force.
+
+## Internal component ownership
+
+`quoter.route_tools` owns the shared query/feed API; `quoter.custom_routes`
+packages generic custom graph/split enumeration from `quoter.discovery`.
+`quoter.amm_adapter` owns CyberGold path policy and candidate selection;
+`quoter.amm` owns
+exact path replay; `quoter.evaluate` owns ordered whole-plan/Core/fee economics;
+`quoter.ranking` compares only completed plans. `quoter.funding` and
+`quoter.prefix` propose smaller funding, `quoter.policy` supplies optional
+bounds, and `quoter.exploration` owns the optional feeds. `quoter.search` owns
+the context, ordinary jobs, incumbent, deadline and finalization. Internal
+contracts/traces are request-local and never become public quote fields.
+Registry owns canonical acquisition and coverage; hypothetical post-state
+remains candidate-private. Fast Estimator, SQL store and Transaction
+Preparation keep their existing responsibilities; these modules are not new
+services.
+
 The unused Uniswap onchain Quoter ABI/config/metadata dependency is retired
 from the production pricing path. Retained Node comparison fixtures may use a
 test-only oracle. SDK arithmetic remains the pricing implementation; Universal
@@ -164,11 +336,15 @@ Router remains execution infrastructure behind the routing adapter.
 ## Measurements and remaining qualification
 
 Completed searches expose producer time to first whole plan, search duration,
-total duration and selection reason. Final canonical verification belongs to
-total/finalization time, rather than search duration. Safe operation evidence
+total duration and selection reason. Quotation uses latest simulation without
+extra header/canonicality calls. Execution preparation separately simulates the
+captured plan for execution. Safe operation evidence
 distinguishes Quoter search/lookup, Fast Estimator and Transaction Preparation.
 Stored quote metrics describe its original search, not the latency of a later
 lookup. Client HTTP and browser journey times remain separate.
+`metrics.optionalSearch` records the optional start/pruning/repair counts and
+the exploratory random seed. Post-selection funding replay belongs to
+finalization and cannot qualify an earlier E1 result during ordinary selection.
 
 Focused correctness controls are included in the Python local suite. Native
 PostgreSQL controls exercise actual independent connections, concurrent
@@ -176,8 +352,10 @@ coverage/whole-record writes and scoped bounds against caller-owned disposable
 databases, without RPC. `native_economic_api_processes.py` additionally starts
 two independent local Uvicorn API processes and HTTP clients: a process whose
 fixture provider cannot acquire a head still retrieves the other process's
-original SQL-saved quote, including after a failed explicit Refresh. Its
-deterministic pricing fixture proves cross-process reuse, not AMM latency.
+original SQL-saved quote, including after a failed explicit Refresh. The
+`--actual-sdk` mode additionally uses captured Mainnet state, reduced funding,
+successful seeded Refresh and a freshly started process. These correctness
+fixtures prove cross-process reuse, not live AMM latency.
 The App's paired measurement loop controls database/process cold starts, forced
 warm searches, second-process lookups and a header-only advance. The completed
 local native-arm64 cohort recorded 180 primary requests, including three failed

@@ -20,6 +20,8 @@ from cybergold_candidate.uniswap_routes import resize_branches
 from cybergold_candidate.market_fee import quoted_fee
 from cybergold_candidate.market_capacity import maximum_filled_input
 from cybergold_candidate.universal_quote import UniversalQuotes
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
+from test_universal_quote import fixture_plan_simulator
 
 CORE = '0x'+'6'*40
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -98,7 +100,15 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         # Full provider search rebuilds a usable purchase within the budget.
         async with asyncio.timeout(3):
             result = await quotes._get(request, block=BLOCK)
-        self.assertLessEqual(sum(name == 'getTickBitmap(bytes32,int16)' for name, _ in rpc.calls), 3)
+        bitmap_reads = sum(name == 'getTickBitmap(bytes32,int16)' for name, _ in rpc.calls)
+        bulk = [args[0] for name, args in rpc.calls if name == 'extsload(bytes32[])']
+        # Each successive bounded window has one demanded boundary read. The
+        # old all-direction fetch needed fewer boundary reads but could block
+        # useful state behind unrelated distant coverage.
+        self.assertTrue(bulk)
+        self.assertLessEqual(bitmap_reads, len(bulk) + 3)
+        self.assertTrue(all(len(batch) <= 127 for batch in bulk))
+        self.assertGreater(min(rpc.bulk_words[:len(bulk[0])]), -100)
         actual = int(result['totalInput'])
         self.assertGreater(actual, 0)
         self.assertLess(actual, int(request['amount']))
@@ -131,7 +141,11 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
             NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS='0x'+'2'*40,
             CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS='0x'+'7'*40)
-        universal = UniversalQuotes(settings, quotes)
+        async def simulate(request, selected, **kwargs):
+            kwargs.setdefault('block', BLOCK)
+            return await fixture_plan_simulator(universal, request, selected,
+                                                basis_reader=universal.basis, **kwargs)
+        universal = UniversalQuotes(settings, quotes, plan_simulator=simulate)
         request = {'intent': 0, 'inputs': [{'currency': registry.seed['token0']['address'], 'amount': str(budget)}],
             'outputCurrency': CORE, 'recipient': '0x'+'8'*40, 'deadline': '2000000000', 'slippageBps': 100}
         # The same finite-liquidity SDK result is retainable at the declared
@@ -251,6 +265,21 @@ class MarketLiquidityTests(unittest.IsolatedAsyncioTestCase):
         changed = await quotes._get(request, block=BLOCK)
         self.assertGreater(int(changed['params']['amount']), int(first['params']['amount']))
         self.assertEqual(rpc.liquidity, 10**18)
+
+    async def test_latest_capacity_search_does_not_retain_a_completed_capacity_observation(self):
+        quotes, registry, rpc = await self.fixture([(-60, 60, 10**18)])
+        original = rpc.read_function
+        async def latest_read(address, signature, inputs, args, outputs, block):
+            self.assertEqual(block, LATEST_BLOCK)
+            return await original(address, signature, inputs, args, outputs, BLOCK)
+        rpc.read_function = latest_read
+        result = await quotes.get(self.purchase(registry, 10**18))
+        self.assertGreater(int(result['totalInput']), 0)
+        self.assertLess(int(result['totalInput']), 10**18)
+        self.assertEqual(result['context']['blockTag'], 'latest')
+        self.assertIsNone(result['context']['blockHash'])
+        self.assertEqual(quotes.fill_capacity.completed, {})
+        self.assertEqual(registry.observed, {})
 
     async def test_retained_purchase_never_increases_funding_and_smaller_capacity_invalidates(self):
         quotes, registry, rpc = await self.fixture([(-60, 60, 10**18)])

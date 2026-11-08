@@ -1,12 +1,18 @@
-"""Wallet-bounded proportional basket MAX from one canonical Core snapshot."""
+"""Wallet-bounded proportional basket MAX using direct latest-state reads."""
 import asyncio
 from datetime import datetime, timezone
 
 from pydantic import BaseModel, TypeAdapter
+from eth_utils.abi import collapse_if_tuple
 
 from .basket_arithmetic import PPM, FP, ceil_div, gross_for_net
 from .basket_preview import BasketPreviewRpc, InvalidPreview, handle_basket_preview
 from .protocol_facts import ProtocolFactsRpc
+from .rpc_block_context import LATEST_BLOCK, rpc_block_parameter
+from .recovery_rpc import abi_value
+from .quote_errors import rpc_failure
+from .rpc_diagnostics import rpc_call
+from .telemetry import rpc_exchange
 
 
 class BasketMaxRequest(BaseModel):
@@ -51,6 +57,7 @@ class BasketMaxRpc(ProtocolFactsRpc):
         super().__init__(settings, w3)
         self.basket = BasketPreviewRpc(settings, self.w3)
         self.helpers = self.basket.helpers
+        self._decimals = {}
 
     def encode(self, request):
         return self.basket.encode({'mode': 'issue-exact-in', 'maximumAmountsIn': request['maximumAmountsIn']})
@@ -58,12 +65,27 @@ class BasketMaxRpc(ProtocolFactsRpc):
     async def state(self, block):
         names = ('basketAssets', 'basketTargetsPpm', 'basketCygldPerUnitFp18', 'issuanceFeePpm',
                  'totalSupply', 'maxTotalSupply', 'effectiveCygldSupplyCap')
-        values = await asyncio.gather(*(self.read('core', self.core, name, block) for name in names))
+        calls = [('eth_call', [{'to': self.core, 'data': self.contracts['core'].encode_abi(name)},
+                              rpc_block_parameter(block)]) for name in names]
+        with rpc_exchange(len(calls)), rpc_call('eth_call', stage='basket-max') as call:
+            rows = await self.w3.provider.make_batch_request(calls)
+            values = []
+            for name, response in zip(names, rows, strict=True):
+                if 'error' in response:
+                    raise rpc_failure(call.rpc_error(response['error']))
+                output = next(row for row in self.abi['core'] if row['name'] == name)['outputs'][0]
+                value, = self.w3.codec.decode([collapse_if_tuple(output)], bytes.fromhex(response['result'][2:]))
+                values.append(abi_value(value, output))
         return dict(zip(('assets', 'weights', 'conversions', 'issueFee', 'supply', 'maxSupply', 'effectiveCap'),
                         values, strict=True))
 
     async def decimals(self, assets, block):
-        return await asyncio.gather(*(self.read('token', asset, 'decimals', block) for asset in assets))
+        async def metadata(asset):
+            key = asset.lower()
+            if key not in self._decimals:
+                self._decimals[key] = await self.read('token', asset, 'decimals', block)
+            return self._decimals[key]
+        return await asyncio.gather(*(metadata(asset) for asset in assets))
 
     async def preview(self, amounts, block):
         data = self.basket.encode({'mode': 'issue-exact-in', 'maximumAmountsIn': [str(value) for value in amounts]})
@@ -83,7 +105,7 @@ class BasketMax:
         # The retained fixed Helpers ABI establishes uint256 input bounds.
         self.rpc.encode(request)
         async with asyncio.timeout(15):
-            block = await self.rpc.block()
+            block = LATEST_BLOCK
             state = await self.rpc.state(block)
             assets, weights = state['assets'], state['weights']
             if len(request['maximumAmountsIn']) != len(assets):
@@ -108,15 +130,14 @@ class BasketMax:
                     budgets, weights, decimals,
                     state['conversions'], state['issueFee'], capacity, driver)
                 if amount:
-                    # All arithmetic inputs and the authoritative validation use
-                    # the same existing EIP-1898 hash/requireCanonical contract.
+                    # Helpers validates the computed funding at latest state;
+                    # this observation makes no pinned-block claim.
                     result = await self.rpc.preview(amounts, block)
                     net = result['netCygldOut']
                     if int(net) == 0:
                         amount, amounts = 0, [0] * len(assets)
-            await self.rpc.assert_canonical(block)
-            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': str(block['number']),
-                                'blockHash': block['hash'], 'observedAt': self.now()},
+            return {'context': {'chainId': self.rpc.chain_id, 'blockNumber': None,
+                                'blockHash': None, 'blockTag': 'latest', 'observedAt': self.now()},
                     'helpers': self.rpc.helpers, 'orderedCoreAssets': assets,
                     'driverToken': assets[driver], 'driverAmount': str(amount),
                     'maximumAmountsIn': [str(value) for value in amounts], 'netCygldOut': net}

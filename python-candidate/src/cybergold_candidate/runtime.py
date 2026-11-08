@@ -106,12 +106,16 @@ def create_configured_app(settings=None, database=None, client=None):
     uniswap_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None
     async def configuration_generation():
         from .fork_recovery import read_generation
-        async with database.connection() as connection:
-            stored = await read_generation(connection, core.lower())
+        from .quote_flow import stage
+        with stage('metadata.generation'):
+            async with database.connection() as connection:
+                stored = await read_generation(connection, core.lower())
         generation = stored['anchor']['generation'] if stored else None
-        await history.observe_generation(generation)
-        await market_quotes.observe_generation(generation)
-        await configuration.observe_generation(generation)
+        with stage('metadata.observers'):
+            await history.observe_generation(generation)
+            await market_quotes.observe_generation(generation)
+            await universal_quotes.core_state_cache.observe_generation(generation)
+            await configuration.observe_generation(generation)
         return generation
     configuration_store = UniswapStore(database, chain, core) if settings.DATABASE_URL else None
     configuration = ProtocolConfiguration(settings, configuration_store,
@@ -124,7 +128,25 @@ def create_configured_app(settings=None, database=None, client=None):
     routes.engine = market_quotes
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
-    universal_quotes = UniversalQuotes(settings, market_quotes)
+    from .quoter.providers import route_providers
+    universal_quotes = UniversalQuotes(settings, market_quotes,
+        route_provider_factory=lambda: route_providers(settings, market_quotes))
+    core_quote_state = universal_quotes.core_state_cache
+    async def quote_generation_observed(generation):
+        for observer in (history.observe_generation, market_quotes.observe_generation,
+                         configuration.observe_generation):
+            try:
+                await observer(generation)
+            except Exception:
+                pass
+    core_quote_state.generation_observer = quote_generation_observed
+    def facts_observed(facts):
+        for observer in (history.facts_observed, core_quote_state.observe_facts):
+            try:
+                observer(facts)
+            except Exception:
+                pass  # Independent advisory observers do not veto live facts.
+    history.state_observer = lambda row: core_quote_state.observe_model(row['state'])
     observe_quote_scope = configuration.load if chain == 31338 and settings.DATABASE_URL else None
     transaction_preparation = TransactionPreparation(universal_quotes, observe_scope=observe_quote_scope)
     # Per-block Core fee observations belong to the saved quote's original
@@ -133,6 +155,9 @@ def create_configured_app(settings=None, database=None, client=None):
                                      observe_scope=observe_quote_scope)
     market_quotes.universal_quotes = universal_quotes
     trade_quotes = TradeQuotes(settings, core_quotes, market_quotes, request_resolver=configuration.resolve_request)
+    from .economic_estimate import CachedEconomicEstimates
+    trade_quotes.cached_estimates = CachedEconomicEstimates(economic_quotes.store, universal_quotes.core,
+                                                           observe_scope=observe_quote_scope)
     trade_quotes.universal_quotes = universal_quotes
     shared_core_quotes = IntentSharing(core_quotes, rpc_factory=route_rpc,
                                       request_resolver=configuration.resolve_request)
@@ -199,7 +224,8 @@ def create_configured_app(settings=None, database=None, client=None):
                           rpc_authorization=settings.FORK_FAUCET_RPC_AUTHORIZATION,
                           state_root=settings.FORK_FAUCET_STATE_ROOT,
                           generation_file=settings.FORK_FAUCET_GENERATION_FILE),
-                      recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=history.facts_observed, history=history, pool_reads=pool_reads),
+                      recovery=RecoveryLoader(settings),aliases=AliasService(database),protocol_facts=ProtocolFacts(settings, on_observation=facts_observed, history=history, pool_reads=pool_reads),
+                      core_quote_state=core_quote_state,
                       protocol_configuration=configuration,
                       basket_preview=BasketPreview(settings, history=history),
                       basket_max=BasketMax(settings),

@@ -142,7 +142,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         history = QuoteHistory(SETTINGS)
         await history.observe_generation('old')
         intent.history = history
-        shared = IntentSharing(intent)
+        shared = IntentSharing(intent, head=lambda: routes.rpc.block(None))
         self.addAsyncCleanup(shared.close)
         provider.hold_chain = asyncio.Event()
         frames = []
@@ -223,7 +223,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         _, provider, routes, _ = service()
         self.addAsyncCleanup(routes.close)
         history = QuoteHistory(SETTINGS)
-        shared = IntentSharing(QuoteIntent(SETTINGS, routes, history=history))
+        shared = IntentSharing(QuoteIntent(SETTINGS, routes, history=history), head=lambda: routes.rpc.block(None))
         self.addAsyncCleanup(shared.close)
         provider.hold_chain = asyncio.Event()
         frames = []
@@ -242,8 +242,9 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         seeds = VerifiedGrossSeed(now=lambda: clock[0])
         intent.seeds = seeds
         value = request('redeem-exact-out')
-        first = await intent.get(value, lambda e: asyncio.sleep(0))
-        second = await intent.get({**value, 'deadline': str(int(value['deadline'])+1)}, lambda e: asyncio.sleep(0))
+        block = await routes.rpc.block(None)
+        first = await intent.get(value, lambda e: asyncio.sleep(0), block=block)
+        second = await intent.get({**value, 'deadline': str(int(value['deadline'])+1)}, lambda e: asyncio.sleep(0), block=block)
         self.assertEqual(second['executionAmount'], first['executionAmount'])
         self.assertIsNone(second['initialPreview'])
         self.assertEqual(second['metrics']['iterations'], 0)
@@ -300,7 +301,8 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         history.acquire_route = optional
         intent = QuoteIntent(SETTINGS, routes, history=history)
         frames = []
-        result = await asyncio.wait_for(intent.get(request('issue-exact-in'), lambda e: asyncio.sleep(0, result=frames.append(e))), 2)
+        block = await routes.rpc.block(None)
+        result = await asyncio.wait_for(intent.get(request('issue-exact-in'), lambda e: asyncio.sleep(0, result=frames.append(e)), block=block), 2)
         packets = [e['value'] for e in frames if e['type'] == 'model']
         self.assertFalse(packets[0]['whole'])
         self.assertEqual(len(packets[-1]['whole']), 1)
@@ -309,7 +311,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         before = deepcopy(history.packet(request('issue-exact-in')))
         provider.reorg = True
         with self.assertRaises(Exception):
-            await intent.get({**request('issue-exact-in'), 'amount': '101'}, lambda e: asyncio.sleep(0))
+            await intent.get({**request('issue-exact-in'), 'amount': '101'}, lambda e: asyncio.sleep(0), block=block)
         self.assertEqual(history.packet(request('issue-exact-in')), before)
         await history.close()
         self.assertFalse(history.tasks)

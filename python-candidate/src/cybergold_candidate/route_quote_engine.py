@@ -4,8 +4,9 @@ Core, Market and direct Uniswap consumers share one runtime instance. Protocol
 pricing methods are implementation details of a canonical forward route.
 """
 import asyncio
-from .route_work_slots import engine_work
+from .route_work_slots import engine_work, PricingSlots, required_state_wait
 from copy import deepcopy
+from .pool_snapshot import copy_pool_snapshot
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -19,12 +20,16 @@ from .recovery_rpc import SnapshotChanged
 from .rpc_diagnostics import route_count, route_legs, route_leg_started, route_leg_finished
 from .route_scheduler import schedule_routes, raise_snapshot_disproof
 from .sdk_worker import SdkWorker, MissingPoolState
+from .sdk_simulation import simulate_sdk
 from .uniswap_routes import (candidate_branches, supported_route, resize_branches,
     pool_identity, route_identity, v3_branches, initial_v3_branches, initial_market_branches,
     market_anchor, LEGACY_V3_ADAPTERS)
-from .uniswap_state import ZERO, same_observed_pool
+from .uniswap_state import ZERO, same_observed_pool, search_pool_state
 from .uniswap_v4 import tick_prefetch_scope
+from .rpc_block_context import is_latest
 from .wallet_balances import TOKENS
+from .uniswap_api_queue import UniswapApiQueue
+from .quote_flow import stage
 
 _quote_snapshots = ContextVar('route_quote_snapshots', default=None)
 
@@ -45,27 +50,40 @@ class RouteQuoteEngine:
         self.settings, self.registry = settings, registry
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
-        self.semaphore = asyncio.Semaphore(8)
+        self.semaphore = PricingSlots(8)
+        self._route_optimizers = {}
+        self.uniswap_api_queue = UniswapApiQueue(
+            int(getattr(settings, 'CYBERGOLD_UNISWAP_API_RPS', None) or 6))
 
     async def close(self):
+        self.uniswap_api_queue.close()
+        await asyncio.gather(*(driver.close() for driver in self._route_optimizers.values()))
+        self._route_optimizers.clear()
         await self.shared.close()
         await self.sdk.close()
 
+    def route_optimizer(self, provider):
+        """Construct each local driver lazily; searches own only its sessions."""
+        if provider not in self._route_optimizers:
+            self._route_optimizers[provider] = provider(self)
+        return self._route_optimizers[provider]
+
     def enrich_branches(self, branches):
         """Attach observed metadata without changing execution identity."""
-        registry = getattr(self, 'registry', None)
-        known = {pool_identity(pool): pool for pool in getattr(registry, 'inventory', {}).values()}
-        result = deepcopy(branches)
-        for branch in result:
-            for hop in branch['hops']:
-                pool = known.get(pool_identity(hop['pool']))
-                if pool is not None:
-                    hop['pool'] = deepcopy(pool)
-                elif hop['pool']['protocol'] == 'v3':
-                    # Absent inventory still has one factory execution identity;
-                    # optional caller/catalog IDs cannot duplicate SDK state.
-                    hop['pool']['id'] = ':'.join(map(str, pool_identity(hop['pool'])))
-        return result
+        with stage('topology.enrich', kind='cpu'):
+            registry = getattr(self, 'registry', None)
+            known = {pool_identity(pool): pool for pool in getattr(registry, 'inventory', {}).values()}
+            result = deepcopy(branches)
+            for branch in result:
+                for hop in branch['hops']:
+                    pool = known.get(pool_identity(hop['pool']))
+                    if pool is not None:
+                        hop['pool'] = deepcopy(pool)
+                    elif hop['pool']['protocol'] == 'v3':
+                        # Absent inventory still has one factory execution identity;
+                        # optional caller/catalog IDs cannot duplicate SDK state.
+                        hop['pool']['id'] = ':'.join(map(str, pool_identity(hop['pool'])))
+            return result
 
     def baseline(self, state, zero_for_one):
         if state['protocol'] == 'v2':
@@ -80,15 +98,28 @@ class RouteQuoteEngine:
             fee = protocol+lp-protocol*lp//1_000_000
         return PoolBaseline.v3(int(state['sqrtRatioX96']), int(state['liquidity']), fee, zero_for_one)
 
-    async def route_baseline(self, plan, block):
+    async def route_baseline(self, plan, block, states=None):
         """Indicative marginal/impact metadata; exact swap arithmetic is SDK-owned."""
         plan = {**plan, 'branches': RouteQuoteEngine.enrich_branches(self, plan['branches'])}
-        states = {}
+        states = dict(states or {})
+        pools = {}
         for branch in plan['branches']:
             for hop in branch['hops']:
                 identity = pool_identity(hop['pool'])
-                if identity not in states:
-                    states[identity] = await self.registry.snapshot(hop['pool'], block)
+                pools.setdefault(identity, hop['pool'])
+                if identity not in states and is_latest(block) and (state := search_pool_state(self.registry.chain, hop['pool'])) is not None:
+                    states[identity] = state
+        reads = {identity: asyncio.create_task(self.registry.snapshot(pool, block))
+                 for identity, pool in pools.items() if identity not in states}
+        try:
+            for identity, task in reads.items():
+                async with required_state_wait():
+                    states[identity] = await task
+        finally:
+            for task in reads.values():
+                if not task.done():
+                    task.cancel()
+            raise_snapshot_disproof(await asyncio.gather(*reads.values(), return_exceptions=True))
         return self.baseline_from_states(plan, states)
 
     def baseline_from_states(self, plan, states):
@@ -133,6 +164,10 @@ class RouteQuoteEngine:
         known = {(pool['protocol'], tuple(sorted((pool['token0']['address'].lower(),
             pool['token1']['address'].lower()))), int(pool['feePips'])): pool
             for pool in self.registry.inventory.values() if pool.get('address')}
+        def token(address):
+            known = self.registry.metadata.get(address.lower())
+            return deepcopy(known) if known is not None else {
+                **self.registry.token(address, 18), 'decimalsKnown': address.lower() == ZERO}
         async def v2(pair):
             key = ('v2', pair, 3000)
             if key in known or key in self.registry.lookups:
@@ -143,7 +178,7 @@ class RouteQuoteEngine:
                 if address.lower() == ZERO:
                     self.registry.lookups[key] = None
                     return
-                a, b = await asyncio.gather(*(self.registry.token_metadata(token, block) for token in pair))
+                a, b = map(token, pair)
                 pool = {'id': address.lower(), 'protocol': 'v2', 'address': address,
                     'token0': a, 'token1': b, 'feePips': 3000}
                 self.registry.inventory[pool['id']] = pool
@@ -164,10 +199,9 @@ class RouteQuoteEngine:
                 if address.lower() == ZERO:
                     self.registry.lookups[key] = None
                     return
-                a, b = await asyncio.gather(*(self.registry.token_metadata(token, block) for token in pair))
-                spacing, = await rpc.read_function(address, 'tickSpacing()', [], [], ['int24'], block)
+                a, b = map(token, pair)
                 pool = {'id': address.lower(), 'protocol': 'v3', 'address': address,
-                    'token0': a, 'token1': b, 'feePips': fee, 'tickSpacing': spacing}
+                    'token0': a, 'token1': b, 'feePips': fee}
                 self.registry.inventory[pool['id']] = pool
                 self.registry.lookups[key] = pool
                 self.registry.persist('inventory', pool['id'], pool)
@@ -176,10 +210,9 @@ class RouteQuoteEngine:
             except Exception:
                 # Discovery failure is unknown, not canonical absence. Keep
                 # its execution identity for the SDK's on-demand acquisition.
-                a, b = (self.registry.token(token, 18) for token in pair)
+                a, b = map(token, pair)
                 pool = {'id': 'v3:'+':'.join((*pair, str(fee))), 'protocol': 'v3',
                     'token0': a, 'token1': b, 'feePips': fee,
-                    'tickSpacing': {100: 1, 500: 10, 3000: 60, 10000: 200}[fee],
                     **({'address': address} if address else {})}
                 self.registry.inventory[pool['id']] = pool
         pending = set()
@@ -188,9 +221,10 @@ class RouteQuoteEngine:
                 pending.add(asyncio.create_task(v2(pair)))
                 for fee in (100, 500, 3000, 10000):
                     pending.add(asyncio.create_task(v3(pair, fee)))
-                if len(pending) >= 32:
-                    await asyncio.gather(*pending)
-                    pending.clear()
+                while len(pending) >= 32:
+                    done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                    await asyncio.gather(*done)
+                    pending.difference_update(done)
             await asyncio.gather(*pending)
         finally:
             for task in pending:
@@ -244,7 +278,6 @@ class RouteQuoteEngine:
             raise InvalidPreview('Retained route cannot be resolved.') from error
 
     async def quote_branches(self, branches, mode, amount, block):
-        branches = RouteQuoteEngine.enrich_branches(self, branches)
         value = await self.quote_sdk_branches(branches, mode, amount, block)
         if not value.get('settled', True):
             error = InvalidPreview('Unsettled current-operation intermediate currency.')
@@ -287,10 +320,17 @@ class RouteQuoteEngine:
             for identity, pool in pools.items():
                 if identity not in canonical:
                     previous = bank_state(canonical, pool)
-                    canonical[identity] = ({**deepcopy(previous), 'id': identity} if previous is not None
-                        else await reads[identity] if reads else await self.registry.snapshot(pool, block))
+                    if previous is not None:
+                        canonical[identity] = {**copy_pool_snapshot(previous), 'id': identity}
+                    else:
+                        # Initial observations suspend arithmetic just like
+                        # later SDK tick requests. Keep their subscriptions
+                        # owned, and reacquire before entering the SDK.
+                        async with required_state_wait():
+                            canonical[identity] = (await reads[identity] if reads
+                                else await self.registry.snapshot(pool, block))
                 private = bank_state(candidate, pool)
-                snapshots[identity] = {**deepcopy(private if private is not None else canonical[identity]), 'id': identity}
+                snapshots[identity] = {**copy_pool_snapshot(private if private is not None else canonical[identity]), 'id': identity}
         finally:
             # These subscriptions are owned here; SharedReads preserves other
             # subscribers and cancels a producer only when nobody still needs it.
@@ -305,10 +345,13 @@ class RouteQuoteEngine:
                     'zeroForOne': hop['zeroForOne']} for hop in branch['hops']]} for branch in branches]}}
         async def acquire(requests):
             observations = []
-            for identity, snapshot in list(snapshots.items()):
-                needed = [row for row in requests if row.get('poolId', row.get('id')) == identity]
-                if needed:
-                    observed = await self.registry.extend_ticks(canonical[identity], needed, block)
+            reads = {identity: asyncio.create_task(self.registry.extend_ticks(canonical[identity], needed, block))
+                for identity in snapshots
+                if (needed := [row for row in requests if row.get('poolId', row.get('id')) == identity])}
+            try:
+                for identity, task in reads.items():
+                    snapshot = snapshots[identity]
+                    observed = await task
                     canonical[identity] = observed
                     for alias, state in list(canonical.items()):
                         if alias != identity and same_observed_pool(state, observed):
@@ -316,12 +359,17 @@ class RouteQuoteEngine:
                                 'bitmapWords': deepcopy(observed['bitmapWords'])}
                     snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
                     observations.append({'id': identity, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']})
-            return observations
+                return observations
+            finally:
+                for task in reads.values():
+                    if not task.done():
+                        task.cancel()
+                raise_snapshot_disproof(await asyncio.gather(*reads.values(), return_exceptions=True))
         # The SDK pauses at its exact missing observation instead of replaying
         # completed swaps. The existing producer budget still owns every fill.
         while True:
             try:
-                value = await self.sdk.request(payload, on_state=acquire)
+                value = await simulate_sdk(self, payload, acquire)
                 if candidate is not None:
                     # Compact postState carries only changing fields. Keep
                     # canonical coverage in this isolated candidate bank.

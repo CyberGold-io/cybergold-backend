@@ -16,6 +16,7 @@ from .app_tokens import configured_tokens
 from .helpers_router_facts import ABI
 from .protocol_facts import ProtocolFactsRpc
 from .quote_errors import QuoteFailure
+from .quote_flow import follow, producer_flow, stage
 from .routing_encoding import ROUTING_ENCODING
 from .route_encoding import register_routing_adapter
 
@@ -68,44 +69,52 @@ class ProtocolConfiguration:
         return task
 
     async def observe_generation(self, generation):
-        if generation != self.generation:
-            self.generation = generation
-            self.epoch += 1
-            self.value = None
-            self.unsaved_epoch = None
-            if self.store:
-                self.store.scope = ('generation:'+str(generation)+':' if generation
-                                    else 'generation:unobserved:') if self.chain == 31338 else ''
+        with stage('metadata.observe', kind='cpu'):
+            if generation != self.generation:
+                self.generation = generation
+                self.epoch += 1
+                self.value = None
+                self.unsaved_epoch = None
+                if self.store:
+                    self.store.scope = ('generation:'+str(generation)+':' if generation
+                                        else 'generation:unobserved:') if self.chain == 31338 else ''
 
     async def load(self, *, wait=True):
-        if self.loading is None:
-            async def recover():
-                try:
-                    if self.generation_reader:
+        with stage('metadata.load', kind='await'):
+            if self.loading is None:
+                async def recover():
+                    with producer_flow('configuration'):
                         try:
-                            generation = await self.generation_reader()
+                            if self.generation_reader:
+                                try:
+                                    generation = await self.generation_reader()
+                                except Exception:
+                                    generation = None
+                                await self.observe_generation(generation)
+                            epoch = self.epoch
+                            unsaved = self.unsaved_epoch is not None
+                            if self.store and self.helpers:
+                                with stage('metadata.configuration', kind='await'):
+                                    values = await self.store.load('helpers-configuration')
+                                if (epoch == self.epoch and not unsaved and self.unsaved_epoch is None
+                                        and self.helpers.lower() in values):
+                                    self.value = values[self.helpers.lower()]
                         except Exception:
-                            generation = None
-                        await self.observe_generation(generation)
-                    epoch = self.epoch
-                    unsaved = self.unsaved_epoch is not None
-                    if self.store and self.helpers:
-                        values = await self.store.load('helpers-configuration')
-                        if (epoch == self.epoch and not unsaved and self.unsaved_epoch is None
-                                and self.helpers.lower() in values):
-                            self.value = values[self.helpers.lower()]
-                except Exception:
-                    # Optional cache recovery does not block configured roots.
-                    pass
-            task = self.track(recover())
-            self.loading = task
-            def done(task):
-                if self.loading is task:
-                    self.loading = None
-            task.add_done_callback(done)
-        if wait:
-            await asyncio.shield(self.loading)
-        return deepcopy(self.value)
+                            # Optional cache recovery does not block configured roots.
+                            pass
+                task = self.track(recover())
+                self.loading = task
+                def done(task):
+                    if self.loading is task:
+                        self.loading = None
+                task.add_done_callback(done)
+            if wait:
+                loading = self.loading
+                try:
+                    await asyncio.shield(loading)
+                finally:
+                    follow(loading, 'configuration')
+            return deepcopy(self.value)
 
     async def persist(self):
         if not self.store or not self.helpers:

@@ -26,9 +26,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                safe_timeout_seconds=15, safe_status=None, faucet_settings=None, faucet_timeout_seconds=20, faucet_service=None,
                recovery=None,diagnostic_logger=None,release=None,aliases=None,protocol_facts=None,protocol_configuration=None,
                shared_market=None,pool_producer=None,helpers_activity=None,pool_activity=None,basket_preview=None,basket_max=None,governance_core_facts=None,
-               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None,universal_quotes=None,economic_quotes=None,transaction_preparation=None):
-    from .telemetry import Metrics, TelemetryMiddleware
+               wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None,universal_quotes=None,economic_quotes=None,transaction_preparation=None,core_quote_state=None):
+    from .telemetry import Metrics, TelemetryMiddleware, observe
+    from .quote_flow_monitor import LoopMonitor
     metrics=Metrics()
+    loop_monitor=LoopMonitor(metrics)
     owned_client = client is None
     # HTTPX does not retry by default. Follow provider redirects like fetch().
     client = client or httpx.AsyncClient(timeout=10, follow_redirects=True)
@@ -62,11 +64,22 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
 
     @asynccontextmanager
     async def lifespan(_app):
+        observe(loop_monitor.start)
         try:
             if protocol_configuration and hasattr(protocol_configuration, 'start'):
                 await protocol_configuration.start()
+            if core_quote_state:
+                await core_quote_state.start()
             yield
         finally:
+            try:
+                await loop_monitor.close()
+            except Exception:
+                pass  # Observation cannot veto ordinary application shutdown.
+            if economic_quotes:
+                await economic_quotes.close()
+            if core_quote_state:
+                await core_quote_state.close()
             if faucet_service is not None:
                 await faucet_service.close()
             if protocol_configuration:
@@ -78,8 +91,6 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
             rpc.close()
             if owned_client:
                 await client.aclose()
-            if on_shutdown:
-                await on_shutdown()
             if recovery:
                 await recovery.close()
             if protocol_facts:
@@ -158,6 +169,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 await governance_target_code.close()
             if governance_safe_principal:
                 await governance_safe_principal.close()
+            if on_shutdown:
+                await on_shutdown()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.metrics=metrics
@@ -406,6 +419,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     async def economic_quote_route(request: Request):
         from .economic_quotes import handle_economic_quote
         return await handle_economic_quote(request, economic_quotes)
+
+    @app.post('/api/economic-quotes/stream')
+    async def economic_quote_stream_route(request: Request):
+        from .economic_quotes import handle_economic_quote_stream
+        return await handle_economic_quote_stream(request, economic_quotes)
 
     @app.post('/api/tx-preparations')
     async def tx_preparation_route(request: Request):

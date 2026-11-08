@@ -1,0 +1,17 @@
+{
+  "package": "bunyan",
+  "version": "1.8.15",
+  "resolved": "https://registry.npmjs.org/bunyan/-/bunyan-1.8.15.tgz",
+  "integrity": "sha512-0tECWShh6wUysgucJcBAoYegf3JJoZWibxdqhTm7OHPeT42qdjkZ29QCMcKwbgU1kiH+auSIasNRXMLWXafXig==",
+  "runtimeFileSha256": {
+    "README.md": "ebd622db27f748392959b5b8d6593cf1558dcb4806d61e96fc3eabba28b64715",
+    "CHANGES.md": "825d15f5b371d242ddc9f0e94a1528c43314b2b5129ecf4a7245fe7cf2e9f81a",
+    "LICENSE.txt": "0d59313583051e5d9d35d78fc07ab8a2cd60358de36c54dc594095699d187291",
+    "bin/bunyan": "249b245d274f97e3e496df7dfe928479154c91412f741cb78117e1e4836a1856",
+    "lib/bunyan.js": "17b2be415059dd434c4945fe4c4e67e0220195e1e5e47367ca35bd136090f967"
+  },
+  "manifestOnlyChanges": [
+    "remove optional mv (unused rotating-file logging)",
+    "remove development dependencies and scripts"
+  ]
+}

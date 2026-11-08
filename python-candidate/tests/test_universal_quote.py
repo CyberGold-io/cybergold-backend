@@ -1,10 +1,12 @@
 """Executable universal quotes: actual ordered pool arithmetic, wire and HTTP."""
 import asyncio
 from copy import deepcopy
+from contextvars import ContextVar
 import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from web3 import Web3
@@ -22,6 +24,7 @@ from cybergold_candidate.uniswap_routes import pool_identity
 CORE, HELPERS, OTHER, USER = ['0x'+part*40 for part in '1235']
 ADAPTER = '0x'+'a1'*20
 BLOCK={'number':21,'hash':'0x'+'ab'*32}
+_oracle_observations = ContextVar('fixture_oracle_observations', default=None)
 
 def settings(configured=True):
     return SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
@@ -43,10 +46,12 @@ class Engine:
               pool(OTHER,PAXG,'0x'+'88'*20),pool(PAXG,CORE,'0x'+'99'*20,True)]
         self.registry=SimpleNamespace(inventory={row['id']:row for row in rows},chain=1,core=CORE,seed=rows[-1])
         self.registry.get_rpc=lambda:self
+        self.registry.snapshot=self.snapshot
         self.calls=[]
         self.semaphore=asyncio.Semaphore(8)
         self.cap=None
         self.supply=10**24
+    async def snapshot(self,pool,_block): return deepcopy(pool)
     async def block(self,_): return deepcopy(BLOCK)
     async def assert_canonical(self,block): self.calls.append(('canonical',block))
     async def read_function(self,target,signature,types,arguments,outputs,block):
@@ -66,11 +71,34 @@ class Engine:
         return {'amountIn':str(used),'amountOut':str(received)}
 
 
+async def fixture_plan_simulator(quoter, request, selected, *, basis_reader, candidate=None,
+                                 block=None, pricing=True, **_):
+    """Component oracle only: preserve legacy SDK replay, never emulate Helpers."""
+    from quoter_sdk_oracle import evaluate_candidate
+    at = deepcopy(BLOCK if block is None else block)
+    market = request['intent'] < 2 and all(row['kind'] == 1 for row in selected['allocations'])
+    assets, weights = ([], []) if market else await basis_reader(at)
+    # This oracle models an execution leaf, including after selection stops.
+    value = await evaluate_candidate(quoter, request, 100, 'core-first', at, assets, weights,
+                                     selected=selected, selection=False, observations=_oracle_observations.get())
+    value['context'] = {**value['context'], 'blockNumber': None, 'blockHash': None,
+                        'blockTag': 'latest', 'verification': 'fixture-sdk-oracle'}
+    return value
+
+
 class Quotes(UniversalQuotes):
     def __init__(self,engine,configured=True):
-        self.previews=[]; self.evaluated=[]
-        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call)
+        self.previews=[]; self.evaluated=[]; self.selected_evaluated=[]
+        super().__init__(settings(configured),engine,preview=self.preview_call,basis_reader=self.basis_call,
+                         plan_simulator=self.simulate_plan)
+    async def exploration_block(self): return deepcopy(BLOCK)
+    async def simulate_plan(self,request,selected,**options):
+        return await fixture_plan_simulator(self,request,selected,basis_reader=self.basis_reader,**options)
     async def basis_call(self,block): return [PAXG,OTHER],[500000,500000]
+    async def core_outputs(self,block):
+        return [{'kind':0,'token':PAXG,'id':'0','amount':'1'},
+                {'kind':1,'token':OTHER,'id':'7','amount':'1'},
+                {'kind':0,'token':OTHER,'id':'0','amount':'1'}]
     def seed_routes(self,*_): pass
     async def discover(self,*_): pass
     async def preview_call(self,mode,value,block):
@@ -87,12 +115,188 @@ class Quotes(UniversalQuotes):
             'fees':{'protocolFeeCygld':'0','helperFeeCygld':'0'}}
     async def candidate(self,request,share,order,*args,**kwargs):
         self.evaluated.append((share,order))
-        return await super().candidate(request,share,order,*args,**kwargs)
+        self.selected_evaluated.append(kwargs.get('selected') is not None)
+        token = _oracle_observations.set(kwargs.get('observations'))
+        try:
+            return await super().candidate(request,share,order,*args,**kwargs)
+        finally:
+            _oracle_observations.reset(token)
 
 
 def request(intent=0):
     return {'intent':intent,'inputs':[{'currency':ZERO if intent==0 else CORE,'amount':'10001'}],
         'outputCurrency':CORE if intent in (0,2) else ZERO,'recipient':USER,'deadline':'2000000000','slippageBps':100}
+
+
+class CapacityEngine(Engine):
+    """Independent constant-product forward/inverse arithmetic with one thin hop."""
+    def __init__(self):
+        super().__init__()
+        rows = list(self.registry.inventory.values())
+        self.prefix, self.direct, self.thin, self.anchor = rows
+        self.prefix, self.direct = self.direct, self.prefix  # WETH/OTHER precedes OTHER/PAXG.
+        self.thin_id = self.thin['id']
+        self.priced, self.inverses = [], []
+        self.inverse_entered, self.inverse_release = asyncio.Event(), None
+        self.sdk = SimpleNamespace(request=self.inverse)
+
+    async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate, canonical):
+        hop = branches[0]['hops'][0]
+        state = candidate.setdefault(pool_identity(hop['pool']), deepcopy(hop['pool']))
+        left, right = ('reserve0', 'reserve1') if hop['zeroForOne'] else ('reserve1', 'reserve0')
+        self.priced.append((hop['pool']['id'], amount, deepcopy(state)))
+        used = min(amount, 50) if hop['pool']['id'] == self.thin_id else amount
+        x, y = int(state[left]), int(state[right])
+        output = used*997*y//(x*1000+used*997)
+        state[left], state[right] = str(x+used), str(y-output)
+        return {'amountIn': str(used), 'amountOut': str(output)}
+
+    async def inverse(self, value):
+        self.inverses.append(deepcopy(value))
+        self.inverse_entered.set()
+        if self.inverse_release is not None:
+            await self.inverse_release.wait()
+        state = value['pools'][0]
+        left, right = ('reserve0', 'reserve1') if value['zeroForOne'] else ('reserve1', 'reserve0')
+        x, y, target = int(state[left]), int(state[right]), int(value['amount'])
+        required = (x*target*1000 + (y-target)*997-1)//((y-target)*997)
+        return {'amountIn': str(required), 'amountOut': str(target)}
+
+
+def capacity_hop(source, row):
+    return {'pool': row, 'zeroForOne': source.lower() == row['token0']['address'].lower()}
+
+
+def capacity_nominations(adapter, paths, *, origins=('uniroute-local', 'uniswap-alpharouter'), closed=None):
+    """Finite semantic tool feed: the adapter still owns actual replay and funding."""
+    async def nominations(source, target, amount, _block, **_):
+        try:
+            branches = paths[(source.lower(), target.lower())]
+            routes = [{'sharePpm': share} for share, _ in branches]
+            yield [{'amountIn': str(funded), 'hops': deepcopy(route)}
+                   for (_, route), funded in zip(branches, split_runtime(amount, routes), strict=True)], list(origins)
+        finally:
+            if closed is not None:
+                closed.set()
+    adapter.async_nominations = nominations
+
+
+class OrdinaryCapacityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_transition_preserves_partial_first_physical_source_debit(self):
+        from cybergold_candidate.quoter.amm import price_path
+        from cybergold_candidate.quoter.contracts import capture_paths
+        for kind, physical_source in (('wrap', WETH), ('unwrap', ZERO)):
+            with self.subTest(transition=kind):
+                engine = Engine()
+                engine.cap = 4000
+                selected = pool(physical_source, PAXG, '0x'+'45'*20, physical_source == ZERO)
+                engine.registry.inventory[selected['id']] = selected
+                hop = capacity_hop(physical_source, selected)
+                physical = await price_path(engine, [hop], 10001, BLOCK, {}, {})
+                with capture_paths() as traces:
+                    actual = await price_path(engine, [{'kind': kind, 'currencyOut': physical_source}, hop],
+                                              10001, BLOCK, {}, {})
+                self.assertEqual(actual, physical)
+                self.assertEqual(actual, (4000, 3972))
+                self.assertEqual((traces[0].funded, traces[0].consumed, traces[0].output),
+                                 (10001, 4000, 3972))
+                self.assertEqual(len(traces[0].hops), 1)
+                self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_native_transition_does_not_hide_true_intermediate_partial_fill(self):
+        from cybergold_candidate.quoter.amm import PartialPath, price_path
+        from cybergold_candidate.quoter.contracts import capture_paths
+        engine = CapacityEngine()
+        route = [{'kind': 'wrap', 'currencyOut': WETH}, capacity_hop(WETH, engine.prefix),
+                 capacity_hop(OTHER, engine.thin)]
+        with capture_paths(), self.assertRaises(PartialPath) as caught:
+            await price_path(engine, route, 1000, BLOCK, {}, {})
+        trace = caught.exception.trace
+        self.assertEqual((trace.funded, trace.consumed), (1000, 1000))
+        self.assertEqual(len(trace.hops), 2)
+        self.assertEqual(trace.hops[0].consumed, 1000)
+        self.assertLess(trace.hops[1].consumed, trace.hops[1].funded)
+        self.assertEqual(trace.hops[1].consumed, 50)
+        self.assertEqual(engine.inverses, [])
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_unrepairable_nomination_leaves_an_independent_alternative_available(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        partial = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        direct = [capacity_hop(WETH, engine.direct)]
+        async def nominations(*_args, **_kwargs):
+            for route in (partial, direct):
+                yield [{'amountIn': '1000', 'hops': route}], ['cybergold-custom']
+        q.amm.async_nominations = nominations
+        chosen = {}
+        with patch('cybergold_candidate.quoter.amm_adapter.backward_input', AsyncMock(return_value=None)) as inverse:
+            _, output, _ = await q.conversion(WETH, PAXG, 1000, BLOCK, {}, {}, capture=chosen)
+        inverse.assert_awaited_once()
+        self.assertGreater(output, 50)
+        self.assertNotIn('_funding', chosen)
+        self.assertEqual(chosen['branches'][0]['hops'], direct)
+
+    async def test_native_repair_replays_from_preceding_private_bank_and_preserves_origins(self):
+        from cybergold_candidate.quoter.contracts import capture_paths, path_operation
+        q = Quotes(CapacityEngine()); engine = q.engine
+        route = [{'kind': 'wrap', 'currencyOut': WETH}, capacity_hop(WETH, engine.prefix),
+                 capacity_hop(OTHER, engine.thin)]
+        capacity_nominations(q.amm, {(ZERO, PAXG.lower()): [(0, route)]})
+        previous = deepcopy(engine.prefix)
+        left, right = ('reserve0', 'reserve1') if capacity_hop(WETH, previous)['zeroForOne'] else ('reserve1', 'reserve0')
+        previous[left], previous[right] = '1000100', '999910'
+        bank = {pool_identity(previous): deepcopy(previous)}
+        chosen = {}
+        with capture_paths() as traces, path_operation('2:acquire:1', 2, 0):
+            template, output, retained = await q.conversion(ZERO, PAXG, 1000, BLOCK, bank, {}, capture=chosen)
+        funding = chosen['_funding']
+        self.assertTrue(0 < funding < 1000)
+        self.assertGreater(output, 0)
+        self.assertEqual(retained, [])
+        self.assertEqual(template['inputCurrency'].lower(), WETH.lower())
+        self.assertEqual(chosen['inputCurrency'], ZERO)
+        self.assertEqual(chosen['discoveryOrigins'], ['uniroute-local', 'uniswap-alpharouter'])
+        self.assertEqual(engine.inverses[0]['pools'][0][left], previous[left])
+        self.assertEqual([row[2][left] for row in engine.priced if row[0] == engine.prefix['id']],
+                         [previous[left], previous[left]])
+        self.assertEqual(bank[pool_identity(previous)][left], str(int(previous[left])+funding))
+        self.assertEqual(chosen['_observation']['fundedInput'], str(funding))
+        self.assertEqual([trace.funded for trace in traces], [1000, funding])
+        self.assertTrue(all(trace.operation == '2:acquire:1' and trace.branch == 2 for trace in traces))
+
+    async def test_split_repair_preserves_weights_and_actual_integer_allocations(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        partial = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        direct = [capacity_hop(WETH, engine.direct)]
+        capacity_nominations(q.amm, {(WETH.lower(), PAXG.lower()): [(250000, partial), (0, direct)]})
+        chosen = {}
+        template, output, _ = await q.conversion(WETH, PAXG, 1003, BLOCK, {}, {}, capture=chosen)
+        self.assertTrue(0 < chosen['_funding'] < 1003)
+        # The tool's 250/1003 lot is encoded as 249252 ppm before replay.
+        # Repair keeps that actual template, including Solidity's remainder.
+        self.assertEqual([row['sharePpm'] for row in template['routes']], [249252, 0])
+        allocated = split_runtime(chosen['_funding'], template['routes'])
+        self.assertEqual(sum(allocated), chosen['_funding'])
+        self.assertEqual([row[1] for row in engine.priced if row[0] == engine.direct['id']], [allocated[1]])
+        self.assertEqual([row[1] for row in engine.priced if row[0] == engine.prefix['id']], [249, allocated[0]])
+        self.assertGreater(output, 0)
+
+    async def test_cancelled_inverse_discards_trial_drains_feed_and_restores_slot(self):
+        q = Quotes(CapacityEngine()); engine = q.engine
+        engine.inverse_release = asyncio.Event()
+        closed = asyncio.Event()
+        route = [capacity_hop(WETH, engine.prefix), capacity_hop(OTHER, engine.thin)]
+        capacity_nominations(q.amm, {(WETH.lower(), PAXG.lower()): [(0, route)]}, closed=closed)
+        bank = {pool_identity(engine.prefix): deepcopy(engine.prefix)}
+        retained = deepcopy(bank)
+        pending = asyncio.create_task(q.conversion(WETH, PAXG, 1000, BLOCK, bank, {}))
+        await asyncio.wait_for(engine.inverse_entered.wait(), 1)
+        pending.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await pending
+        self.assertEqual(bank, retained)
+        self.assertTrue(closed.is_set())
+        self.assertEqual(engine.semaphore._value, 8)
 
 
 class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
@@ -183,12 +387,18 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['strategy'],'universal');self.assertEqual(value['quotedInput'],'10001')
         expected={(0,'core-first'),(100,'core-first'),*( (share,order) for share in (25,50,75) for order in ('core-first','market-first'))}
         self.assertEqual(set(service.evaluated),expected)
-        self.assertEqual(len(service.evaluated),16)
+        ordinary = [config for config, selected in zip(service.evaluated, service.selected_evaluated, strict=True) if not selected]
+        # Initial and detailed work retain every grid point; completed hints
+        # can add further arrival-driven passes through that same grid.
+        for config in expected:
+            self.assertGreaterEqual(ordinary.count(config), 2)
+        self.assertEqual(set(ordinary), expected)
+        self.assertTrue(any(service.selected_evaluated))
         self.assertEqual(value['plan']['inputs'],request()['inputs'])
         self.assertGreater(int(value['quotedOutput']),int(value['outputMinimum']))
         self.assertEqual(compile_plan(value['plan'],value['planDescription'],int(value['outputMinimum'])),value['plan'])
         self.assertEqual(value['retentionDisclosure']['custodian'],HELPERS)
-        self.assertEqual(service.engine.calls[-1],('canonical',BLOCK))
+        self.assertNotIn(('canonical',BLOCK),service.engine.calls)
         for mode,args in service.previews:
             self.assertEqual(mode,'issue-exact-in');self.assertEqual(len(args['maximumAmountsIn']),2)
 
@@ -208,13 +418,13 @@ class UniversalQuoteTests(unittest.IsolatedAsyncioTestCase):
         usdc,xaut=[dict(TOKENS)[name] for name in ('usdc','xaut')]
         async def loaded(): pass
         async def connectors(*_): pass
-        async def metadata(currency,block):
-            if currency.lower()==OTHER.lower(): raise OSError('optional metadata unavailable')
-            return registry.token(currency,6 if currency.lower() in (usdc.lower(),xaut.lower()) else 18)
-        registry.ensure_loaded=loaded;registry.token_metadata=metadata
+        registry.ensure_loaded=loaded
+        registry.token_metadata=AsyncMock(side_effect=AssertionError('Discovery must not wait for display metadata'))
         registry.token=lambda address,decimals:{'address':Web3.to_checksum_address(address),'decimals':decimals,'chainId':1}
+        registry.metadata={address.lower():registry.token(address,6) for address in (usdc,xaut)}
         service.engine.connector_inventory=connectors
         await UniversalQuotes.discover(service,request(),[usdc,xaut,OTHER],BLOCK)
+        registry.token_metadata.assert_not_awaited()
         for address in (usdc,xaut):
             row=next(pool for pool in registry.inventory.values() if {pool['token0']['address'].lower(),
                 pool['token1']['address'].lower()}=={ZERO,address.lower()})

@@ -1,4 +1,4 @@
-"""Executable proportional MAX: integer boundaries and real pinned RPC layout."""
+"""Executable proportional MAX: integer boundaries and direct latest reads."""
 import asyncio
 import random
 from types import SimpleNamespace
@@ -78,6 +78,7 @@ class Provider(AsyncBaseProvider):
         self.w3 = Web3()
         self.contracts = {group: self.w3.eth.contract(abi=abi) for group, abi in FACTS_ABI.items()}
         self.preview = self.w3.eth.contract(abi=PREVIEW_ABI)
+        self.batches = []
         names = {'basketAssets': 'assets', 'basketTargetsPpm': 'weights',
                  'basketCygldPerUnitFp18': 'conversions', 'issuanceFeePpm': 'issueFee',
                  'totalSupply': 'supply', 'maxTotalSupply': 'maxSupply', 'effectiveCygldSupplyCap': 'effectiveCap'}
@@ -127,6 +128,10 @@ class Provider(AsyncBaseProvider):
             raise AssertionError(method)
         return {'jsonrpc': '2.0', 'id': 1, 'result': result}
 
+    async def make_batch_request(self, calls):
+        self.batches.append(calls)
+        return await asyncio.gather(*(self.make_request(method, params) for method, params in calls))
+
     def assert_positive_asset(self, address):
         if address.lower() == ASSETS[2].lower():
             raise AssertionError('Zero-weight token metadata is not needed for MAX')
@@ -146,7 +151,22 @@ REQUEST = {'driverToken': ASSETS[0], 'maximumAmountsIn': ['100', str(100 * 10**1
 
 
 class MaxTests(unittest.IsolatedAsyncioTestCase):
-    async def test_positive_max_uses_one_hash_and_real_preview_with_current_capacity_and_helper_fee(self):
+    async def test_warm_max_reuses_display_decimals_but_reads_state_and_preview_again(self):
+        provider = Provider()
+        maximum = service(provider)
+        self.addAsyncCleanup(maximum.close)
+        first = await maximum.get(REQUEST)
+        provider.state['helperFee'] = 0
+        second = await maximum.get(REQUEST)
+        self.assertEqual(len(provider.batches), 2)
+        metadata = [params for method, params in provider.calls
+                    if params[0]['to'].lower() in [asset.lower() for asset in ASSETS]]
+        previews = [params for method, params in provider.calls if params[0]['to'].lower() == HELPERS.lower()]
+        self.assertEqual(len(metadata), 2)
+        self.assertEqual(len(previews), 2)
+        self.assertGreater(int(second['netCygldOut']), int(first['netCygldOut']))
+
+    async def test_positive_max_uses_latest_and_real_preview_without_header_reads(self):
         provider = Provider()
         maximum = service(provider)
         self.addAsyncCleanup(maximum.close)
@@ -157,11 +177,15 @@ class MaxTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['maximumAmountsIn'], [str(value) for value in expected_amounts])
         preview = BasketArithmetic(provider.state).issue_in(expected_amounts)
         self.assertEqual(result['netCygldOut'], str(preview['netCygldOut']))
-        self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': '101', 'blockHash': HASH,
+        self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': None, 'blockHash': None,
+                                             'blockTag': 'latest',
                                              'observedAt': '2026-10-19T00:00:00.000Z'})
         calls = [params for method, params in provider.calls if method == 'eth_call']
         self.assertEqual(len(calls), 10)  # Seven Core values, two positive-weight decimals, one preview.
-        self.assertTrue(all(params[1] == {'blockHash': HASH, 'requireCanonical': True} for params in calls))
+        self.assertEqual(len(provider.batches), 1)
+        self.assertEqual(len(provider.batches[0]), 7)
+        self.assertTrue(all(params[1] == 'latest' for params in calls))
+        self.assertEqual([method for method, _ in provider.calls], ['eth_call'] * 10)
         self.assertEqual(sum(params[0]['to'].lower() == HELPERS.lower() for params in calls), 1)
         provider.state['supply'] = provider.state['maxSupply']
         self.assertEqual((await maximum.get(REQUEST))['driverAmount'], '0')
@@ -208,8 +232,8 @@ class MaxTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(response.headers['cache-control'], 'no-store')
 
-    async def test_ordinary_read_preview_and_reorg_failures_are_not_published_as_zero(self):
-        for provider in [Provider(failure='effectiveCygldSupplyCap'), Provider(failure='preview'), Provider(reorg=True)]:
+    async def test_ordinary_read_and_preview_failures_are_not_published_as_zero(self):
+        for provider in [Provider(failure='effectiveCygldSupplyCap'), Provider(failure='preview')]:
             app = create_app(basket_max=service(provider))
             async with app.router.lifespan_context(app), httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
@@ -218,6 +242,14 @@ class MaxTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.headers['cache-control'], 'no-store')
                 self.assertIn('correlationId', response.json())
                 self.assertNotIn('password', response.text)
+
+    async def test_latest_max_does_not_read_or_verify_a_separate_header(self):
+        provider = Provider(reorg=True)
+        maximum = service(provider)
+        self.addAsyncCleanup(maximum.close)
+        value = await maximum.get(REQUEST)
+        self.assertEqual(value['context']['blockTag'], 'latest')
+        self.assertTrue(all(method == 'eth_call' for method, _ in provider.calls))
 
     async def test_cancellation_reaches_existing_shared_reads(self):
         provider = Provider(blocked=True)

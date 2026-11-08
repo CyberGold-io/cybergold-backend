@@ -48,11 +48,12 @@ async def resolve_start(config, client, store, head):
 
 
 class CoreCollector:
-    def __init__(self, database, config, safe_profile):
+    def __init__(self, database, config, safe_profile, *, on_rewind=None):
         self.database, self.config, self.safe_profile = database, config, safe_profile
         self.store = HolderProjection(database, config)
         self.projection = EventProjection(database, config)
         self.completed = CompletedState(database, {**config, 'safeAddresses': safe_profile['safeAddresses']})
+        self.on_rewind = on_rewind
 
     async def committed(self):
         block, block_hash, profile, identifier, revision = await asyncio.gather(*(self.store.state(key) for key in CORE_COMMITTED))
@@ -179,6 +180,9 @@ class CoreCollector:
             if holder_ready and not await store.rewind(start):
                 incremental = False
             await self.projection.delete_from(start)
+            if self.on_rewind and (reset or anchor and plan['reason'] in (
+                    'configuration-overlap', 'cursor-ahead-overlap', 'hash-mismatch-overlap')):
+                await self.on_rewind(start)
             await store.prune_snapshots(start)
         diagnostic('dashboard-projection')
         cursor, event_count = start, 0

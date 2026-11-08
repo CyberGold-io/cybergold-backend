@@ -6,6 +6,7 @@ Universal tests separately exercise the real SDK and ordered candidate state.
 import asyncio
 from copy import deepcopy
 import unittest
+from unittest.mock import AsyncMock
 
 from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.ranking import prefer_completed
@@ -66,21 +67,20 @@ class QuoterFoundationTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(times['timeToFirstWholePlanMs'], 0)
         self.assertLessEqual(times['timeToFirstWholePlanMs'], times['searchMs'])
         self.assertLessEqual(times['searchMs'], times['totalMs'])
-        self.assertLessEqual(times['canonicalCompletedMs'], times['totalMs'])
+        self.assertNotIn('canonicalCompletedMs', times)
         self.assertIn(times['selectionReason'], ('complete', 'best-initial', 'first-extension'))
         self.assertEqual(times['timeToFirstWholePlanMs'], times['firstQualifiedMs'])
         self.assertLessEqual(times['searchMs'], times['selectionMs'])
 
-    async def test_natural_completion_excludes_canonical_read_from_search_time(self):
+    async def test_natural_completion_has_no_quote_time_canonical_read(self):
         service = Quotes(Engine())
-        async def canonical(block):
-            await asyncio.sleep(.03)
-        service.engine.assert_canonical = canonical
+        service.engine.assert_canonical = AsyncMock(side_effect=AssertionError('No quote verification read'))
         value = await service.get(request())
         times = value['metrics']
         self.assertEqual(times['selectionReason'], 'complete')
         self.assertEqual(times['searchMs'], times['cleanupCompletedMs'])
-        self.assertGreaterEqual(times['canonicalCompletedMs'] - times['searchMs'], 20)
+        self.assertNotIn('canonicalCompletedMs', times)
+        service.engine.assert_canonical.assert_not_awaited()
         self.assertAlmostEqual(times['finalizationMs'], times['totalMs'] - times['searchMs'], delta=.002)
 
     def test_output_wins_then_true_scalar_funding_not_retention(self):

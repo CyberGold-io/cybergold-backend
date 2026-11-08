@@ -44,10 +44,13 @@ class UniswapQuoteTests(unittest.IsolatedAsyncioTestCase):
                 provider = Provider()
                 result = await service(provider).get(row['request'])
                 self.assertEqual(json.dumps(result['result']).lower(), json.dumps(row['value']).lower())
-                self.assertEqual(result['context']['blockHash'], HASH)
+                self.assertEqual(result['context']['blockHash'], None)
+                self.assertEqual(result['context']['blockNumber'], None)
+                self.assertEqual(result['context']['blockTag'], 'latest')
                 calls = [params for method, params in provider.calls if method == 'eth_call']
                 self.assertEqual(calls, [[{'to': service(provider).rpc.quoter, 'data': row['data']},
-                                         {'blockHash': HASH, 'requireCanonical': True}]])
+                                         'latest']])
+                self.assertEqual([method for method, _ in provider.calls], ['eth_call'])
 
     async def test_invalid_input_and_abi_values_fail_before_rpc(self):
         original = REFERENCE['rows'][0]['request']
@@ -76,10 +79,11 @@ class UniswapQuoteTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('correlationId', response.json())
             self.assertNotIn('password', response.text)
 
-    async def test_reorg_wrong_chain_and_caller_cancellation(self):
+    async def test_latest_quote_needs_no_header_or_chain_read_and_preserves_cancellation(self):
         for provider in (Provider(reorg=True), Provider(chain='0x1')):
-            with self.assertRaises(Exception):
-                await service(provider).get(REFERENCE['rows'][0]['request'])
+            result = await service(provider).get(REFERENCE['rows'][0]['request'])
+            self.assertEqual(result['context']['blockTag'], 'latest')
+            self.assertEqual([method for method, _ in provider.calls], ['eth_call'])
         provider = Provider(blocked=True)
         operation = asyncio.create_task(service(provider).get(REFERENCE['rows'][0]['request']))
         await provider.started.wait()

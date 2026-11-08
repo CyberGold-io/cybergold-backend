@@ -5,7 +5,7 @@ const routePhases = ["context", "eligibility", "v3-coverage", "typed-reserve", "
 const waveNumbers = ["elapsedMs", "subphaseElapsedMs", "legacyCandidates", "legacyCompleted", "typedEnumerated",
   "typedCompleted", "typedPending", "sdkRequests", "sdkWaiting", "sdkLockWaitMs", "sdkExchangeMs"] as const;
 const quoteCodes = ["rpc-rate-limit", "rpc-timeout", "rpc-unavailable", "rpc-access-denied", "quote-timeout",
-  "quote-no-route", "quote-insufficient-liquidity", "quote-contract-reverted", "quote-unavailable", "insufficient-protocol-supply",
+  "quote-no-route", "quote-insufficient-liquidity", "quote-contract-reverted", "quote-unavailable", "unsupported-simulation-funding", "insufficient-protocol-supply",
   "issuance-cap-exceeded", "redemption-supply-exceeded", "redemption-capacity-exceeded",
   "insufficient-reserve-balance", "insufficient-recovery-shares"] as const;
 const providerStages = ["composition", "basket-preview", "initial-preview", "execution-search", "expected-input-search",

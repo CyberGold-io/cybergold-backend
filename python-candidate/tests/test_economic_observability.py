@@ -21,8 +21,8 @@ from cybergold_candidate.telemetry import configure_logging, operation_work, rpc
 from cybergold_candidate.trade_observation import economic_evidence
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from cybergold_candidate.uniswap_state import UniswapRpc
-from test_economic_quote_api import SharedStore, service
-from test_universal_quote import request, USER, PAXG
+from test_economic_quote_api import SharedStore, service, persisted
+from test_universal_quote import request, USER, PAXG, OTHER
 
 
 class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
@@ -39,14 +39,18 @@ class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
         return [row for row in map(json.loads, self.stream.getvalue().splitlines())
                 if row.get('event') == 'quote_outcome']
 
-    async def test_search_lookup_refresh_and_preparation_have_distinct_safe_evidence(self):
+    async def test_scalar_search_cached_search_refresh_and_preparation_have_distinct_safe_evidence(self):
         store = SharedStore()
         quoter, quotes = service(store)
+        self.addAsyncCleanup(quotes.close)
+        quoter.quote = AsyncMock(wraps=quoter.quote)
         app = create_app(economic_quotes=quotes,
                          transaction_preparation=TransactionPreparation(quoter, now=lambda: 2000))
         value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://one') as client:
             initial = await client.post('/api/economic-quotes', json=value)
+            await persisted(quotes)
+            self.assertTrue(store.rows)
             cached = await client.post('/api/economic-quotes', json=value)
             refreshed = await client.post('/api/economic-quotes', json={**value, 'refresh': True})
             prepared = await client.post('/api/tx-preparations', json={'quote': initial.json(),
@@ -54,7 +58,7 @@ class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([initial.status_code, cached.status_code, refreshed.status_code, prepared.status_code], [200]*4)
         rows = self.outcomes()
         self.assertEqual([row['resultSource'] for row in rows],
-                         ['search', 'stored-quote', 'refresh', 'prepared-transaction'])
+                         ['search', 'search', 'refresh', 'prepared-transaction'])
         self.assertEqual([row['operationKind'] for row in rows],
                          ['quoter', 'quoter', 'quoter', 'transaction-preparation'])
         self.assertTrue(all('requestId' in row for row in rows))
@@ -62,9 +66,13 @@ class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0]['quotedOutput'], initial.json()['quotedOutput'])
         self.assertEqual(rows[0]['funding'], initial.json()['inputs'])
         self.assertEqual(rows[0]['inputBudget'], value['inputs'])
-        self.assertIn('producerMetrics', rows[0])
-        self.assertIn('observedQuoteMetrics', rows[1])
-        self.assertNotIn('producerMetrics', rows[1])
+        self.assertEqual(quoter.quote.await_count, 3)
+        self.assertTrue(callable(quoter.quote.await_args_list[1].kwargs['neighbors']))
+        self.assertEqual(cached.json()['observation'], {'source': 'search', 'refresh': False})
+        for row in rows[:3]:
+            self.assertEqual(row['operationPhase'], 'current-state-search')
+            self.assertIn('producerMetrics', row)
+            self.assertNotIn('observedQuoteMetrics', row)
         self.assertNotIn('firstExecutableMs', rows[0])
         self.assertNotIn('firstExecutableMs', rows[1])
         # Neither current subscription IDs nor transport counters enter storage.
@@ -76,7 +84,42 @@ class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('operation="/api/tx-preparations"', rendered)
         samples = [sample for family in app.state.metrics.quoter_first_plan.collect()
                    for sample in family.samples if sample.name.endswith('_count')]
-        self.assertEqual(sum(sample.value for sample in samples), 2)
+        self.assertEqual(sum(sample.value for sample in samples), 3)
+
+    async def test_basket_cache_hit_has_historical_metrics_without_a_new_producer(self):
+        store = SharedStore()
+        quoter, quotes = service(store)
+        self.addAsyncCleanup(quotes.close)
+        app = create_app(economic_quotes=quotes)
+        value = {key: request(2)[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        value['inputs'] = [{'currency': PAXG, 'amount': '100'}, {'currency': OTHER, 'amount': '100'}]
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://one') as client:
+            initial = await client.post('/api/economic-quotes', json=value)
+            self.assertEqual(initial.status_code, 200, initial.text)
+            await persisted(quotes)
+            quoter.quote = AsyncMock(side_effect=AssertionError('A basket cache hit must not search'))
+            cached = await client.post('/api/economic-quotes', json=value)
+        self.assertEqual(cached.status_code, 200, cached.text)
+        quoter.quote.assert_not_awaited()
+        self.assertEqual(cached.json()['observation'], {'source': 'stored', 'refresh': False})
+        for field in ('inputs', 'plan', 'context', 'quotedOutput', 'fees'):
+            self.assertEqual(cached.json()[field], initial.json()[field])
+        searched, stored = self.outcomes()
+        self.assertEqual(stored['resultSource'], 'stored-quote')
+        self.assertEqual(stored['operationPhase'], 'lookup')
+        self.assertEqual(stored['requestId'], cached.headers['x-cybergold-request-id'])
+        self.assertNotEqual(stored['requestId'], searched['requestId'])
+        self.assertEqual(stored['inputBudget'], value['inputs'])
+        self.assertEqual(stored['funding'], cached.json()['inputs'])
+        self.assertEqual(stored['observedQuoteMetrics'], searched['producerMetrics'])
+        self.assertNotIn('producerMetrics', stored)
+        self.assertNotIn('firstExecutableMs', stored)
+        self.assertFalse(any('requestId' in quote or 'rpc' in quote for quote in store.rows.values()))
+        for text in ('calldata', 'signature', 'planDescription', 'sender', 'recipient'):
+            self.assertNotIn('"'+text+'"', self.stream.getvalue())
+        samples = [sample for family in app.state.metrics.quoter_first_plan.collect()
+                   for sample in family.samples if sample.name.endswith('_count')]
+        self.assertEqual(sum(sample.value for sample in samples), 1)
 
     async def test_timeout_and_no_route_keep_error_codes_ids_and_private_producer_clocks(self):
         quoter, quotes = service(SharedStore())

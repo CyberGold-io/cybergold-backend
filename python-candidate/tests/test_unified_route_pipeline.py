@@ -25,6 +25,7 @@ from cybergold_candidate.sdk_worker import SdkWorker
 from cybergold_candidate.uniswap_quote import UniswapQuote
 from cybergold_candidate.uniswap_routes import RoutePlan, v3_path, initial_v3_branches
 from cybergold_candidate.uniswap_state import PoolRegistry, ZERO
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 from test_quote_intent import (ADAPTER, ASSET_A, ASSET_B, CORE, HASH, SETTINGS,
                                request as core_request, service as core_service)
 from cybergold_candidate.route_search import WETH
@@ -48,8 +49,10 @@ class PipelineFixtureRpc:
         self.fast, self.tail, self.typed = (asyncio.Event() for _ in range(3))
         self.drained = set()
         self.canonical = 0
+        self.heads = 0
 
     async def block(self, _hash):
+        self.heads += 1
         return BLOCK
 
     async def assert_canonical(self, block):
@@ -58,7 +61,7 @@ class PipelineFixtureRpc:
 
     async def price_v3(self, path, mode, amount, block):
         """Opaque SDK callback; never dispatched as a contract/RPC quote."""
-        assert block == BLOCK
+        assert block in (BLOCK, LATEST_BLOCK)
         self.sdk_prices.append((path, mode, amount))
         if all(int.from_bytes(path[offset:offset+3]) == 100 for offset in range(20, len(path), 23)):
             self.fast.set()
@@ -72,7 +75,7 @@ class PipelineFixtureRpc:
         raise ValueError('No programmable SDK result for this fixture path')
 
     async def read_function(self, address, signature, inputs, args, outputs, block):
-        assert block == BLOCK
+        assert block in (BLOCK, LATEST_BLOCK)
         self.calls.append((address, signature, deepcopy(args)))
         if signature.startswith('quoteExact') or signature.startswith('getAmounts'):
             raise AssertionError('Contract pricing is retired')
@@ -208,7 +211,9 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
         result = await direct.get({'mode': 'exact-in', 'path': path,
                                    'amount': selected['inputAmount']})
         self.assertEqual(result['result']['amount'], selected['outputAmount'])
-        self.assertEqual(result['context']['blockHash'], HASH)
+        self.assertIsNone(result['context']['blockHash'])
+        self.assertEqual(result['context']['blockTag'], 'latest')
+        self.assertEqual((rpc.heads, rpc.canonical), (0, 0))
         self.assertGreater(len(rpc.sdk_prices), before)
 
     async def test_core_exact_output_preserves_sdk_overdelivery_without_raising_helpers_minimum(self):
@@ -293,7 +298,7 @@ class UnifiedRoutePipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertLess(budget.selected, budget.deadline)
             self.assertTrue(any(frame['type'] == 'qualified' for frame in frames))
             self.assertEqual(result['plan']['route']['branches'][0]['hops'][0]['pool']['protocol'], 'v3')
-            self.assertGreater(rpc.canonical, 0)
+            self.assertEqual((rpc.heads, rpc.canonical), (0, 0))
             self.assertTrue(connector_drained.is_set())
             self.assertEqual(rpc.drained, {'v3', 'typed'})
             self.assertEqual(registry.pending.pending, {})

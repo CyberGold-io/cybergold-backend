@@ -32,13 +32,17 @@ this source refactor changes no Solidity deployment. Core basket fees, asset
 order, shared-pool state replay, bounds and Helpers validation stay with Core.
 Market keeps its own fee and settlement economics over the shared engine.
 
-The existing producer owns selection time: search through five seconds, extend
-to fifteen only when none qualifies, then finish canonical validation and drain.
+The economic producer publishes completed Helpers quotes while exploration
+continues to natural completion or caller cancellation. Candidate failures do
+not impose a global search deadline. Preparation separately simulates the
+accepted plan for execution.
 Route/intent `rpcReadsScope: "coordinator"` marks their coordinator counters;
 they do not include every engine observation or supplier request. Candidate
 calls now count common-engine jobs rather than only the old V3 batch members.
-These counters alone cannot establish RPC savings. Smart Order Router/AlphaRouter
-is deferred until this pipeline provides a measured comparison baseline.
+These counters alone cannot establish RPC savings. Custom discovery,
+AlphaRouter, UniRoute local and configured hosted providers nominate market
+paths in parallel, including the market legs of Core plans. The engine reuses
+the local optimizer workers; each search owns its requests and cancellation.
 
 Implemented and compared with the **actual retained Node implementation**:
 
@@ -869,6 +873,52 @@ identity does not assert liquidity. Candidates share quote-local immutable
 observations while keeping independent execution state banks. Initial known V3
 coverage can qualify before cold V4 connector observations; refinement explores
 all selected protocols and allocations.
+
+The Quoter also interleaves full-budget Market route starts by structural
+family. Pricing slots bound concurrency; failed attempts do not consume a
+global candidate allowance. Saved-plan replay and ordinary exploration run
+concurrently. SDK-head bounds cannot disprove a latest Helpers quote. An ordered
+replay can remove unneeded scalar payer funding while preserving output;
+linear partial-intermediate paths can use backward SDK planning followed by
+ordinary exact-input evaluation. V3 and V4 share directional empty-region
+acquisition: start with 31 additional bitmap words, then grow to 63 or 127
+only after contiguous already-observed empty coverage supports the wider
+window. Initial traversal still uses the small window. V3 uses Multicall and
+V4 uses the singleton's storage reader; both load tick-liquidity rows only
+when the SDK requests them. An ordinary optional batch failure suppresses
+further optional attempts for that pool within its owning request; required
+reads continue and a fresh request can retry. Empty coverage never proves
+global liquidity exhaustion. V4 native currencies, directional fees and hook
+restrictions retain their existing protocol-specific handling.
+The existing clock, exact ranking,
+accepted bounds, private pool states and ordinary failure fallback remain.
+See [component contracts and limits](../docs/quoter.md). These source changes
+do not by themselves establish installed adoption.
+
+Scalar exact-input amount edits reuse completed economic observations from
+the shared Backend store in two ways. The Fast Estimator selects neighboring
+observations and scales net output and fees against consumed input. An ordinary
+fully consumed lower observation can estimate the new budget; a measured route
+limit clamps the estimate to its demonstrated capacity. This is approximate integer arithmetic:
+no RPC, SDK pricing, Core preview or current-state validation runs, including
+on a miss or optional cache failure. A miss returns no hint rather than
+hydrating a cold model. The App displays Backend estimates and selected quotes;
+it keeps no reusable whole-quote history or candidate ranking. These hints never
+qualify Swap or set execution funding/minima.
+
+Exact search independently rebuilds full-budget candidates from both nearest
+lower and upper cached route blueprints, plus their distinct fitting saved
+funding. It reprices complete ordered Core/Market/mixed/split plans at current
+state, including native ETH and V2/V3/V4. A ready bootstrap receives the next
+free slot within the unchanged eight-permit pricing capacity; ordinary work
+never waits for a cache lookup, and optional cached work cannot prolong
+otherwise-completed discovery. Every successful same-funded-route reprice
+replaces its prior whole observation in either direction before Backend ranking.
+A weaker independent candidate does not replace a better route. Completed
+observations enter the shared Backend cache before producer teardown or optional
+SQL writes finish. Quote simulation uses latest; execution preparation preserves
+its accepted bounds. The optional sample is historical, non-executable metadata;
+only completed exact observations become anchors.
 
 The optional `CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS` is deliberately absent
 from the local defaults. After the successor has a real deployment address,

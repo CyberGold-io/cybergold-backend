@@ -1,16 +1,18 @@
 """Canonical snapshot copy ownership controls."""
 import asyncio
 from copy import deepcopy
+import json
 from pathlib import Path
 import sys
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from cybergold_candidate.uniswap_state import PoolRegistry, copy_pool_snapshot, merge_pool_coverage
+from cybergold_candidate.uniswap_state import (PoolRegistry, canonical_observation,
+    copy_pool_snapshot, merge_pool_coverage)
 from test_uniswap_market import A, BLOCK, POOL, TickFillRpc
 
 
@@ -40,6 +42,73 @@ class SnapshotCopyTests(unittest.TestCase):
 
 
 class SnapshotPersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tick_fill_key_preserves_exact_canonical_content_and_alias_sharing(self):
+        for protocol in ('v2', 'v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                registry = PoolRegistry(SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338',
+                    NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=A), rpc=SimpleNamespace(close=AsyncMock()))
+                self.addAsyncCleanup(registry.close)
+                source = _reuse_snapshot(0, 0)
+                source.update(protocol=protocol, address='0x'+'aB'*20)
+                if protocol == 'v4':
+                    source.update(id='0x'+'ab'*32, poolManager='0x'+'4'*40)
+                alias = deepcopy(source)
+                if protocol != 'v4':
+                    alias['id'] = 'another-catalog-alias'
+                canonical = canonical_observation(source)
+                requests = [{'poolId':source['id'], 'id':source['id'],
+                             'wordPositions':[0], 'ticks':[0]}]
+                alias_requests = [{**requests[0], 'poolId':alias['id'], 'id':alias['id']}]
+                entered, release = asyncio.Event(), asyncio.Event()
+                produced, tasks = [], []
+                async def produce(snapshot, _requests, _block, _generation):
+                    produced.append(snapshot)
+                    entered.set()
+                    await release.wait()
+                    return snapshot
+                with patch.object(registry, '_extend_ticks', side_effect=produce):
+                    try:
+                        tasks.append(asyncio.create_task(registry.extend_ticks(source, requests, BLOCK)))
+                        await asyncio.wait_for(entered.wait(), 1)
+                        tasks.append(asyncio.create_task(registry.extend_ticks(alias, alias_requests, BLOCK)))
+                        async with asyncio.timeout(1):
+                            while not any(entry.users == 2 for entry in registry.pending.pending.values()):
+                                await asyncio.sleep(0)
+                        key, = registry.pending.pending
+                        self.assertEqual(key, ('tick-fill', registry.generation, BLOCK['hash'],
+                            json.dumps(canonical, sort_keys=True), json.dumps([
+                                {'poolId':canonical['id'], 'id':canonical['id'],
+                                 'wordPositions':[0], 'ticks':[0]}], sort_keys=True)))
+                        # Both metadata and coverage remain part of equivalence;
+                        # neither may accidentally join this in-flight producer.
+                        metadata, coverage = deepcopy(alias), deepcopy(alias)
+                        metadata['nestedUnknown']['rows'][0]['value'] = 'different metadata'
+                        coverage['ticks'][0]['liquidityNet'] = '-4'
+                        tasks.extend(asyncio.create_task(registry.extend_ticks(value, alias_requests, BLOCK))
+                                     for value in (metadata, coverage))
+                        async with asyncio.timeout(1):
+                            while len(produced) != 3:
+                                await asyncio.sleep(0)
+                        self.assertEqual(len(registry.pending.pending), 3)
+                        source['nestedUnknown']['rows'][0]['value'] = 'caller mutation during fill'
+                        source['ticks'][0]['liquidityGross'] = 'caller mutation during fill'
+                        release.set()
+                        first, second, _, _ = await asyncio.gather(*tasks)
+                        self.assertEqual(first['id'], source['id'])
+                        self.assertEqual(second['id'], alias['id'])
+                        self.assertEqual(first['nestedUnknown'], alias['nestedUnknown'])
+                        self.assertEqual(first['ticks'], alias['ticks'])
+                        first['nestedUnknown']['rows'][0]['value'] = 'one subscriber'
+                        first['ticks'][0]['liquidityGross'] = 'one subscriber'
+                        self.assertEqual(second['nestedUnknown']['rows'][0]['value'], 'original')
+                        self.assertEqual(second['ticks'][0]['liquidityGross'], '7')
+                        self.assertFalse(registry.pending.pending or registry.pending.groups)
+                    finally:
+                        release.set()
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+
     async def test_input_shared_consumers_observed_and_persistence_are_independent(self):
         rpc = TickFillRpc()
         registry = PoolRegistry(SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='1',
@@ -226,9 +295,6 @@ _BITMAP_ADDRESS = '0x' + '3' * 40
 _BITMAP_CORE = '0x' + '1' * 40
 _BITMAP_TOKEN = '0x' + '2' * 40
 
-def _bitmap_expected_indices(word, bitmap, spacing=10):
-    return {((word << 8) + bit) * spacing for bit in range(256) if bitmap & 1 << bit}
-
 def _bitmap_snapshot(protocol, words=(), ticks=()):
     return {'id': _BITMAP_ADDRESS if protocol == 'v3' else '0x' + '4' * 64, 'protocol': protocol, 'address': _BITMAP_ADDRESS, 'tickSpacing': 10, 'token0': {'address': _BITMAP_CORE, 'decimals': 18}, 'token1': {'address': _BITMAP_TOKEN, 'decimals': 18}, 'feePips': 500, 'sqrtRatioX96': str(1 << 96), 'liquidity': '1000', 'tick': 1, 'context': {'chainId': 31338, 'blockNumber': '101', 'blockHash': _BITMAP_BLOCK['hash']}, 'unknown': {'nested': ['preserve']}, 'bitmapWords': [{'wordPosition': word, 'bitmap': str(bits)} for (word, bits) in words], 'ticks': [{'index': tick, 'liquidityGross': '999', 'liquidityNet': '-7'} for tick in ticks]}
 
@@ -289,7 +355,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(registry.observed, {})
         self.assertEqual(rpc.active, 0)
 
-    async def test_v3_demand_v4_eager_empty_sparse_dense_and_bounded_integer_semantics(self):
+    async def test_both_protocols_preserve_empty_sparse_dense_bitmaps_without_unrequested_tick_rows(self):
         patterns = [0, 1, 1 << 255, (1 << 256) - 1, sum((1 << bit for bit in range(0, 256, 2))), -1, (1 << 300) + (1 << 255) + 1, -(1 << 300)]
         for protocol in ('v3', 'v4'):
             for bitmap in patterns:
@@ -298,38 +364,39 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
                     registry = self.registry(rpc)
                     source = _bitmap_snapshot(protocol)
                     original = deepcopy(source)
-                    expected = sorted(_bitmap_expected_indices(-1, bitmap)) if protocol == 'v4' else []
                     result = await registry.extend_ticks(source, [{'poolId': source['id'], 'wordPositions': [-1], 'ticks': []}], _BITMAP_BLOCK)
                     self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [-1])
-                    self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
+                    self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
                     self.assertEqual(result['bitmapWords'], [{'wordPosition': -1, 'bitmap': str(bitmap)}])
-                    self.assertEqual(result['ticks'], [{'index': tick, 'liquidityGross': str(1000 + abs(tick)), 'liquidityNet': str(-tick - 1)} for tick in expected])
+                    self.assertEqual(result['ticks'], [])
                     self.assertEqual(source, original)
                     self.assert_drained(registry, rpc)
 
-    async def test_v3_dense_bitmap_returns_without_unrequested_ticks_then_fills_demanded_row(self):
-        rpc = _BitmapExpansionRpc({0: (1 << 256) - 1},
-            error=AssertionError('V3 bitmap must not prefetch tick rows'))
-        registry = self.registry(rpc)
-        source = _bitmap_snapshot('v3')
-        original = deepcopy(source)
-        covered = await registry.extend_ticks(source,
-            [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
-        self.assertEqual(covered['bitmapWords'], [{'wordPosition': 0, 'bitmap': str((1 << 256) - 1)}])
-        self.assertEqual(covered['ticks'], [])
-        self.assertEqual(source, original)
-        rpc.error = None
-        filled = await registry.extend_ticks(covered,
-            [{'poolId': source['id'], 'wordPositions': [], 'ticks': [10, 10]}], _BITMAP_BLOCK)
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
-        self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [10])
-        self.assertEqual(filled['bitmapWords'], covered['bitmapWords'])
-        self.assertEqual(filled['ticks'], [{'index': 10, 'liquidityGross': '1010', 'liquidityNet': '-11'}])
-        self.assertEqual(covered['ticks'], [])
-        self.assertEqual(source, original)
-        self.assert_drained(registry, rpc)
+    async def test_dense_bitmap_returns_without_unrequested_ticks_then_fills_demanded_row_in_both_protocols(self):
+        for protocol in ('v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                rpc = _BitmapExpansionRpc({0: (1 << 256) - 1},
+                    error=AssertionError('Bitmap acquisition must not prefetch tick rows'))
+                registry = self.registry(rpc)
+                source = _bitmap_snapshot(protocol)
+                original = deepcopy(source)
+                covered = await registry.extend_ticks(source,
+                    [{'poolId': source['id'], 'wordPositions': [0], 'ticks': []}], _BITMAP_BLOCK)
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [])
+                self.assertEqual(covered['bitmapWords'], [{'wordPosition': 0, 'bitmap': str((1 << 256) - 1)}])
+                self.assertEqual(covered['ticks'], [])
+                self.assertEqual(source, original)
+                rpc.error = None
+                filled = await registry.extend_ticks(covered,
+                    [{'poolId': source['id'], 'wordPositions': [], 'ticks': [10, 10]}], _BITMAP_BLOCK)
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [0])
+                self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], [10])
+                self.assertEqual(filled['bitmapWords'], covered['bitmapWords'])
+                self.assertEqual(filled['ticks'], [{'index': 10, 'liquidityGross': '1010', 'liquidityNet': '-11'}])
+                self.assertEqual(covered['ticks'], [])
+                self.assertEqual(source, original)
+                self.assert_drained(registry, rpc)
 
     async def test_known_coverage_explicit_ticks_duplicate_words_and_mutable_copies(self):
         for protocol in ('v3', 'v4'):
@@ -341,7 +408,7 @@ class BitmapExpansionTests(unittest.IsolatedAsyncioTestCase):
             requested = deepcopy(requests)
             result = await registry.extend_ticks(source, requests, _BITMAP_BLOCK)
             self.assertEqual([row[1] for row in rpc.calls if row[0] == 'bitmap'], [1])
-            expected = [13, 20, 2580] if protocol == 'v4' else [13]
+            expected = [13]
             self.assertEqual([row[1] for row in rpc.calls if row[0] == 'tick'], expected)
             self.assertEqual([row['index'] for row in result['ticks']], [0, *expected])
             self.assertEqual(result['ticks'][0], original['ticks'][0])

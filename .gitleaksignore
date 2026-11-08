@@ -9,3 +9,5 @@
 008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:169
 008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:175
 008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:199
+# Public CYGLD contract address in the captured tiny-quote recipient token field.
+06927020047248d0e08850e9e11635ced84fac8b:python-candidate/tests/fixtures/quoter-acquired/tiny-original.json:generic-api-key:1

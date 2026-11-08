@@ -29,6 +29,7 @@ from cybergold_candidate.recovery_rpc import RecoveryApiError
 from cybergold_candidate.quote_history import QuoteHistory
 from cybergold_candidate.quote_errors import public_quote_error
 from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope, quote_phase, freeze_quote_work
+from cybergold_candidate.route_work_slots import required_state_wait
 
 A, B, C = ('0x'+str(index).rjust(40, '0') for index in (1, 2, 3))
 BLOCK = {'number': 123, 'hash': '0x'+'ab'*32}
@@ -497,7 +498,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.rpc.owner_reads, 0)
 
     async def test_changed_fee_hook_reprices_cached_model_without_losing_amm_points(self):
-        initial = await self.quotes.get(self.request)
+        initial = await self.quotes._get(self.request, block=BLOCK)
         previous = self.quotes.packet(self.request)
         self.assertTrue(previous['routes'][0]['points'])
         with patch('cybergold_candidate.market_swap.get_market_fee_rate', return_value=2500):
@@ -514,43 +515,54 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(previous['feeRatePpm'], 1000)
         self.assertEqual(self.rpc.owner_reads, 0)
 
-    async def test_market_only_overlapping_heads_share_and_cancel_independently(self):
+    async def test_market_latest_producer_shares_and_cancels_independently_without_heads(self):
         started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
-        async def head(_hash):
-            self.rpc.head_reads += 1
-            started.set()
-            try:
-                await release.wait()
-                return deepcopy(BLOCK)
-            except asyncio.CancelledError:
-                cancelled.set()
-                raise
-        self.rpc.block = head
+        read = self.rpc.read_function
+        async def held_read(address, signature, inputs, args, outputs, block):
+            if signature == 'getReserves()':
+                started.set()
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
+            return await read(address, signature, inputs, args, outputs, block)
+        self.rpc.read_function = held_read
         first = asyncio.create_task(self.quotes.get(self.request))
         second = asyncio.create_task(self.quotes.get(self.request))
-        await started.wait()
-        # Wait for both subscribers to the same pending context read; no time
-        # cache is involved, and cancelling one must not cancel the other.
-        while self.registry.pending.pending[('head',1)].users != 2:
-            await asyncio.sleep(0)
-        first.cancel()
-        await asyncio.gather(first,return_exceptions=True)
-        self.assertFalse(cancelled.is_set())
-        release.set()
-        result = await second
-        self.assertEqual(result['netOutput'],'1974')
-        self.assertEqual(self.rpc.head_reads,1)
-        self.assertEqual(self.quotes.sharing.started,1)
-        # No completed head retention: a later caller reads again; its last
-        # disconnect cancels that read promptly through the shared primitive.
-        started.clear()
-        release.clear()
-        last = asyncio.create_task(self.quotes.get(self.request))
-        await started.wait()
-        last.cancel()
-        await asyncio.gather(last,return_exceptions=True)
-        await asyncio.wait_for(cancelled.wait(),1)
-        self.assertEqual(self.rpc.head_reads,2)
+        tasks = [first, second]
+        try:
+            async with asyncio.timeout(self.sdk.timeout):
+                await started.wait()
+                # Two subscribers share the pending quote. Cancelling one
+                # leaves the other subscriber's state acquisition running.
+                while not self.quotes.sharing.pending or len(next(iter(self.quotes.sharing.pending.values()))['clients']) != 2:
+                    await asyncio.sleep(0)
+                first.cancel()
+                await asyncio.gather(first, return_exceptions=True)
+                self.assertFalse(cancelled.is_set())
+                release.set()
+                result = await second
+                self.assertEqual(result['netOutput'], '1974')
+                self.assertEqual(self.rpc.head_reads, 0)
+                self.assertEqual(self.quotes.sharing.started, 1)
+                # A later caller starts fresh latest work. Its last disconnect
+                # cancels that work through the existing shared primitive.
+                started.clear()
+                release.clear()
+                last = asyncio.create_task(self.quotes.get(self.request))
+                tasks.append(last)
+                await started.wait()
+                last.cancel()
+                await asyncio.gather(last, return_exceptions=True)
+                await cancelled.wait()
+                self.assertEqual(self.rpc.head_reads, 0)
+        finally:
+            release.set()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def test_cold_model_needs_no_amount_or_prior_quote_and_bank_is_tagged(self):
         request = {name: self.request[name] for name in ('side', 'mode', 'counterToken', 'adapter')}
@@ -716,30 +728,42 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observed['context']['blockHash'], next_block['hash'])
         self.assertEqual(self.rpc.state_reads, reads_before)
 
-    async def test_v3_connector_fallback_spacing_crosses_real_initialized_boundary(self):
+    async def test_v3_connector_defers_actual_nondefault_spacing_and_crosses_initialized_boundary(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
+        reads = []
         async def read(address, signature, inputs, args, outputs, block):
+            reads.append(signature)
             if signature == 'getPair(address,address)':
                 return (ZERO,)
             if signature == 'getPool(address,address,uint24)':
-                return (C if args[-1] == 500 else ZERO,)
+                # A factory cannot return one physical address for every pair.
+                return (C if set(args[:2]) == {A.lower(), B.lower()} and args[-1] == 500 else ZERO,)
             if signature == 'tickSpacing()':
-                raise ValueError('Transient optional metadata read failure')
-            if signature == 'decimals()':
-                return (18,)
+                return (20,)  # Deliberately differs from fee500's common spacing10.
+            if signature == 'slot0()':
+                return (1 << 96, 0, 0, 0, 0, 0, True)
+            if signature == 'liquidity()':
+                return (1000000,)
             raise AssertionError(signature)
         self.rpc.read_function = read
         await MarketQuotes.connector_inventory(self.quotes, A, B, BLOCK)
         pool = next(pool for pool in self.registry.inventory.values() if pool['protocol'] == 'v3'
             and pool['token0']['address'].lower() == A.lower() and pool['token1']['address'].lower() == B.lower())
-        self.assertEqual(pool['tickSpacing'], 10)
-        state = {**pool, 'sqrtRatioX96': str(1 << 96), 'tick': 0, 'liquidity': '1000000',
-            'ticks': [{'index': -1000, 'liquidityGross': '1500000', 'liquidityNet': '1500000'},
-                {'index': -10, 'liquidityGross': '500000', 'liquidityNet': '-500000'},
-                {'index': 1000, 'liquidityGross': '1000000', 'liquidityNet': '-1000000'}],
+        self.assertNotIn('tickSpacing', pool)
+        self.assertNotIn('tickSpacing()', reads)
+        self.assertNotIn('decimals()', reads)
+        # Semantic topology is usable immediately; only SDK exploration obtains
+        # actual spacing, never an observed-looking fee-tier guess.
+        observed = await self.registry.snapshot(pool, BLOCK)
+        self.assertEqual(observed['tickSpacing'], 20)
+        self.assertEqual(reads.count('tickSpacing()'), 1)
+        state = {**observed,
+            'ticks': [{'index': -2000, 'liquidityGross': '1500000', 'liquidityNet': '1500000'},
+                {'index': -20, 'liquidityGross': '500000', 'liquidityNet': '-500000'},
+                {'index': 2000, 'liquidityGross': '1000000', 'liquidityNet': '-1000000'}],
             'bitmapWords': [{'wordPosition': -1, 'bitmap': str((1 << 255)+(1 << 156))},
                 {'wordPosition': 0, 'bitmap': str(1 << 100)}]}
-        result = await self.sdk.request({'operation': 'quote', 'mode': 'exactIn', 'amount': '1000',
+        result = await self.sdk.request({'operation': 'quote', 'mode': 'exactIn', 'amount': '2000',
             'pools': [state], 'poolId': pool['id'], 'zeroForOne': True})
         self.assertTrue(result['fullyFilled'])
         self.assertEqual(result['postState']['liquidity'], '1500000')
@@ -825,7 +849,7 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1]['type'], 'complete')
         self.assertEqual(events[-1]['value']['netOutput'], '1974')
 
-    async def test_amount_edits_across_blocks_reuse_factory_identity_and_decimals(self):
+    async def test_amount_edits_across_blocks_reuse_factory_identity_without_display_reads(self):
         self.rpc.v2_factory, self.rpc.factory = A, A
         reads = []
         old_read = self.rpc.read_function
@@ -851,8 +875,10 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         first = await self.quotes._get(request, block=BLOCK)
         static = {name: reads.count(name) for name in ('getPair(address,address)',
             'getPool(address,address,uint24)', 'decimals()')}
+        reserve_reads = reads.count('getReserves()')
+        self.assertGreaterEqual(reserve_reads, 2)  # Canonical edge and the connector.
         self.assertGreater(static['getPair(address,address)'], 0)
-        self.assertEqual(static['decimals()'], 2)
+        self.assertEqual(static['decimals()'], 0)
         second = await self.quotes._get({**request, 'amount': '2002'}, block={
             'number': 124, 'hash': '0x'+'cd'*32})
         self.assertNotEqual(first['netOutput'], second['netOutput'])
@@ -863,7 +889,10 @@ class MarketIntegration(unittest.IsolatedAsyncioTestCase):
         # at the new block instead of inheriting an old absence as a veto.
         self.assertEqual(reads.count('getPool(address,address,uint24)'),
                          static['getPool(address,address,uint24)']+4+2*9)
-        self.assertEqual(reads.count('getReserves()'), 2)
+        # The retained observations advance without fresh scalar reads. This
+        # fake records logical getters, not UniswapRpc's physical-read memo;
+        # first-request advisory/quote overlap need not imply one physical RPC.
+        self.assertEqual(reads.count('getReserves()'), reserve_reads)
 
     async def test_native_and_unknown_metadata_pool_do_not_abort_catalog(self):
         self.rpc.v2_factory, self.rpc.factory, self.rpc.pool_manager = A, B, C
@@ -1248,7 +1277,11 @@ for line in sys.stdin:
                 events, replays = [], []
                 async def delayed(branches, mode, amount, block):
                     if any(len(branch['hops']) > 2 for branch in branches):
-                        await release.wait()
+                        # This fixture holds unavailable route state, rather
+                        # than eight active SDK computations. Preserve those
+                        # pending candidates while returning owned capacity.
+                        async with required_state_wait():
+                            await release.wait()
                     return await quote(branches, mode, amount, block)
                 async def ordered(rows, mode, block, **kwargs):
                     result = await compose(rows, mode, block, **kwargs)
@@ -1262,7 +1295,8 @@ for line in sys.stdin:
                         qualified.set()
                 self.quotes.quote_branches, self.quotes.compose_core_rows = delayed, ordered
                 value = {**request('redeem-exact-in'), 'amount': '100000', 'orderedAssets': [ASSET_B, ASSET_A]}
-                operation = asyncio.create_task(intent.get(value, update))
+                operation = asyncio.create_task(intent.get(value, update,
+                    block={'number': 101, 'hash': HASH}))
                 try:
                     await asyncio.wait_for(replayed.wait(), self.sdk.timeout)
                     self.assertFalse(operation.done())
@@ -1287,7 +1321,7 @@ for line in sys.stdin:
                         self.assertTrue(all(leg.get('routePlan') for leg in first['quotes']))
                         self.assertEqual([leg['minimumAmountOut'] for leg in first['quotes']],
                             [str(int(row['best']['quote'])*99//100) for row in after])
-                        self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 2)
+                        self.assertGreaterEqual(sum(method.startswith('eth_getBlock') for method, _ in provider.calls), 1)
                         release.set()
                         final = await operation
                         self.assertEqual(final['context']['blockHash'], HASH)

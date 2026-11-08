@@ -1,0 +1,548 @@
+"""Real AlphaRouter child with a controlled canonical Python pricing boundary."""
+import asyncio
+from copy import deepcopy
+import json
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, patch
+
+from cybergold_candidate.quoter.alpha_routes import AlphaRoutes, AlphaRouteError, drain_retired_callbacks
+from cybergold_candidate.quoter.bootstrap import ProviderUnavailable
+from cybergold_candidate.recovery_rpc import SnapshotChanged
+from cybergold_candidate.route_work_slots import PricingSlots
+from cybergold_candidate.search_observations import search_observation_scope
+
+
+A, B, C = ('0x'+value*40 for value in ('1', '2', '3'))
+BLOCK = {'number': 101, 'hash': '0x'+'ab'*32}
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def pool(a=A, b=C, fee=3000, protocol='v3'):
+    return {'id': f'{protocol}:{a}:{b}:{fee}', 'protocol': protocol,
+            'token0': {'address': a, 'chainId': 1, 'decimals': 18},
+            'token1': {'address': b, 'chainId': 1, 'decimals': None},
+            'feePips': fee, 'tickSpacing': 60}
+
+
+class Engine:
+    def __init__(self, pools=None, chain=1):
+        rows = deepcopy(pools or [pool()])
+        for row in rows:
+            row['token0']['chainId'] = row['token1']['chainId'] = chain
+        self.registry = SimpleNamespace(chain=chain, inventory={row['id']: row for row in rows})
+        self.semaphore = asyncio.Semaphore(8)
+        self.calls = []
+
+    async def quote_sdk_branches(self, branches, mode, amount, block, *, candidate, canonical):
+        self.calls.append((deepcopy(branches), mode, amount, block, candidate, canonical))
+        # The explicit oracle makes a two-hop shape better. SDK tests separately
+        # prove arithmetic; this checks that actual AlphaRouter uses this oracle.
+        output = amount * (3 if len(branches[0]['hops']) > 1 else 2)
+        return {'amountIn': str(amount), 'amountOut': str(output), 'fullyFilled': True, 'settled': True}
+
+
+class AlphaRouteTests(unittest.IsolatedAsyncioTestCase):
+    def provider(self, engine):
+        return AlphaRoutes(engine, command=['node', str(ROOT/'src/uniswap-sdk/alpha-worker.ts')])
+
+    async def test_real_router_selects_canonical_two_hop_and_retains_seed_identifiers(self):
+        engine = Engine([pool(), pool(A, B, 500), pool(B, C)])
+        provider = self.provider(engine)
+        try:
+            candidates = await provider.discover(A, C, 1000000000000000007, BLOCK)
+            self.assertGreaterEqual(len(candidates), 2)
+            self.assertEqual(len(candidates[-1]), 1)
+            self.assertEqual(len(candidates[-1][0]['hops']), 2)
+            self.assertGreater(len(engine.calls), 1)
+            self.assertTrue(all(call[4] == {} for call in engine.calls))
+            self.assertEqual(len({id(call[4]) for call in engine.calls}), len(engine.calls))
+            self.assertEqual(len({id(call[5]) for call in engine.calls}), 1)
+            self.assertTrue(all(call[3] is BLOCK for call in engine.calls))
+            self.assertTrue(all(hop['pool']['id'] in engine.registry.inventory
+                                for candidate in candidates for row in candidate for hop in row['hops']))
+            child = provider.process
+            await provider.discover(C, A, 99999, BLOCK)
+            self.assertIs(child, provider.process)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
+
+    async def test_actual_local_tools_overlap_independent_callbacks_and_keep_private_banks(self):
+        from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
+        for cls in (AlphaRoutes, UnirouteLocal):
+            with self.subTest(provider=cls.name):
+                engine = Engine([pool(), pool(A, B, 500), pool(B, C)])
+                original = engine.quote_sdk_branches
+                entered, sibling, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                active, peak = 0, 0
+                async def quote(*args, **options):
+                    nonlocal active, peak
+                    active += 1
+                    peak = max(peak, active)
+                    if entered.is_set():
+                        sibling.set()
+                    else:
+                        entered.set()
+                    try:
+                        await release.wait()
+                        return await original(*args, **options)
+                    finally:
+                        active -= 1
+                engine.quote_sdk_branches = quote
+                provider = cls(engine)
+                pending = asyncio.create_task(provider.discover(A, C, 10007, BLOCK))
+                try:
+                    await asyncio.wait_for(entered.wait(), 5)
+                    # The first observation has not returned. Another must be
+                    # running independently under the existing eight permits.
+                    await asyncio.wait_for(sibling.wait(), 2)
+                    self.assertFalse(pending.done())
+                    release.set()
+                    candidates = await asyncio.wait_for(pending, 5)
+                    self.assertGreater(peak, 1)
+                    self.assertLessEqual(peak, 8)
+                    self.assertTrue(candidates)
+                    self.assertEqual(len({id(call[4]) for call in engine.calls}), len(engine.calls))
+                    self.assertTrue(all(call[4] == {} for call in engine.calls))
+                finally:
+                    release.set()
+                    pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+                    await provider.close()
+                self.assertFalse(provider.requests)
+                self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_v2_also_uses_canonical_callback_not_dummy_reserves(self):
+        engine = Engine([pool(protocol='v2')])
+        provider = self.provider(engine)
+        try:
+            self.assertTrue(await provider.discover(A, C, 10**30, BLOCK))
+            self.assertTrue(engine.calls)
+            self.assertEqual(engine.calls[0][0][0]['hops'][0]['pool']['protocol'], 'v2')
+        finally:
+            await provider.close()
+
+    async def test_ordinary_quote_failure_keeps_alphas_unpriced_topology_available(self):
+        engine = Engine()
+        async def unavailable(*_args, **_kwargs):
+            raise RuntimeError('ordinary missing or unfillable pool')
+        engine.quote_sdk_branches = unavailable
+        provider = self.provider(engine)
+        try:
+            hints = await provider.discover(A, C, 1000, BLOCK)
+            self.assertTrue(hints)
+            self.assertTrue(all('quote' not in branch for hint in hints for branch in hint))
+        finally:
+            await provider.close()
+
+    async def test_context_disproof_propagates_and_reaps_calculation_child(self):
+        engine = Engine()
+        async def invalidated(*_args, **_kwargs):
+            raise SnapshotChanged('controlled disproof')
+        engine.quote_sdk_branches = invalidated
+        provider = self.provider(engine)
+        with self.assertRaises(SnapshotChanged):
+            await provider.discover(A, C, 1000, BLOCK)
+        self.assertIsNone(provider.process)
+        await provider.close()
+
+    async def test_actual_unsupported_chain_returns_ordinary_provider_error(self):
+        provider = self.provider(Engine(chain=31337))
+        try:
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            child = provider.process
+            self.assertIsNotNone(child)
+            self.assertIsNone(child.returncode)
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            self.assertIs(provider.process, child)
+            self.assertEqual(provider.sequence, 2)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
+
+    async def test_mainnet_backed_fork_uses_real_chain_dependencies_and_quote_callbacks(self):
+        engine = Engine([pool(), pool(A, B, 500), pool(B, C)], chain=31338)
+        provider = self.provider(engine)
+        self.addAsyncCleanup(provider.close)
+        candidates = await asyncio.wait_for(provider.discover(A, C, 10**18+7, BLOCK), 3)
+        self.assertTrue(candidates)
+        self.assertGreater(len(engine.calls), 1)
+        self.assertTrue(all(call[3] is BLOCK for call in engine.calls))
+        self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for candidate in candidates
+            for branch in candidate for hop in branch['hops'] if 'pool' in hop for token in ('token0', 'token1')))
+        self.assertTrue(all(hop['pool'][token]['chainId'] == 31338 for call in engine.calls
+            for branch in call[0] for hop in branch['hops'] for token in ('token0', 'token1')))
+
+    async def test_terminal_error_after_quote_callback_reuses_child_for_next_request(self):
+        script = '''import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    if request.get('operation') == 'cancel':
+        print(json.dumps({'id': request['id'], 'operation': 'cancelled'}), flush=True)
+        continue
+    if request['id'] == '1':
+        print(json.dumps({'id': '1', 'operation': 'quote', 'quoteId': '1:1',
+            'mode': 'exactIn', 'amount': '1000', 'branches': [{'amountIn': '1000',
+            'hops': [{'pool': request['pools'][0], 'zeroForOne': True}]}]}), flush=True)
+        json.loads(next(sys.stdin))
+        print(json.dumps({'id': '1', 'error': 'ordinary calculation failure'}), flush=True)
+    else:
+        print(json.dumps({'id': request['id'], 'candidates': []}), flush=True)
+'''
+        engine = Engine()
+        provider = AlphaRoutes(engine, command=[sys.executable, '-u', '-c', script])
+        try:
+            with self.assertRaises(AlphaRouteError):
+                await provider.discover(A, C, 1000, BLOCK)
+            child = provider.process
+            self.assertEqual(len(engine.calls), 1)
+            self.assertIsNone(child.returncode)
+            self.assertEqual(await provider.discover(A, C, 1000, BLOCK), [])
+            self.assertIs(provider.process, child)
+        finally:
+            await provider.close()
+        self.assertIsNotNone(child.returncode)
+
+    async def test_eof_and_invalid_frames_still_retire_child(self):
+        frames = [None, 'not-json', json.dumps({'id': 'other', 'error': 'wrong request'}),
+                  json.dumps({'id': '1', 'unexpected': True})]
+        for frame in frames:
+            with self.subTest(frame=frame):
+                statement = 'sys.exit(0)' if frame is None else f'print({frame!r}, flush=True)'
+                script = f'import sys\nnext(sys.stdin)\n{statement}\n'
+                provider = AlphaRoutes(Engine(), command=[sys.executable, '-u', '-c', script])
+                with self.assertRaises((AlphaRouteError, json.JSONDecodeError)):
+                    await provider.discover(A, C, 1000, BLOCK)
+                self.assertIsNone(provider.process)
+                await provider.close()
+
+    async def test_transport_failure_still_retires_child(self):
+        provider = AlphaRoutes(Engine(), command=[sys.executable, '-u', '-c',
+                              'import sys\nfor line in sys.stdin: pass'])
+        async def disconnected(*_):
+            raise BrokenPipeError()
+        provider._write = disconnected
+        with self.assertRaises(BrokenPipeError):
+            await provider.discover(A, C, 1000, BLOCK)
+        self.assertIsNone(provider.process)
+        await provider.close()
+
+    async def test_cancellation_during_callback_drains_child(self):
+        engine, entered = Engine(), asyncio.Event()
+        async def blocked(*_args, **_kwargs):
+            entered.set()
+            await asyncio.Event().wait()
+        engine.quote_sdk_branches = blocked
+        provider = self.provider(engine)
+        task = asyncio.create_task(provider.discover(A, C, 1000, BLOCK))
+        await entered.wait()
+        child = provider.process
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertIsNotNone(child.returncode)
+        self.assertIsNone(provider.process)
+        await provider.close()
+
+    async def test_close_drains_callback_even_when_hint_subscriber_has_not_resumed(self):
+        engine, entered, drained = Engine(), asyncio.Event(), asyncio.Event()
+        async def blocked(*_args, **_kwargs):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+        engine.quote_sdk_branches = blocked
+        provider = self.provider(engine)
+        stream = provider.discover_batches(A, C, 1000, BLOCK)
+        try:
+            self.assertTrue(await asyncio.wait_for(anext(stream), 3))
+            await asyncio.wait_for(entered.wait(), 1)
+            child = provider.process
+            await asyncio.wait_for(provider.close(), 1)
+            self.assertTrue(drained.is_set())
+            self.assertIsNotNone(child.returncode)
+            self.assertIsNone(provider.process)
+            self.assertEqual(engine.semaphore._value, 8)
+            self.assertTrue(all(not entry['callbacks'] for entry in provider.requests.values()))
+            with self.assertRaises(AlphaRouteError):
+                await anext(stream)
+        finally:
+            await stream.aclose()
+            await provider.close()
+
+    async def test_cancellation_while_spawn_handle_is_pending_reaps_exact_child(self):
+        provider = self.provider(Engine())
+        original = asyncio.create_subprocess_exec
+        children, entered, release = [], asyncio.Event(), asyncio.Event()
+        async def delayed(*args, **kwargs):
+            child = await original(*args, **kwargs)
+            children.append(child)
+            entered.set()
+            await release.wait()
+            return child
+        with patch('cybergold_candidate.quoter.alpha_routes.asyncio.create_subprocess_exec', delayed):
+            task = asyncio.create_task(provider.discover(A, C, 1000, BLOCK))
+            await entered.wait()
+            task.cancel()
+            await asyncio.sleep(0)
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].returncode)
+        await provider.close()
+        with self.assertRaises(ProviderUnavailable):
+            await provider.discover(A, C, 1000, BLOCK)
+
+
+class CallbackObservationTests(unittest.IsolatedAsyncioTestCase):
+    def request(self, amount=1000):
+        return {'mode': 'exactIn', 'amount': str(amount),
+                'branches': [{'amountIn': str(amount), 'hops': [{'pool': pool(), 'zeroForOne': True}]}]}
+
+    def owned_callback(self, provider, identity):
+        entry = {'process': object(), 'queue': asyncio.Queue(), 'callbacks': set(),
+                 'canonical': {}, 'block': BLOCK, 'terminal': False, 'counts': None}
+        provider.requests[identity] = entry
+        response = {**self.request(), 'id':identity, 'quoteId':identity+':quote'}
+        task = asyncio.create_task(provider._answer(response, entry))
+        entry['callbacks'].add(task)
+        task.add_done_callback(entry['callbacks'].discard)
+        return entry, task
+
+    async def test_retired_queued_callback_returns_grant_to_active_sibling_without_sdk_work(self):
+        for retirement in ('removed', 'replaced'):
+            with self.subTest(retirement=retirement):
+                engine = Engine()
+                engine.semaphore = PricingSlots(8)
+                provider = AlphaRoutes(engine)
+                provider._write = AsyncMock()
+                held, tasks = 0, []
+                async with search_observation_scope() as observations:
+                    try:
+                        for _ in range(8):
+                            await engine.semaphore.acquire()
+                            held += 1
+                        retired, first = self.owned_callback(provider, 'retired')
+                        active, sibling = self.owned_callback(provider, 'active')
+                        tasks.extend((first, sibling))
+                        async with asyncio.timeout(1):
+                            while len(engine.semaphore._ordinary) != 2:
+                                await asyncio.sleep(0)
+                        self.assertEqual(engine.calls, [])
+                        provider.requests.pop('retired')
+                        replacement = object()
+                        if retirement == 'replaced':
+                            provider.requests['retired'] = replacement
+                        engine.semaphore.release()
+                        held -= 1
+                        with self.assertRaises(asyncio.CancelledError):
+                            await asyncio.wait_for(first, 1)
+                        await asyncio.wait_for(sibling, 1)
+                        self.assertEqual(len(engine.calls), 1)
+                        self.assertIs(engine.calls[0][5], active['canonical'])
+                        provider._write.assert_awaited_once_with(active['process'],
+                            {'id':'active','operation':'quoteResult','quoteId':'active:quote',
+                             'result':{'quote':'2000'}})
+                        self.assertTrue(retired['queue'].empty())
+                        self.assertTrue(first.done() and sibling.done())
+                        await asyncio.sleep(0)  # Run their registered set-discard callbacks.
+                        self.assertFalse(retired['callbacks'] or active['callbacks'])
+                        if retirement == 'replaced':
+                            self.assertIs(provider.requests['retired'], replacement)
+                        self.assertFalse(observations.reads.pending or observations.reads.groups)
+                    finally:
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                        for _ in range(held):
+                            engine.semaphore.release()
+                self.assertEqual(engine.semaphore._value, 8)
+                self.assertFalse(engine.semaphore._ordinary or engine.semaphore._priority)
+
+    async def test_immediate_grant_for_retired_owner_cancels_but_ownerless_calls_keep_behavior(self):
+        engine = Engine()
+        engine.semaphore = PricingSlots(8)
+        provider = AlphaRoutes(engine)
+        provider._write = AsyncMock()
+        entry, task = self.owned_callback(provider, 'retired')
+        provider.requests.pop('retired')
+        async with search_observation_scope():
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertEqual(engine.calls, [])
+            provider._write.assert_not_awaited()
+            self.assertTrue(entry['queue'].empty())
+            # No id or registered owner is required by the existing direct API.
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}), {'quote':'2000'})
+        self.assertEqual(len(engine.calls), 1)
+        self.assertEqual(engine.semaphore._value, 8)
+        self.assertFalse(entry['callbacks'] or engine.semaphore._ordinary)
+
+    async def test_retirement_leaves_started_work_owned_until_callback_drain_finishes(self):
+        engine = Engine()
+        engine.semaphore = PricingSlots(8)
+        entered, finalizing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        calls = []
+        async def quote(*args, **_options):
+            calls.append(args)
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                finalizing.set()
+                await release.wait()
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        provider._write = AsyncMock()
+        closing = None
+        async with search_observation_scope() as observations:
+            entry, task = self.owned_callback(provider, 'started')
+            try:
+                await asyncio.wait_for(entered.wait(), 1)
+                provider.requests.pop('started')
+                provider.retired.add('started')
+                await asyncio.sleep(0)
+                self.assertFalse(finalizing.is_set())
+                self.assertEqual(len(calls), 1)
+                closing = asyncio.create_task(drain_retired_callbacks((task,)))
+                await asyncio.wait_for(finalizing.wait(), 1)
+                self.assertFalse(closing.done())
+                self.assertEqual(engine.semaphore._value, 7)
+                self.assertFalse(observations.reads.pending)
+                self.assertEqual(len(observations.reads.groups), 1)
+                release.set()
+                outcomes = await asyncio.wait_for(closing, 1)
+                self.assertEqual(len(outcomes), 1)
+                self.assertIsInstance(outcomes[0], asyncio.CancelledError)
+                self.assertFalse(entry['callbacks'] or observations.reads.groups)
+                provider._write.assert_not_awaited()
+            finally:
+                release.set()
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                if closing is not None:
+                    await asyncio.gather(closing, return_exceptions=True)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_active_owned_callback_keeps_ordinary_failure_retry_and_snapshot_disproof(self):
+        for error in (OSError('ordinary observation failure'), SnapshotChanged('context changed')):
+            with self.subTest(error=type(error).__name__):
+                engine = Engine()
+                engine.semaphore = PricingSlots(8)
+                original = engine.quote_sdk_branches
+                attempts = 0
+                async def quote(*args, **options):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        raise error
+                    return await original(*args, **options)
+                engine.quote_sdk_branches = quote
+                provider = AlphaRoutes(engine)
+                owner = {}
+                provider.requests['active'] = owner
+                request = {**self.request(), 'id':'active'}
+                async with search_observation_scope():
+                    if isinstance(error, SnapshotChanged):
+                        with self.assertRaises(SnapshotChanged) as caught:
+                            await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner)
+                        self.assertIs(caught.exception, error)
+                    else:
+                        self.assertEqual(await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner),
+                                         {'quote':None})
+                    self.assertEqual(await provider._quote(request, BLOCK, {}, (provider,'active'), owner=owner),
+                                     {'quote':'2000'})
+                self.assertEqual(attempts, 2)
+                self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_equal_callbacks_share_work_but_preserve_answers_and_query_scope(self):
+        engine = Engine()
+        original = engine.quote_sdk_branches
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def quote(*args, **options):
+            entered.set()
+            await release.wait()
+            return await original(*args, **options)
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            first = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            second = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await asyncio.sleep(0)
+            release.set()
+            values = await asyncio.gather(first, second)
+            values.append(await provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            self.assertEqual(values, [{'quote': '2000'}] * 3)
+            self.assertEqual(len(engine.calls), 1)
+            values[0]['quote'] = 'mutated consumer copy'
+            self.assertEqual(values[1]['quote'], '2000')
+            await provider._quote(self.request(1001), BLOCK, {}, (provider, '1'))
+            await provider._quote(self.request(), BLOCK, {}, (provider, '2'))
+            self.assertEqual(len(engine.calls), 3)
+            self.assertEqual(len({id(call[4]) for call in engine.calls}), 3)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_ordinary_failure_is_not_retained_as_a_failed_quote(self):
+        engine, count = Engine(), 0
+        original = engine.quote_sdk_branches
+        async def quote(*args, **options):
+            nonlocal count
+            count += 1
+            if count == 1:
+                raise OSError('ordinary RPC failure')
+            return await original(*args, **options)
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}, (provider, '1')), {'quote': None})
+            self.assertEqual(await provider._quote(self.request(), BLOCK, {}, (provider, '1')), {'quote': '2000'})
+        self.assertEqual(count, 2)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_cancelled_subscriber_preserves_sibling_then_final_cancel_drains_work(self):
+        engine = Engine()
+        entered, release, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        original = engine.quote_sdk_branches
+        async def quote(*args, **options):
+            entered.set()
+            try:
+                await release.wait()
+                return await original(*args, **options)
+            finally:
+                drained.set()
+        engine.quote_sdk_branches = quote
+        provider = AlphaRoutes(engine)
+        async with search_observation_scope():
+            first = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            second = asyncio.create_task(provider._quote(self.request(), BLOCK, {}, (provider, '1')))
+            await asyncio.sleep(0)
+            first.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first
+            self.assertFalse(drained.is_set())
+            release.set()
+            self.assertEqual(await second, {'quote': '2000'})
+            self.assertEqual(len(engine.calls), 1)
+            entered.clear()
+            release.clear()
+            drained.clear()
+            final = asyncio.create_task(provider._quote(self.request(1001), BLOCK, {}, (provider, '1')))
+            await entered.wait()
+            final.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await final
+            await asyncio.wait_for(drained.wait(), 1)
+        self.assertEqual(engine.semaphore._value, 8)
+
+
+if __name__ == '__main__':
+    unittest.main()

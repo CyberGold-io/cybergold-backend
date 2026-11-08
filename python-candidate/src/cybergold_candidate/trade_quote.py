@@ -10,7 +10,8 @@ import time
 from types import SimpleNamespace
 from typing import Literal
 
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.requests import ClientDisconnect
 from eth_abi.exceptions import EncodingError
 from pydantic import BaseModel, Field
 from web3 import Web3
@@ -20,6 +21,7 @@ from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .pool_producer import ZERO
 from .protocol_facts import ABI
 from .quote_cache import IntentSharing
+from .quote_history import block_key
 from .quote_errors import QuoteFailure, public_quote_error
 from .rpc_diagnostics import bind_quote_error, quote_failure_context
 from .fast_trade_estimates import FastTradeEstimates, model_estimate
@@ -255,7 +257,7 @@ class TradeQuotes:
             context = {'chainId': int(self.settings.NEXT_PUBLIC_CHAIN_ID), 'blockNumber': str(block['number']),
                        'blockHash': block['hash'], 'observedAt': self.core.now()}
             self.history.ensure_state(self.core.routes.rpc, block, context)
-            task = self.history.tasks.get(('state', block['hash'].lower()))
+            task = self.history.tasks.get(('state', block_key(block)))
             if task:
                 await asyncio.shield(task)
         async def market_model():
@@ -266,15 +268,28 @@ class TradeQuotes:
         return self.packet(request, models)
 
     async def get_model(self, request):
-        request = await self.resolve(validate(TradeModelRequest.model_validate(request).model_dump(), model=True))
+        request = validate(TradeModelRequest.model_validate(request).model_dump(), model=True)
+        cached_estimates = getattr(self, 'cached_estimates', None)
+        if request['mode'] == 'exact-in' and cached_estimates is not None:
+            return await cached_estimates.get_model(request)
+        request = await self.resolve(request)
+        def ready_packet():
+            packet = self.packet(request)
+            if packet.get('budgetRange') and packet.get('estimate'):
+                return packet
+            if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol'))
+                   for row in packet['models']) and packet['models']:
+                return packet
+            return None
+        packet = ready_packet()
+        if packet is not None:
+            return packet
         registry = getattr(self.market, 'registry', None)
         if registry is not None:
             await registry.ensure_loaded(wait=True)
-        packet = self.packet(request)
-        if packet.get('budgetRange') and packet.get('estimate'):
-            return packet
-        if all(row['value'].get('routes') or (row['strategy'] == 'core' and row['value'].get('protocol')) for row in packet['models']) and packet['models']:
-            return packet
+            packet = ready_packet()
+            if packet is not None:
+                return packet
         # Cold model acquisition reuses the providers' lightweight baselines;
         # warm display is RPC-free and exact search never waits for this work.
         if self.core.routes.rpc is None:
@@ -531,10 +546,16 @@ async def handle_trade_quote(request, service, *, model=False):
         return JSONResponse({'error': 'Invalid trade quote input.'}, status_code=400, headers={'Cache-Control': 'no-store'})
     observation = QuoteObservation(request, value)
     if model:
+        from .economic_quotes import request_operation
         try:
-            result = await service.get_model(value)
+            result = await request_operation(request, lambda: service.get_model(value))
             observation.finish('succeeded')
             return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+        except (asyncio.CancelledError, ClientDisconnect) as error:
+            observation.finish('cancelled')
+            if isinstance(error, ClientDisconnect):
+                return Response(status_code=499)
+            raise
         except Exception as error:
             payload = observation.event(observation.error(error))
             return JSONResponse({key: value for key, value in payload.items() if key != 'type'},
@@ -569,4 +590,5 @@ async def handle_trade_quote(request, service, *, model=False):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
             observation.finish('cancelled')
-    return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
+    from .progressive_quotes import OwnedStreamingResponse
+    return OwnedStreamingResponse.create(events())

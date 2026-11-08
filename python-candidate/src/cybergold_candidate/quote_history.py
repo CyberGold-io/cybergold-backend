@@ -16,6 +16,24 @@ from .recovery_rpc import ABI as RECOVERY_ABI, abi_value
 from .execution_tolerance import DEFAULT_SLIPPAGE_BPS
 from .uniswap_routes import route_identity, standalone_v3, uses_typed_adapter, v3_plan
 from .shared_reads import discard_pool_observation
+from .rpc_block_context import is_latest
+
+
+def context_key(context):
+    """Only real hashes identify a pinned advisory observation."""
+    value = context.get('blockHash')
+    return value.lower() if value and value != 'latest' and context.get('blockTag') != 'latest' else None
+
+
+def block_key(block):
+    return None if is_latest(block) else block['hash'].lower()
+
+
+def observation_context(context):
+    context = deepcopy(context)
+    if context_key(context) is None:
+        context.update(blockHash=None, blockNumber=None, blockTag='latest', verification='quote-observation')
+    return context
 
 
 def economic_path(path, mode):
@@ -65,6 +83,7 @@ class QuoteHistory:
         self.revision = 0
         self.reads = self.envelopes = 0
         self.predictions = self.retired = 0
+        self.state_observer = None
 
     async def observe_generation(self, generation):
         """Retire optional display history at the existing accepted fork reset."""
@@ -90,8 +109,8 @@ class QuoteHistory:
     def facts_observed(self, facts):
         if all(facts['basket'][key]['status'] == 'success' for key in ('assets', 'targetsPpm', 'cygldPerUnitFp18')) and all(
                 row['status'] == 'success' for row in facts['fees'].values()):
-            key = facts['context']['blockHash'].lower()
-            self.facts[key] = deepcopy(facts)
+            key = context_key(facts['context'])
+            self.facts[key] = {**deepcopy(facts), 'context': observation_context(facts['context'])}
             self.trim(self.facts)
 
     def launch(self, key, produce):
@@ -136,11 +155,11 @@ class QuoteHistory:
         return values
 
     def ensure_state(self, rpc, block, context):
-        key = block['hash'].lower()
+        key = block_key(block)
         row = self.states.get(key)
-        # Model state is a display hint. Reuse it until the head changes or an
-        # ordinary validated quote contradicts its arithmetic; no periodic
-        # recalibration reads on a stagnant Sandbox header.
+        # Model state is advisory, including unbound latest observations. Ordinary
+        # validated quotes retire contradictions; this never proves an exact
+        # quote or replaces execution reads.
         if row:
             return
         epoch = self.epoch
@@ -148,6 +167,7 @@ class QuoteHistory:
 
     async def acquire_state(self, rpc, block, context, epoch=None):
         epoch = self.epoch if epoch is None else epoch
+        context = observation_context(context)
         core = Web3.to_checksum_address(self.settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS)
         helpers = Web3.to_checksum_address(self.settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
         names = ('totalSupply', 'maxTotalSupply', 'effectiveCygldSupplyCap', 'redemptionFeePpm')
@@ -160,7 +180,7 @@ class QuoteHistory:
         abi += [row for row in RECOVERY_ABI['core'] if row['name'] in ('reserveCustodyStatus', 'recoveryPool')]
         fact_names = ('basketAssets', 'basketTargetsPpm', 'basketCygldPerUnitFp18', 'issuanceFeePpm')
         abi += [row for row in FACTS_ABI['core'] if row['name'] in fact_names] + FACTS_ABI['helpers']
-        facts = self.facts.get(block['hash'].lower())
+        facts = self.facts.get(block_key(block))
         calls = [(core, name, []) for name in names + ('coreAttachedRecoveryAssets',)] + [
             (core, 'hasRole', [Web3.keccak(text='REDEMPTION_FEE_EXEMPT_ROLE'), helpers])]
         if not facts:
@@ -174,7 +194,8 @@ class QuoteHistory:
         values = await self.batch(rpc, [(core, 'reserveCustodyStatus', [a]) for a in assets] + [
             (core, 'recoveryPool', [a]) for a in recovery], block, abi)
         custody, pools = values[:len(assets)], values[len(assets):]
-        await rpc.assert_canonical(block)
+        if not is_latest(block):
+            await rpc.assert_canonical(block)
         if epoch != self.epoch:
             return
         state = {'assets': assets, 'weights': list(map(int, weights)), 'conversions': list(map(int, conversions)),
@@ -186,14 +207,19 @@ class QuoteHistory:
                                     for p in pools],
                  'descriptors': [{'kind': 0, 'token': a, 'id': '0'} for a in assets] + [
                      {'kind': 1, 'token': core, 'id': str(int(a, 16))} for a in recovery]}
-        self.states[block['hash'].lower()] = {'context': {**deepcopy(context), 'observedAt': datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}, 'state': wire(state), '_acquiredAt': time.monotonic()}
-        self.states.move_to_end(block['hash'].lower())
+        self.states[block_key(block)] = {'context': {**deepcopy(context), 'observedAt': datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}, 'state': wire(state), '_acquiredAt': time.monotonic()}
+        if self.state_observer is not None:
+            try:
+                self.state_observer(deepcopy(self.states[block_key(block)]))
+            except Exception:
+                pass  # An optional construction-hint observer cannot veto the model.
+        self.states.move_to_end(block_key(block))
         self.trim(self.states)
         self.revision += 1
 
     def ensure_route(self, provider, plan, block, context):
         plan = deepcopy(plan)
-        key = (*route_key(plan), block['hash'].lower())
+        key = (*route_key(plan), block_key(block))
         if key in self.baselines:
             return
         epoch = self.epoch
@@ -201,12 +227,14 @@ class QuoteHistory:
 
     async def acquire_route(self, provider, plan, block, context, epoch=None):
         epoch = self.epoch if epoch is None else epoch
+        context = observation_context(context)
         baseline = await provider.route_baseline(plan, block)
-        await provider.registry.get_rpc().assert_canonical(block)
+        if not is_latest(block):
+            await provider.registry.get_rpc().assert_canonical(block)
         if epoch != self.epoch:
             return
         key = route_key(plan)
-        self.baselines[(*key, block['hash'].lower())] = (baseline, deepcopy(context), time.monotonic())
+        self.baselines[(*key, block_key(block))] = (baseline, deepcopy(context), time.monotonic())
         entry = self.routes.setdefault(key, {'model': LegModel(), 'context': deepcopy(context),
             'observations': [], 'routePlan': deepcopy(plan)})
         if entry['context']['blockHash'] != context['blockHash'] or (
@@ -216,7 +244,7 @@ class QuoteHistory:
         entry['context'] = deepcopy(context)
         entry['routePlan'] = deepcopy(plan)
         self.routes.move_to_end(key)
-        self.baselines.move_to_end((*key, block['hash'].lower()))
+        self.baselines.move_to_end((*key, block_key(block)))
         self.trim(self.routes)
         self.trim(self.baselines)
         self.revision += 1
@@ -242,7 +270,7 @@ class QuoteHistory:
                             'zeroForOne': source.lower() == pool['token0']['address'].lower()}]}],
                         'inputAmount': '0', 'outputAmount': '0', 'limit': '0', 'deadline': '0'}
                     self.ensure_route(provider, plan, block, context)
-        self.launch(('known-routes', family(request), block['hash'].lower()), discover_known)
+        self.launch(('known-routes', family(request), block_key(block)), discover_known)
 
     # Compatibility adapters normalize at entry and delegate to the same engine.
     ensure_typed_pool = ensure_route
@@ -253,9 +281,9 @@ class QuoteHistory:
         self.ensure_route(getattr(rpc, 'route_engine', rpc), plan, block, context)
 
     def observe(self, request, result, waves):
-        context = result['context']
+        context = observation_context(result['context'])
         source_legs = []
-        snapshot = self.states.get(context['blockHash'].lower())
+        snapshot = self.states.get(context_key(context))
         if snapshot:
             try:
                 state = {k: [int(v) for v in value] if k in ('weights', 'conversions', 'available', 'recoveryShares', 'recoveryValues')
@@ -267,12 +295,12 @@ class QuoteHistory:
                               if request['mode'].startswith('issue') else model.redeem_in(int(result['executionAmount'])))
                 expected = {key: actual[key] for key in prediction}
                 if wire(prediction) != expected:
-                    self.states.pop(context['blockHash'].lower(), None)
+                    self.states.pop(context_key(context), None)
             except (ValueError, KeyError, ZeroDivisionError):
-                self.states.pop(context['blockHash'].lower(), None)
+                self.states.pop(context_key(context), None)
         for wave in waves:
             mode, rows = wave[:2]
-            source_context = wave[2] if len(wave) > 2 else context
+            source_context = observation_context(wave[2]) if len(wave) > 2 else context
             for row in rows:
                 best, target = row['best'], row['target']
                 if not best:
@@ -289,7 +317,7 @@ class QuoteHistory:
                 entry = self.routes.setdefault(key, {'model': LegModel(), 'context': context, 'observations': []})
                 entry['routePlan'] = deepcopy(plan)
                 self.routes.move_to_end(key)
-                baseline = self.baselines.get((*key, context['blockHash'].lower()))
+                baseline = self.baselines.get((*key, context_key(context)))
                 model = entry['model']
                 if entry['context']['blockHash'] != context['blockHash']:
                     # Preserve old observations as history; do not relabel them
@@ -309,7 +337,7 @@ class QuoteHistory:
                 removed = previous_points-set(model.points)
                 if removed:
                     if context['chainId'] != 1:
-                        self.baselines.pop((*key, context['blockHash'].lower()), None)
+                        self.baselines.pop((*key, context_key(context)), None)
                     for family_points in self.families.values():
                         for coordinate, point in list(family_points.items()):
                             if any(route == key and (a, b) in removed for route, a, b in point['_legs']):
@@ -358,7 +386,7 @@ class QuoteHistory:
                 row['routePlan'] = deepcopy(entry['routePlan'])
                 row['protocols'] = [hop['pool']['protocol'] for branch in entry['routePlan']['branches'] for hop in branch['hops']]
                 row['poolIds'] = [hop['pool']['id'] for branch in entry['routePlan']['branches'] for hop in branch['hops']]
-            baseline = self.baselines.get((*key, entry['context']['blockHash'].lower()))
+            baseline = self.baselines.get((*key, context_key(entry['context'])))
             if baseline:
                 row['feeRetention'] = fraction(baseline[0].fee_retention)
                 row['exchangeRate'] = fraction(baseline[0].exchange)

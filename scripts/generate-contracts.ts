@@ -45,7 +45,12 @@ operation("/api/protocol/config", "get", "ProtocolConfiguration", undefined, {
 });
 operation("/api/gold", "get", "Gold");
 operation("/api/economic-quotes", "post", "EconomicQuote", "EconomicQuoteRequest", {
-  description: "Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast.",
+  description: "Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Scalar requests search both pure-Market and Core-containing path families, seeding up to four distinct lower/upper cached routes at the requested budget; JSON waits for natural completion. Direct basket requests retain their existing stored-offer behavior. Execution guards and lifetime are bound during unsigned preparation.",
+});
+operation("/api/economic-quotes/stream", "post", "EconomicQuoteEvent", "EconomicQuoteRequest", {
+  description: "Subscription-owned selected economic observations are published by the Backend while discovery continues to natural completion. The shared Backend cache supplies early historical observations and lower/upper routes independently per market/Core-containing family. Whole-plan Helpers latest-state repricing replaces a candidate's previous observation in either direction, then the Backend ranks the latest complete candidate tuples and emits its selected result; independent weaker paths are not emitted merely because they are fresh. Fast estimates are separate advisory Backend results. Latest observations have nullable block coordinates. Caller disconnect cancels and drains only its owned work.",
+  responses: { "200": { description: "Helpers-qualified improvements followed by complete or error; caller cancellation ends its subscription. Snapshot disproof emits invalidated before error. Integers are decimal strings.",
+    content: { "application/x-ndjson": { schema: ref("EconomicQuoteEvent") } } }, default: response(ref("PublicError")) },
 });
 operation("/api/tx-preparations", "post", "PreparedTransaction", "TransactionPreparationRequest", {
   description: "Replay only the selected semantic plan at current state. Bind accepted input/output guards before repricing and start the ten-minute execution lifetime during unsigned preparation. No replacement-route discovery, signing or broadcast.",

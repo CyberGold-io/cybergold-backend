@@ -15,6 +15,7 @@ from cybergold_candidate.app import create_app
 from cybergold_candidate.protocol_facts import ProtocolFacts, ProtocolFactsRpc
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.shared_reads import SharedReads
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 
 REFERENCE = json.loads(Path(sys.argv[1]).read_text())
 HASH='0x'+'a'*64
@@ -58,6 +59,23 @@ def service(provider, helpers=True, pool_reads=None):
 
 
 class FactsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_latest_getter_is_not_retained_while_explicit_pinned_mainnet_is(self):
+        provider = Provider(chain=1)
+        facts = service(provider)
+        self.addAsyncCleanup(facts.close)
+        address = REFERENCE['core']
+        for _ in range(2):
+            await facts.rpc.read('core', address, 'paused', LATEST_BLOCK)
+        self.assertEqual(len(provider.calls), 2)
+        self.assertTrue(all(method == 'eth_call' and params[1] == 'latest'
+                            for method, params in provider.calls))
+        self.assertEqual(facts.rpc.pool_reads.completed, {})
+        for _ in range(2):
+            await facts.rpc.read('core', address, 'paused', {'number': 101, 'hash': HASH})
+        self.assertEqual(len(provider.calls), 3)
+        self.assertEqual(provider.calls[-1][1][1], {'blockHash': HASH, 'requireCanonical': True})
+        self.assertEqual(len(facts.rpc.pool_reads.completed), 1)
+
     async def test_mainnet_concurrent_and_warm_facts_share_getters_but_recheck_each_header(self):
         bank, provider = SharedReads(), Provider(chain=1)
         self.addAsyncCleanup(bank.close)

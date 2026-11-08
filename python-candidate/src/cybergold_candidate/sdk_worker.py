@@ -1,11 +1,13 @@
 """Managed lossless JSONL bridge. Only Python acquires chain observations."""
 import asyncio
-import json
 import os
 import shlex
 from copy import deepcopy
+from .pool_snapshot import copy_pool_snapshot
 from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
 from .route_work_slots import required_state_wait
+from .quote_flow import stage
+from . import sdk_bridge
 
 
 class SdkWorkerError(RuntimeError):
@@ -32,7 +34,10 @@ class SdkWorker:
         self.sequence = 0
 
     async def request(self, payload, on_state=None):
-        payload = deepcopy(payload)
+        pools = payload.get('pools')
+        payload = deepcopy({key: value for key, value in payload.items() if key != 'pools'})
+        if pools is not None:
+            payload['pools'] = [copy_pool_snapshot(pool) for pool in pools]
         observation = quote_sdk_session(payload)
         process = request_id = None
         terminal, coverage = False, None
@@ -41,15 +46,28 @@ class SdkWorker:
                 # Each start/resume is one serialized exchange. Required chain
                 # observations run outside this lock and its diagnostics scope.
                 with quote_sdk_request(observation) as acquired:
-                    async with self.lock:
+                    async with sdk_bridge.exchange_lock(self.lock):
                         acquired()
                         if process is not None and (self.process is not process or process.returncode is not None):
                             raise SdkWorkerError('SDK continuation worker exited')
                         if process is None:
                             if self.process is None or self.process.returncode is not None:
-                                self.process = await asyncio.create_subprocess_exec(*self.command,
+                                starting = asyncio.create_task(asyncio.create_subprocess_exec(*self.command,
                                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                                    stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024)
+                                    stderr=asyncio.subprocess.DEVNULL, limit=4*1024*1024))
+                                try:
+                                    with stage('sdk.start'):
+                                        self.process = await asyncio.shield(starting)
+                                except asyncio.CancelledError:
+                                    # Cancellation can arrive after the OS child
+                                    # exists but before its handle is returned.
+                                    # Acquire and reap that exact owned child.
+                                    try:
+                                        self.process = await starting
+                                        await self._stop()
+                                    except BaseException:
+                                        pass
+                                    raise
                             process = self.process
                             self.sequence += 1
                             request_id = str(self.sequence)
@@ -60,12 +78,9 @@ class SdkWorker:
                             outgoing = {'id': request_id, 'operation': 'resume', 'coverage': coverage}
                         try:
                             async with asyncio.timeout(self.timeout):
-                                process.stdin.write((json.dumps(outgoing, separators=(',', ':'))+'\n').encode())
-                                await process.stdin.drain()
-                                line = await process.stdout.readline()
-                                if not line:
+                                response = await sdk_bridge.exchange(process, outgoing)
+                                if response is None:
                                     raise SdkWorkerError('SDK worker exited')
-                                response = json.loads(line)
                                 if response.get('id') != request_id:
                                     raise SdkWorkerError('SDK worker response does not match request')
                                 if not (response.get('stateRequest') or response.get('missingState') or response.get('error')):
@@ -84,7 +99,8 @@ class SdkWorker:
                         raise MissingPoolState(response['stateRequest'])
                     observation.call('missing', response['stateRequest'])
                     async with required_state_wait():
-                        observed = await on_state(response['stateRequest'])
+                        with stage('state.acquire'):
+                            observed = await on_state(response['stateRequest'])
                         observation.call('queued')
                     coverage = []
                     for pool in observed:
@@ -116,7 +132,7 @@ class SdkWorker:
                 # A complete synchronous JSONL write cannot interleave bytes.
                 # One-way cancellation must not wait on another client's lock.
                 try:
-                    process.stdin.write((json.dumps({'id': request_id, 'operation': 'cancel'})+'\n').encode())
+                    process.stdin.write(sdk_bridge.encode({'id': request_id, 'operation': 'cancel'}))
                 except (BrokenPipeError, ConnectionError, RuntimeError):
                     pass  # Cleanup never replaces the owning operation's error.
 
@@ -126,11 +142,12 @@ class SdkWorker:
         deadline = asyncio.get_running_loop().time()+2
         try:
             async with asyncio.timeout_at(deadline):
-                process.stdin.write((json.dumps({'id': request_id, 'operation': 'cancel',
-                    'acknowledge': True})+'\n').encode())
-                await process.stdin.drain()
+                await sdk_bridge.write(process, {'id': request_id, 'operation': 'cancel',
+                    'acknowledge': True})
                 while True:
-                    response = json.loads(await process.stdout.readline())
+                    response = await sdk_bridge.read(process)
+                    if response is None:
+                        raise SdkWorkerError('SDK worker exited')
                     if response.get('id') != request_id:
                         raise SdkWorkerError('SDK worker response does not match request')
                     # A state/result frame can already be queued when cancelled.
@@ -143,15 +160,16 @@ class SdkWorker:
                 pass  # Keep the original cancellation/deadline error.
 
     async def _stop(self, grace=2):
-        process, self.process = self.process, None
-        if process and process.returncode is None:
-            process.terminate()
-            try:
-                await asyncio.wait_for(process.wait(), grace)
-            except TimeoutError:
-                process.kill()
-                await process.wait()
+        with stage('sdk.cleanup'):
+            process, self.process = self.process, None
+            if process and process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), grace)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
 
     async def close(self):
-        async with self.lock:
+        async with sdk_bridge.exchange_lock(self.lock):
             await self._stop()

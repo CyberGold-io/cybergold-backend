@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame</desc>
+<defs>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
+  <style>
+    text{font-family:Arial,Helvetica,sans-serif;fill:#142b42}
+    .eyebrow{font-size:11px;font-weight:700;letter-spacing:1.5px;fill:#167c80}
+    .title{font-size:23px;font-weight:700}
+    .subtitle{font-size:12.5px;fill:#53697a}
+    .lane-label{font-size:10px;font-weight:700;letter-spacing:1.2px;fill:#53697a}
+    .node{fill:#fff;stroke:#c8d6df;stroke-width:1.2}
+    .fresh{fill:#e8f6f2;stroke:#3d9e90;stroke-width:1.2}
+    .heading{font-size:14px;font-weight:700}
+    .body{font-size:12px}
+    .body-large{font-size:12.5px}
+    .muted{fill:#53697a}
+    .line{fill:none;stroke:#3e596d;stroke-width:1.5}
+    .bus{fill:none;stroke:#3e596d;stroke-width:1.5}
+    .dashed{fill:none;stroke:#8a9cab;stroke-width:1.3;stroke-dasharray:4 4}
+    .step{fill:#fff;stroke:#16858a;stroke-width:1.4}
+    .step-text{font-size:10px;font-weight:700;fill:#167c80;text-anchor:middle;dominant-baseline:central}
+    .source{font-size:9.5px;fill:#64798a}
+  </style>
+</defs>
+<rect width="842" height="595" fill="#fff"/>
+<text x="42" y="30" class="eyebrow">CYBERGOLD · CURRENT QUOTER · 02</text>
+<text x="42" y="61" class="title">Fast results and continued search run together</text>
+<text x="42" y="81" class="subtitle">Current scalar quotation · no supplier-completion wait is required before a selected frame</text>
+<rect x="42" y="110" width="177" height="241" rx="10" fill="#edf7f4"/>
+<rect x="237" y="110" width="177" height="241" rx="10" fill="#f0f6fa"/>
+<rect x="432" y="110" width="177" height="241" rx="10" fill="#f0f6fa"/>
+<rect x="627" y="110" width="173" height="241" rx="10" fill="#f4f5fa"/>
+<text x="53" y="135" class="heading">A · Stored quote</text>
+<text x="248" y="135" class="heading">B · Retained path</text>
+<text x="443" y="135" class="heading">C · Initial path</text>
+<text x="638" y="135" class="heading">D · Search</text>
+<rect x="50" y="154" width="161" height="77" rx="8" class="node"/>
+<text x="61" y="177" class="heading">L1 validated</text>
+<text x="61" y="194" class="heading">observation</text>
+<text x="61" y="215" class="body">Existing measured tuple</text>
+<rect x="245" y="154" width="161" height="77" rx="8" class="node"/>
+<text x="256" y="178" class="heading">Retained L1 body</text>
+<text x="256" y="198" class="body">Complete semantic route</text>
+<text x="256" y="215" class="body">No SDK state needed</text>
+<rect x="440" y="154" width="161" height="77" rx="8" class="node"/>
+<text x="451" y="178" class="heading">Initial topology</text>
+<text x="451" y="198" class="body">Direct / seed connector</text>
+<text x="451" y="215" class="body">Before full graph / SDK</text>
+<rect x="635" y="154" width="157" height="77" rx="8" class="node"/>
+<text x="646" y="178" class="heading">Five suppliers</text>
+<text x="646" y="198" class="body">Per AMM query</text>
+<text x="646" y="215" class="body">SDK market-leg work</text>
+<rect x="50" y="268" width="161" height="65" rx="8" class="node"/>
+<text x="61" y="292" class="heading">Backend quote book</text>
+<text x="61" y="313" class="body">Select before new search</text>
+<rect x="245" y="268" width="161" height="65" rx="8" class="node"/>
+<text x="256" y="292" class="heading">Helpers replay</text>
+<text x="256" y="313" class="body">Known-body priority</text>
+<rect x="440" y="268" width="161" height="65" rx="8" class="node"/>
+<text x="451" y="292" class="heading">Complete proposal</text>
+<text x="451" y="313" class="body">Ordinary admission</text>
+<rect x="635" y="268" width="157" height="65" rx="8" class="node"/>
+<text x="646" y="292" class="heading">More proposals</text>
+<text x="646" y="313" class="body">Ordinary admission</text>
+<path d="M130 231 V268" class="line"/><polygon points="130.00,268.00 127.00,261.00 133.00,261.00" fill="#3e596d"/><circle cx="130" cy="249" r="10" class="step"/><text x="130" y="249" class="step-text">1</text>
+<path d="M325 231 V268" class="line"/><polygon points="325.00,268.00 322.00,261.00 328.00,261.00" fill="#3e596d"/><circle cx="325" cy="249" r="10" class="step"/><text x="325" y="249" class="step-text">1</text>
+<path d="M520 231 V268" class="line"/><polygon points="520.00,268.00 517.00,261.00 523.00,261.00" fill="#3e596d"/><circle cx="520" cy="249" r="10" class="step"/><text x="520" y="249" class="step-text">1</text>
+<path d="M713 231 V268" class="line"/><polygon points="713.00,268.00 710.00,261.00 716.00,261.00" fill="#3e596d"/><circle cx="713" cy="249" r="10" class="step"/><text x="713" y="249" class="step-text">1</text>
+<path d="M130 333 V392" class="line"/><polygon points="130.00,392.00 127.00,385.00 133.00,385.00" fill="#3e596d"/><circle cx="130" cy="361" r="10" class="step"/><text x="130" y="361" class="step-text">2</text>
+<path d="M325 333 V371" class="line"/><polygon points="325.00,371.00 322.00,364.00 328.00,364.00" fill="#3e596d"/><circle cx="325" cy="351" r="10" class="step"/><text x="325" y="351" class="step-text">2</text>
+<path d="M520 333 V371" class="line"/><polygon points="520.00,371.00 517.00,364.00 523.00,364.00" fill="#3e596d"/><circle cx="520" cy="351" r="10" class="step"/><text x="520" y="351" class="step-text">2</text>
+<path d="M713 333 V371" class="line"/><polygon points="713.00,371.00 710.00,364.00 716.00,364.00" fill="#3e596d"/><circle cx="713" cy="351" r="10" class="step"/><text x="713" y="351" class="step-text">2</text>
+<rect x="245" y="371" width="547" height="62" rx="8" class="node"/>
+<text x="259" y="396" class="heading">Helpers + SDK share eight engine permits</text>
+<text x="259" y="416" class="body">Known-body priority; running work is not preempted.</text>
+<rect x="50" y="392" width="161" height="100" rx="8" class="fresh"/>
+<text x="61" y="416" class="heading">Selected stream</text>
+<text x="61" y="434" class="heading">frame</text>
+<text x="61" y="458" class="body">Zero new quote RPC</text>
+<text x="61" y="478" class="body">Yield to delivery first</text>
+<rect x="440" y="466" width="161" height="66" rx="8" class="fresh"/>
+<text x="451" y="489" class="heading">Helpers result</text>
+<text x="451" y="509" class="body">One latest eth_call</text>
+<text x="451" y="525" class="body">Decode → rank → stream</text>
+<path d="M520 433 V466" class="line"/><polygon points="520.00,466.00 517.00,459.00 523.00,459.00" fill="#3e596d"/><circle cx="520" cy="449" r="10" class="step"/><text x="520" y="449" class="step-text">3</text>
+<rect x="237" y="466" width="177" height="66" rx="8" class="node"/>
+<text x="248" y="487" class="body-large">Optional metadata + SQL</text>
+<text x="248" y="507" class="body">Parallel history recovery</text>
+<text x="248" y="523" class="body">Cannot gate scalar L1</text>
+<rect x="627" y="466" width="173" height="66" rx="8" class="node"/>
+<text x="638" y="487" class="heading">Shared loop CPU</text>
+<text x="638" y="507" class="body">Graph copies and tasks</text>
+<text x="638" y="523" class="body">can add contention</text>
+<text x="42" y="557" class="body-large">Stored delivery and Helpers repricing proceed independently. Later candidates can improve the winner.</text>
+<text x="42" y="579" class="source">Sources: progressive_quotes / quote_publication; quoter/search, evaluate, bootstrap, plan_transport; route_work_slots.</text>
+</svg>

@@ -202,6 +202,16 @@ class MarketSampleObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(points[1]['context']['blockHash'], '0x'+'cd'*32)
         self.assertEqual(service.estimate(service.packet(request), request), '799')
 
+    def test_latest_quote_is_not_recorded_as_an_immutable_exact_sample(self):
+        service, request, result, target = fixture()
+        before = deepcopy(service.models)
+        result['context'] = {**CONTEXT, 'blockNumber': None, 'blockHash': None, 'blockTag': 'latest'}
+        result['amountOut'] = '900'
+        service.remember_model_quote(request, result, 1000, target, service.generation)
+        self.assertEqual(service.models, before)
+        # Existing pinned history remains an observation of its own state.
+        self.assertEqual(service.packet(request)['routes'][0]['points'][0]['context'], CONTEXT)
+
     def test_writer_deduplicates_same_observation_and_preserves_legacy_coordinates(self):
         service, request, result, target = fixture()
         packet = service.models[market_family(request, 1, CORE)]

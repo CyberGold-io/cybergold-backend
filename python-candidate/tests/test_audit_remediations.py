@@ -154,7 +154,7 @@ class WorkerCancellationRegression(unittest.IsolatedAsyncioTestCase):
         class Rpc:
             async def close(self):pass
         class Collector:
-            def __init__(self,*_args):pass
+            def __init__(self,*_args,**_kwargs):pass
             async def reconcile(self,*_args,**_kwargs):
                 shared['active']+=1;shared['peak']=max(shared['peak'],shared['active'])
                 try:

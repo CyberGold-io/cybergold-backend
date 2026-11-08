@@ -12,6 +12,7 @@ from web3 import Web3
 from .recovery_rpc import RecoveryRpc, abi_value
 from .quote_errors import public_quote_error, RpcTimeout
 from .shared_reads import SharedReads, discard_pool_observation
+from .rpc_block_context import is_latest, rpc_block_parameter
 from .trade_observation import failure as observe_failure
 
 ABI = json.loads(Path(__file__).with_name('protocol-facts-abi.json').read_text())
@@ -43,11 +44,11 @@ class ProtocolFactsRpc(RecoveryRpc):
         key = (self.chain_id, block['hash'].lower(), address.lower(), data.lower())
         async def produce(_keys):
             return [await self.w3.provider.make_request('eth_call', [
-                {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])]
+                {'to': address, 'data': data}, rpc_block_parameter(block)])]
         # Borrow the same getter identity as routes and pool observations.
         # Sandbox administrative writes can change values under one header,
         # so only overlapping Sandbox callers share an unfinished read.
-        rows, _ = await self.pool_reads.many([key], produce, retain=self.chain_id == 1)
+        rows, _ = await self.pool_reads.many([key], produce, retain=self.chain_id == 1 and not is_latest(block))
         response = rows[0]
         if 'error' in response:
             raise ValueError('Contract read failed')

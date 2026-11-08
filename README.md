@@ -13,6 +13,11 @@ virtual environment with private environment inputs. This repository owns the cu
 server routes, PostgreSQL domain code, live recovery reader, market caches and
 worker controls; browser wallet signing and submission stay in the frontend.
 
+The root [quotation specifications](SPECS.md) describe the implemented flow,
+module boundaries and linked editable process diagrams. Proposed improvements
+remain in the Ops workplans; specification changes require the owner's explicit
+authorization under [AGENTS.md](AGENTS.md).
+
 RPC-dependent errors retain their existing error text, code and correlation ID.
 An optional `diagnostics` object preserves observed RPC method, operation stage,
 elapsed time, upstream error code or HTTP status, sanitized provider message,

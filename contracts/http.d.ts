@@ -58,8 +58,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Wallet-free whole-plan economics. Ordinary lookup reuses the last successful shared observation with its original context; explicit refresh searches current state and may seed from the saved plan. No execution guards, deadline, calldata, signing or broadcast. */
+        /** @description Wallet-free whole-plan economics priced by complete Helpers latest-state simulations. Scalar requests search both pure-Market and Core-containing path families, seeding up to four distinct lower/upper cached routes at the requested budget; JSON waits for natural completion. Direct basket requests retain their existing stored-offer behavior. Execution guards and lifetime are bound during unsigned preparation. */
         post: operations["post__api_economic_quotes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/economic-quotes/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Subscription-owned selected economic observations are published by the Backend while discovery continues to natural completion. The shared Backend cache supplies early historical observations and lower/upper routes independently per market/Core-containing family. Whole-plan Helpers latest-state repricing replaces a candidate's previous observation in either direction, then the Backend ranks the latest complete candidate tuples and emits its selected result; independent weaker paths are not emitted merely because they are fresh. Fast estimates are separate advisory Backend results. Latest observations have nullable block coordinates. Caller disconnect cancels and drains only its owned work. */
+        post: operations["post__api_economic_quotes_stream"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1191,7 +1208,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        QuoteErrorCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        QuoteErrorCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
         /** @description Economic calculation has no recipient, execution guards, expiry or wire bytes. */
         EconomicRequest: {
             inputs: {
@@ -1222,6 +1239,16 @@ export interface components {
                 conversions: components["schemas"]["Record<string,Record<string,unknown>>"];
                 body: components["schemas"]["Record<string,unknown>"];
             };
+            /** @description Diagnostic nomination origins; never required to replay or rank a route. */
+            routeOrigins?: {
+                /** @constant */
+                economicEvaluator: "cybergold-quoter";
+                /** @enum {string} */
+                pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                discoveryProviders: string[];
+                conversions: components["schemas"]["Record<string,string[]>"];
+                adapterConversions?: string[];
+            };
             /** @description Measured conversion quantities; these never reduce declared funding by inference. */
             conversionObservations?: {
                 operation: string;
@@ -1235,6 +1262,33 @@ export interface components {
                 /** @enum {string} */
                 source: "search" | "stored";
                 refresh: boolean;
+            };
+            /** @description Cached arithmetic only; never executable amounts or accepted bounds. */
+            reuseSample?: {
+                referenceInput: string;
+                netOutput: string;
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                /** @enum {string} */
+                basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                /** @description Historical limitation of this route/funding; not a global or current maximum. */
+                inputLimitObserved?: boolean;
+            };
+            pricingEvidence?: {
+                /** @constant */
+                engine: "helpers-execution";
+                rpcCalls: number;
+                /** @constant */
+                funding: "ephemeral-overrides";
+                /** @enum {string} */
+                feeTreatment: "plan-fees" | "policy-output-arithmetic";
+                stages: components["schemas"]["Record<string,string>"][];
+                coalesced?: number;
+                reused?: number;
+                rawTradeResult?: components["schemas"]["Record<string,unknown>"];
             };
         };
         "Omit<UniversalExactInputQuote,\"plan\"|\"planDescription\"|\"outputMinimum\"|\"economicQuote\">": {
@@ -1282,11 +1336,19 @@ export interface components {
                 /** @constant */
                 encoding: "uniswap-routing-v1";
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             retentionDisclosure: {
                 custodian: string;
@@ -1294,14 +1356,16 @@ export interface components {
                 beneficiary: "helpers-owner-at-settlement";
             };
             searchCoverage: {
-                coreSharesPercent: number[];
-                orders: string[];
+                coreSharesPercent?: number[];
+                orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -1315,8 +1379,262 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                    }[];
+                };
             };
         };
+        "Record<string,string[]>": Record<string, never>;
+        "Record<string,string>": Record<string, never>;
+        /** @description Qualified frames contain complete simulated quote observations. */
+        EconomicQuoteEvent: ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "qualified";
+            value: components["schemas"]["EconomicQuote"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "upper-replay-settled";
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "complete";
+            value: components["schemas"]["EconomicQuote"];
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "invalidated";
+            /** @description Latest simulations carry no independently verified block identity. */
+            context: {
+                chainId: number;
+                blockNumber: null | string;
+                blockHash: null | string;
+                observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
+            };
+        }) | ({
+            requestId?: string;
+            attemptId?: string;
+            correlationId?: string;
+            workId?: string;
+        } & {
+            /** @constant */
+            type: "error";
+            error: string;
+            /** @enum {string} */
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+            /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
+            constraint?: {
+                /** @enum {string} */
+                kind?: "issuance-cap" | "redemption-capacity" | "redemption-supply";
+                /** @enum {string} */
+                quantity?: "core-output-minima" | "gross-cygld-input" | "gross-cygld-mint";
+                /** @enum {string} */
+                limitKind?: "effective-supply-cap" | "maximum-total-supply";
+                requestedRaw?: string;
+                availableRaw?: string;
+                currentSupplyRaw?: string;
+                limitRaw?: string;
+            };
+            /** @description Optional observed RPC failure context; provider text is sanitized before publication. */
+            diagnostics?: {
+                rpcMethod?: string;
+                stage?: string;
+                elapsedMs?: number;
+                upstreamErrorCode?: number;
+                providerMessage?: string;
+                httpStatus?: number;
+                /** @enum {string} */
+                failureType?: "backend-deadline" | "http-error" | "provider-timeout" | "rpc-error" | "transport-error";
+                errorSelector?: string;
+                errorName?: string;
+            };
+            /** @description Existing public quote-work projection; aggregate waits are not wall-clock partitions. */
+            quoteDiagnostics?: {
+                /** @enum {string} */
+                phase?: "basket-preview" | "canonicality" | "capacity" | "context" | "execution-search" | "expected-input-search" | "final-preview" | "initial-preview" | "initial-search" | "retained-validation";
+                elapsedMs?: number;
+                qualified?: boolean;
+                inversionIteration?: number;
+                routeWave?: {
+                    elapsedMs?: number;
+                    subphaseElapsedMs?: number;
+                    /** @enum {string} */
+                    subphase?: "canonicality" | "composition" | "context" | "eligibility" | "structured-search" | "typed-reserve" | "v3-coverage";
+                    /** @enum {string} */
+                    mode?: "exact-in" | "exact-out";
+                    legacyCandidates?: number;
+                    legacyCompleted?: number;
+                    typedEnumerated?: number;
+                    typedCompleted?: number;
+                    typedPending?: number;
+                    sdkRequests?: number;
+                    sdkWaiting?: number;
+                    sdkLockWaitMs?: number;
+                    sdkExchangeMs?: number;
+                    legs?: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        count: number;
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedRows: number;
+                        rows: {
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            index: number;
+                            inputAsset?: string;
+                            outputAsset?: string;
+                            /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                            amount?: string;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            started: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            succeeded: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            failed: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            cancelled: number;
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            pending: number;
+                            bestAvailable: boolean;
+                            failureCounts: {
+                                code: components["schemas"]["QuoteErrorCode"];
+                                /** @description Bounded observation count; never an execution eligibility predicate. */
+                                count: number;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedFailureCodes: number;
+                            bestPools: {
+                                /** @enum {string} */
+                                protocol: "v2" | "v3" | "v4";
+                                /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                                poolId?: string;
+                                poolAddress?: string;
+                            }[];
+                            /** @description Bounded observation count; never an execution eligibility predicate. */
+                            omittedPools: number;
+                        }[];
+                    };
+                };
+                providerQualifications?: {
+                    /** @enum {string} */
+                    provider: "core" | "market";
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    attempts: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    qualified: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    rejected: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    notImproved: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    cancelled: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    superseded: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    pending: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    omittedRows: number;
+                    /** @description Bounded observation count; never an execution eligibility predicate. */
+                    selectedAttempt?: number;
+                    /** @enum {string} */
+                    selectionReason?: "best-initial" | "complete" | "first-extension" | "timeout";
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    firstQualifiedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    selectionMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    canonicalCompletedMs?: number;
+                    /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                    cleanupCompletedMs?: number;
+                    rows: {
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        attempt: number;
+                        /** @enum {string} */
+                        stage: "basket-preview" | "canonicality" | "composition" | "execution-search" | "expected-input-search" | "fee-bounds" | "final-preview" | "initial-preview" | "qualification" | "retained-validation" | "route-pricing" | "selection" | "tolerance";
+                        /** @enum {string} */
+                        outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
+                        /** @enum {string} */
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        targetAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        minimumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountOut?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        maximumAmountIn?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        observedAmountIn?: string;
+                        /** @description Offsets use the existing selection-budget origin, or provider-work origin without a budget. */
+                        startedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        completedMs?: number;
+                        /** @description Observed duration or offset in milliseconds, never a selection predicate. */
+                        elapsedMs?: number;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        executionAmount?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedInput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        quotedOutput?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        inputMaximum?: string;
+                        /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
+                        outputMinimum?: string;
+                        pools?: {
+                            /** @enum {string} */
+                            protocol: "v2" | "v3" | "v4";
+                            /** @description Concrete pool identity or the existing unresolved V3 execution identity. */
+                            poolId?: string;
+                            poolAddress?: string;
+                        }[];
+                        /** @description Bounded observation count; never an execution eligibility predicate. */
+                        omittedPools?: number;
+                    }[];
+                };
+            };
+        });
         PreparedTransaction: {
             /** @constant */
             strategy: "universal";
@@ -1366,11 +1684,19 @@ export interface components {
                 /** @constant */
                 encoding: "uniswap-routing-v1";
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             retentionDisclosure: {
                 custodian: string;
@@ -1378,14 +1704,16 @@ export interface components {
                 beneficiary: "helpers-owner-at-settlement";
             };
             searchCoverage: {
-                coreSharesPercent: number[];
-                orders: string[];
+                coreSharesPercent?: number[];
+                orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -1399,6 +1727,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                    }[];
+                };
             };
         } & {
             economicQuote: components["schemas"]["EconomicQuote"];
@@ -1528,11 +1876,19 @@ export interface components {
                 quote: {
                     /** @enum {string} */
                     mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     quotes: (({
                         adapter: string;
@@ -1858,7 +2214,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2056,11 +2412,19 @@ export interface components {
                             notional: string;
                         };
                     };
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     feeBeneficiaryDisplay?: {
                         address: string;
@@ -2194,7 +2558,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2276,11 +2640,19 @@ export interface components {
             quotedOutput: string;
             inputMaximum: string;
             outputMinimum: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             evaluation: components["schemas"]["TradeEvaluation"];
             metrics: {
@@ -2390,11 +2762,19 @@ export interface components {
             providerQuote: {
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 quotes: (({
                     adapter: string;
@@ -2720,7 +3100,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -2780,11 +3160,19 @@ export interface components {
             quotedOutput: string;
             inputMaximum: string;
             outputMinimum: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             evaluation: components["schemas"]["TradeEvaluation"];
             metrics: {
@@ -2953,11 +3341,19 @@ export interface components {
                         notional: string;
                     };
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 feeBeneficiaryDisplay?: {
                     address: string;
@@ -3091,7 +3487,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -3155,7 +3551,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -3286,7 +3682,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -3335,7 +3731,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -3466,7 +3862,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -3521,11 +3917,19 @@ export interface components {
             quotedOutput: string;
             inputMaximum: string;
             outputMinimum: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             evaluation: components["schemas"]["TradeEvaluation"];
             metrics: {
@@ -3635,11 +4039,19 @@ export interface components {
             providerQuote: {
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 quotes: (({
                     adapter: string;
@@ -3965,7 +4377,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4019,11 +4431,19 @@ export interface components {
             quotedOutput: string;
             inputMaximum: string;
             outputMinimum: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             evaluation: components["schemas"]["TradeEvaluation"];
             metrics: {
@@ -4192,11 +4612,19 @@ export interface components {
                         notional: string;
                     };
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 feeBeneficiaryDisplay?: {
                     address: string;
@@ -4330,7 +4758,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -4406,11 +4834,19 @@ export interface components {
                         routes: {
                             tokens: string[];
                             fees: number[];
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             routePlan?: {
                                 /** @constant */
@@ -4438,11 +4874,19 @@ export interface components {
                             points: {
                                 input: string;
                                 output: string;
+                                /** @description Latest simulations carry no independently verified block identity. */
                                 context?: {
                                     chainId: number;
-                                    blockNumber: string;
-                                    blockHash: string;
+                                    blockNumber: null | string;
+                                    blockHash: null | string;
                                     observedAt: string;
+                                    blockTag?: {
+                                        blockHash: string;
+                                        /** @constant */
+                                        requireCanonical: true;
+                                    } | "latest";
+                                    /** @enum {string} */
+                                    verification?: "execution-simulation" | "quote-observation";
                                 };
                                 recordedAt?: number;
                             }[];
@@ -4450,11 +4894,19 @@ export interface components {
                                 numerator: string;
                                 denominator: string;
                             };
+                            /** @description Latest simulations carry no independently verified block identity. */
                             exchangeContext?: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             feeRetention: {
                                 numerator: string;
@@ -4468,20 +4920,36 @@ export interface components {
                         whole: {
                             input: string;
                             display: string;
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             recordedAt: number;
                         }[];
                         protocol: {
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             state: {
                                 assets: string[];
@@ -4511,11 +4979,19 @@ export interface components {
                         /** @constant */
                         namespace: "market";
                         family: string;
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context?: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         intent: {
                             /** @enum {string} */
@@ -4553,27 +5029,50 @@ export interface components {
                             amountOut: string;
                             sourceObservations?: {
                                 poolId: string;
+                                /** @description Latest simulations carry no independently verified block identity. */
                                 context: {
                                     chainId: number;
-                                    blockNumber: string;
-                                    blockHash: string;
+                                    blockNumber: null | string;
+                                    blockHash: null | string;
                                     observedAt: string;
+                                    blockTag?: {
+                                        blockHash: string;
+                                        /** @constant */
+                                        requireCanonical: true;
+                                    } | "latest";
+                                    /** @enum {string} */
+                                    verification?: "execution-simulation" | "quote-observation";
                                 };
                             }[];
                             sourceContext?: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             } | null;
                             points: {
                                 amountIn: string;
                                 amountOut: string;
+                                /** @description Latest simulations carry no independently verified block identity. */
                                 context?: {
                                     chainId: number;
-                                    blockNumber: string;
-                                    blockHash: string;
+                                    blockNumber: null | string;
+                                    blockHash: null | string;
                                     observedAt: string;
+                                    blockTag?: {
+                                        blockHash: string;
+                                        /** @constant */
+                                        requireCanonical: true;
+                                    } | "latest";
+                                    /** @enum {string} */
+                                    verification?: "execution-simulation" | "quote-observation";
                                 };
                                 requestedAmount?: string;
                                 family?: string;
@@ -4599,6 +5098,50 @@ export interface components {
                     /** @enum {string} */
                     strategy: "core" | "market";
                     amount: string;
+                } | {
+                    /** @constant */
+                    strategy: "universal";
+                    amount: string;
+                    /** @enum {string} */
+                    source: "cached-lower" | "cached-upper";
+                    /**
+                     * @description Advisory display covers this request's full budget; never executable.
+                     * @constant
+                     */
+                    fullBudget?: true;
+                    referenceInput: string;
+                    /** @enum {string} */
+                    basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                    fees: {
+                        coreProtocolFeeCygld: string;
+                        coreHelpersFeeCygld: string;
+                        marketFeeCygld: string;
+                    };
+                    /** @description Latest simulations carry no independently verified block identity. */
+                    context: {
+                        chainId: number;
+                        blockNumber: null | string;
+                        blockHash: null | string;
+                        observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
+                    };
+                    sourceIdentity?: string;
+                    sourceRequestedInput?: string;
+                    routeOrigins?: {
+                        /** @constant */
+                        economicEvaluator: "cybergold-quoter";
+                        /** @enum {string} */
+                        pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                        discoveryProviders: string[];
+                        conversions: components["schemas"]["Record<string,string[]>"];
+                        adapterConversions?: string[];
+                    };
                 };
                 /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
                 budgetRange?: {
@@ -4676,11 +5219,19 @@ export interface components {
                     /** @constant */
                     encoding: "uniswap-routing-v1";
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 retentionDisclosure: {
                     custodian: string;
@@ -4688,14 +5239,16 @@ export interface components {
                     beneficiary: "helpers-owner-at-settlement";
                 };
                 searchCoverage: {
-                    coreSharesPercent: number[];
-                    orders: string[];
+                    coreSharesPercent?: number[];
+                    orders?: string[];
                     maxCoreInvocations: number;
+                    /** @description Historical route/funding limitation, advisory only. */
+                    inputLimitObserved?: boolean;
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -4709,6 +5262,26 @@ export interface components {
                     timeToFirstWholePlanMs: null | number;
                     searchMs: null | number;
                     selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                    nearbySearch?: {
+                        starts: number;
+                        completed: number;
+                        sources: {
+                            /** @enum {string} */
+                            side: "lower" | "upper";
+                            identity?: null | string;
+                            /** @enum {string} */
+                            referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                            attempts: {
+                                funding: string;
+                                completed?: boolean;
+                                elapsedMs: number;
+                                /** @enum {string} */
+                                failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                            }[];
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                    };
                 };
             } | ({
                 /** @enum {string} */
@@ -4721,11 +5294,19 @@ export interface components {
                 quotedOutput: string;
                 inputMaximum: string;
                 outputMinimum: string;
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 evaluation: components["schemas"]["TradeEvaluation"];
                 metrics: {
@@ -4835,11 +5416,19 @@ export interface components {
                 providerQuote: {
                     /** @enum {string} */
                     mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     quotes: (({
                         adapter: string;
@@ -5165,7 +5754,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -5225,11 +5814,19 @@ export interface components {
                 quotedOutput: string;
                 inputMaximum: string;
                 outputMinimum: string;
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 evaluation: components["schemas"]["TradeEvaluation"];
                 metrics: {
@@ -5398,11 +5995,19 @@ export interface components {
                             notional: string;
                         };
                     };
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     feeBeneficiaryDisplay?: {
                         address: string;
@@ -5536,7 +6141,7 @@ export interface components {
                                 /** @enum {string} */
                                 outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                                 /** @enum {string} */
-                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                                 targetAmount?: string;
                                 /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -5614,7 +6219,7 @@ export interface components {
                 searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
                 error?: string;
                 /** @enum {string} */
-                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                 /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                 constraint?: {
                     /** @enum {string} */
@@ -5745,7 +6350,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -5816,7 +6421,7 @@ export interface components {
             strategy: "core" | "market";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -5947,7 +6552,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -6008,7 +6613,7 @@ export interface components {
             type: "error";
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -6139,7 +6744,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -6277,11 +6882,19 @@ export interface components {
                 /** @constant */
                 encoding: "uniswap-routing-v1";
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             retentionDisclosure: {
                 custodian: string;
@@ -6289,14 +6902,16 @@ export interface components {
                 beneficiary: "helpers-owner-at-settlement";
             };
             searchCoverage: {
-                coreSharesPercent: number[];
-                orders: string[];
+                coreSharesPercent?: number[];
+                orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -6310,6 +6925,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                    }[];
+                };
             };
         } | {
             /** @constant */
@@ -6402,11 +7037,19 @@ export interface components {
                     notional: string;
                 };
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             feeBeneficiaryDisplay?: {
                 address: string;
@@ -6540,7 +7183,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -6594,11 +7237,19 @@ export interface components {
                 /** @constant */
                 namespace: "market";
                 family: string;
+                /** @description Latest simulations carry no independently verified block identity. */
                 context?: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 intent: {
                     /** @enum {string} */
@@ -6636,27 +7287,50 @@ export interface components {
                     amountOut: string;
                     sourceObservations?: {
                         poolId: string;
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                     }[];
                     sourceContext?: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     } | null;
                     points: {
                         amountIn: string;
                         amountOut: string;
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context?: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         requestedAmount?: string;
                         family?: string;
@@ -6743,11 +7417,19 @@ export interface components {
                     /** @constant */
                     encoding: "uniswap-routing-v1";
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 retentionDisclosure: {
                     custodian: string;
@@ -6755,14 +7437,16 @@ export interface components {
                     beneficiary: "helpers-owner-at-settlement";
                 };
                 searchCoverage: {
-                    coreSharesPercent: number[];
-                    orders: string[];
+                    coreSharesPercent?: number[];
+                    orders?: string[];
                     maxCoreInvocations: number;
+                    /** @description Historical route/funding limitation, advisory only. */
+                    inputLimitObserved?: boolean;
                     maxAmmHops: number;
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -6776,6 +7460,26 @@ export interface components {
                     timeToFirstWholePlanMs: null | number;
                     searchMs: null | number;
                     selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                    nearbySearch?: {
+                        starts: number;
+                        completed: number;
+                        sources: {
+                            /** @enum {string} */
+                            side: "lower" | "upper";
+                            identity?: null | string;
+                            /** @enum {string} */
+                            referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                            attempts: {
+                                funding: string;
+                                completed?: boolean;
+                                elapsedMs: number;
+                                /** @enum {string} */
+                                failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                            }[];
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                    };
                 };
             } | {
                 /** @constant */
@@ -6868,11 +7572,19 @@ export interface components {
                         notional: string;
                     };
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 feeBeneficiaryDisplay?: {
                     address: string;
@@ -7006,7 +7718,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -7193,7 +7905,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -7454,7 +8166,6 @@ export interface components {
                 publicEvents: number;
             };
         };
-        "Record<string,string>": Record<string, never>;
         /** @description Live configured product facts; amounts stay lossless over JSON. */
         "FactRead<string>": {
             /** @constant */
@@ -8270,11 +8981,19 @@ export interface components {
         };
         BasketPreview: ({
             basketModel?: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -8296,11 +9015,19 @@ export interface components {
                     }[];
                 };
             } | null;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8317,11 +9044,19 @@ export interface components {
             };
         }) | ({
             basketModel?: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -8343,11 +9078,19 @@ export interface components {
                     }[];
                 };
             } | null;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8363,11 +9106,19 @@ export interface components {
             };
         }) | ({
             basketModel?: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -8389,11 +9140,19 @@ export interface components {
                     }[];
                 };
             } | null;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8413,11 +9172,19 @@ export interface components {
             };
         }) | ({
             basketModel?: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -8439,11 +9206,19 @@ export interface components {
                     }[];
                 };
             } | null;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8654,11 +9429,19 @@ export interface components {
             }[];
         };
         TokenPreview: ({
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8673,11 +9456,19 @@ export interface components {
                 orderedCoreAssets: string[];
             };
         }) | ({
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8691,11 +9482,19 @@ export interface components {
                 orderedCoreAssets: string[];
             };
         }) | ({
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
         } & {
@@ -8758,7 +9557,7 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                     /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                     constraint?: {
                         /** @enum {string} */
@@ -8797,11 +9596,19 @@ export interface components {
                 mode: "exact-in" | "exact-out";
                 /** @constant */
                 qualification: "sdk";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 results: {
                     target: {
@@ -8843,7 +9650,7 @@ export interface components {
                         path: string;
                         rpcCode: number;
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                         constraint?: {
                             /** @enum {string} */
@@ -8892,7 +9699,7 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -9023,7 +9830,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -9080,11 +9887,19 @@ export interface components {
                 routes: {
                     tokens: string[];
                     fees: number[];
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     routePlan?: {
                         /** @constant */
@@ -9112,11 +9927,19 @@ export interface components {
                     points: {
                         input: string;
                         output: string;
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context?: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         recordedAt?: number;
                     }[];
@@ -9124,11 +9947,19 @@ export interface components {
                         numerator: string;
                         denominator: string;
                     };
+                    /** @description Latest simulations carry no independently verified block identity. */
                     exchangeContext?: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     feeRetention: {
                         numerator: string;
@@ -9142,20 +9973,36 @@ export interface components {
                 whole: {
                     input: string;
                     display: string;
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     recordedAt: number;
                 }[];
                 protocol: {
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     state: {
                         assets: string[];
@@ -9198,11 +10045,19 @@ export interface components {
             /** @constant */
             type: "estimate";
             amount: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
         }) | ({
             requestId?: string;
@@ -9215,11 +10070,19 @@ export interface components {
             value: {
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 quotes: (({
                     adapter: string;
@@ -9545,7 +10408,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -9591,11 +10454,19 @@ export interface components {
                 readOnly: true;
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 slippageBps?: number;
                 metrics?: {
@@ -9630,11 +10501,19 @@ export interface components {
         } & {
             /** @constant */
             type: "invalidated";
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             /** @constant */
             reason?: "snapshot-changed";
@@ -9649,11 +10528,19 @@ export interface components {
             value: {
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 quotes: (({
                     adapter: string;
@@ -9979,7 +10866,7 @@ export interface components {
                             /** @enum {string} */
                             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                             /** @enum {string} */
-                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                             targetAmount?: string;
                             /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -10025,11 +10912,19 @@ export interface components {
                 readOnly: true;
                 /** @enum {string} */
                 mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 slippageBps?: number;
                 metrics?: {
@@ -10067,7 +10962,7 @@ export interface components {
             error: string;
             correlationId: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -10198,7 +11093,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -10268,7 +11163,7 @@ export interface components {
             omittedPools?: number;
         };
         /** @enum {string} */
-        QuoteCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+        QuoteCode: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
         "Partial<Record<\"elapsedMs\"|\"subphaseElapsedMs\"|\"legacyCandidates\"|\"legacyCompleted\"|\"typedEnumerated\"|\"typedCompleted\"|\"typedPending\"|\"sdkRequests\"|\"sdkWaiting\"|\"sdkLockWaitMs\"|\"sdkExchangeMs\",number>>": {
             elapsedMs?: number;
             subphaseElapsedMs?: number;
@@ -10289,7 +11184,7 @@ export interface components {
             /** @enum {string} */
             outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
         } & components["schemas"]["Partial<Record<\"outputMinimum\"|\"quotedInput\"|\"inputMaximum\"|\"quotedOutput\"|\"targetAmount\"|\"minimumAmountOut\"|\"maximumAmountOut\"|\"observedAmountOut\"|\"maximumAmountIn\"|\"observedAmountIn\"|\"executionAmount\",string>>"] & components["schemas"]["Partial<Record<\"elapsedMs\"|\"startedMs\"|\"completedMs\",number>>"] & {
             pools?: {
                 /** @enum {string} */
@@ -10803,7 +11698,7 @@ export interface components {
                     /** @enum {string} */
                     outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                     /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                     targetAmount?: string;
                     /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -10945,11 +11840,19 @@ export interface components {
                 /** @constant */
                 encoding: "uniswap-routing-v1";
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             retentionDisclosure: {
                 custodian: string;
@@ -10957,14 +11860,16 @@ export interface components {
                 beneficiary: "helpers-owner-at-settlement";
             };
             searchCoverage: {
-                coreSharesPercent: number[];
-                orders: string[];
+                coreSharesPercent?: number[];
+                orders?: string[];
                 maxCoreInvocations: number;
+                /** @description Historical route/funding limitation, advisory only. */
+                inputLimitObserved?: boolean;
                 maxAmmHops: number;
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "detailed" | "first-result" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -10978,6 +11883,26 @@ export interface components {
                 timeToFirstWholePlanMs: null | number;
                 searchMs: null | number;
                 selectionReason: ("best-initial" | "complete" | "first-extension" | "timeout") | null;
+                nearbySearch?: {
+                    starts: number;
+                    completed: number;
+                    sources: {
+                        /** @enum {string} */
+                        side: "lower" | "upper";
+                        identity?: null | string;
+                        /** @enum {string} */
+                        referenceBasis?: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                        attempts: {
+                            funding: string;
+                            completed?: boolean;
+                            elapsedMs: number;
+                            /** @enum {string} */
+                            failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                        }[];
+                        /** @enum {string} */
+                        failureCode?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
+                    }[];
+                };
             };
         };
         TradeProviderAssessment: {
@@ -10987,7 +11912,7 @@ export interface components {
             searchOutcome: "cancelled" | "complete" | "error" | "not-run" | "running" | "timeout";
             error?: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -11118,7 +12043,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -11189,11 +12114,19 @@ export interface components {
                     routes: {
                         tokens: string[];
                         fees: number[];
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         routePlan?: {
                             /** @constant */
@@ -11221,11 +12154,19 @@ export interface components {
                         points: {
                             input: string;
                             output: string;
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context?: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             recordedAt?: number;
                         }[];
@@ -11233,11 +12174,19 @@ export interface components {
                             numerator: string;
                             denominator: string;
                         };
+                        /** @description Latest simulations carry no independently verified block identity. */
                         exchangeContext?: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         feeRetention: {
                             numerator: string;
@@ -11251,20 +12200,36 @@ export interface components {
                     whole: {
                         input: string;
                         display: string;
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         recordedAt: number;
                     }[];
                     protocol: {
+                        /** @description Latest simulations carry no independently verified block identity. */
                         context: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         };
                         state: {
                             assets: string[];
@@ -11294,11 +12259,19 @@ export interface components {
                     /** @constant */
                     namespace: "market";
                     family: string;
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context?: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     intent: {
                         /** @enum {string} */
@@ -11336,27 +12309,50 @@ export interface components {
                         amountOut: string;
                         sourceObservations?: {
                             poolId: string;
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                         }[];
                         sourceContext?: {
                             chainId: number;
-                            blockNumber: string;
-                            blockHash: string;
+                            blockNumber: null | string;
+                            blockHash: null | string;
                             observedAt: string;
+                            blockTag?: {
+                                blockHash: string;
+                                /** @constant */
+                                requireCanonical: true;
+                            } | "latest";
+                            /** @enum {string} */
+                            verification?: "execution-simulation" | "quote-observation";
                         } | null;
                         points: {
                             amountIn: string;
                             amountOut: string;
+                            /** @description Latest simulations carry no independently verified block identity. */
                             context?: {
                                 chainId: number;
-                                blockNumber: string;
-                                blockHash: string;
+                                blockNumber: null | string;
+                                blockHash: null | string;
                                 observedAt: string;
+                                blockTag?: {
+                                    blockHash: string;
+                                    /** @constant */
+                                    requireCanonical: true;
+                                } | "latest";
+                                /** @enum {string} */
+                                verification?: "execution-simulation" | "quote-observation";
                             };
                             requestedAmount?: string;
                             family?: string;
@@ -11382,6 +12378,50 @@ export interface components {
                 /** @enum {string} */
                 strategy: "core" | "market";
                 amount: string;
+            } | {
+                /** @constant */
+                strategy: "universal";
+                amount: string;
+                /** @enum {string} */
+                source: "cached-lower" | "cached-upper";
+                /**
+                 * @description Advisory display covers this request's full budget; never executable.
+                 * @constant
+                 */
+                fullBudget?: true;
+                referenceInput: string;
+                /** @enum {string} */
+                basis: "funded-input-approximation" | "market-sale-consumed" | "observed-nonretained";
+                fees: {
+                    coreProtocolFeeCygld: string;
+                    coreHelpersFeeCygld: string;
+                    marketFeeCygld: string;
+                };
+                /** @description Latest simulations carry no independently verified block identity. */
+                context: {
+                    chainId: number;
+                    blockNumber: null | string;
+                    blockHash: null | string;
+                    observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
+                };
+                sourceIdentity?: string;
+                sourceRequestedInput?: string;
+                routeOrigins?: {
+                    /** @constant */
+                    economicEvaluator: "cybergold-quoter";
+                    /** @enum {string} */
+                    pricing: "canonical-sdk-and-core-previews" | "helpers-execution-with-policy-fees";
+                    discoveryProviders: string[];
+                    conversions: components["schemas"]["Record<string,string[]>"];
+                    adapterConversions?: string[];
+                };
             };
             /** @description Display-only economics of a Backend-selected quote. An absent maximumBudget means no upper budget bound. */
             budgetRange?: {
@@ -11573,11 +12613,19 @@ export interface components {
                     notional: string;
                 };
             };
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             feeBeneficiaryDisplay?: {
                 address: string;
@@ -11711,7 +12759,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -11757,11 +12805,19 @@ export interface components {
             /** @constant */
             namespace: "market";
             family: string;
+            /** @description Latest simulations carry no independently verified block identity. */
             context?: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             intent: {
                 /** @enum {string} */
@@ -11799,27 +12855,50 @@ export interface components {
                 amountOut: string;
                 sourceObservations?: {
                     poolId: string;
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                 }[];
                 sourceContext?: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 } | null;
                 points: {
                     amountIn: string;
                     amountOut: string;
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context?: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     requestedAmount?: string;
                     family?: string;
@@ -11905,11 +12984,19 @@ export interface components {
         };
         ProtocolFacts: {
             basketModel?: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -12295,10 +13382,18 @@ export interface components {
         HelpersExecution: {
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
-                blockTimestamp: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
+            } & {
+                blockTimestamp: null | string;
             };
             helpers: string;
             owner: string;
@@ -12492,11 +13587,19 @@ export interface components {
             maximumAmountsIn: string[];
         };
         BasketMax: {
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             helpers: string;
             orderedCoreAssets: string[];
@@ -12512,11 +13615,19 @@ export interface components {
             amount: string;
         };
         UniswapQuote: {
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             /** @constant */
             qualification: "sdk";
@@ -12541,11 +13652,19 @@ export interface components {
             mode: "exact-in" | "exact-out";
             /** @constant */
             qualification: "sdk";
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             results: {
                 target: {
@@ -12587,7 +13706,7 @@ export interface components {
                     path: string;
                     rpcCode: number;
                     /** @enum {string} */
-                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                    code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                     /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
                     constraint?: {
                         /** @enum {string} */
@@ -12724,11 +13843,19 @@ export interface components {
         QuoteIntent: {
             /** @enum {string} */
             mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             quotes: (({
                 adapter: string;
@@ -13054,7 +14181,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -13103,11 +14230,19 @@ export interface components {
             routes: {
                 tokens: string[];
                 fees: number[];
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 routePlan?: {
                     /** @constant */
@@ -13135,11 +14270,19 @@ export interface components {
                 points: {
                     input: string;
                     output: string;
+                    /** @description Latest simulations carry no independently verified block identity. */
                     context?: {
                         chainId: number;
-                        blockNumber: string;
-                        blockHash: string;
+                        blockNumber: null | string;
+                        blockHash: null | string;
                         observedAt: string;
+                        blockTag?: {
+                            blockHash: string;
+                            /** @constant */
+                            requireCanonical: true;
+                        } | "latest";
+                        /** @enum {string} */
+                        verification?: "execution-simulation" | "quote-observation";
                     };
                     recordedAt?: number;
                 }[];
@@ -13147,11 +14290,19 @@ export interface components {
                     numerator: string;
                     denominator: string;
                 };
+                /** @description Latest simulations carry no independently verified block identity. */
                 exchangeContext?: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 feeRetention: {
                     numerator: string;
@@ -13165,20 +14316,36 @@ export interface components {
             whole: {
                 input: string;
                 display: string;
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 recordedAt: number;
             }[];
             protocol: {
+                /** @description Latest simulations carry no independently verified block identity. */
                 context: {
                     chainId: number;
-                    blockNumber: string;
-                    blockHash: string;
+                    blockNumber: null | string;
+                    blockHash: null | string;
                     observedAt: string;
+                    blockTag?: {
+                        blockHash: string;
+                        /** @constant */
+                        requireCanonical: true;
+                    } | "latest";
+                    /** @enum {string} */
+                    verification?: "execution-simulation" | "quote-observation";
                 };
                 state: {
                     assets: string[];
@@ -13206,11 +14373,19 @@ export interface components {
             readOnly: true;
             /** @enum {string} */
             mode: "issue-exact-in" | "issue-exact-out" | "redeem-exact-in" | "redeem-exact-out";
+            /** @description Latest simulations carry no independently verified block identity. */
             context: {
                 chainId: number;
-                blockNumber: string;
-                blockHash: string;
+                blockNumber: null | string;
+                blockHash: null | string;
                 observedAt: string;
+                blockTag?: {
+                    blockHash: string;
+                    /** @constant */
+                    requireCanonical: true;
+                } | "latest";
+                /** @enum {string} */
+                verification?: "execution-simulation" | "quote-observation";
             };
             slippageBps?: number;
             metrics?: {
@@ -13321,7 +14496,7 @@ export interface components {
                 } & components["schemas"]["Partial<Record<\"pending\"|\"cancelled\"|\"attempts\"|\"qualified\"|\"rejected\"|\"superseded\"|\"notImproved\"|\"omittedRows\"|\"firstQualifiedMs\"|\"selectionMs\"|\"canonicalCompletedMs\"|\"cleanupCompletedMs\",number>>"];
             };
             /** @enum {string} */
-            errorClassification?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            errorClassification?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-invalid-input" | "quote-no-route" | "quote-request-limit" | "quote-service-unavailable" | "quote-stream-interrupted" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             tokenIn?: string;
             tokenOut?: string;
             amount?: string;
@@ -13684,7 +14859,7 @@ export interface components {
         } & {
             error: string;
             /** @enum {string} */
-            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+            code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
             /** @description Canonical preview rejection evidence; absent quantities were not provided by the contract. */
             constraint?: {
                 /** @enum {string} */
@@ -13815,7 +14990,7 @@ export interface components {
                         /** @enum {string} */
                         outcome: "cancelled" | "not-improved" | "qualified" | "rejected" | "running" | "superseded";
                         /** @enum {string} */
-                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable";
+                        code?: "insufficient-protocol-supply" | "insufficient-recovery-shares" | "insufficient-reserve-balance" | "issuance-cap-exceeded" | "quote-contract-reverted" | "quote-insufficient-liquidity" | "quote-no-route" | "quote-timeout" | "quote-unavailable" | "redemption-capacity-exceeded" | "redemption-supply-exceeded" | "rpc-access-denied" | "rpc-rate-limit" | "rpc-timeout" | "rpc-unavailable" | "unsupported-simulation-funding";
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
                         targetAmount?: string;
                         /** @description Raw uint256 quantity; the producer additionally enforces the uint256 maximum. */
@@ -14261,6 +15436,50 @@ export interface operations {
                 };
             };
             /** @description Existing route-specific errors; see compatibility fixtures */
+            default: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicError"];
+                };
+            };
+        };
+    };
+    post__api_economic_quotes_stream: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for one browser trade attempt. Invalid values are ignored. */
+                "X-CyberGold-Attempt-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EconomicQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Helpers-qualified improvements followed by complete or error; caller cancellation ends its subscription. Snapshot disproof emits invalidated before error. Integers are decimal strings. */
+            200: {
+                headers: {
+                    /** @description Backend request reference, separate for each subscriber to shared quote work. */
+                    "X-CyberGold-Request-Id"?: string;
+                    /** @description Optional observed Backend build commit from this responding process; absent for unversioned local builds. */
+                    "X-CyberGold-Backend-Revision"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["EconomicQuoteEvent"];
+                };
+            };
+            /** @description Existing response envelope */
             default: {
                 headers: {
                     /** @description Backend request reference, separate for each subscriber to shared quote work. */

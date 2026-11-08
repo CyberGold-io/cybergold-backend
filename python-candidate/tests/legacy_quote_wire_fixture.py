@@ -16,6 +16,7 @@ from cybergold_candidate.quote_errors import rpc_failure
 from cybergold_candidate.rpc_diagnostics import error_diagnostics
 from cybergold_candidate.shared_reads import SharedReads
 from cybergold_candidate.uniswap_state import ZERO
+from cybergold_candidate.rpc_block_context import rpc_block_parameter, is_latest
 
 ABI = json.loads(Path(__file__).with_name('legacy-uniswap-quoter-abi.json').read_text())
 METHODS = {'exact-in': 'quoteExactInput', 'exact-out': 'quoteExactOutput'}
@@ -37,7 +38,7 @@ class ReferenceUniswapQuoteRpc(QuoteContextRpc):
 
     async def quote(self, mode, data, block):
         response = await self.w3.provider.make_request('eth_call', [
-            {'to': self.quoter, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
+            {'to': self.quoter, 'data': data}, rpc_block_parameter(block)])
         if 'error' in response:
             raise ValueError('Uniswap quote contract read failed')
         outputs = next(row for row in ABI if row['name'] == METHODS[mode])['outputs']
@@ -150,7 +151,7 @@ class SharingQuoterRpc(ReferenceRouteSearchRpc):
         keys = [(self.chain_id, block['hash'].lower(), self.quoter.lower(), mode, value.lower()) for value in data]
         by_key = dict(zip(keys, data, strict=True))
         hits = {}
-        if self.retain_completed and self.chain_id == 1:
+        if self.retain_completed and self.chain_id == 1 and not is_latest(block):
             for key in keys:
                 row = self.completed_quotes.get(key)
                 if row and time.monotonic()-row[0] < 10:
@@ -160,7 +161,7 @@ class SharingQuoterRpc(ReferenceRouteSearchRpc):
                     self.completed_quotes.pop(key,None)
         async def produce(missing):
             result = await super(SharingQuoterRpc, self).quote_batch(mode, [by_key[key] for key in missing], block)
-            if self.retain_completed and self.chain_id == 1:
+            if self.retain_completed and self.chain_id == 1 and not is_latest(block):
                 for key,value in zip(missing,result,strict=True):
                     if value['status'] == 'success':
                         self.completed_quotes[key] = (time.monotonic(),deepcopy(value))

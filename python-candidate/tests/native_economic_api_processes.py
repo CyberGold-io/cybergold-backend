@@ -1,6 +1,7 @@
 """Literal two-process HTTP/SQL completed-quote reuse on a caller-owned DB.
 
-Pricing uses the deterministic test_universal_quote fixture, not a provider.
+Pricing uses a deterministic fixture by default; --actual-sdk uses captured
+Mainnet state and the serving SDK, with reduced-funded quote/Refresh controls.
 Each Uvicorn process owns a real app, service, SQL store and connection pool.
 The coordinator owns both loopback sockets/processes and always stops them.
 """
@@ -31,8 +32,26 @@ from test_universal_quote import CORE, Engine, Quotes, request
 
 async def serve(role, descriptor):
     database = Database(os.environ['DATABASE_URL'])
-    engine = Engine()
-    quoter = Quotes(engine)
+    cleanups = []
+    if os.environ.get('QUOTER_API_ACTUAL_SDK') == '1':
+        from quoter_fixture import historical_service, historical_route
+        class Owner:
+            def addAsyncCleanup(self, function, *args):
+                cleanups.append((function, args))
+        quoter, case = historical_service(Owner(), exploration_seed=1700)
+        engine = quoter.engine
+        direct = next(row for row in case['routes'] if row['output'] == '1512123003848321271')
+        route = historical_route(quoter, direct)
+        engine.registry.inventory = {hop['pool']['id']: hop['pool'] for hop in route}
+        quoter.evaluated = []
+        candidate = quoter.candidate
+        async def recorded(*args, **kwargs):
+            quoter.evaluated.append(True)
+            return await candidate(*args, **kwargs)
+        quoter.candidate = recorded
+    else:
+        engine = Engine()
+        quoter = Quotes(engine)
     registry = engine.registry
     registry.store = UniswapStore(database, registry.chain, registry.core)
     registry.store.scope = os.environ['QUOTER_API_TEST_SCOPE']
@@ -40,7 +59,8 @@ async def serve(role, descriptor):
         pass
     registry.ensure_loaded = loaded
     observed = {'pid': os.getpid(), 'role': role, 'headRequests': 0, 'failRefresh': False}
-    block = engine.block
+    rpc = registry.get_rpc()
+    block = rpc.block
     async def fixture_block(value):
         observed['headRequests'] += 1
         if role == 'lookup':
@@ -48,9 +68,13 @@ async def serve(role, descriptor):
         if observed['failRefresh']:
             raise QuoteFailure('quote-no-route')
         return await block(value)
-    engine.block = fixture_block
+    rpc.block = fixture_block
     service = EconomicQuotes(quoter, EconomicQuoteStore(quoter.settings, registry))
-    app = create_app(economic_quotes=service, on_shutdown=database.close)
+    async def shutdown():
+        for function, args in reversed(cleanups):
+            await function(*args)
+        await database.close()
+    app = create_app(economic_quotes=service, on_shutdown=shutdown)
 
     @app.get('/__fixture__/state')
     async def state():
@@ -115,7 +139,11 @@ async def qualify(output):
                 before_a, before_b = await asyncio.gather(await_fixture(one, processes[0]),
                                                          await_fixture(two, processes[1]))
                 assert before_a['pid'] != before_b['pid']
-                payload = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+                if os.environ.get('QUOTER_API_ACTUAL_SDK') == '1':
+                    from quoter_fixture import historical_data
+                    payload = deepcopy(historical_data()['cases'][0]['request'])
+                else:
+                    payload = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
                 response = await one.post('/api/economic-quotes', json=payload)
                 assert response.status_code == 200
                 original = response.json()
@@ -129,6 +157,20 @@ async def qualify(output):
                 after_a, after_b = (await one.get('/__fixture__/state')).json(), (await two.get('/__fixture__/state')).json()
                 assert after_a['headRequests'] > 0 and after_a['candidateEvaluations'] > 0
                 assert after_b['headRequests'] == 0 and after_b['candidateEvaluations'] == 0
+
+                if os.environ.get('QUOTER_API_ACTUAL_SDK') == '1':
+                    assert original['inputs'][0]['amount'] == '198627782'
+                    assert original['request']['inputs'][0]['amount'] == '500000000'
+                    refreshed_response = await one.post('/api/economic-quotes', json={**payload, 'refresh': True})
+                    assert refreshed_response.status_code == 200
+                    original = refreshed_response.json()
+                    assert original['observation'] == {'source': 'search', 'refresh': True}
+                    assert original['inputs'][0]['amount'] == '198627782'
+                    assert original['quotedOutput'] == '1512123003848321271'
+                    assert original['metrics']['optionalSearch']['randomSeed'] == '1700'
+                    shared = (await two.post('/api/economic-quotes', json=payload)).json()
+                    assert economic_tuple(shared) == economic_tuple(original)
+                    after_a = (await one.get('/__fixture__/state')).json()
 
                 await one.post('/__fixture__/fail-refresh')
                 failure = await one.post('/api/economic-quotes', json={**payload, 'refresh': True})
@@ -147,11 +189,28 @@ async def qualify(output):
                     version = (await (await connection.execute('SHOW server_version')).fetchone())['server_version']
                     rows = await (await connection.execute('''SELECT payload FROM cybergold_uniswap_state
                         WHERE chain_id=%s AND core_address=%s AND namespace=%s''',
-                        (1, CORE.lower(), namespace+'economic-quotes'))).fetchall()
+                        (1, (payload['outputCurrency'] if payload['intent'] == 0 else payload['inputs'][0]['currency']).lower(), namespace+'economic-quotes'))).fetchall()
                 assert len(rows) == 1
                 assert rows[0]['payload']['quote'] == economic_tuple(original)
-                report = {'result': 'passed', 'scope': 'local two-process HTTP and PostgreSQL correctness control',
-                    'pricing': 'deterministic test fixture; no live RPC or owned-fork latency measurement',
+                restart_listener = socket.socket()
+                restart_listener.bind(('127.0.0.1', 0)); restart_listener.listen(128)
+                listeners.append(restart_listener)
+                restart_endpoint = 'http://127.0.0.1:' + str(restart_listener.getsockname()[1])
+                restart_log = open(Path(directory) / 'restart.log', 'w'); logs.append(restart_log)
+                restarted = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                    '--serve', 'lookup', '--fd', str(restart_listener.fileno())],
+                    env={**os.environ, 'QUOTER_API_TEST_SCOPE': namespace},
+                    pass_fds=(restart_listener.fileno(),), stdout=restart_log, stderr=restart_log)
+                processes.append(restarted); restart_listener.close()
+                async with httpx.AsyncClient(base_url=restart_endpoint, timeout=20, trust_env=False) as fresh:
+                    await await_fixture(fresh, restarted)
+                    restarted_quote = (await fresh.post('/api/economic-quotes', json=payload)).json()
+                    assert economic_tuple(restarted_quote) == economic_tuple(original)
+                    restarted_state = (await fresh.get('/__fixture__/state')).json()
+                    assert restarted_state['headRequests'] == restarted_state['candidateEvaluations'] == 0
+                report = {'result': 'passed', 'restartReusesStoredQuoteWithoutPricing': True, 'scope': 'local two-process HTTP and PostgreSQL correctness control',
+                    'pricing': 'actual SDK / captured Mainnet state' if os.environ.get('QUOTER_API_ACTUAL_SDK') == '1' else 'deterministic test fixture',
+                    'actualSdkFundingRefresh': os.environ.get('QUOTER_API_ACTUAL_SDK') == '1',
                     'postgresVersion': version, 'distinctApiProcesses': True,
                     'api1Pid': after_a['pid'], 'api2Pid': after_b['pid'],
                     'api1InitialHeadReads': after_a['headRequests'],
@@ -190,7 +249,10 @@ if __name__ == '__main__':
     parser.add_argument('--serve', choices=('producer', 'lookup'))
     parser.add_argument('--fd', type=int)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--actual-sdk', action='store_true')
     arguments = parser.parse_args()
+    if arguments.actual_sdk:
+        os.environ['QUOTER_API_ACTUAL_SDK'] = '1'
     try:
         asyncio.run(serve(arguments.serve, arguments.fd) if arguments.serve else qualify(arguments.output))
     except Exception as error:

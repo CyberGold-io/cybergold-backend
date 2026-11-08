@@ -15,8 +15,9 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from web3 import AsyncWeb3, Web3
 
 from .pool_cache import Pair
-from .recovery_rpc import RecoveryRpc, abi_value, ZERO
+from .recovery_rpc import RecoveryRpc, SnapshotChanged, abi_value, ZERO
 from .rpc_transport import rpc_provider
+from .rpc_block_context import rpc_block_parameter
 from .supplier_dispatch import dispatch
 from .quote_errors import public_quote_error
 
@@ -119,7 +120,7 @@ class PoolRpc(RecoveryRpc):
         data = self.pool_contracts[group].encode_abi(name, args=[abi_value(value, parameter)
             for value, parameter in zip(args, function['inputs'], strict=True)])
         response = await self.w3.provider.make_request('eth_call', [
-            {'to': address, 'data': data}, {'blockHash': block['hash'], 'requireCanonical': True}])
+            {'to': address, 'data': data}, rpc_block_parameter(block)])
         if 'error' in response:
             raise ValueError('Pool contract read failed')
         values = self.w3.codec.decode([collapse_if_tuple(output) for output in function['outputs']],
@@ -168,6 +169,7 @@ class PoolProducer:
     async def resolve(self, identifier, block, staged=None):
         """Resolve identity once; share the quote registry's static lookup cache."""
         from .uniswap_routes import v4_pool_id
+        from .uniswap_state import owned_reads
         registry, rpc = self.registry, self.registry.get_rpc()
         staged = staged if staged is not None else {}
         protocol = identifier.get('protocol') or 'v3'
@@ -215,7 +217,7 @@ class PoolProducer:
                 address = values[0]
                 if address.lower() == ZERO:
                     return {'pool': None, 'acquired': True}
-                a, b = await asyncio.gather(self.token_ref(token0, block), self.token_ref(token1, block))
+                a, b = await owned_reads(self.token_ref(token0, block), self.token_ref(token1, block))
                 value = {'id': address.lower(), 'protocol': protocol, 'address': Web3.to_checksum_address(address),
                          'token0': a, 'token1': b, 'feePips': fee if protocol == 'v3' else 3000}
                 if protocol == 'v3':
@@ -225,7 +227,7 @@ class PoolProducer:
             resolved = deepcopy(await registry.pending.one(('pool-identity', registry.generation, block['hash'], lookup), acquire_address))
             staged[lookup] = resolved
             return resolved['pool']
-        a, b = await asyncio.gather(self.token_ref(token0, block), self.token_ref(token1, block))
+        a, b = await owned_reads(self.token_ref(token0, block), self.token_ref(token1, block))
         return {'id': identity, 'protocol': protocol, 'token0': a, 'token1': b,
                 'feePips': fee, 'tickSpacing': identifier['tickSpacing'],
                 'hooks': identifier['hooks'], 'poolManager': manager}
@@ -233,6 +235,8 @@ class PoolProducer:
     async def token_ref(self, address, block):
         try:
             return await self.registry.token_metadata(address, block, publish=False)
+        except SnapshotChanged:
+            raise
         except Exception:
             # Optional display decimals cannot make a previously supported V3
             # slot/balance observation depend on a new metadata prerequisite.

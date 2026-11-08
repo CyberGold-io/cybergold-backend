@@ -350,8 +350,215 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(values, [{'result': 'failed'}])
         self.assertEqual(counts['issued'], 1)
 
-    async def test_five_concurrent_fresh_waves_reduce_issued_reads_without_dropping_candidates(self):
-        for asset, current, shared in ((WETH, 135, 71), (target()['inputAsset'], 315, 179)):
+    async def _warm_reads(self, bank, values):
+        async def produce(keys):
+            return [values[key] for key in keys]
+        return await bank.many(list(values), produce, retain=True)
+
+    async def _close_batch_readers(self, bank, readers, *releases):
+        for release in releases:
+            release.set()
+        for reader in readers:
+            if not reader.done():
+                reader.cancel()
+        await asyncio.gather(*readers, return_exceptions=True)
+        await bank.close()
+
+    async def test_cached_many_yields_to_peer_without_creating_hit_tasks(self):
+        bank = SharedReads()
+        self.addAsyncCleanup(bank.close)
+        cached = {'a': {'result': 'a'}, 'b': {'result': 'b'}}
+        await self._warm_reads(bank, cached)
+        async def unexpected(_keys):
+            self.fail('Cached reads must not invoke a producer')
+        loop, peer = asyncio.get_running_loop(), []
+        loop.call_soon(peer.append, 'checkpoint')
+        counts = {}
+        with patch.object(loop, 'create_task', wraps=loop.create_task) as create_task:
+            values, observed = await bank.many(['a', 'b', 'a'], unexpected, retain=True, counts=counts)
+        self.assertEqual(peer, ['checkpoint'])
+        create_task.assert_not_called()
+        self.assertIs(observed, counts)
+        self.assertEqual(counts, {'requested': 3, 'issued': 0, 'coalesced': 0, 'reused': 3})
+        self.assertIs(values[0], cached['a'])
+        self.assertIs(values[1], cached['b'])
+        self.assertIs(values[2], values[0])
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+
+    async def test_cached_singleton_keeps_its_immediate_fastpath(self):
+        bank = SharedReads()
+        self.addAsyncCleanup(bank.close)
+        cached = {'result': 'cached'}
+        await self._warm_reads(bank, {'cached': cached})
+        async def unexpected(_keys):
+            self.fail('A cached singleton must not invoke a producer')
+        loop, peer = asyncio.get_running_loop(), []
+        loop.call_soon(peer.append, 'next-turn')
+        with patch.object(loop, 'create_task', wraps=loop.create_task) as create_task:
+            values, counts = await bank.many(['cached'], unexpected, retain=True)
+        self.assertEqual(peer, [])
+        create_task.assert_not_called()
+        self.assertIs(values[0], cached)
+        self.assertEqual(counts, {'requested': 1, 'issued': 0, 'coalesced': 0, 'reused': 1})
+        await asyncio.sleep(0)
+        self.assertEqual(peer, ['next-turn'])
+
+    async def test_cached_pending_and_new_members_keep_duplicate_positions_aliases_and_counts(self):
+        bank, readers = SharedReads(), []
+        started, release, new_started = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        self.addAsyncCleanup(self._close_batch_readers, bank, readers, release)
+        cached, pending, new = ({'result': name} for name in ('cached', 'pending', 'new'))
+        await self._warm_reads(bank, {'cached': cached})
+        calls = []
+        async def original(keys):
+            calls.append(list(keys))
+            started.set()
+            await release.wait()
+            return [pending]
+        first = asyncio.create_task(bank.many(['pending'], original, retain=True))
+        readers.append(first)
+        await self._singleton_until(started.is_set)
+        async def produce_new(keys):
+            calls.append(list(keys))
+            new_started.set()
+            return [new]
+        counts = {}
+        mixed = asyncio.create_task(bank.many(
+            ['cached', 'pending', 'new', 'cached', 'pending', 'new'],
+            produce_new, retain=True, counts=counts))
+        readers.append(mixed)
+        await self._singleton_until(new_started.is_set)
+        self.assertFalse(mixed.done())
+        self.assertEqual(bank.pending['pending'].users, 3)
+        release.set()
+        (original_values, _), (values, observed) = await asyncio.gather(first, mixed)
+        self.assertIs(observed, counts)
+        self.assertEqual(counts, {'requested': 6, 'issued': 1, 'coalesced': 3, 'reused': 2})
+        self.assertEqual(calls, [['pending'], ['new']])
+        for position, value in enumerate((cached, pending, new, cached, pending, new)):
+            self.assertIs(values[position], value)
+        self.assertIs(original_values[0], values[1])
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+        self.assertIs(bank.completed['pending'], pending)
+        self.assertIs(bank.completed['new'], new)
+
+    async def test_cached_mixed_failure_and_snapshot_disproof_preserve_original_exception(self):
+        from cybergold_candidate.recovery_rpc import SnapshotChanged
+        for error in (ValueError('ordinary failure'), SnapshotChanged('canonical disproof')):
+            with self.subTest(error=type(error).__name__):
+                bank, readers = SharedReads(), []
+                started, release = asyncio.Event(), asyncio.Event()
+                self.addAsyncCleanup(self._close_batch_readers, bank, readers, release)
+                cached = {'result': 'cached'}
+                await self._warm_reads(bank, {'cached': cached})
+                async def fail(_keys):
+                    started.set()
+                    await release.wait()
+                    raise error
+                async def unexpected(_keys):
+                    self.fail('A subscriber must share the existing failing producer')
+                first = asyncio.create_task(bank.many(['pending'], fail, retain=True))
+                readers.append(first)
+                await self._singleton_until(started.is_set)
+                counts = {}
+                mixed = asyncio.create_task(bank.many(
+                    ['cached', 'pending', 'pending'], unexpected, retain=True, counts=counts))
+                readers.append(mixed)
+                await self._singleton_until(lambda: bank.pending['pending'].users == 3)
+                release.set()
+                outcomes = await asyncio.gather(first, mixed, return_exceptions=True)
+                self.assertTrue(all(outcome is error for outcome in outcomes))
+                self.assertEqual(counts, {'requested': 3, 'issued': 0, 'coalesced': 2, 'reused': 1})
+                self.assertEqual(bank.pending, {})
+                self.assertEqual(bank.groups, {})
+                self.assertEqual(bank.completed, {'cached': cached})
+                self.assertIs(bank.completed['cached'], cached)
+
+    async def test_cached_mixed_sibling_cancellation_keeps_shared_batch_alive(self):
+        bank, readers = SharedReads(), []
+        started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        self.addAsyncCleanup(self._close_batch_readers, bank, readers, release)
+        cached = {'result': 'cached'}
+        values = {'a': {'result': 'a'}, 'b': {'result': 'b'}}
+        await self._warm_reads(bank, {'cached': cached})
+        calls = []
+        async def produce(keys):
+            calls.append(list(keys))
+            started.set()
+            try:
+                await release.wait()
+                return [values[key] for key in keys]
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+        async def unexpected(_keys):
+            self.fail('The sibling must share the original batch')
+        first = asyncio.create_task(bank.many(['cached', 'a', 'b', 'a'], produce, retain=True))
+        readers.append(first)
+        await self._singleton_until(started.is_set)
+        sibling = asyncio.create_task(bank.many(['cached', 'b', 'cached'], unexpected, retain=True))
+        readers.append(sibling)
+        await self._singleton_until(lambda: bank.pending['b'].users == 2)
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertFalse(cancelled.is_set())
+        self.assertEqual((bank.pending['a'].users, bank.pending['b'].users), (0, 1))
+        release.set()
+        observed, counts = await sibling
+        self.assertIs(observed[0], cached)
+        self.assertIs(observed[1], values['b'])
+        self.assertIs(observed[2], cached)
+        self.assertEqual(counts, {'requested': 3, 'issued': 0, 'coalesced': 1, 'reused': 2})
+        self.assertEqual(calls, [['a', 'b']])
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+        self.assertIs(bank.completed['a'], values['a'])
+        self.assertIs(bank.completed['b'], values['b'])
+
+    async def test_cached_mixed_last_subscriber_drains_before_return_without_losing_replacement(self):
+        bank, readers = SharedReads(), []
+        started, cleaning, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        self.addAsyncCleanup(self._close_batch_readers, bank, readers, finish)
+        cached, fresh = {'result': 'cached'}, {'result': 'replacement'}
+        await self._warm_reads(bank, {'cached': cached})
+        async def original(_keys):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleaning.set()
+                await finish.wait()
+        first = asyncio.create_task(bank.many(['cached', 'pending', 'pending'], original, retain=True))
+        readers.append(first)
+        await self._singleton_until(started.is_set)
+        first.cancel()
+        await self._singleton_until(cleaning.is_set)
+        self.assertFalse(first.done(), 'Last subscriber must await its producer drain')
+        self.assertNotIn('pending', bank.pending)
+        self.assertEqual(len(bank.groups), 1)
+        async def replacement(keys):
+            self.assertEqual(keys, ['pending'])
+            return [fresh]
+        values, counts = await bank.many(
+            ['cached', 'pending', 'pending'], replacement, retain=True)
+        self.assertIs(values[0], cached)
+        self.assertIs(values[1], fresh)
+        self.assertIs(values[2], fresh)
+        self.assertEqual(counts, {'requested': 3, 'issued': 1, 'coalesced': 1, 'reused': 1})
+        self.assertFalse(first.done())
+        finish.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+        self.assertIs(bank.completed['cached'], cached)
+        self.assertIs(bank.completed['pending'], fresh)
+
+    async def test_five_concurrent_pinned_waves_reduce_issued_reads_without_dropping_candidates(self):
+        for asset, shared in ((WETH, 56), (target()['inputAsset'], 164)):
             search, _, wire = service()
             self.addAsyncCleanup(search.close)
             original = wire.send
@@ -362,36 +569,41 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             search.rpc.client = httpx.AsyncClient(transport=httpx.MockTransport(delayed))
             requests = [{'mode': 'exact-in', 'targets': [target(asset, amount=100 + i),
                 target(asset, ASSET_C, amount=200 + i)]} for i in range(5)]
-            values = await asyncio.gather(*(search.get(request) for request in requests))
-            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 15)
-            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 15)
+            values = await asyncio.gather(*(search.get(request, block={'number': 101, 'hash': HASH})
+                                          for request in requests))
+            self.assertEqual(sum(value['metrics']['rpcReadsRequested'] for value in values), 0)
+            self.assertEqual(sum(value['metrics']['rpcReads'] for value in values), 0)
             self.assertTrue(all(value['metrics']['rpcReadsScope'] == 'coordinator' for value in values))
             self.assertTrue(all(value['metrics']['candidateCalls'] == (8 if asset == WETH else 26) for value in values))
-            self.assertEqual(sum(len(batch) for batch in wire.batches) + 15, shared)
+            self.assertEqual(sum(len(batch) for batch in wire.batches), shared)
 
-    async def test_mainnet_warm_pool_reuse_keeps_amount_reads_fresh_and_new_hash_misses(self):
+    async def test_explicit_pinned_mainnet_pool_reuse_keeps_amount_reads_fresh_and_new_hash_misses(self):
         search, provider, wire = service()
         self.addAsyncCleanup(search.close)
         async def quote(_path, amount): return amount + 777
         wire.on_quote = quote
         def members():
             return sum(len(batch) for batch in wire.batches)
-        first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]})
+        block = {'number': 101, 'hash': HASH}
+        first = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=100), target(WETH, ASSET_C, amount=200)]}, block=block)
         first_members = members()
-        second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]})
+        second = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=101), target(WETH, ASSET_C, amount=201)]}, block=block)
         second_members = members()-first_members
         self.assertEqual((first_members, second_members), (24, 8))
-        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (3, 3))
+        self.assertEqual((first['metrics']['rpcReads'], second['metrics']['rpcReads']), (0, 0))
         self.assertEqual(second['metrics']['rpcReadsScope'], 'coordinator')
         self.assertEqual(int(second['results'][0]['best']['quote']), int(first['results'][0]['best']['quote']) + 1)
         provider.block_hash = '0x' + 'b' * 64
-        third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]})
+        block = {'number': 101, 'hash': provider.block_hash}
+        third = await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=102), target(WETH, ASSET_C, amount=202)]}, block=block)
         self.assertEqual(members()-first_members-second_members, 24)
-        self.assertEqual(third['metrics']['rpcReads'], 3)
+        self.assertEqual(third['metrics']['rpcReads'], 0)
         self.assertEqual(third['context']['blockHash'], provider.block_hash)
+        self.assertEqual(provider.calls, [])
+        # Explicit pinned producers retain their own canonical verification.
         provider.reorg = True
         with self.assertRaisesRegex(Exception, 'snapshot changed'):
-            await search.get({'mode': 'exact-out', 'targets': [target(WETH, amount=103)]})
+            await search.rpc.assert_canonical(block)
 
     async def test_sandbox_same_hash_override_is_observed_without_any_new_marker(self):
         settings = SimpleNamespace(**{**vars(SETTINGS), 'NEXT_PUBLIC_CHAIN_ID': '31338'})
@@ -408,7 +620,9 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
         before = len(wire.batches)
         wire.pool_liquidity = lambda _fee: 123
         second = await search.get({'mode': 'exact-in', 'targets': [target(WETH)]})
-        self.assertEqual(second['context']['blockHash'], HASH)
+        self.assertEqual(second['context']['blockHash'], None)
+        self.assertEqual(second['context']['blockTag'], 'latest')
+        self.assertEqual(provider.calls, [])
         self.assertEqual(second['metrics']['candidateCalls'], 4)
         native = [row for batch in wire.batches[before:] for row in batch
             if row['params'][0]['data'][:10] not in ('0x1698ee82', '0x1a686502')]
@@ -526,6 +740,45 @@ class SharedReadTests(unittest.IsolatedAsyncioTestCase):
             await bank.many(['missing'], lambda keys: asyncio.sleep(0, result=[]))
         self.assertEqual(bank.pending, {})
         await bank.close()
+
+    async def test_producer_cancelled_before_first_turn_wakes_waiters_and_cleans_entries(self):
+        bank, started = SharedReads(), []
+        async def produce():
+            started.append(True)
+            return {'result': 'unused'}
+        reader = asyncio.create_task(bank.one('early-producer', produce))
+        # The reader's first turn creates its producer behind this callback.
+        asyncio.get_running_loop().call_soon(lambda: bank.pending['early-producer'].task.cancel())
+        with self.assertRaises(asyncio.CancelledError):
+            await asyncio.wait_for(reader, 1)
+        self.assertEqual(started, [])
+        self.assertEqual(bank.pending, {})
+        self.assertEqual(bank.groups, {})
+        await bank.close()
+
+    async def test_close_owns_a_retiring_producer_after_its_pending_keys_were_removed(self):
+        bank = SharedReads()
+        started, retiring, drained = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def produce():
+            try:
+                started.set()
+                await asyncio.Event().wait()
+            finally:
+                try:
+                    retiring.set()
+                    await asyncio.Event().wait()
+                finally:
+                    drained.set()
+        reader = asyncio.create_task(bank.one('retiring', produce))
+        await started.wait()
+        reader.cancel()
+        await retiring.wait()
+        self.assertEqual(bank.pending, {})
+        self.assertFalse(drained.is_set())
+        await bank.close()
+        with self.assertRaises(asyncio.CancelledError): await reader
+        self.assertTrue(drained.is_set())
+        self.assertEqual(bank.groups, {})
 
 
 if __name__ == '__main__':

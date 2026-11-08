@@ -19,6 +19,7 @@ MESSAGES = {
     'quote-insufficient-liquidity': 'The Market does not have enough liquidity to fill this amount. Reduce the amount.',
     'quote-contract-reverted': 'The contract rejected the quote for this amount.',
     'quote-unavailable': 'The quote service could not complete this request. Please retry.',
+    'unsupported-simulation-funding': 'Quote simulation funding is not supported for this input currency.',
 }
 
 

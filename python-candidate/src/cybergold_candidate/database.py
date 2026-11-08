@@ -6,6 +6,7 @@ from pathlib import Path
 
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
+from .quote_flow import stage
 
 SCHEMA = json.loads(Path(__file__).with_name('retained-schema.json').read_text())
 POOL_IDENTITIES = json.loads(Path(__file__).with_name('pool-identity-schema.json').read_text())
@@ -28,9 +29,17 @@ class Database:
 
     @asynccontextmanager
     async def connection(self):
-        pool = await self.get_pool()
-        async with pool.connection() as connection:
+        with stage('database.acquire', kind='await'):
+            pool = await self.get_pool()
+            lease = pool.connection()
+            connection = await lease.__aenter__()
+        try:
             yield connection
+        except BaseException as error:
+            if not await lease.__aexit__(type(error), error, error.__traceback__):
+                raise
+        else:
+            await lease.__aexit__(None, None, None)
 
     async def initialize_schema(self):
         for statement in (*SCHEMA['statements'], *POOL_IDENTITIES['statements']):

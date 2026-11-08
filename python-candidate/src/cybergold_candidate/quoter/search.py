@@ -7,30 +7,78 @@ Every candidate owns its pool-state bank. Quotes model disclosed treasury
 retention; they never subtract retained principal from the user's gross spend.
 """
 import asyncio
+import json
+from contextlib import aclosing, nullcontext
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import combinations
+from secrets import randbits
 
 from web3 import Web3
 
+from ..quote_flow import flow_entry, stage
 from ..basket_preview import BasketPreviewRpc, InvalidPreview
 from .types import EconomicRequest
 from ..protocol_config import configured_address
 from ..quote_budget import budget_entry, current_budget, SearchStopped, budget_context, QuoteBudget
 from ..quote_errors import QuoteFailure, public_quote_error, rpc_failure
 from ..recovery_rpc import SnapshotChanged
-from ..preview_errors import preview_error
+from ..preview_errors import KnownPreviewError, preview_error
 from ..routing_encoding import ZERO, ROUTING_ENCODING, weighted_routes, split_runtime
 from ..route_search import WETH
-from ..uniswap_routes import pool_identity, opposite, V4_CONNECTOR_KEYS, initial_v3_branches
+from ..route_work_slots import bootstrap_priority
+from ..uniswap_routes import pool_identity, V4_CONNECTOR_KEYS, initial_v3_branches
 from ..uniswap_v4 import v4_pool_id, POOL_MANAGER
 from ..wallet_balances import TOKENS
 from ..uniswap_state import owned_reads
-from ..route_work_slots import engine_work
+from ..rpc_block_context import LATEST_BLOCK, rpc_block_parameter
+from .amm import price_path, PartialPath
+from .discovery import paths, route_candidates
 from .ranking import prefer_completed
+from .reuse_estimate import input_limit_observed
+from .contracts import SearchSession
+from .exploration import explore
+from .funding import measured_funding_proposal, cached_core_funding
+from .residual_retention import residual_retention_proposal
+from .reuse_routes import neighbor_proposals, proposal_identity, funded_route_identity
+from .path_families import quote_path_family
+from .market_segments import market_segment_entry, observe_market_segments, observed_market_revision
+from .bootstrap import RouteBootstrap, bootstrap_scope, current_bootstrap
+from .amm_adapter import CyberGoldAmmAdapter
+from .custom_routes import CustomRoutes
+from .provenance import attach_origins, merge_origins, origin_names
+from ..route_observations import RouteObservations, current_route_observations, route_observation_scope
+from ..search_observations import search_observation_scope, current_search_observations
+from .core_state import CoreQuoteState
 
 PAXG = dict(TOKENS)['paxg']
 CORE_SHARES = (0, 25, 50, 75, 100)
+
+
+async def alongside_bootstrap(ordinary, bootstrap, *, incumbent=None):
+    """Optional cached work cannot prolong otherwise-completed discovery.
+
+    Both tasks are owned here. Optional lookup failure does not disprove a
+    Helpers result. A complete ordinary result need not wait for a slow cache;
+    if nothing priced, an offered seed may still be the first useful result.
+    """
+    tasks = [asyncio.create_task(ordinary), asyncio.create_task(bootstrap)]
+    try:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        if tasks[1] in done:
+            await asyncio.gather(tasks[1], return_exceptions=True)
+        await tasks[0]
+        if incumbent is not None and incumbent() is None:
+            # A missing ordinary result can wait for the offered route, but
+            # optional lookup failure/cancellation is not caller cancellation.
+            await asyncio.gather(tasks[1], return_exceptions=True)
+        if tasks[1].done():
+            await asyncio.gather(tasks[1], return_exceptions=True)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def identity_template(currency):
@@ -38,70 +86,53 @@ def identity_template(currency):
             'routes': []}
 
 
-def paths(pools, source, target, weth=WETH, max_hops=3):
-    """Selected pool graph plus explicit lossless native/WETH transitions."""
-    graph = {}
-    unique = {}
-    for pool in pools:
-        identity = pool_identity(pool)
-        if identity not in unique or pool.get('address'):
-            unique[identity] = pool
-    for pool in unique.values():
-        if pool.get('hooks', ZERO).lower() != ZERO:
-            continue
-        for token in (pool['token0'], pool['token1']):
-            graph.setdefault(token['address'].lower(), []).append(pool)
-    found = []
-    def walk(current, route, visited, hops):
-        if current == target.lower():
-            if route:
-                found.append(route)
-            return
-        if hops < max_hops:
-            for pool in sorted(graph.get(current, []), key=lambda row: (row['protocol'], row['id'])):
-                following = opposite(pool, current)
-                if following not in visited:
-                    walk(following, route + [{'pool': pool, 'zeroForOne': current == pool['token0']['address'].lower()}],
-                         visited | {following}, hops + 1)
-        if current in (ZERO, weth.lower()):
-            following = weth.lower() if current == ZERO else ZERO
-            if following not in visited:
-                walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
-                    'currencyOut': following}], visited | {following}, hops)
-    walk(source.lower(), [], {source.lower()}, 0)
-    return sorted(found, key=lambda route: (len(route), repr(route)))
-
-
-def route_candidates(routes, amount):
-    for route in routes:
-        yield [{'amountIn': str(amount), 'hops': route}]
-    for left, right in combinations(routes, 2):
-        for share in (25, 50, 75):
-            first = amount * share // 100
-            if first and amount - first:
-                yield [{'amountIn': str(first), 'hops': left}, {'amountIn': str(amount - first), 'hops': right}]
-
-
 class Quoter:
-    def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None):
+    def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
+                 exploration_seed=None, route_provider_factory=None, plan_simulator=None,
+                 core_state_cache=None):
         self.settings, self.engine = settings, engine
+        self.exploration_seed = exploration_seed
+        self.route_provider_factory = route_provider_factory
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
         self.helpers = configured_address(settings, 'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS')
         self.core = configured_address(settings, 'NEXT_PUBLIC_CORE_DIAMOND_ADDRESS')
+        self.amm = CyberGoldAmmAdapter(engine, self.core)
         self.preview = preview
         self.basis_reader = basis_reader
         self.now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
+        self.core_state_cache = core_state_cache or CoreQuoteState(settings, engine.registry)
+        from .plan_simulation import HelpersPlanSimulation
+        self.plan_simulator = plan_simulator or HelpersPlanSimulation(settings, engine.registry,
+            helpers=self.helpers, adapter=self.adapter, core=self.core, now=self.now,
+            semaphore=engine.semaphore if plan_simulator is None else None)
 
     async def basis(self, block):
         if self.basis_reader:
             return await self.basis_reader(block)
-        rpc = self.engine.registry.get_rpc()
-        assets, weights = await asyncio.gather(
-            rpc.read_function(self.core, 'basketAssets()', [], [], ['address[]'], block),
-            rpc.read_function(self.core, 'basketTargetsPpm()', [], [], ['uint256[]'], block))
-        return list(assets[0]), list(map(int, weights[0]))
+        state = await self.core_state(block)
+        return list(state['assets']), list(map(int, state['weights']))
+
+    async def core_state(self, block=None):
+        return await self.core_state_cache.get()
+
+    async def core_outputs(self, block=None):
+        return await self.core_state_cache.outputs()
+
+    async def start(self):
+        await self.core_state_cache.start()
+
+    async def close(self):
+        await self.core_state_cache.close()
 
     async def core_preview(self, mode, value, block):
+        observations = current_search_observations()
+        if observations is not None:
+            identity = ('core-preview', self.core.lower(), self.helpers.lower(), mode,
+                        json.dumps(value, sort_keys=True), json.dumps(block, sort_keys=True))
+            return await observations.read(identity, lambda: self._core_preview(mode, value, block))
+        return await self._core_preview(mode, value, block)
+
+    async def _core_preview(self, mode, value, block):
         if self.preview:
             return await self.preview(mode, value, block)
         if mode == 'issue-exact-in':
@@ -110,7 +141,7 @@ class Quoter:
                 ['uint256[]'], [list(map(int, value['maximumAmountsIn']))])
             response = await rpc.w3.provider.make_request('eth_call', [
                 {'from': self.helpers, 'to': self.core, 'data': Web3.to_hex(data)},
-                {'blockHash': block['hash'], 'requireCanonical': True}])
+                rpc_block_parameter(block)])
             if 'error' in response:
                 raise preview_error(response['error'], mode=mode, arguments=value) or rpc_failure(response['error'])
             target, protocol_fee, exact, assets = rpc.w3.codec.decode(
@@ -159,6 +190,9 @@ class Quoter:
     async def discover(self, request, assets, block):
         registry = self.engine.registry
         await registry.ensure_loaded()
+        bootstrap = current_bootstrap()
+        if bootstrap is not None:
+            bootstrap.watch_catalog_load()
         payment = request['inputs'][0]['currency'] if request['intent'] == 0 else request['outputCurrency']
         if payment.lower() == ZERO:
             payment = WETH
@@ -168,19 +202,9 @@ class Quoter:
         # these ordinary hookless candidates, including on a cold inventory.
         currencies = sorted({ZERO, WETH.lower(), payment.lower(), PAXG.lower(),
                              *(asset.lower() for asset in assets)})
-        async def metadata(currency):
-            if currency == ZERO:
-                return registry.token(currency, 18)
-            try:
-                return await registry.token_metadata(currency, block)
-            except SnapshotChanged:
-                raise
-            except Exception:
-                # Match the registry's discovery contract: display scale can
-                # be unknown while raw integer pricing remains available.
-                return {**registry.token(currency, 18), 'decimalsKnown': False}
-        observed = await owned_reads(*(metadata(currency) for currency in currencies))
-        tokens = dict(zip(currencies, observed, strict=True))
+        tokens = {currency: deepcopy(getattr(registry, 'metadata', {}).get(currency) or
+            {**registry.token(currency, 18), 'decimalsKnown': currency == ZERO})
+            for currency in currencies}
         for a, b in combinations(currencies, 2):
             if ZERO not in (a, b):
                 continue
@@ -195,116 +219,99 @@ class Quoter:
                         pool[f'token{index}'] = deepcopy(tokens[currency])
 
     async def price_path(self, route, amount, block, bank, canonical):
-        current, used = amount, amount
-        for index, hop in enumerate(route):
-            if not current:
-                break
-            if 'kind' in hop:
-                continue
-            async with engine_work(self.engine.semaphore):
-                value = await self.engine.quote_sdk_branches([{'amountIn': str(current), 'hops': [hop]}],
-                    'exactIn', current, block, candidate=bank, canonical=canonical)
-            debit, output = int(value['amountIn']), int(value['amountOut'])
-            if index == 0:
-                used = debit
-            elif debit < current:
-                raise InvalidPreview('Unsettled current-operation intermediate currency.')
-            current = output
-        return used, current
+        return await price_path(self.engine, route, amount, block, bank, canonical)
 
-    async def conversion(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0, capture=None):
-        if not amount or source.lower() == target.lower():
-            if capture is not None:
-                capture.update(inputCurrency=source, outputCurrency=target, branches=[],
-                               _observation={'inputCurrency': source, 'fundedInput': str(amount),
-                                             'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
-            return identity_template(source), amount, []
-        registry = self.engine.registry
-        selected = paths(list(registry.inventory.values()), source, target)
-        if market:
-            anchor = pool_identity(registry.seed)
-            selected = [route for route in selected if pool_identity(
-                next(hop for hop in (route if source.lower() == self.core.lower() else reversed(route))
-                     if 'pool' in hop)['pool']) == anchor]
-        if first:
-            # Keep the V3 seed ahead of newly discovered V2 and noncanonical V4
-            # paths, including after their addresses become known. A thin V2
-            # acquisition must not displace the prompt Core candidate. Refinement
-            # still compares every selected protocol/path and split allocation.
-            canonical_edge = pool_identity(registry.seed)
-            selected.sort(key=lambda route: (sum(hop['pool']['protocol'] != 'v3' and
-                pool_identity(hop['pool']) != canonical_edge for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and not hop['pool'].get('address') for hop in route if 'pool' in hop),
-                sum(hop['pool']['protocol'] == 'v3' and hop['pool']['feePips'] != 3000 for hop in route if 'pool' in hop), len(route)))
-        best, rpc_error = None, None
-        for branches in route_candidates(selected, amount):
-            # A common leading wrap belongs to Helpers funding, not to the
-            # adapter's whole-conversion intermediate set.
-            leading = [row['hops'][0].get('kind') for row in branches]
-            normalized = deepcopy(branches)
-            physical_source = source
-            if leading and leading[0] in ('wrap', 'unwrap') and all(value == leading[0] for value in leading):
-                physical_source = normalized[0]['hops'][0]['currencyOut']
-                for row in normalized:
-                    row['hops'] = row['hops'][1:]
-            routes = weighted_routes(normalized)
-            for row, funded in zip(normalized, split_runtime(amount, routes), strict=True):
-                row['amountIn'] = str(funded)
-            trial = deepcopy(bank)
-            output, consumed, retained = 0, 0, []
-            try:
-                for row in normalized:
-                    funded = int(row['amountIn'])
-                    used, received = await self.price_path(row['hops'], funded, block, trial, canonical)
-                    output += received
-                    consumed += used
-                    if used < funded:
-                        retained.append({'branch': branch, 'stage': stage + (physical_source.lower() != source.lower()), 'currency': physical_source,
-                                         'amount': str(funded - used)})
-            except SnapshotChanged:
-                raise
-            except Exception as error:
-                if public_quote_error(error).get('code', '').startswith('rpc-'):
-                    rpc_error = error
-                continue
-            if retained:
-                retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
-            if best is None or output > best[0]:
-                template = {'inputCurrency': physical_source, 'outputCurrency': target,
-                            'routes': routes}
-                best = output, template, retained, trial, deepcopy(normalized), consumed
-                if first and output > 0:
-                    break
-            await asyncio.sleep(0)
-        if best is None:
-            raise rpc_error or QuoteFailure('quote-no-route')
-        if capture is not None:
-            capture.update(inputCurrency=source, outputCurrency=target, branches=[{'hops': row['hops']} for row in best[4]], template=deepcopy(best[1]),
-                           _observation={'inputCurrency': best[1]['inputCurrency'], 'fundedInput': str(amount),
-                                         'consumedInput': str(best[5]), 'outputCurrency': target, 'output': str(best[0])})
-        bank.clear()
-        bank.update(best[3])
-        return best[1], best[0], best[2]
+    async def conversion(self, source, target, amount, block, bank, canonical, **options):
+        return await self.amm.convert(source, target, amount, block, bank, canonical,
+                                      price_path=self.price_path, **options)
 
     async def candidate(self, request, share, order, block, assets, weights, *, first=False,
-                        observations=None, selected=None):
+                        observations=None, selected=None, selection=True):
         from .evaluate import evaluate_candidate
-        return await evaluate_candidate(self, request, share, order, block, assets, weights,
-                                        first=first, observations=observations, selected=selected)
+        from .dormant_routes import with_dormant_routes
+        if selected is not None:
+            return await self.plan_simulator(request, selected)
+        value = await evaluate_candidate(self, request, share, order, block, assets, weights,
+                                         first=first, observations=observations, selected=selected, selection=selection)
+        value = with_dormant_routes(value, getattr(self.engine.registry, 'seed', None))
+        # SDK quantities choose promising paths/allocations. Only execution of
+        # the complete plan supplies the published economic result.
+        funded = {**request, 'inputs': deepcopy(value['inputs'])}
+        try:
+            return await self.plan_simulator(funded, value['plan'], candidate=value)
+        except QuoteFailure as error:
+            # Preserve construction inputs only for optional failed-plan
+            # exploration. Successful quotes still take one Helpers call.
+            if error.code == 'quote-contract-reverted' or getattr(error, 'unsettled_intermediate', None) is not None:
+                error.candidate_plan = value['plan']
+                error.candidate_inputs = value['inputs']
+            raise
+
+    async def exploration_block(self):
+        """Local SDK metadata only; exploration needs no header acquisition."""
+        return deepcopy(LATEST_BLOCK)
 
     @budget_entry
-    async def get(self, request, on_update=None, *, core_only=False, seed=None):
+    @flow_entry('search')
+    async def get(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
+                  seed_lookup=None, on_family=None, route_seeds=None, on_candidate=None):
+        observations = RouteObservations()
+        with route_observation_scope(observations):
+            try:
+                with stage('search.run'):
+                    result = await self._produce(request, on_update, core_only=core_only,
+                                                 seed=seed, neighbors=neighbors, seed_lookup=seed_lookup,
+                                                 on_family=on_family, route_seeds=route_seeds,
+                                                 on_candidate=on_candidate)
+            except (Exception, asyncio.CancelledError) as error:
+                error.quoter_metrics = {**self.producer_metrics(current_budget()),
+                    **getattr(error, 'quoter_metrics', {}),
+                    'routeDiscovery': {**observations.discovery, 'physicalRpc': observations.metrics,
+                                       'apiRequests': observations.api_metrics}}
+                raise
+        result.setdefault('metrics', {}).setdefault('routeDiscovery', {}).update(
+            physicalRpc=observations.metrics, apiRequests=observations.api_metrics)
+        return attach_origins(result)
+
+    async def _produce(self, request, on_update=None, *, core_only=False, seed=None, neighbors=None,
+                       seed_lookup=None, on_family=None, route_seeds=None, on_candidate=None):
         budget = current_budget()
+        # The SQL feed starts alongside construction-state preparation. Its caller
+        # captures the existing scope; this task never owns a second search.
+        async def lookup_neighbors():
+            try:
+                return await neighbors()
+            except Exception:
+                return []
+        neighbor_task = (asyncio.create_task(lookup_neighbors())
+                         if neighbors is not None and not core_only else None)
+        async def lookup_seed():
+            try:
+                return await seed_lookup()
+            except Exception:
+                return None
+        seed_task = asyncio.create_task(lookup_seed()) if seed_lookup is not None else None
         try:
-            result = await budget.produce(self._get(request, on_update, core_only=core_only, seed=seed))
+            from .plan_transport import simulation_scope
+            async with simulation_scope(), search_observation_scope():
+                result = await budget.produce(self._get(request, on_update, core_only=core_only,
+                                                       seed=seed, neighbor_task=neighbor_task,
+                                                       seed_task=seed_task, on_family=on_family,
+                                                       route_seeds=route_seeds, on_candidate=on_candidate))
         except Exception as error:
             # Private diagnostic evidence preserves the public error contract.
             # In particular, exhaustion can still return quote-no-route while
             # its actual stopping reason is recorded as timeout.
             error.quoter_metrics = self.producer_metrics(budget)
             raise
-        result['metrics'] = self.producer_metrics(budget)
+        finally:
+            lookups = [task for task in (neighbor_task, seed_task) if task is not None]
+            for task in lookups:
+                if not task.done():
+                    task.cancel()
+            with stage('search.cleanup'):
+                await asyncio.gather(*lookups, return_exceptions=True)
+        result['metrics'] = {**(result.get('metrics') or {}), **self.producer_metrics(budget)}
         return result
 
     @staticmethod
@@ -337,82 +344,335 @@ class Quoter:
         return request
 
     async def direct_basket_funding(self, request, block):
-        """Construct a smaller direct Core candidate, leaving unused budgets unfunded.
+        """Offer proportional/capacity funding from cached construction facts.
 
-        Core's issuance preview already solves its supply cap and returns the
-        canonical basket costs, as used by basket MAX. Redemption funding cannot
-        exceed the existing CYGLD supply; Helpers/Core still preview that actual
-        funding and apply both fee layers before it becomes a completed quote.
+        This is only a nomination. It never reads a supply/amount preview before
+        trying the ordinary full plan; Helpers measures any resulting body.
         """
-        if request['intent'] == 2:
-            result = await self.core_preview('issue-exact-in', {
-                'maximumAmountsIn': [row['amount'] for row in request['inputs']]}, block)
-            amounts = list(map(int, result['amountsInExact']))
-        elif request['intent'] == 3:
-            supply, = await self.engine.registry.get_rpc().read_function(
-                self.core, 'totalSupply()', [], [], ['uint256'], block)
-            return [{'currency': request['inputs'][0]['currency'],
-                     'amount': str(min(int(request['inputs'][0]['amount']), int(supply)))}]
-        else:
+        from ..basket_arithmetic import ceil_div
+        state = deepcopy(self.core_state_cache.value)
+        if request['intent'] == 3:
+            supply = state.get('supply')
+            if supply is None:
+                return None
+            amount = min(int(request['inputs'][0]['amount']), int(supply))
+            return ([{**request['inputs'][0], 'amount': str(amount)}]
+                    if amount and amount < int(request['inputs'][0]['amount']) else None)
+        if request['intent'] != 2:
             return None
-        if not any(amounts) or amounts == [int(row['amount']) for row in request['inputs']]:
+        units, weights = state.get('conversions'), state.get('weights')
+        if not units or not weights:
             return None
-        return [{'currency': row['currency'], 'amount': str(amount)}
-                for row, amount in zip(request['inputs'], amounts, strict=True)]
+        budgets = [int(row['amount']) for row in request['inputs']]
+        try:
+            gross = min((budget * int(unit) // 10**18) * 1_000_000 // int(weight)
+                        for budget, unit, weight in zip(budgets, units, weights, strict=True) if int(weight))
+            if all(name in state for name in ('supply', 'maxSupply', 'effectiveCap')):
+                gross = min(gross, max(0, min(int(state['maxSupply']), int(state['effectiveCap']))-int(state['supply'])))
+            amounts = [ceil_div(ceil_div(gross * int(weight), 1_000_000) * 10**18, int(unit)) if int(weight) else 0
+                       for unit, weight in zip(units, weights, strict=True)]
+        except (ValueError, ZeroDivisionError):
+            return None
+        if not any(amounts) or amounts == budgets:
+            return None
+        return [{**row, 'amount': str(amount)} for row, amount in zip(request['inputs'], amounts, strict=True)]
 
-    async def _get(self, request, on_update=None, *, core_only=False, seed=None):
+    @market_segment_entry
+    async def _get(self, request, on_update=None, *, core_only=False, seed=None, neighbor_task=None,
+                   seed_task=None, on_family=None, route_seeds=None, on_candidate=None):
         request = self.normalise_request(request)
         budget = current_budget()
         registry = self.engine.registry
         rpc = registry.get_rpc()
-        block = await budget.prepare(rpc.block(None))
-        assets, weights = await budget.prepare(self.basis(block)) if request['intent'] != 3 else ([], [])
-        if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
-            raise InvalidPreview('Basket input currencies must follow Core basket order.')
-        if request['intent'] != 3:
+        block = await self.exploration_block()
+        assets = [row['currency'] for row in request['inputs']] if request['intent'] == 2 else []
+        weights = []
+        route_bootstrap = None
+        direct_funding, default_funding = None, None
+        best, first_failure, observations = None, None, {}
+        family_best = {}
+        def remember_failure(error):
+            nonlocal first_failure
+            # Only this first informative failure can become the terminal
+            # error. Retaining every discarded traceback also retains each
+            # failed candidate's private bank for the whole search lifetime.
+            if first_failure is None and not isinstance(error, InvalidPreview) and not (
+                    isinstance(error, QuoteFailure) and error.code == 'quote-no-route'):
+                first_failure = error
+        if request['intent'] in (0, 1):
+            self.seed_routes(request, [])
+        async def prepare_basis():
+            nonlocal assets, weights, block, direct_funding, default_funding
+            if request['intent'] >= 2:
+                return
+            if request['intent'] == 1:
+                # Redemption templates need output identities, not allocation
+                # weights. Start catalog work as soon as the asset list exists.
+                if self.basis_reader is not None:
+                    assets, _ = await budget.prepare(self.basis(block))
+                else:
+                    assets = await budget.prepare(self.core_state_cache.field('assets'))
+            else:
+                assets, weights = await budget.prepare(self.basis(block))
             self.seed_routes(request, assets)
-        direct_funding = (await budget.prepare(self.direct_basket_funding(request, block))
-                          if request['intent'] == 3 else None)
-        # At zero supply the original request still receives Core's ordinary
-        # identified rejection; zero funding must not become a successful quote.
-        default_funding = direct_funding if direct_funding and any(int(row['amount']) for row in direct_funding) else None
-        best, failures, observations = None, [], {}
-        async def evaluate(share, order, first, selected=None, funding=None, phase=None):
+            if route_bootstrap is not None:
+                route_bootstrap.refresh_catalog()
+        preparation = asyncio.create_task(prepare_basis())
+        async def prepared():
+            if preparation is not None:
+                try:
+                    # Many candidate/feed owners await this one preparation.
+                    # The producer below retains ownership through cleanup.
+                    await asyncio.shield(preparation)
+                except SnapshotChanged as error:
+                    remember_failure(error)
+                    return False
+                except Exception as error:
+                    remember_failure(error)
+                    return False
+            return True
+        session = SearchSession(self.exploration_seed if self.exploration_seed is not None else randbits(64))
+        reconstructions = set()
+        repair_started = set()
+        core_repairs = {}
+        residual_retention_jobs = {}
+        def reconstruct_later(operation):
+            async def owned():
+                try:
+                    return await operation
+                except SearchStopped:
+                    pass
+                except Exception as error:
+                    remember_failure(error)
+            task = asyncio.create_task(owned())
+            reconstructions.add(task)
+            def finished(done):
+                reconstructions.discard(done)
+                operation.close()  # Also owns cancellation before the first turn.
+                if not done.cancelled():
+                    done.exception()
+            task.add_done_callback(finished)
+            return task
+        async def wait_reconstruction(task):
+            return await asyncio.shield(task)
+        neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
+        async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
+                           failure_sink=None, limited_funding=None, retained=False):
             nonlocal best
+            record_error = remember_failure if failure_sink is None else failure_sink.append
             try:
+                needs_core = request['intent'] == 0 and share != 0
+                if selected is None and needs_core and not await prepared():
+                    return
                 funding = default_funding if funding is None else funding
                 funded_request = {**request, 'inputs': deepcopy(funding)} if funding is not None else request
-                value = await budget.discovery(self.candidate(funded_request, share, order, block, assets, weights, first=first,
-                    observations=observations, selected=selected))
+                if not retained:
+                    funded_request, selected = cached_core_funding(
+                        funded_request, self.core_state_cache.value, selected)
+                try:
+                    async def produce_candidate():
+                        # A cached body uses the same finite bootstrap lane as
+                        # SQL neighbors. Scope it to Helpers so later recovery
+                        # and SDK exploration retain their ordinary priority.
+                        with bootstrap_priority() if retained else nullcontext():
+                            return await self.candidate(funded_request, share, order, block, assets, weights,
+                                first=first, observations=observations, selected=selected)
+                    shared = current_search_observations()
+                    if selected is None and shared is not None:
+                        identity = ('complete-candidate', share, order, first,
+                            json.dumps(funded_request, sort_keys=True), route_bootstrap.revision if route_bootstrap else 0,
+                            observed_market_revision(funded_request, share, order))
+                        pending = shared.read(identity, produce_candidate)
+                    else:
+                        pending = produce_candidate()
+                    value = await budget.discovery(pending)
+                except SnapshotChanged as error:
+                    # The SDK only constructs proposals. A failed exploratory
+                    # snapshot says nothing about an independent Helpers quote.
+                    record_error(error)
+                    return
+                # This records a completed observation, not a funding bound.
+                # Replayed historical knowledge applies only to the unchanged
+                # selected funding; an expanded successful plan starts fresh.
+                retained_limit = limited_funding is not None and len(value['inputs']) == len(limited_funding) and all(
+                    current['currency'].lower() == previous['currency'].lower()
+                    and int(current['amount']) == int(previous['amount'])
+                    for current, previous in zip(value['inputs'], limited_funding, strict=True))
+                if phase in ('backward-prefix', 'measured-funding') or retained_limit:
+                    value.setdefault('searchCoverage', {})['inputLimitObserved'] = True
+                if selected is not None:
+                    # A legacy seed/neighbor is a newly offered quote here,
+                    # unlike TransactionPreparation's already-accepted plan.
+                    from .dormant_routes import with_dormant_routes
+                    value = with_dormant_routes(value, getattr(registry, 'seed', None))
                 value['request'] = deepcopy(request)
-                if prefer_completed(value, best, scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2):
+                attach_origins(value)
+                merge_origins(best, value)
+                family = quote_path_family(value)
+                merge_origins(family_best.get(family), value)
+                family_improves = prefer_completed(value, family_best.get(family),
+                    scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
+                improves = prefer_completed(value, best,
+                    scalar=request['intent'] in (0, 1), basket=request['intent'] >= 2)
+                if on_candidate is not None or family_improves or improves:
                     if not budget.qualified():
                         return
                     value['searchCoverage']['selectedPhase'] = phase or ('saved-plan' if selected is not None
                         else 'capacity-limited' if funding is not None and funding != request['inputs']
                         else 'first-result' if first else 'detailed')
+                    measured = current_route_observations()
+                    discovery_metrics = route_bootstrap.metrics if route_bootstrap is not None else {}
+                    if measured is not None:
+                        discovery_metrics.update(physicalRpc=measured.metrics, apiRequests=measured.api_metrics)
+                    value.setdefault('metrics', {})['routeDiscovery'] = discovery_metrics
+                if on_candidate is not None:
+                    # The serving Backend owns reconciliation with previously
+                    # known paths. Every paid whole observation updates that
+                    # candidate, including downward/equal repricing and losers.
+                    await on_candidate({'type': 'candidate-repriced',
+                        '_candidateIdentity': funded_route_identity(value), 'value': value})
+                if family_improves:
+                    family_best[family] = value
+                    if on_family:
+                        await on_family(deepcopy(value))
+                if improves:
                     best = value
-                    if on_update: await on_update({'type': 'qualified', 'value': value})
+                    if on_update and on_candidate is None:
+                        await on_update({'type': 'qualified', 'value': value})
+                # A lower-funding body is a new proposal. Price it alongside
+                # normal search, rather than adding a network tail afterward.
+                proposal = measured_funding_proposal(value, registry.chain) if not core_only else None
+                if proposal is not None:
+                    reduced_request, plan = proposal
+                    async def reprice():
+                        try:
+                            await evaluate(share, order, False, selected=plan,
+                                funding=reduced_request['inputs'], phase='measured-funding')
+                        except SearchStopped:
+                            pass
+                        except Exception as error:
+                            remember_failure(error)
+                    reconstruct_later(reprice())
+                if (selected is None or phase == 'core-market-bootstrap') and observe_market_segments(
+                        value, funded_request, share, order):
+                    # The completed Helpers quote is already published. Its
+                    # actual Core-produced market lots now seed exploration;
+                    # retaining this owner keeps providers alive for the pass.
+                    await evaluate(share, order, False, funding=funded_request['inputs'],
+                        phase='observed-market-segments')
+                return value
             except SnapshotChanged:
                 raise
+            except PartialPath as error:
+                if partial:
+                    raise
+                record_error(error)
             except Exception as error:
-                failures.append(error)
+                if partial and isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted':
+                    # An optional failed whole path can ask the SDK to explore
+                    # a different funding/prefix shape; no SDK reprice is
+                    # required for a successful Helpers observation.
+                    raise
+                record_error(error)
+                failed = selected if selected is not None else getattr(error, 'candidate_plan', None)
+                if failed is not None and isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted':
+                    failed_request = {**funded_request,
+                        'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}
+                    proposal = residual_retention_proposal(failed_request, failed)
+                    if proposal is not None:
+                        identity = proposal_identity(proposal)
+                        task = residual_retention_jobs.get(identity)
+                        if task is None:
+                            task = residual_retention_jobs[identity] = reconstruct_later(evaluate(
+                                share, order, False, selected=proposal['plan'], funding=proposal['inputs'],
+                                phase='residual-retention'))
+                        if selected is None:
+                            await wait_reconstruction(task)
+                if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
+                    failed_request = {**funded_request,
+                        'inputs': deepcopy(getattr(error, 'candidate_inputs', funded_request['inputs']))}
+                    identity = proposal_identity({'inputs': failed_request['inputs'], 'plan': failed})
+                    recover_funding = identity not in repair_started
+                    repair_started.add(identity)
+                    unsettled = deepcopy(error.unsettled_intermediate)
+                    from .core_market_recovery import compose_core_market, implicated_core_market_operations
+                    async def repair():
+                        from .capacity_recovery import recover_selected
+                        async def attempt(proposal):
+                            repair_started.add(proposal_identity(proposal))
+                            session.repairs += 1
+                            try:
+                                return await evaluate(share, order, False, selected=proposal['plan'],
+                                    funding=proposal['inputs'], phase='core-market-bootstrap', partial=True)
+                            except SnapshotChanged:
+                                raise
+                            except Exception as error:
+                                record_error(error)
+                                raise
+                        # A paid second-leg failure belongs to the changed
+                        # complete body. Feed it back before returning to this
+                        # parent's alternatives; successful observations still
+                        # publish before normal actual-lot exploration.
+                        if await compose_core_market(self, failed_request, failed, block,
+                                unsettled=unsettled, attempt=attempt) is not None:
+                            return
+                        proposals = (await budget.discovery(recover_selected(
+                            self, failed_request, failed, block, observations, unsettled=unsettled))
+                            if recover_funding else [])
+                        for proposal in proposals:
+                            session.repairs += 1
+                            await evaluate(share, order, False, selected=proposal['plan'],
+                                funding=proposal['inputs'], phase='backward-prefix')
+                    # Concurrent producers of the same failed topology share
+                    # its recovery owner. A later provider revision may expose
+                    # new alternatives and receives its own recovery pass.
+                    repair_key = (identity, unsettled['currency'].lower(),
+                                  route_bootstrap.revision if route_bootstrap else 0)
+                    task = core_repairs.get(repair_key)
+                    if task is None:
+                        task = core_repairs[repair_key] = reconstruct_later(repair())
+                    if selected is None and implicated_core_market_operations(failed, unsettled):
+                        # Ordinary Core topology bootstrap can start supplier
+                        # cohorts. Existing cached/backward replay keeps its
+                        # independent reconstruction owner and lifetime.
+                        await wait_reconstruction(task)
         grid = [(share, order) for share in CORE_SHARES for order in
                 (('core-first', 'market-first') if 0 < share < 100 else ('core-first',))]
         if request['intent'] >= 2 or core_only: grid = [(100, 'core-first')]
         async def discovered():
+            async def side(chosen_assets):
+                try:
+                    if request['intent'] != 3:
+                        await budget.discovery(self.discover(request, chosen_assets, block))
+                        route_bootstrap.refresh_catalog()
+                    await owned_reads(*(evaluate(share, order, False) for share, order in grid))
+                except SearchStopped:
+                    pass
+                except Exception as error:
+                    remember_failure(error)
+            async def core_side():
+                if await prepared():
+                    await side(assets)
             try:
-                if request['intent'] != 3:
-                    await budget.discovery(self.discover(request, assets, block))
-                await owned_reads(*(evaluate(share, order, False) for share, order in grid))
-            except SnapshotChanged:
-                raise
+                if request['intent'] in (0, 1) and not core_only:
+                    await owned_reads(side([]), core_side())
+                else:
+                    await core_side()
             except Exception as error:
-                failures.append(error)
+                remember_failure(error)
+            finally:
+                session.discovery_done.set()
         try:
-            async def seeded():
-                if seed is not None:
-                    funding = seed['inputs']
+            async def seeded_body():
+                # The family neighbor feed includes exact points. It owns all
+                # cached candidates when present, so a fifth global seed does
+                # not compete with the requested four lower/upper routes.
+                if neighbor_task is not None:
+                    return
+                offered = (seed if seed is not None else
+                    await budget.discovery(asyncio.shield(seed_task)) if seed_task is not None else None)
+                if offered is not None:
+                    funding = offered['inputs']
                     maxima = direct_funding if direct_funding is not None else request['inputs']
                     # A saved plan remains an optional candidate under the
                     # requested budget, including for direct diagnostic callers.
@@ -420,49 +680,309 @@ class Quoter:
                             row['currency'].lower() == maximum['currency'].lower()
                             and int(row['amount']) <= int(maximum['amount'])
                             for row, maximum in zip(funding, maxima, strict=True)):
-                        await evaluate(100, 'core-first', False, selected=seed['plan'], funding=funding)
-            async def limited():
-                if request['intent'] != 2:
-                    return
+                        async def expanded_seed():
+                            try:
+                                proposal = neighbor_proposals(offered, int(maxima[0]['amount']), assets)[-1]
+                            except Exception as error:
+                                remember_failure(error)
+                                return
+                            await evaluate(100, 'core-first', False, selected=proposal['plan'],
+                                funding=proposal['inputs'], phase='saved-plan-budget')
+                        async def retained_seed():
+                            errors = []
+                            value = await evaluate(100, 'core-first', False,
+                                selected=offered['plan'], funding=funding, retained=True,
+                                failure_sink=errors,
+                                limited_funding=funding if input_limit_observed(offered) else None)
+                            await repriced_source(offered, value, errors)
+                        retained = retained_seed()
+                        if request['intent'] in (0, 1) and int(funding[0]['amount']) < int(maxima[0]['amount']):
+                            # The exact request key can retain a smaller-funded
+                            # winner. Start its full-budget topology replay now,
+                            # independently of the already-fitting fallback.
+                            expanded = reconstruct_later(expanded_seed())
+                            await owned_reads(wait_reconstruction(expanded), retained)
+                        else:
+                            await retained
+            async def seeded():
                 try:
-                    funding = await budget.discovery(self.direct_basket_funding(request, block))
-                    if funding is not None:
-                        await evaluate(100, 'core-first', True, funding=funding, phase='capacity-limited')
+                    await seeded_body()
                 except SnapshotChanged:
                     raise
                 except Exception as error:
-                    failures.append(error)
-            await owned_reads(seeded(), limited(), owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+                    remember_failure(error)
+                finally:
+                    session.seed_done.set()
+            async def limited():
+                if request['intent'] not in (2, 3):
+                    return
+                try:
+                    if not await prepared():
+                        return
+                    funding = await self.direct_basket_funding(request, block)
+                    if funding is not None:
+                        await evaluate(100, 'core-first', True, funding=funding, phase='capacity-limited')
+                except Exception as error:
+                    remember_failure(error)
+            async def repriced_source(source, value, errors):
+                """Update one retained identity from its own paid observation."""
+                callback = on_candidate
+                disproof = next((error for error in errors if isinstance(error, KnownPreviewError) or
+                    isinstance(error, QuoteFailure) and error.code == 'quote-contract-reverted'), None)
+                if callback is None or value is None and disproof is None:
+                    return
+                original = funded_route_identity(source)
+                actual = funded_route_identity(value) if value is not None else original
+                if on_candidate is not None and value is not None and actual == original:
+                    return  # The ordinary paid observation already updated it.
+                await callback({'type': 'candidate-repriced', '_candidateIdentity': actual,
+                    '_replacesIdentity': original, 'value': deepcopy(value),
+                    **({'code': public_quote_error(disproof)['code']} if value is None else {})})
+
+            async def nearby():
+                if neighbor_task is None or request['intent'] not in (0, 1):
+                    return
+                rows = await budget.discovery(asyncio.shield(neighbor_task))
+                if not rows:
+                    # Optional SQL failure cannot discard an available exact
+                    # seed. This fallback is still only one cached route.
+                    offered = seed if seed is not None else (
+                        await budget.discovery(asyncio.shield(seed_task)) if seed_task is not None else None)
+                    rows = ([{'family': quote_path_family(offered), 'side': 'lower', 'quote': offered}]
+                            if offered is not None else [])
+                jobs = {}
+                for row in rows:
+                    source = {'attempts': []}
+                    try:
+                        source.update(side=row['side'], family=row['family'], identity=row.get('identity'))
+                        proposals = neighbor_proposals(row['quote'], int(request['inputs'][0]['amount']), assets)
+                        proposal = proposals[-1]
+                        identity = proposal_identity(proposal)
+                        if identity in jobs:
+                            job = jobs[identity]
+                            job['upper'] |= row['side'] == 'upper'
+                            if int(row['quote']['inputs'][0]['amount']) <= int(request['inputs'][0]['amount']):
+                                job['retained'][funded_route_identity(row['quote'])] = row['quote']
+                            job['source'].setdefault('aliases', []).append({key: source[key]
+                                for key in ('side', 'family', 'identity')})
+                            # Equivalent cached topologies keep every original
+                            # nomination origin, without another Helpers call.
+                            for operation, chosen in job['proposal']['plan']['conversions'].items():
+                                other = proposal['plan']['conversions'].get(operation, {})
+                                names = set(origin_names(chosen.get('discoveryOrigins')))
+                                names.update(origin_names(other.get('discoveryOrigins')))
+                                if names:
+                                    chosen['discoveryOrigins'] = sorted(names)
+                            continue
+                        basis = row['quote'].get('reuseSample', {}).get('basis')
+                        if basis is not None:
+                            source['referenceBasis'] = basis
+                        neighbor_metrics['sources'].append(source)
+                        jobs[identity] = {'source': source, 'proposal': proposal,
+                            'retained': {},
+                            'quote': row['quote'], 'upper': row['side'] == 'upper'}
+                        if int(row['quote']['inputs'][0]['amount']) <= int(request['inputs'][0]['amount']):
+                            jobs[identity]['retained'][funded_route_identity(row['quote'])] = row['quote']
+                    except Exception as error:
+                        source['failureCode'] = public_quote_error(error)['code']
+                        neighbor_metrics['sources'].append(source)
+
+                async def replay_job(job):
+                    source = job['source']
+                    async def attempt(proposal, retained=None):
+                        observation = {'funding': proposal['inputs'][0]['amount']}
+                        source['attempts'].append(observation)
+                        neighbor_metrics['starts'] += 1
+                        started = asyncio.get_running_loop().time()
+                        try:
+                            errors = []
+                            previous = retained if retained is not None else job['quote']
+                            with bootstrap_priority():
+                                value = await evaluate(100, 'core-first', False,
+                                    selected=proposal['plan'], funding=proposal['inputs'],
+                                    phase='nearby-'+source['side'], failure_sink=errors,
+                                    limited_funding=previous['inputs']
+                                        if input_limit_observed(previous) else None,
+                                    retained=retained is not None)
+                            if retained is not None:
+                                await repriced_source(retained, value, errors)
+                            observation['completed'] = value is not None
+                            neighbor_metrics['completed'] += value is not None
+                            if errors:
+                                observation['failureCode'] = public_quote_error(errors[-1])['code']
+                            return value
+                        finally:
+                            observation['elapsedMs'] = round((asyncio.get_running_loop().time()-started)*1000, 3)
+                    async def replay():
+                        original = job['retained']
+                        expanded = funded_route_identity(job['proposal'])
+                        await owned_reads(attempt(job['proposal'], original.get(expanded)), *(
+                            attempt({'plan': quote['plan'], 'inputs': quote['inputs']}, quote)
+                            for identity, quote in original.items() if identity != expanded))
+                    await wait_reconstruction(reconstruct_later(replay()))
+
+                async def upper():
+                    settled = False
+                    try:
+                        await owned_reads(*(replay_job(job) for job in jobs.values() if job['upper']))
+                        settled = True
+                    finally:
+                        if settled and on_update:
+                            await on_update({'type': 'upper-replay-settled'})
+                await owned_reads(upper(), owned_reads(*(
+                    replay_job(job) for job in jobs.values() if not job['upper'])))
+
+            async def retained_routes():
+                # The shared Backend cache has these complete semantic paths. Do
+                # not wait for the previous owner's drain/optional SQL commit
+                # or require SDK state to execute their fitting funded bodies.
+                if request['intent'] not in (0, 1) or not route_seeds:
+                    return
+                jobs = {}
+                maximum = request['inputs'][0]
+                for seed in route_seeds:
+                    try:
+                        funding = seed['inputs']
+                        # Reuse the existing seed's exact budget/currency
+                        # boundary; no source/provenance property is required.
+                        if len(funding) != 1 or funding[0]['currency'].lower() != maximum['currency'].lower():
+                            continue
+                        identity = proposal_identity({'inputs': funding, 'plan': seed['plan']})
+                        job = jobs.setdefault(identity, {'seed': seed, 'ids': []})
+                        if seed.get('id') is not None:
+                            job['ids'].append(seed['id'])
+                    except Exception as error:
+                        remember_failure(error)
+
+                async def replay(job):
+                    seed, errors = job['seed'], []
+                    if int(seed['inputs'][0]['amount']) > int(maximum['amount']):
+                        return  # The same upper topology still expands below.
+                    value = await evaluate(100, 'core-first', False, selected=seed['plan'],
+                        funding=seed['inputs'], phase='retained-route-replay',
+                        failure_sink=errors, retained=True,
+                        limited_funding=seed['inputs'] if input_limit_observed(seed) else None)
+                    await repriced_source(seed, value, errors)
+
+                async def expand(job):
+                    seed = job['seed']
+                    if int(seed['inputs'][0]['amount']) == int(maximum['amount']):
+                        return
+                    try:
+                        # Retain the already-fitting observation while this
+                        # same topology tries to consume the current budget.
+                        # Arithmetic reconstructs a body, never its price.
+                        proposal = neighbor_proposals({**seed, 'request': request},
+                                                      int(maximum['amount']), assets)[-1]
+                        await evaluate(100, 'core-first', False, selected=proposal['plan'],
+                            funding=proposal['inputs'], phase='retained-route-budget', retained=True)
+                    except SnapshotChanged:
+                        raise
+                    except Exception as error:
+                        remember_failure(error)
+
+                await owned_reads(*(operation(job) for job in jobs.values() for operation in (replay, expand)))
+            async def ordinary_body():
+                ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                    observations=observations, seeded=seed is not None, core_only=core_only), limited(),
+                    owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
+                if neighbor_task is None:
+                    await ordinary
+                else:
+                    await alongside_bootstrap(ordinary, nearby(), incumbent=lambda: best)
+
+            async def ordinary_search():
+                # Saved plans, Market construction, and Core preparation have
+                # separate inputs and start independently.
+                await owned_reads(retained_routes(),
+                    alongside_bootstrap(ordinary_body(), seeded(), incumbent=lambda: best))
+
+            async def provider_arrival():
+                # Late AMM nominations receive the same optional family and
+                # partial-prefix work as the initial/catalog snapshots. Reuse
+                # the existing successful observation bank and selection clock;
+                # ordinary whole-plan improvements publish independently.
+                await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
+                    observations=observations, seeded=seed is not None, core_only=core_only),
+                    owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
+                                  for share, order in grid)))
+
+            async def provider_quick():
+                # Ready nominations can qualify while an older detailed pass
+                # still owns slow state reads. These remain complete economic
+                # candidates under the same comparator and selection budget.
+                await owned_reads(*(evaluate(share, order, True, phase='provider-arrival-quick')
+                                    for share, order in grid))
+
+            tools = (self.route_provider_factory() if self.route_provider_factory is not None
+                     else [CustomRoutes(registry)])
+            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True)
+            with bootstrap_scope(route_bootstrap):
+                await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
+                while reconstructions:
+                    completed = tuple(reconstructions)
+                    await asyncio.gather(*completed, return_exceptions=True)
+                    # Already-finished tasks make gather return inline; retire
+                    # this batch without waiting for queued done callbacks.
+                    reconstructions.difference_update(completed)
         except SearchStopped:
             pass
+        finally:
+            for task in tuple(reconstructions):
+                task.cancel()
+            with stage('search.reconstruction.settle'):
+                await asyncio.gather(*tuple(reconstructions), return_exceptions=True)
+            preparation_error = None
+            if preparation is not None:
+                if not preparation.done():
+                    preparation.cancel()
+                with stage('search.preparation.settle'):
+                    outcome, = await asyncio.gather(preparation, return_exceptions=True)
+                if isinstance(outcome, SnapshotChanged):
+                    preparation_error = outcome
+                elif isinstance(outcome, Exception):
+                    remember_failure(outcome)
+            measured = current_route_observations()
+            if measured is not None and route_bootstrap is not None:
+                # The session has drained before exposing its terminal outcome,
+                # including no-route, context disproof and caller cancellation.
+                measured.discovery = route_bootstrap.metrics
+            if on_family:
+                # Equivalent later nominations can add origins without a new
+                # economic winner. Preserve those final whole-family tuples
+                # after owned work drains, including on caller cancellation.
+                for value in family_best.values():
+                    await on_family(deepcopy(value))
+            if preparation_error is not None:
+                remember_failure(preparation_error)
         budget.cleanup_done()
-        await rpc.assert_canonical(block)
-        budget.canonical_done()
+        if best is not None and not budget.stop.is_set():
+            budget.finish_selection('complete')
+        if best is not None:
+            best['metrics'] = {**(best.get('metrics') or {}), 'optionalSearch': {
+                'randomSeed': str(session.random_seed) if seed is not None else None,
+                'starts': session.starts, 'pruned': session.pruned, 'repairs': session.repairs}}
+            if neighbor_task is not None:
+                best['metrics']['nearbySearch'] = neighbor_metrics
+            if route_bootstrap is not None:
+                best['metrics']['routeDiscovery'] = route_bootstrap.metrics
+                best['metrics']['routeDiscovery']['capabilities'] = {'uniroute-local': 'published-route-finder-and-quote-split-components', 'uniroute-api': 'trading-api-observed-engine'}
         if best is None:
-            informative = next((error for error in failures if not isinstance(error, InvalidPreview) and
-                not (isinstance(error, QuoteFailure) and error.code == 'quote-no-route')), None)
-            raise informative or QuoteFailure('quote-no-route')
+            raise first_failure or QuoteFailure('quote-no-route')
         return best
 
     quote = get
 
     @budget_entry
-    async def evaluate_selected(self, request, selected):
-        """Replay selected routes at current state without route discovery."""
+    async def evaluate_selected(self, request, selected, *, recipient=None, minimum=1, accepted_core=None):
+        """Prepare through one fresh latest-state execution of the accepted plan."""
         request = self.normalise_request(request)
         from .types import EconomicPlan
         selected = EconomicPlan.model_validate(selected).model_dump()
         budget = current_budget()
         async def replay():
-            rpc = self.engine.registry.get_rpc()
-            block = await budget.prepare(rpc.block(None))
-            assets, weights = await budget.prepare(self.basis(block)) if request['intent'] != 3 else ([], [])
-            if request['intent'] == 2 and [row['currency'].lower() for row in request['inputs']] != [asset.lower() for asset in assets]:
-                raise InvalidPreview('Basket input currencies must follow Core basket order.')
-            value = await budget.prepare(self.candidate(request, 100, 'core-first', block, assets, weights,
-                                                       selected=selected))
+            value = await budget.prepare(self.plan_simulator(request, selected, pricing=False,
+                recipient=recipient, minimum=minimum, accepted_core=accepted_core))
             budget.cleanup_done()
-            await rpc.assert_canonical(block)
-            budget.canonical_done()
-            return value
+            return attach_origins(value)
         return await budget.produce(replay())

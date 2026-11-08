@@ -77,20 +77,28 @@ class PreviewTests(unittest.IsolatedAsyncioTestCase):
         history.states.clear()
         self.assertIsNone((await warm.get(row['request']))['basketModel'])
 
-    async def test_all_four_canonical_viem_calls_and_lossless_ordered_results(self):
+    async def test_all_four_latest_viem_calls_and_lossless_ordered_results_without_headers(self):
         for row in REFERENCE['rows']:
             with self.subTest(mode=row['mode']):
                 provider = Provider()
                 result = await service(provider).get(row['request'])
                 # Web3 checksum formatting is the only address-text difference.
                 self.assertEqual(json.dumps(result['result']).lower(), json.dumps(row['value']).lower())
-                self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': '101', 'blockHash': HASH,
+                self.assertEqual(result['context'], {'chainId': 31338, 'blockNumber': None, 'blockHash': None,
+                                                    'blockTag': 'latest',
                                                     'observedAt': '2026-10-01T00:00:00.000Z'})
                 calls = [params for method, params in provider.calls if method == 'eth_call']
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(calls[0][0]['data'], row['data'])
                 self.assertEqual(calls[0][0]['to'].lower(), REFERENCE['helpers'])
-                self.assertEqual(calls[0][1], {'blockHash': HASH, 'requireCanonical': True})
+                self.assertEqual(calls[0][1], 'latest')
+                self.assertEqual([method for method, _ in provider.calls], ['eth_call'])
+
+    async def test_explicit_pinned_preview_retains_its_hash_parameter(self):
+        provider = Provider()
+        preview, row = service(provider), REFERENCE['rows'][0]
+        await preview.rpc.preview(row['mode'], preview.rpc.encode(row['request']), {'number': 101, 'hash': HASH})
+        self.assertEqual(provider.calls[0][1][1], {'blockHash': HASH, 'requireCanonical': True})
 
     async def test_http_input_abi_errors_are_400_without_rpc(self):
         provider = Provider()
@@ -121,11 +129,11 @@ class PreviewTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('correlationId', response.json())
             self.assertNotIn('password', response.text)
 
-    async def test_reorg_and_wrong_chain_do_not_publish_preview(self):
+    async def test_latest_preview_does_not_fetch_or_verify_a_separate_header(self):
         for provider in (Provider(reorg=True), Provider(chain='0x1')):
-            with self.assertRaises(Exception):
-                await service(provider).get(REFERENCE['rows'][0]['request'])
-        self.assertFalse(any(method == 'eth_call' for method, _ in provider.calls))
+            result = await service(provider).get(REFERENCE['rows'][0]['request'])
+            self.assertEqual(result['context']['blockTag'], 'latest')
+            self.assertEqual([method for method, _ in provider.calls], ['eth_call'])
 
     async def test_caller_cancellation_reaches_private_read(self):
         provider = Provider(blocked=True)

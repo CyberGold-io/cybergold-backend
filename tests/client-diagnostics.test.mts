@@ -40,8 +40,8 @@ test("insufficient Market liquidity survives top-level and nested diagnostic pro
   assert.equal(result.quoteDiagnostics?.providerQualifications?.rows[0].code, "quote-insufficient-liquidity");
 });
 
-test("Core shortages remain distinct in top-level and nested diagnostic projection", () => {
-  for (const code of ["redemption-supply-exceeded", "insufficient-reserve-balance", "insufficient-recovery-shares", "insufficient-protocol-supply"]) {
+test("Core shortages and simulation funding failures remain distinct in diagnostic projection", () => {
+  for (const code of ["redemption-supply-exceeded", "insufficient-reserve-balance", "insufficient-recovery-shares", "insufficient-protocol-supply", "unsupported-simulation-funding"]) {
     const result = projectClientDiagnostic({ operation: "quote", outcome: "failed", errorClassification: code,
       quoteDiagnostics: { routeWave: { legs: { count: 1, rows: [{ index: 0, failureCounts: [{ code, count: 1 }] }] } },
         providerQualifications: { provider: "core", attempts: 1, rejected: 1,
