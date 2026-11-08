@@ -390,7 +390,51 @@ was observed or prepared.
   disconnect and stream cleanup. These are Backend-local clocks; middleware
   entry does not measure socket arrival or earlier server scheduling. A `sent`
   milestone records completion of the ASGI `send` call, not receipt by a proxy,
-  a public client or the browser.
+  a public client or the browser. Each flow also retains `startedMonotonicMs`,
+  its monotonic clock origin, so request milestones and child-flow stage offsets
+  can be placed on the same clock within one API process/container lifetime.
+  This is not UTC and must not be aligned with a browser or another process/slot
+  by assuming a common origin. It distinguishes a sampled acquire before full
+  publication from later refinement/cleanup, without proving candidate ownership.
+- The stream separately observes the first selected full-budget validated
+  non-read-only `qualified`/`complete` frame as `publication.first_full_selected`, with
+  `.ready` and `.sent` milestones carried by that exact encoded frame. Full
+  budget means its selected funding equals the current canonical request's
+  complete ordered currency and raw-amount vector. This is observation metadata,
+  not a new result-acceptance, balance, reserve, transaction or display condition.
+  First useful validation can still be a limited stored offer. The full-frame
+  milestones use the same Backend-local clock and ASGI sent boundary above;
+  absence does not establish zero waiting or client receipt.
+- Alongside the caller's inclusive `rpc.session` await, completed native
+  cache-lock acquisitions retain `rpc.session.acquire`, `rpc.session.executor`, `rpc.session.lock` and
+  `rpc.session.resume` queue-kind aggregates. Four readings of the owning flow's
+  monotonic clock record executor submission, worker start, lock acquisition
+  and the first cache-body membership operation after the acquiring coroutine's
+  await resumes. This last boundary includes the few native Python instructions
+  before that operation; it is not an exact Future wakeup timestamp.
+  Their successive intervals describe executor queuing, blocking lock wait and
+  completion/event-loop handoff, not CPU or lock-holder attribution. Only worker
+  timestamps cross threads; flow aggregates are updated on the event loop.
+  The longest completed `rpc.session.acquire` sample retains one matching
+  `acquireBoundariesMs` tuple (`submittedMs`, `workerStartedMs`, `acquiredMs`,
+  `cacheEnteredMs`), all offsets from that flow's origin. Independent stage
+  maxima may belong to different acquisitions and must not be combined.
+  These rows describe completed four-boundary observations; missing/unfinished
+  samples do not prove zero delay. Outer `rpc.session` remains inclusive of
+  acquisition, cache/session work, replacement/close and other scheduling, with
+  its ordinary failure/cancellation accounting. If the caller cancels, that
+  outer await ends while its shielded owned lookup can still complete later;
+  the completed acquisition rows may extend beyond the cancelled outer span
+  and caller elapsed. Nested and parallel totals are not additive critical-path
+  time. Diagnostic producer retention can postpone
+  the flow record until an already-owned shielded lookup settles, preserving
+  caller elapsed and the separate owned-work tail without extending caller waits.
+  The native Web3 cache method, shared class lock, per-manager executor/cache,
+  acquire/release, shielded ownership and disconnect drain remain. No additional
+  acquire, task, timer, retry, capacity limit, deadline or readiness gate is
+  introduced. Optional observation failures preserve native results/errors;
+  extra observation allocations and scheduling can affect timing, and overhead
+  is unmeasured.
 - Proxy records separate headers-to-first-downstream-pull from that pull's
   first-read wait, and record upstream cancellation cleanup separately.
 - The App's page-local `cybergold:quote-latency` events record native amount edits/Refresh,
@@ -462,6 +506,25 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-08 - Observe session acquisition and full-budget stream delivery
+
+- Retain the Backend flow monotonic origin for same-process placement of child
+  acquisition samples against request publication; keep UTC/browser clocks separate.
+- Observe executor submission, worker start, native lock acquisition and first
+  post-await cache-body entry for the same existing session lookup. Add bounded
+  queue/lock/handoff aggregates and retain one complete boundary tuple for the
+  longest completed acquire, without mixing independent stage maxima.
+- Preserve the native Web3 session-cache implementation, shared lock, original
+  per-manager executor/cache, cancellation-safe owning task and disconnect drain.
+  Retain late diagnostic lookup observations without extending the caller's wait.
+- Add separate first full-budget selected/ready/sent milestones on the current
+  request and exact encoded frame. Ordered current-request funding equality is
+  classification only; limited validated offers and ordinary quote/stream/error
+  behavior remain. ASGI send completion does not prove browser receipt.
+- No selection, readiness, RPC, concurrency, timeout, deadline, GC, transaction or
+  qualification policy changes. Current-process diagrams remain accurate and
+  unchanged; these observations add no process dependency or delivery gate.
 
 ### 2026-11-08 - Enqueue final calculation retirement without sibling backpressure
 
