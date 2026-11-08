@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import unittest
 
 from cybergold_candidate.app import create_app
+from cybergold_candidate.economic_quotes import full_funding_observation
 from cybergold_candidate.quote_flow import Flow, current_flow, stage
 from cybergold_candidate.quote_flow_monitor import LoopMonitor
 from cybergold_candidate.telemetry import Metrics, TelemetryMiddleware
@@ -32,6 +33,106 @@ async def invoke(app, metrics, *, path=PATH):
 
 
 class FlowTelemetryTests(unittest.IsolatedAsyncioTestCase):
+    def test_full_funding_observation_uses_the_existing_ordered_asset_budget(self):
+        a, b, c = ('0x'+name*40 for name in ('a', 'b', 'c'))
+        budget = [{'currency': a, 'amount': '10'}, {'currency': b, 'amount': '20'}]
+        original = deepcopy(budget)
+        self.assertTrue(full_funding_observation({'inputs': [
+            {'currency': a.upper(), 'amount': '10'}, {'currency': b, 'amount': '20'}]}, budget))
+        for value in (
+                {'inputs': [{'currency': a, 'amount': '9'}, budget[1]]},
+                {'inputs': [{'currency': c, 'amount': '10'}, budget[1]]},
+                {'inputs': list(reversed(budget))}, {'inputs': budget[:1]},
+                {'inputs': budget, 'readOnly': True}, {'inputs': [{'currency': a, 'amount': 'bad'}, budget[1]]},
+                None):
+            self.assertFalse(full_funding_observation(value, budget))
+        self.assertEqual(budget, original)
+
+    async def test_full_budget_marks_follow_the_encoded_validated_frame_and_actual_send(self):
+        currency, output = '0x'+'1'*40, '0x'+'2'*40
+        budget = {'intent': 0, 'inputs': [{'currency': currency, 'amount': '10'}], 'outputCurrency': output}
+        path = '/api/economic-quotes/stream'
+        for prefix, has_full, fail_full_send in (
+                ('partial', True, False), ('read-only', True, False),
+                ('partial', False, False), ('partial', True, True)):
+            with self.subTest(prefix=prefix, full=has_full, fail_send=fail_full_send):
+                clock, flows, sent = [0.0], [], []
+                blocked, release = asyncio.Event(), asyncio.Event()
+                first = {'inputs': [{'currency': currency, 'amount': '9' if prefix == 'partial' else '10'}],
+                         'quotedOutput': '7', **({'readOnly': True} if prefix == 'read-only' else {})}
+                full = {'inputs': deepcopy(budget['inputs']), 'quotedOutput': '8'}
+                async def progressive(_request, publish, **_kwargs):
+                    clock[0] = .010
+                    await publish({'type': 'qualified', 'value': deepcopy(first)})
+                    if has_full:
+                        clock[0] = .020
+                        await publish({'type': 'qualified', 'value': deepcopy(full)})
+                    return deepcopy(full if has_full else first)
+                app = create_app(economic_quotes=SimpleNamespace(progressive=progressive))
+                incoming = asyncio.Queue()
+                incoming.put_nowait({'type': 'http.request', 'body': json.dumps(budget).encode(), 'more_body': False})
+                def observed_flow(*args, **kwargs):
+                    flow = Flow(*args, **kwargs, clock=lambda: clock[0])
+                    flows.append(flow)
+                    return flow
+                async def send(message):
+                    if message['type'] != 'http.response.body' or not message.get('body'):
+                        return
+                    frame = json.loads(message['body'])
+                    if not sent:
+                        # Both callbacks already ran, but this first encoded
+                        # frame is still partial/read-only and must not inherit
+                        # the later full callback's ready/sent classification.
+                        self.assertNotIn('publication.first_full_selected.ready', current_flow().milestones)
+                        blocked.set()
+                        await release.wait()
+                    if frame['value'] == full and not any(row['value'] == full for row in sent):
+                        self.assertIn('publication.first_full_selected.ready', current_flow().milestones)
+                        self.assertNotIn('publication.first_full_selected.sent', current_flow().milestones)
+                        clock[0] = .040
+                        if fail_full_send:
+                            raise OSError('ordinary downstream connection loss')
+                    sent.append(frame)
+                scope = {'type': 'http', 'asgi': {'version': '3.0', 'spec_version': '2.4'},
+                    'http_version': '1.1', 'method': 'POST', 'scheme': 'http', 'path': path,
+                    'raw_path': path.encode(), 'query_string': b'', 'root_path': '',
+                    'headers': [(b'content-type', b'application/json')],
+                    'server': ('test', 80), 'client': ('127.0.0.1', 1)}
+                task = None
+                try:
+                    with patch('cybergold_candidate.telemetry.Flow', side_effect=observed_flow):
+                        task = asyncio.create_task(app(scope, incoming.get, send))
+                        await asyncio.wait_for(blocked.wait(), 1)
+                        marks = flows[0].milestones
+                        if has_full:
+                            self.assertEqual(marks['publication.first_full_selected'], 20)
+                        else:
+                            self.assertNotIn('publication.first_full_selected', marks)
+                        self.assertNotIn('publication.first_full_selected.ready', marks)
+                        clock[0] = .030
+                        release.set()
+                        await asyncio.wait_for(task, 1)
+                    marks = flows[0].milestones
+                    if has_full:
+                        self.assertEqual(marks['publication.first_full_selected.ready'], 30)
+                        if fail_full_send:
+                            self.assertNotIn('publication.first_full_selected.sent', marks)
+                            self.assertEqual(len(sent), 1)
+                            self.assertEqual(sent[0]['type'], 'qualified')
+                            self.assertEqual(sent[0]['value'], first)
+                        else:
+                            self.assertEqual(marks['publication.first_full_selected.sent'], 40)
+                            self.assertEqual([frame['value'] for frame in sent], [first, full, full])
+                    else:
+                        self.assertFalse(any(key.startswith('publication.first_full_selected') for key in marks))
+                        self.assertEqual([frame['value'] for frame in sent], [first, first])
+                finally:
+                    release.set()
+                    if task is not None and not task.done():
+                        task.cancel()
+                    if task is not None:
+                        await asyncio.gather(task, return_exceptions=True)
+
     async def test_request_flow_preserves_response_and_existing_headers(self):
         metrics = Metrics()
         async def app(scope,receive,send):

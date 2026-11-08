@@ -26,12 +26,14 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
     state.acquire state.clone topology.clone topology.enrich plan.compile helpers.shared
-    helpers.permit helpers.rpc rpc.session rpc.http observation.project publication.queue publication.reconcile
+    helpers.permit helpers.rpc rpc.session rpc.session.acquire rpc.session.executor
+    rpc.session.lock rpc.session.resume rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
 _current = ContextVar('quotation_flow', default=None)
 MILESTONES = frozenset('''http.entered http.headers.ready http.headers.sent
     http.first_body.ready http.first_body.sent http.disconnect
     publication.first_selected publication.first_selected.ready publication.first_selected.sent
+    publication.first_full_selected publication.first_full_selected.ready publication.first_full_selected.sent
     http.cleanup.started http.cleanup.finished'''.split())
 
 
@@ -86,6 +88,35 @@ class Flow:
         if name in MILESTONES and name not in self.milestones:
             self.milestones[name] = round((self.clock()-self.started)*1000, 3)
 
+    def session_acquired(self, submitted, worker_started, acquired, cache_entered):
+        """Completed same-acquire observations; invoked only on the event loop.
+
+        The last boundary is the first cache-body operation after Web3's await,
+        not a claim about the exact Future wakeup instruction. Independent stage
+        maxima can belong to different acquisitions; the inclusive maximum keeps
+        its own complete boundary tuple.
+        """
+        boundaries = dict(zip(('submittedMs', 'workerStartedMs', 'acquiredMs', 'cacheEnteredMs'),
+                              (round((value-self.started)*1000, 3)
+                               for value in (submitted, worker_started, acquired, cache_entered))))
+        for name, start, end in (
+                ('rpc.session.acquire', submitted, cache_entered),
+                ('rpc.session.executor', submitted, worker_started),
+                ('rpc.session.lock', worker_started, acquired),
+                ('rpc.session.resume', acquired, cache_entered)):
+            row = self.row(name, 'queue')
+            elapsed = (end-start)*1000
+            row['started'] += 1
+            row['completed'] += 1
+            row['summedWallMs'] += elapsed
+            row.setdefault('firstStartMs', (start-self.started)*1000)
+            row['lastEndMs'] = (end-self.started)*1000
+            if elapsed >= row['maxWallMs']:
+                row.update(maxWallMs=elapsed, slowestStartMs=(start-self.started)*1000,
+                           slowestEndMs=(end-self.started)*1000)
+                if name == 'rpc.session.acquire':
+                    row['acquireBoundariesMs'] = boundaries
+
     def snapshot(self):
         now = self.clock()
         rows = []
@@ -100,6 +131,7 @@ class Flow:
         return {'flowId': self.flow_id, 'parentFlowId': self.parent_id,
                 'requestId': self.request_id, 'attemptId': self.attempt_id,
                 'operation': self.operation, 'flowKind': self.kind,
+                'startedMonotonicMs': round(self.started*1000, 3),
                 'elapsedMs': round((now-self.started)*1000, 3),
                 'milestonesMs': dict(self.milestones),
                 'stages': sorted(rows, key=lambda row: (row['stage'], row['kind'])),

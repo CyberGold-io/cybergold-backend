@@ -22,6 +22,20 @@ def economic_intent(value):
             'assetCount': len(value['inputs']), 'inputs': value['inputs']}
 
 
+def full_funding_observation(value, budget):
+    """Optional ordered budget equality; it never admits or rejects a quote."""
+    try:
+        if value.get('readOnly'):
+            return False
+        funding = value['inputs']
+        return len(funding) == len(budget) and all(
+            current['currency'].lower() == requested['currency'].lower()
+            and int(current['amount']) == int(requested['amount'])
+            for current, requested in zip(funding, budget, strict=True))
+    except Exception:
+        return False
+
+
 def work_evidence(work, **values):
     try:
         return {**values, 'rpc': work.snapshot()}
@@ -202,6 +216,8 @@ async def handle_economic_quote_stream(request, service):
         incumbent = None
         async def publish(frame):
             nonlocal incumbent
+            if frame['type'] in ('qualified', 'complete') and full_funding_observation(frame.get('value'), value['inputs']):
+                milestone('publication.first_full_selected')
             if frame['type'] == 'qualified':
                 milestone('publication.first_selected')
                 incumbent = deepcopy(frame['value'])
@@ -244,6 +260,11 @@ async def handle_economic_quote_stream(request, service):
                 with stage('http.encode', kind='cpu'):
                     encoded = json.dumps(frame, separators=(',', ':'))+'\n'
                 request.scope.setdefault('state', {})['quote_frame_type'] = frame['type']
+                # Bind to this encoded frame, not a later callback while an
+                # earlier partial frame is still queued or awaiting ASGI send.
+                request.scope['state']['quote_frame_full_funding'] = (
+                    frame['type'] in ('qualified', 'complete') and
+                    full_funding_observation(frame.get('value'), value['inputs']))
                 yield encoded
         finally:
             if not task.done():

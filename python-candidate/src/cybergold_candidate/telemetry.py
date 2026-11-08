@@ -317,6 +317,8 @@ class TelemetryMiddleware:
                 markers.append('http.first_body')
                 if scope['state'].get('quote_frame_type') == 'qualified':
                     markers.append('publication.first_selected')
+                if scope['state'].get('quote_frame_full_funding'):
+                    markers.append('publication.first_full_selected')
             for marker in markers:
                 milestone(marker+'.ready')
             with stage('http.send'):

@@ -106,6 +106,49 @@ class FlowClocks(unittest.TestCase):
         self.assertIn('cg_sum_plan_compile;dur=1000.000', header)
         self.assertNotIn('helpers_rpc', header)
 
+    def test_acquire_maximum_keeps_its_own_four_boundaries(self):
+        self.flow.session_acquired(.1, .4, .6, .9)
+        self.flow.session_acquired(.9, 1.0, 1.8, 1.9)
+        rows = self.rows()
+        whole = rows['rpc.session.acquire']
+        self.assertEqual(whole['completed'], 2)
+        self.assertAlmostEqual(whole['summedWallMs'], 1800)
+        self.assertAlmostEqual(whole['maxWallMs'], 1000)
+        self.assertEqual(whole['acquireBoundariesMs'], {
+            'submittedMs': 900, 'workerStartedMs': 1000,
+            'acquiredMs': 1800, 'cacheEnteredMs': 1900})
+        # Different per-stage maxima must not be presented as this same acquire.
+        self.assertAlmostEqual(rows['rpc.session.executor']['maxWallMs'], 300)
+        self.assertAlmostEqual(rows['rpc.session.lock']['maxWallMs'], 800)
+        self.assertAlmostEqual(rows['rpc.session.resume']['maxWallMs'], 300)
+        self.assertTrue(all(row['summedCpuMs'] == 0 for row in rows.values()))
+
+    def test_parent_child_origins_place_same_acquire_against_request_full_without_utc(self):
+        clock = lambda: self.wall
+        self.wall = 10
+        parent = Flow('quote', request_id='request', clock=clock)
+        self.wall = 10.25
+        child = Flow('quote', parent=parent, kind='search', clock=clock)
+        child.session_acquired(10.30, 10.40, 10.50, 10.55)
+        self.wall = 10.60
+        parent.mark('publication.first_full_selected')
+        request, search = parent.snapshot(), child.snapshot()
+        full = request['startedMonotonicMs'] + request['milestonesMs']['publication.first_full_selected']
+        sample = next(row for row in search['stages'] if row['stage'] == 'rpc.session.acquire')
+        entered = search['startedMonotonicMs'] + sample['acquireBoundariesMs']['cacheEnteredMs']
+        self.assertEqual((request['startedMonotonicMs'], search['startedMonotonicMs']), (10000, 10250))
+        self.assertEqual((full, entered), (10600, 10550))
+        self.assertLess(entered, full)
+        # A later, larger sample is correctly located after full publication;
+        # its maximum must not be assigned to the earlier foreground wait.
+        child.session_acquired(10.70, 10.80, 10.90, 11.10)
+        self.wall = 11.20
+        search = child.snapshot()
+        sample = next(row for row in search['stages'] if row['stage'] == 'rpc.session.acquire')
+        entered = search['startedMonotonicMs'] + sample['acquireBoundariesMs']['cacheEnteredMs']
+        self.assertEqual(entered, 11100)
+        self.assertGreater(entered, full)
+
 
 class FlowOwnership(unittest.IsolatedAsyncioTestCase):
     async def test_owner_is_linked_without_merging_clocks_and_terminal_is_once(self):

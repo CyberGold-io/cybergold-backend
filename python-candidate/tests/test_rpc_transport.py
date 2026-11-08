@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import gc
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +10,8 @@ from aiohttp import web, ClientResponseError
 from web3._utils.http_session_manager import HTTPSessionManager
 
 from cybergold_candidate.rpc_transport import rpc_provider
+from cybergold_candidate import rpc_transport
+from cybergold_candidate.quote_flow import Flow, flow_scope
 
 
 class TransportParity(unittest.IsolatedAsyncioTestCase):
@@ -98,10 +101,11 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
         started, release, unhandled = asyncio.Event(), asyncio.Event(), []
         previous_handler = loop.get_exception_handler()
         loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+        failure = ValueError('Synthetic session-cache failure')
         async def fail_cache(_manager, *args, **kwargs):
             started.set()
             await release.wait()
-            raise ValueError('Synthetic session-cache failure')
+            raise failure
         try:
             with patch.object(HTTPSessionManager, 'async_cache_and_return_session', fail_cache):
                 request = asyncio.create_task(self.provider.make_request('eth_chainId', []))
@@ -117,8 +121,11 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
                 gc.collect()
                 await asyncio.sleep(0)
                 self.assertEqual(unhandled, [])
-                with self.assertRaisesRegex(ValueError, 'Synthetic session-cache failure'):
+                active_flow = Flow('quote')
+                with flow_scope(active_flow), self.assertRaisesRegex(ValueError, 'Synthetic session-cache failure') as caught:
                     await self.provider.make_request('eth_chainId', [])
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(active_flow.shared_producers, 0)
                 self.assertEqual(self.requests, [])
         finally:
             loop.set_exception_handler(previous_handler)
@@ -200,6 +207,139 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
+        self.assertEqual(len(self.requests), 2)
+
+    async def test_default_delegates_observe_one_acquire_across_three_controlled_boundaries(self):
+        manager = self.provider._request_session_manager
+        pool, cache = manager.session_pool.pool, manager.session_cache._cache
+        self.assertEqual(pool._max_workers, 5)
+        self.assertIs(manager._lock, HTTPSessionManager._lock)
+        release_workers, acquired = threading.Event(), threading.Event()
+        occupied = [threading.Event() for _ in range(5)]
+        def occupy(entered):
+            entered.set()
+            release_workers.wait()
+        workers = [pool.submit(occupy, entered) for entered in occupied]
+        flow, probes = Flow('quote'), []
+        original_mark = rpc_transport._SessionAcquisition.mark
+        def marked(probe, name):
+            original_mark(probe, name)
+            if name == 'submitted':
+                probes.append(probe)
+            if name == 'acquired':
+                acquired.set()
+        task = None
+        held = manager._lock.acquire(blocking=False)
+        try:
+            self.assertTrue(held)
+            async with asyncio.timeout(1):
+                while not all(event.is_set() for event in occupied):
+                    await asyncio.sleep(0)
+            with patch.object(rpc_transport._SessionAcquisition, 'mark', marked), flow_scope(flow):
+                task = asyncio.create_task(self.provider.make_request('eth_chainId', []))
+                async with asyncio.timeout(1):
+                    while not probes:
+                        await asyncio.sleep(0)
+                probe, = probes
+                self.assertIsNone(probe.worker_started, 'all five native workers are occupied')
+                release_workers.set()
+                async with asyncio.timeout(1):
+                    while probe.worker_started is None:
+                        await asyncio.sleep(0)
+                self.assertIsNone(probe.acquired, 'the original global lock is still held')
+                self.assertEqual(self.requests, [])
+                manager._lock.release()
+                held = False
+                # Block only until this native worker acquires. The event loop
+                # cannot enter the cache body during this deterministic barrier.
+                self.assertTrue(acquired.wait(1))
+                self.assertIsNone(probe.cache_entered)
+                response = await asyncio.wait_for(task, 1)
+            self.assertEqual(response['result'], '0x01')
+            self.assertEqual(len(self.requests), 1)
+            self.assertLessEqual(probe.submitted, probe.worker_started)
+            self.assertLessEqual(probe.worker_started, probe.acquired)
+            self.assertLessEqual(probe.acquired, probe.cache_entered)
+            rows = {row['stage']: row for row in flow.snapshot()['stages']}
+            boundary = rows['rpc.session.acquire']['acquireBoundariesMs']
+            self.assertEqual(list(boundary), ['submittedMs', 'workerStartedMs', 'acquiredMs', 'cacheEnteredMs'])
+            self.assertEqual(rows['rpc.session.acquire']['completed'], 1)
+            self.assertEqual(rows['rpc.session']['completed'], 1)
+            self.assertIs(manager.session_pool.pool, pool)
+            self.assertIs(manager.session_cache._cache, cache)
+            first = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+            second = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+            self.assertIs(first, second, 'native warm-cache session identity is unchanged')
+        finally:
+            release_workers.set()
+            if held:
+                manager._lock.release()
+            if task is not None and not task.done():
+                task.cancel()
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            await manager.finish_pending()
+            await asyncio.gather(*(asyncio.wrap_future(worker) for worker in workers))
+
+    async def test_cancelled_outer_span_keeps_late_acquire_sample_owned_until_emission(self):
+        manager = self.provider._request_session_manager
+        records, entered = [], threading.Event()
+        flow = Flow('quote', sink=records.append)
+        original_mark = rpc_transport._SessionAcquisition.mark
+        def marked(probe, name):
+            original_mark(probe, name)
+            if name == 'worker_started':
+                entered.set()
+        held = manager._lock.acquire(blocking=False)
+        self.assertTrue(held)
+        task = None
+        try:
+            with patch.object(rpc_transport._SessionAcquisition, 'mark', marked), flow_scope(flow):
+                task = asyncio.create_task(self.provider.make_request('eth_chainId', []))
+                async with asyncio.timeout(1):
+                    while not entered.is_set():
+                        await asyncio.sleep(0)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                flow.finish('cancelled')
+                self.assertEqual(records, [])
+                self.assertEqual(flow.shared_producers, 1)
+                self.assertEqual(self.requests, [])
+                manager._lock.release()
+                held = False
+                await asyncio.wait_for(manager.finish_pending(), 1)
+            self.assertEqual(len(records), 1)
+            rows = {row['stage']: row for row in records[0]['stages']}
+            self.assertEqual(rows['rpc.session']['cancelled'], 1)
+            self.assertEqual(rows['rpc.session.acquire']['completed'], 1)
+            self.assertIn('acquireBoundariesMs', rows['rpc.session.acquire'])
+            self.assertEqual(flow.shared_producers, 0)
+            self.assertFalse(manager._lock.locked())
+            self.assertEqual(self.requests, [])
+        finally:
+            if held:
+                manager._lock.release()
+            if task is not None and not task.done():
+                task.cancel()
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            await manager.finish_pending()
+
+    async def test_optional_acquire_clock_and_recorder_failures_do_not_change_native_result(self):
+        for failure in ('clock', 'recorder'):
+            with self.subTest(failure=failure):
+                flow = Flow('quote')
+                if failure == 'clock':
+                    def broken():
+                        raise ValueError('optional clock unavailable')
+                    flow.clock = broken
+                with flow_scope(flow), patch.object(
+                        flow, 'session_acquired', side_effect=ValueError('optional recorder unavailable')):
+                    response = await self.provider.make_request('eth_chainId', [])
+                self.assertEqual(response['result'], '0x01')
+                self.assertEqual(flow.shared_producers, 0)
+                self.assertFalse(self.provider._request_session_manager._lock.locked())
         self.assertEqual(len(self.requests), 2)
 
 

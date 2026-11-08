@@ -1,5 +1,6 @@
 """Web3.py source adapter; no serving route or autonomous retry scheduler."""
 import asyncio
+from contextvars import ContextVar
 from aiohttp import ClientTimeout
 from web3 import AsyncHTTPProvider
 from web3._utils.http_session_manager import DEFAULT_HTTP_TIMEOUT, HTTPSessionManager
@@ -10,7 +11,71 @@ from .quote_errors import RpcTimeout
 from .rpc_diagnostics import rpc_call
 from .telemetry import rpc_exchange
 from .route_observations import physical_rpc_exchange
-from .quote_flow import stage
+from .quote_flow import current_flow, retain_shared_producer, release_shared_producer, stage
+
+
+_session_acquisition = ContextVar('session_acquisition_observation', default=None)
+
+
+class _SessionAcquisition:
+    """One unchanged native acquire; worker threads only store clock readings."""
+    def __init__(self, flow):
+        self.flow, self.clock = flow, flow.clock
+        self.submitted = self.worker_started = self.acquired = self.cache_entered = None
+
+    def mark(self, name):
+        try:
+            if getattr(self, name) is None:
+                setattr(self, name, self.clock())
+        except Exception:
+            pass
+
+    def publish(self):
+        try:
+            values = self.submitted, self.worker_started, self.acquired, self.cache_entered
+            if all(value is not None for value in values):
+                self.flow.session_acquired(*values)
+        except Exception:
+            pass  # Optional timing never replaces native cache/acquire outcomes.
+
+
+class _SessionPoolObservation:
+    """Delegate to the original per-manager executor, without another pool."""
+    def __init__(self, pool):
+        self.pool = pool
+
+    def __getattr__(self, name):
+        return getattr(self.pool, name)
+
+    def submit(self, function, /, *args, **kwargs):
+        probe = _session_acquisition.get()
+        if probe is None:
+            return self.pool.submit(function, *args, **kwargs)
+        probe.mark('submitted')
+        def observed():
+            probe.mark('worker_started')
+            result = function(*args, **kwargs)  # The same native lock.acquire.
+            probe.mark('acquired')
+            return result
+        return self.pool.submit(observed)
+
+
+class _SessionCacheObservation:
+    """Keep the original cache; observe its first post-acquire membership read."""
+    def __init__(self, cache):
+        self._cache = cache
+
+    def __getattr__(self, name):
+        return getattr(self._cache, name)
+
+    def __len__(self):
+        return len(self._cache)
+
+    def __contains__(self, key):
+        probe = _session_acquisition.get()
+        if probe is not None:
+            probe.mark('cache_entered')
+        return key in self._cache
 
 
 class _CancellationSafeSessionManager(HTTPSessionManager):
@@ -18,13 +83,46 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
     def __init__(self):
         super().__init__()
         self.pending = set()
+        self.session_pool = _SessionPoolObservation(self.session_pool)
+        self.session_cache = _SessionCacheObservation(self.session_cache)
 
     async def async_cache_and_return_session(self, *args, **kwargs):
         # Web3's async_lock awaits a blocking thread acquire. Cancelling that
         # await can leave the acquire running after its release path has exited.
         # Only session/cache work is shielded; the subsequent HTTP request is
         # still awaited directly and retains ordinary cancellation/deadlines.
-        task = asyncio.create_task(super().async_cache_and_return_session(*args, **kwargs))
+        flow = current_flow()
+        if flow is None:
+            operation = super().async_cache_and_return_session(*args, **kwargs)
+            owner = None
+        else:
+            owner = retain_shared_producer()
+            async def observed():
+                probe = token = None
+                try:
+                    try:
+                        probe = _SessionAcquisition(flow)
+                        token = _session_acquisition.set(probe)
+                    except Exception:
+                        pass
+                    return await super(_CancellationSafeSessionManager, self).async_cache_and_return_session(*args, **kwargs)
+                finally:
+                    # The native cache method's finally released the lock first.
+                    if probe is not None:
+                        probe.publish()
+                    if token is not None:
+                        try:
+                            _session_acquisition.reset(token)
+                        except Exception:
+                            pass
+                    release_shared_producer(owner)
+            operation = observed()
+        try:
+            task = asyncio.create_task(operation)
+        except BaseException:
+            operation.close()
+            release_shared_producer(owner)
+            raise
         self.pending.add(task)
         task.add_done_callback(self._finished)
         return await asyncio.shield(task)
