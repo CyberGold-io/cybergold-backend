@@ -429,8 +429,11 @@ was observed or prepared.
   time. Diagnostic producer retention can postpone
   the flow record until an already-owned shielded lookup settles, preserving
   caller elapsed and the separate owned-work tail without extending caller waits.
-  The native Web3 cache method, shared class lock, per-manager executor/cache,
-  acquire/release, shielded ownership and disconnect drain remain. No additional
+  The native Web3 cache method and per-manager executor/cache remain. Each
+  cancellation-safe manager owns a native thread lock shared by its inherited
+  synchronous and asynchronous cache methods; unrelated manager caches do not
+  serialize through Web3's class-level lock. Native acquire/release, shielded
+  ownership and disconnect drain remain. No additional
   acquire, task, timer, retry, capacity limit, deadline or readiness gate is
   introduced. Optional observation failures preserve native results/errors;
   extra observation allocations and scheduling can affect timing, and overhead
@@ -506,6 +509,19 @@ The added page-local latency observations use `app/hooks/useQuoteLatency.ts`
 and `app/utils/quoteLatency.ts`, together with the stream and proxy modules above.
 
 ## Change history
+
+### 2026-11-08 - Scope HTTP session-cache locking to its manager
+
+- Give each cancellation-safe HTTP session manager its own native thread lock,
+  matching its existing independent cache and executor. Both inherited sync and
+  async cache operations still use that same manager lock; the Web3 cache body,
+  stale-session handling, eviction and HTTP behavior are unchanged.
+- Preserve shielded ownership of abandoned lookups, late result/error handling,
+  session-acquisition observations and pending-lookup drain before disconnect.
+  A manager waiting for its cache lock no longer serializes unrelated managers.
+- No RPC concurrency limit, result cache, retry, timeout, deadline, GC policy,
+  readiness condition or deployment/test gate changes. Existing process diagrams
+  retain the same ownership and delivery dependencies and remain unchanged.
 
 ### 2026-11-08 - Observe session acquisition and full-budget stream delivery
 

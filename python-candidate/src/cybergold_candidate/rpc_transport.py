@@ -1,5 +1,6 @@
 """Web3.py source adapter; no serving route or autonomous retry scheduler."""
 import asyncio
+import threading
 from contextvars import ContextVar
 from aiohttp import ClientTimeout
 from web3 import AsyncHTTPProvider
@@ -82,6 +83,9 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
     """Finish Web3's executor-backed cache lock even if its caller cancels."""
     def __init__(self):
         super().__init__()
+        # Web3 allocates a separate cache per manager; serialize its own cache
+        # across threads/loops without coupling unrelated provider caches.
+        self._lock = threading.Lock()
         self.pending = set()
         self.session_pool = _SessionPoolObservation(self.session_pool)
         self.session_cache = _SessionCacheObservation(self.session_cache)

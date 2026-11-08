@@ -81,10 +81,14 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(manager.pending), 1)
             other = rpc_provider(self.provider.endpoint_uri, 'Bearer local-fixture', timeout_seconds=.1)
             try:
-                self.assertIs(other._request_session_manager._lock, manager._lock)
                 next_request = asyncio.create_task(other.make_request('eth_chainId', []))
-                release()
+                # An unrelated cache can progress while the abandoned lookup
+                # still owns its original manager's acquire/release path.
                 response = await asyncio.wait_for(next_request, 1)
+                self.assertTrue(manager._lock.locked())
+                self.assertEqual(len(manager.pending), 1)
+                self.assertEqual(len(self.requests), 1)
+                release()
                 self.assertEqual(response['result'], '0x01')
                 await asyncio.wait_for(manager.finish_pending(), 1)
                 self.assertFalse(manager._lock.locked())
@@ -93,6 +97,7 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response['result'], '0x01')
                 self.assertEqual(len(self.requests), 2)
             finally:
+                release()
                 await other.disconnect()
                 other._request_session_manager.session_pool.shutdown(wait=True)
 
@@ -213,7 +218,7 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
         manager = self.provider._request_session_manager
         pool, cache = manager.session_pool.pool, manager.session_cache._cache
         self.assertEqual(pool._max_workers, 5)
-        self.assertIs(manager._lock, HTTPSessionManager._lock)
+        self.assertIsNot(manager._lock, HTTPSessionManager._lock)
         release_workers, acquired = threading.Event(), threading.Event()
         occupied = [threading.Event() for _ in range(5)]
         def occupy(entered):
@@ -246,7 +251,7 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
                 async with asyncio.timeout(1):
                     while probe.worker_started is None:
                         await asyncio.sleep(0)
-                self.assertIsNone(probe.acquired, 'the original global lock is still held')
+                self.assertIsNone(probe.acquired, 'the original manager lock is still held')
                 self.assertEqual(self.requests, [])
                 manager._lock.release()
                 held = False
