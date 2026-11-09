@@ -47,6 +47,22 @@ def weighted_routes(branches):
     return routes
 
 
+def exact_output_routes(branches):
+    """Round funding up so encoded path lots cover their exact-output inputs."""
+    amounts = [int(branch['amountIn']) for branch in branches]
+    total = sum(amounts)
+    routes = weighted_routes(branches)
+    # Reserve one ppm for every positive path, including sub-ppm inputs.
+    remaining = 1_000_000 - sum(amount > 0 for amount in amounts)
+    for amount, route in zip(amounts[:-1], routes[:-1], strict=True):
+        route['sharePpm'] = 1 + amount * remaining // total if amount else 0
+    shares = [route['sharePpm'] for route in routes[:-1]]
+    shares.append(1_000_000 - sum(shares))
+    funding = max((amount * 1_000_000 + share - 1) // share
+                  for amount, share in zip(amounts, shares, strict=True) if amount)
+    return funding, routes
+
+
 def split_runtime(amount, routes):
     allocated, result = 0, []
     for index, route in enumerate(routes):

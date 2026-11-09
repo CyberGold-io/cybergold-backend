@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from cybergold_candidate.exact_input_plan import compile_plan
+from cybergold_candidate.app_tokens import TOKENS
+from cybergold_candidate.exact_input_plan import CORE_BUY, compile_plan
 from cybergold_candidate.quoter.core_funding import core_funding_alternatives, compose_remaining_budget
 from cybergold_candidate.quoter.evaluate import encode_nomination
 from cybergold_candidate.quoter.plan_call import executable_body, compile_call
@@ -14,8 +15,9 @@ from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.routing_encoding import ZERO
 from quoter_fixture import service, synthetic_pool
-from test_quoter_plan_simulation import Provider, Rpc, encoded, measured, stage, NOW
-from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, HELPERS, ADAPTER, USER, settings
+from test_quoter_plan_simulation import CODEC, Provider, Rpc, branches, encoded, measured, stage, NOW
+from test_universal_quote import (BLOCK, CORE, PAXG, OTHER, WETH, HELPERS, ADAPTER, USER,
+                                 capacity_nominations, settings)
 
 
 def retained(asset):
@@ -216,6 +218,160 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(20000, calls)
         self.assertIn(int(result['inputs'][0]['amount']), calls)
         self.assertTrue(all(row[0] == 'eth_call' for row in provider.calls))
+
+    async def test_100k_usdt_split_acquisitions_preserve_exact_net_core_output_after_fees(self):
+        usdt, xaut = (dict(TOKENS)[name] for name in ('usdt', 'xaut'))
+        decimals = {usdt.lower(): 6, xaut.lower(): 6, PAXG.lower(): 18, WETH.lower(): 18}
+        reserves = {usdt.lower(): 40_000_000 * 10**6, xaut.lower(): 10_000 * 10**6,
+                    PAXG.lower(): 10_000 * 10**18, WETH.lower(): 20_000 * 10**18}
+        pools = []
+        for number, (source, target) in enumerate(((usdt, PAXG), (usdt, WETH),
+                                                   (WETH, PAXG), (usdt, xaut)), 8910):
+            pool = synthetic_pool(source, target, number, 'v2')
+            for index in (0, 1):
+                currency = pool[f'token{index}']['address'].lower()
+                pool[f'token{index}']['decimals'] = decimals[currency]
+                pool[f'reserve{index}'] = str(reserves[currency])
+            pools.append(pool)
+        q = service(self, pools)
+        assets, targets = [PAXG, xaut], [4661111320113019730, 3107408]
+        async def basis(_):
+            return assets, [600000, 400000]
+        q.basis_reader, q.discover = basis, AsyncMock()
+        q.seed_routes = lambda *_: None
+        q.route_provider_factory = lambda: []
+        def hop(source, pool):
+            return {'pool': pool, 'zeroForOne': source.lower() == pool['token0']['address'].lower()}
+        paths = [[hop(usdt, pools[0])], [hop(usdt, pools[1]), hop(WETH, pools[2])]]
+        # Only acquisition topology is available: neither gold surplus nor
+        # remaining USDT can buy CYGLD on a market route in this fixture.
+        capacity_nominations(q.amm, {
+            (usdt.lower(), PAXG.lower()): [(500000, paths[0]), (0, paths[1])],
+            (usdt.lower(), xaut.lower()): [(0, [hop(usdt, pools[3])])],
+        })
+        budget_amount, expected_net = 100_000 * 10**6, 241386318399242216435
+        # Independent capped-Core leaf: protocol 0.1%, Helpers 0.2%, both
+        # rounded up. This gross cap delivers the exact requested net amount.
+        gross_cap = 242112656368347258211
+        def fees(gross):
+            return tuple((gross * rate + 999999) // 1000000 for rate in (1000, 2000))
+        self.assertEqual(gross_cap - sum(fees(gross_cap)), expected_net)
+        request = {'intent': 0, 'inputs': [{'currency': usdt, 'amount': str(budget_amount)}],
+                   'outputCurrency': CORE}
+        acquisitions, conversions = [], {}
+        for index, (asset, funded, selected_paths) in enumerate(zip(
+                assets, (60_000 * 10**6, 40_000 * 10**6), (paths, [[hop(usdt, pools[3])]]), strict=True)):
+            nominated = [{'amountIn': str(funded // len(selected_paths)), 'hops': path}
+                         for path in selected_paths]
+            template, chosen = encode_nomination(usdt, asset, (nominated, []))
+            acquisitions.append({'amountIn': str(funded), 'route': template})
+            conversions[f'0:acquire:{index}'] = chosen
+            conversions[f'0:residual:{index}'] = retained(asset)
+        plan = {'allocations': [{'kind': 0, 'amountIn': str(budget_amount)}], 'conversions': conversions,
+                'body': {'branches': [{'kind': 0, 'amountIn': str(budget_amount), 'data': {
+                    'basketAssets': assets, 'acquisitions': acquisitions,
+                    'continuations': [{'route': deepcopy(conversions[f'0:residual:{index}']['template']),
+                                       'feeCygld': '0'} for index in range(2)]}}]}}
+        provider, executions, sdk_calls = Provider(), [], []
+        rpc = Rpc(provider)
+        q.engine.registry.get_rpc = lambda: rpc
+        simulator = HelpersPlanSimulation(settings(), q.engine.registry, helpers=HELPERS,
+            adapter=ADAPTER, core=CORE, now=lambda: NOW)
+        real_sdk = q.engine.sdk.request
+        async def observe_sdk(payload, **options):
+            sdk_calls.append((payload.get('operation'), payload.get('mode')))
+            return await real_sdk(payload, **options)
+        q.engine.sdk.request = observe_sdk
+        async def execute_helpers(method, params):
+            provider.calls.append((method, deepcopy(params)))
+            self.assertEqual(method, 'eth_call')
+            _, values = simulator.contract.decode_function_input(params[0]['data'])
+            body = branches(values)
+            if len(body) != 1 or body[0][0] != 0:
+                raise QuoteFailure('quote-no-route')
+            encoded_assets, lots, continuations = CODEC.decode([CORE_BUY], body[0][2])[0]
+            self.assertEqual([asset.lower() for asset in encoded_assets], [asset.lower() for asset in assets])
+            self.assertEqual(sum(lot[0] for lot in lots), values['plan']['inputs'][0]['amount'])
+            acquired, stages, bank, split_lots = [], [], {}, []
+            # Decode the actual Helpers calldata and price its encoded ppm
+            # splits and physical hops, rather than using inverse nominations.
+            for asset, (funded, template) in zip(encoded_assets, lots, strict=True):
+                allocated, output, portions = 0, 0, []
+                for index, (share, steps) in enumerate(template[3]):
+                    portion = funded - allocated if index == len(template[3])-1 else funded * share // 1000000
+                    allocated += portion
+                    source, physical = template[0], []
+                    for kind, target, fee, _ in steps:
+                        self.assertEqual(kind, 0)
+                        pool = next(row for row in pools if {
+                            row['token0']['address'].lower(), row['token1']['address'].lower()
+                        } == {source.lower(), target.lower()})
+                        self.assertEqual(fee, pool['feePips'])
+                        physical.append(hop(source, pool))
+                        source = target
+                    used, received = await q.price_path(physical, portion, BLOCK, bank, {})
+                    self.assertEqual(used, portion)
+                    output += received
+                    portions.append(portion)
+                acquired.append(output)
+                split_lots.append(portions)
+                stages.append(stage(len(stages), usdt, asset, funded, output))
+            gross = min(gross_cap, *(amount * gross_cap // target
+                                     for amount, target in zip(acquired, targets, strict=True)))
+            protocol_fee, helper_fee = fees(gross)
+            net = gross - protocol_fee - helper_fee
+            residuals, retained_rows = [], []
+            for index, (asset, amount, target) in enumerate(zip(encoded_assets, acquired, targets, strict=True)):
+                consumed = (target * gross + gross_cap - 1) // gross_cap
+                residual = amount - consumed
+                residuals.append(residual)
+                stages.append(stage(len(stages), asset, CORE, amount, net if index == 0 else 0,
+                                    consumed=consumed, returned=residual))
+                self.assertEqual(continuations[index][0][3], ())
+                if residual:
+                    stages.append(stage(len(stages), asset, CORE, residual, 0, consumed=0, returned=residual))
+                    retained_rows.append((0, len(stages)-1, asset, residual))
+            executions.append({'funding': values['plan']['inputs'][0]['amount'], 'acquired': acquired,
+                               'gross': gross, 'net': net, 'fees': (protocol_fee, helper_fee),
+                               'retained': residuals, 'splitLots': split_lots})
+            return encoded(measured(net, stages=stages, fees=(protocol_fee, helper_fee, 0), retained=retained_rows))
+        provider.make_request, q.plan_simulator = execute_helpers, simulator
+        root = await simulator(request, plan)
+        self.assertEqual([row['consumed'] for row in project_core_inputs(root, 1)], targets)
+        self.assertEqual(root['quotedOutput'], str(expected_net))
+        self.assertEqual(plan['body']['branches'][0]['data']['acquisitions'][0]['route']['routes'][0]['sharePpm'], 500000)
+        initial_retained = executions[0]['retained']
+        events, budget = [], QuoteBudget()
+        async def update(event):
+            if event['type'] == 'qualified':
+                value = event['value']
+                events.append(deepcopy(value))
+                if int(value['inputs'][0]['amount']) < budget_amount and int(value['quotedOutput']) == expected_net:
+                    budget.finish_selection('equal-net-smaller-usdt-funding')
+        with patch('cybergold_candidate.quoter.search.CORE_SHARES', (100,)):
+            async with asyncio.timeout(15):
+                with budget_context(budget):
+                    result = await q.get(request, update, seed=root)
+        self.assertEqual(events[0]['inputs'][0]['amount'], str(budget_amount))
+        self.assertEqual(result['quotedOutput'], str(expected_net))
+        self.assertLess(int(result['inputs'][0]['amount']), budget_amount,
+                        [(row['funding'], row['net']) for row in executions])
+        selected = next(row for row in executions if row['funding'] == int(result['inputs'][0]['amount'])
+                        and row['net'] == expected_net)
+        self.assertEqual(selected['gross'], gross_cap)
+        self.assertGreater(selected['gross'], selected['net'])
+        self.assertEqual(result['fees']['coreProtocolFeeCygld'], str(selected['fees'][0]))
+        self.assertEqual(result['fees']['coreHelpersFeeCygld'], str(selected['fees'][1]))
+        self.assertTrue(all(fee > 0 for fee in selected['fees']))
+        self.assertEqual(result['fees']['marketFeeCygld'], '0')
+        self.assertEqual(result['estimatedRecipientOutputs'][0]['amount'], str(expected_net))
+        self.assertTrue(all(final < initial for final, initial in zip(selected['retained'], initial_retained, strict=True)))
+        self.assertTrue(all(amount >= target for amount, target in zip(selected['acquired'], targets, strict=True)))
+        self.assertEqual(len(selected['splitLots'][0]), 2)
+        self.assertTrue(any(mode == 'exactOut' for _, mode in sdk_calls))
+        self.assertTrue(any(mode == 'exactIn' for _, mode in sdk_calls))
+        self.assertNotIn('inputLimitObserved', result['searchCoverage'])
+        self.assertEqual(request['inputs'][0]['amount'], str(budget_amount))
 
     async def test_primary_market_keeps_actual_sdk_downstream_partial_funding(self):
         q, pools = self.service()
