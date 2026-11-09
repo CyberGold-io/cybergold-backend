@@ -11,3 +11,6 @@
 008833b1fd43236cd8a7a5988e3ebda0aa14bdf1:python-candidate/tests/qualification/universal_fork.result.json:generic-api-key:199
 # Public CYGLD contract address in the captured tiny-quote recipient token field.
 06927020047248d0e08850e9e11635ced84fac8b:python-candidate/tests/fixtures/quoter-acquired/tiny-original.json:generic-api-key:1
+# Public CYGLD contract address in actual partial-funding recipient token fields.
+f94ca2079249034cc1f9e89928bee6e45b78456d:python-candidate/tests/fixtures/core-funding-usdt-100k-20261109.json:generic-api-key:545
+f94ca2079249034cc1f9e89928bee6e45b78456d:python-candidate/tests/fixtures/core-funding-usdt-100k-20261109.json:generic-api-key:662
