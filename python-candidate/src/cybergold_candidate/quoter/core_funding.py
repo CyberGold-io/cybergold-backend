@@ -99,15 +99,26 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
     return funding_proposal(request, original, amounts=amounts, conversions=conversions)
 
 
+def _measured_residuals(value, measured):
+    """Reuse useful consumption and routes already measured by Helpers."""
+    observed = {row['operation']: row for row in value.get('conversionObservations', ())}
+    result = {}
+    for row in measured:
+        key = row['branch'], row['index']
+        operation = f'{key[0]}:residual:{key[1]}'
+        old = observed.get(operation)
+        if old is not None and int(old['consumedInput']):
+            result[key] = int(old['consumedInput']), deepcopy(value['plan']['conversions'][operation])
+    return result
+
+
 async def _useful_residuals(quoter, value, measured, block, canonical):
     bank = await _acquisition_bank(quoter, value, block, canonical)
     result, core = {}, value['request']['outputCurrency']
-    observed = {row['operation']: row for row in value.get('conversionObservations', ())}
     for row in measured:
         branch, index, asset, residual = row['branch'], row['index'], row['currency'], row['residual']
         if not residual:
             continue
-        operation = f'{branch}:residual:{index}'
         chosen = {}
         try:
             await quoter.conversion(asset, core, residual, block, bank, canonical,
@@ -120,11 +131,10 @@ async def _useful_residuals(quoter, value, measured, block, canonical):
         except Exception:
             # An optional SDK failure cannot erase a successfully measured
             # sibling continuation; its existing body remains a nomination.
-            old = observed.get(operation)
-            if old is None:
+            previous = _measured_residuals(value, [row]).get((branch, index))
+            if previous is None:
                 continue
-            useful = int(old['consumedInput'])
-            chosen = deepcopy(value['plan']['conversions'][operation])
+            useful, chosen = previous
         if useful:
             result[(branch, index)] = useful, chosen
     return result
@@ -194,13 +204,15 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         return
     canonical = observations if observations is not None else {}
     seen = {proposal_identity({'inputs': value['inputs'], 'plan': value['plan']})}
-    errors = []
+    errors, ready = [], []
     async def offer(proposal, phase):
         identity = proposal_identity(proposal)
         if identity in seen:
             return
         seen.add(identity)
         yield {**proposal, 'phase': phase}
+
+    async def compositions(proposal):
         if request['intent'] == 0 and not core_only:
             try:
                 async for composed in compose_remaining_budget(quoter, value, proposal, measured, block, canonical):
@@ -212,6 +224,20 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
                 raise
             except Exception as error:
                 errors.append(error)
+    # The root already measured these continuations. Offer their resized body
+    # before optional new route discovery can delay the known useful result.
+    try:
+        residuals = _measured_residuals(value, measured)
+        useful = await _sized(quoter, value, measured, residuals, block, canonical) if residuals else None
+    except SnapshotChanged:
+        raise
+    except Exception as error:
+        errors.append(error)
+    else:
+        if useful is not None:
+            async for proposal in offer(useful, 'useful-core-residual'):
+                ready.append(proposal)
+                yield proposal
     try:
         reduced = await _sized(quoter, value, measured, {}, block, canonical)
     except SnapshotChanged:
@@ -223,7 +249,11 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         # no sizing alternative and does not warrant another Helpers call.
         if reduced['inputs'] != value['inputs']:
             async for proposal in offer(reduced, 'core-consumption'):
+                ready.append(proposal)
                 yield proposal
+    for proposal in ready:
+        async for composed in compositions(proposal):
+            yield composed
     try:
         residuals = await _useful_residuals(quoter, value, measured, block, canonical)
     except SnapshotChanged:
@@ -241,5 +271,7 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         else:
             async for proposal in offer(useful, 'useful-core-residual'):
                 yield proposal
+                async for composed in compositions(proposal):
+                    yield composed
     if errors:
         raise errors[0]  # Preserve the ordinary owned optional-work diagnostic.
