@@ -53,3 +53,37 @@ This is source/build guidance, not a claim of an identical deployed image.
 Original apt packages, builder/frontend/layer metadata and external dependency
 source/availability still have separate qualification limits. No live service,
 host setting, private environment or database data is changed by this package.
+
+## Repository-owned image delivery
+
+A successful Backend CI push on `dev` or `main` starts `publish-image.yml`
+in this repository. The separate build job checks out that exact source and
+builds the API/worker image without registry credentials or private Ops inputs.
+The publish job loads the current-run archive, reuses the exact successful CI
+run and current branch head, publishes an immutable image, and moves `desired`
+last. Pull-request, scheduled and manual CI runs do not publish images.
+
+| Source branch | Environment | Existing private GHCR package |
+| --- | --- | --- |
+| `dev` | Sandbox | `cybergold-backend-b2b-sandbox` |
+| `main` | Mainnet | `cybergold-backend-b2b-mainnet` |
+
+Ops continues to own deployment, private runtime configuration, health checks
+and rollback. Image labels identify Backend as the OCI source and revision;
+the existing Backend commit and snapshot-source labels remain available to
+host tooling. Publication uses this repository's `GITHUB_TOKEN` and needs no
+Ops checkout or cross-repository dispatch token.
+
+For activation, grant this repository Write access under **Manage Actions
+access** for both existing packages, keeping their visibility private. Merge
+through `dev`, then promote the unchanged `dev` branch to default `main`:
+GitHub only starts `workflow_run` workflows present on the default branch.
+After that promotion, a fresh or rerun successful current-head push CI run
+can release the matching environment. Retire the old Ops publisher only after
+the new publisher is available. The former dispatch secret can then be removed.
+
+During the `dev`-merge to default-`main` promotion interval, CI continues to
+validate source but automatic image publication pauses because the former Ops
+dispatch has been removed and GitHub has not registered the new workflow yet.
+Running services retain their current image. Coordinate the default-branch
+promotion before relying on subsequent automatic releases.
