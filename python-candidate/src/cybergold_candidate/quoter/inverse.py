@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from ..pool_snapshot import copy_pool_bank
 from ..route_work_slots import engine_work
-from ..routing_encoding import weighted_routes
+from ..routing_encoding import exact_output_routes, split_runtime
 from .contracts import capture_paths
 from .evaluate import replay_conversion
 from .reuse_routes import _amounts
@@ -28,9 +28,10 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
     """Nominate new split funding, then advance a private bank by forward replay.
 
     Helpers reports aggregate conversions. Diagnostic path replay supplies the
-    output proportions and each occurrence's pre-swap state. Ppm encoding can
-    round the nominated inputs, and changed earlier swaps can change later
-    states; only the caller's complete Helpers execution validates economics.
+    output proportions and each occurrence's pre-swap state. Exact-output SDK
+    pricing includes pool fees; ceiling funding preserves each required path
+    input after ppm encoding. Only complete Helpers execution validates the
+    resulting whole-plan economics.
     """
     selected = deepcopy(chosen)
     if not desired or source.lower() == target.lower():
@@ -44,11 +45,12 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
                for trace, amount in zip(traces, targets, strict=True)]
     branches = [{**deepcopy(branch), 'amountIn': str(amount)}
                 for branch, amount in zip(selected['branches'], amounts, strict=True)]
-    selected['template']['routes'] = weighted_routes(branches)
+    amount, selected['template']['routes'] = exact_output_routes(branches)
     selected['branches'] = branches
-    amount = sum(amounts)
     advanced = copy_pool_bank(preceding)
     await replay_conversion(quoter, selected, source, target, amount, block, advanced, canonical)
+    for branch, funded in zip(selected['branches'], split_runtime(amount, selected['template']['routes']), strict=True):
+        branch['amountIn'] = str(funded)
     selected.pop('_observation', None)
     bank.clear()
     bank.update(advanced)

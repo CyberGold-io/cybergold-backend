@@ -161,10 +161,24 @@ Helpers measures aggregate conversions rather than individual split paths.
 Diagnostic SDK replay follows the selected conversion in execution order with
 a private pool bank, obtaining path outputs and pre-swap states. Desired output
 is allocated in those observed output proportions; per-hop exact-output pricing
-nominates new inputs and the weighted-route encoder nominates their proportions.
-Integer/ppm rounding need not reproduce the original vector exactly. Replay of
-the changed conversion starts from its preceding bank; none of these advisory
-calculations proves the changed whole plan's output or shared-pool state.
+nominates new path inputs `a_i`. Core acquisition sizing directly preserves
+those required inputs through ppm encoding. It reserves one ppm for each
+positive path, then distributes the remaining ppm proportionally. The final
+path retains the integer remainder. For effective shares `p_i`, total funding
+is `max(ceil(a_i * 1_000_000 / p_i))` over positive inputs. Every executed path
+lot therefore covers its nominated exact-output input, including tiny paths
+that ordinary percentage truncation could round to zero.
+
+One replay from the preceding private pool state advances the changed plan;
+its returned branch amounts match the actual encoded lots. There is no funding
+search or repeated correction. This calculation guarantees input allocation,
+not a globally minimal input or target output under changed shared-pool states.
+Prefix capacity recovery retains its existing maximum-settleable arithmetic.
+
+Pool fees are already included in SDK pricing. No generic fee is added to the
+measured physical Core target; complete Helpers evaluation recomputes all Core,
+Helpers and market fees and compares net recipient output. These advisory SDK
+calculations do not certify the changed whole plan's output or shared-pool state.
 
 Direct basket issuance can nominate the measured input vector without swaps.
 A resized scalar Core body can also be combined with a primary market branch

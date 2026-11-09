@@ -110,6 +110,12 @@ smaller Core-funded body can also be combined with a market purchase using
 the remaining request budget, in either order. Direct basket issuance uses
 the measured input vector without acquisition swaps.
 
+Core acquisition sizing uses exact-output SDK prices, including pool fees.
+A direct ceiling calculation funds every encoded path with at least its
+required input after percentage rounding. One forward replay advances the
+private pool state; complete Helpers simulation measures the recipient's net
+output and all applicable fees.
+
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
 observation owns a finite pass over its alternatives; derived results do not
@@ -265,6 +271,16 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-09 - Correct encoded Core acquisition rounding
+
+- Use direct ceiling division over the
+  exact-output path inputs and their encoded percentage shares.
+- Preserve tiny positive path inputs with a positive share; the final path
+  keeps the integer remainder. Replay the resulting acquisition once to advance
+  private pool state, then use complete Helpers evaluation for net output/fees.
+- Keep fee pricing, quote ranking, prefix arithmetic and ordinary proposal
+  failure unchanged; update regressions, technical reference and diagram/PDF.
 
 ### 2026-11-09 - Share funding proposals and size acquisitions from Core consumption
 
