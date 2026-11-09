@@ -158,6 +158,9 @@ residual or primary-market discovery. That `C + U` proposal and pure `C`
 funding are offered before their remaining-budget market compositions.
 Fresh residual-route exploration follows those compositions and can still
 offer a different useful-residual body and its market combinations.
+The two known sizing calls use the existing bootstrap priority only while
+sizing; the scope exits before either proposal is yielded. Their optional
+composition construction and fresh residual rerouting use ordinary admission.
 
 First-hop underconsumption supplies a measured source amount; downstream partial
 fill uses the existing backward-prefix calculation. A revert remainder alone
@@ -296,9 +299,15 @@ they can still incur RPCs while other proposals are measured. The economic
 quoter does not actively call the retained amount-dependent Core-preview methods.
 
 SDK jobs and Helpers evaluation currently share eight engine work slots and
-the Python event loop. Retained-body replay uses the existing bootstrap
-priority lane; initial ordinary proposals use ordinary admission. SDK state
-waits release their pricing lease. Independent missing pools/tick requests
+the Python event loop. Retained-body replay, SQL-neighbor candidate calls,
+known measured Core-plus-residual and pure-Core sizing, and Helpers calls for
+complete Core-funding proposals use the existing bootstrap priority lane.
+Candidate priority ends before recovery, publication callbacks or follow-up
+tasks are created. Sizing priority ends before yielding. Fresh route discovery,
+residual rerouting, market-composition construction and initial ordinary
+proposals retain ordinary admission. Running work is not preempted, and no
+lane reserves idle capacity. SDK state waits release their pricing lease.
+Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
 

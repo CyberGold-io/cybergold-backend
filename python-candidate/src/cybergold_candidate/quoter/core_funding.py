@@ -7,6 +7,7 @@ its root observation's alternatives; derived quotes do not recurse here.
 from copy import deepcopy
 
 from ..recovery_rpc import SnapshotChanged
+from ..route_work_slots import bootstrap_priority
 from .evaluate import replay_conversion
 from .funding import funding_proposal
 from .inverse import inverse_conversion
@@ -226,9 +227,11 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
                 errors.append(error)
     # The root already measured these continuations. Offer their resized body
     # before optional new route discovery can delay the known useful result.
+    # The finite sizing scopes end before yielding or exploring new routes.
     try:
         residuals = _measured_residuals(value, measured)
-        useful = await _sized(quoter, value, measured, residuals, block, canonical) if residuals else None
+        with bootstrap_priority():
+            useful = await _sized(quoter, value, measured, residuals, block, canonical) if residuals else None
     except SnapshotChanged:
         raise
     except Exception as error:
@@ -239,7 +242,8 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
                 ready.append(proposal)
                 yield proposal
     try:
-        reduced = await _sized(quoter, value, measured, {}, block, canonical)
+        with bootstrap_priority():
+            reduced = await _sized(quoter, value, measured, {}, block, canonical)
     except SnapshotChanged:
         raise
     except Exception as error:
