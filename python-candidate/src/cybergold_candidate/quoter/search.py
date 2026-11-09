@@ -431,7 +431,8 @@ class Quoter:
             return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
-                           failure_sink=None, limited_funding=None, retained=False, derived_funding=False):
+                           failure_sink=None, limited_funding=None, retained=False, derived_funding=False,
+                           bootstrap=False):
             nonlocal best
             record_error = remember_failure if failure_sink is None else failure_sink.append
             try:
@@ -445,10 +446,10 @@ class Quoter:
                         funded_request, self.core_state_cache.value, selected)
                 try:
                     async def produce_candidate():
-                        # A cached body uses the same finite bootstrap lane as
-                        # SQL neighbors. Scope it to Helpers so later recovery
-                        # and SDK exploration retain their ordinary priority.
-                        with bootstrap_priority() if retained else nullcontext():
+                        # Saved bodies and complete funding proposals use the
+                        # finite bootstrap lane only for this Helpers call.
+                        # Recovery and new exploration keep ordinary priority.
+                        with bootstrap_priority() if retained or bootstrap else nullcontext():
                             return await self.candidate(funded_request, share, order, block, assets, weights,
                                 first=first, observations=observations, selected=selected)
                     shared = current_search_observations()
@@ -539,7 +540,8 @@ class Quoter:
                                         continue
                                     funding_proposals.add(identity)
                                     await evaluate(share, order, False, selected=proposal['plan'],
-                                        funding=proposal['inputs'], phase=proposal['phase'], derived_funding=True)
+                                        funding=proposal['inputs'], phase=proposal['phase'], derived_funding=True,
+                                        bootstrap=True)
                         reconstruct_later(refine_core())
                 # A lower-funding body is a new proposal. Price it alongside
                 # normal search, rather than adding a network tail afterward.
@@ -801,13 +803,12 @@ class Quoter:
                         try:
                             errors = []
                             previous = retained if retained is not None else job['quote']
-                            with bootstrap_priority():
-                                value = await evaluate(100, 'core-first', False,
-                                    selected=proposal['plan'], funding=proposal['inputs'],
-                                    phase='nearby-'+source['side'], failure_sink=errors,
-                                    limited_funding=previous['inputs']
-                                        if input_limit_observed(previous) else None,
-                                    retained=retained is not None)
+                            value = await evaluate(100, 'core-first', False,
+                                selected=proposal['plan'], funding=proposal['inputs'],
+                                phase='nearby-'+source['side'], failure_sink=errors,
+                                limited_funding=previous['inputs']
+                                    if input_limit_observed(previous) else None,
+                                retained=retained is not None, bootstrap=True)
                             if retained is not None:
                                 await repriced_source(retained, value, errors)
                             observation['completed'] = value is not None

@@ -12,6 +12,7 @@ from cybergold_candidate.app_tokens import TOKENS
 from cybergold_candidate.exact_input_plan import CORE_BUY, compile_plan
 from cybergold_candidate.quoter.core_funding import core_funding_alternatives, compose_remaining_budget
 from cybergold_candidate.quoter.evaluate import encode_nomination
+from cybergold_candidate.quoter.funding import funding_proposal
 from cybergold_candidate.quoter.plan_call import executable_body, compile_call
 from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, project_core_inputs
 from cybergold_candidate.quote_errors import QuoteFailure
@@ -20,6 +21,7 @@ from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
 from cybergold_candidate.rpc_block_context import LATEST_BLOCK
+from cybergold_candidate import route_work_slots as work
 from quoter_fixture import Registry, service, synthetic_pool
 from cybergold_candidate.quoter import Quoter
 from test_quoter_plan_simulation import CODEC, Provider, Rpc, branches, encoded, measured, stage, NOW
@@ -205,6 +207,100 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(value, original)
         finally:
             await alternatives.aclose()
+
+    @staticmethod
+    def scope_nominee(value, amount):
+        # Unpriced complete bodies control scope tests, not economic acceptance.
+        return funding_proposal(value['request'], value['plan'], amounts={
+            '0:acquire:0': amount * 3 // 5, '0:acquire:1': amount - amount * 3 // 5})
+
+    async def test_only_known_sizing_uses_priority_not_yields_or_optional_construction(self):
+        q, value, _ = self.captured_actual_service()
+        scopes, amounts = [], iter((33134152568, 32022705852, 34000000000))
+
+        async def sized(_q, _value, _measured, residuals, *_):
+            scopes.append(('sized', bool(residuals), work._bootstrap.get()))
+            await asyncio.sleep(0)
+            self.assertEqual(work._bootstrap.get(), scopes[-1][-1])
+            return self.scope_nominee(value, next(amounts))
+
+        async def compositions(*_):
+            scopes.append(('compose', work._bootstrap.get()))
+            for proposal in ():
+                yield proposal
+
+        async def fresh(*_):
+            scopes.append(('fresh', work._bootstrap.get()))
+            return {(0, 0): (1, value['plan']['conversions']['0:residual:0'])}
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized), \
+                patch('cybergold_candidate.quoter.core_funding.compose_remaining_budget', compositions), \
+                patch('cybergold_candidate.quoter.core_funding._useful_residuals', fresh):
+            proposals = []
+            async for proposal in core_funding_alternatives(q, value, LATEST_BLOCK, {}):
+                self.assertFalse(work._bootstrap.get(), 'Priority must end before yielding to the caller')
+                proposals.append(proposal)
+        self.assertEqual([row['phase'] for row in proposals],
+                         ['useful-core-residual', 'core-consumption', 'useful-core-residual'])
+        self.assertEqual(scopes, [('sized', True, True), ('sized', False, True),
+                                 ('compose', False), ('compose', False), ('fresh', False),
+                                 ('sized', True, False), ('compose', False)])
+        self.assertFalse(work._bootstrap.get())
+
+    async def test_failed_known_sizing_restores_priority_before_independent_proposal(self):
+        q, value, _ = self.captured_actual_service()
+        error, scopes = RuntimeError('Known sizing unavailable'), []
+
+        async def sized(*_):
+            scopes.append(work._bootstrap.get())
+            if len(scopes) == 1:
+                raise error
+            return self.scope_nominee(value, 32022705852)
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized), \
+                patch('cybergold_candidate.quoter.core_funding._useful_residuals', AsyncMock(return_value={})):
+            alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {}, core_only=True)
+            try:
+                self.assertEqual((await anext(alternatives))['phase'], 'core-consumption')
+                self.assertFalse(work._bootstrap.get())
+                with self.assertRaises(RuntimeError) as caught:
+                    await anext(alternatives)
+                self.assertIs(caught.exception, error)
+                self.assertFalse(work._bootstrap.get())
+            finally:
+                await alternatives.aclose()
+        self.assertEqual(scopes, [True, True])
+
+    async def test_cancelled_known_sizing_restores_its_callers_priority_context(self):
+        q, value, _ = self.captured_actual_service()
+        entered, restored = asyncio.Event(), []
+
+        async def sized(*_):
+            self.assertTrue(work._bootstrap.get())
+            entered.set()
+            await asyncio.Event().wait()
+
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        async def consume():
+            try:
+                await anext(alternatives)
+            finally:
+                restored.append(work._bootstrap.get())
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized):
+            task = asyncio.create_task(consume())
+            try:
+                async with asyncio.timeout(3):
+                    await entered.wait()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                self.assertEqual(restored, [False])
+                self.assertFalse(work._bootstrap.get())
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await alternatives.aclose()
 
     async def test_missing_measured_basket_route_still_offers_independent_core_consumption(self):
         q, value, _ = self.captured_actual_service()

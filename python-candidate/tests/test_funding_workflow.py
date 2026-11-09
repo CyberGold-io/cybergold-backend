@@ -1,10 +1,23 @@
 """Funding refinements use the serving search's publication and ownership path."""
 import asyncio
 from copy import deepcopy
+import hashlib
+import json
+from types import MethodType
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from eth_utils.abi import collapse_if_tuple
+from web3 import Web3
+
+from cybergold_candidate.economic_quotes import EconomicQuotes
+from cybergold_candidate.helpers_execution import ABI, argument
 from cybergold_candidate.quoter import Quoter
+from cybergold_candidate.quoter.custom_routes import CustomRoutes
+from cybergold_candidate.quoter.plan_call import METHOD, compile_call
+from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation
+from cybergold_candidate.quote_errors import QuoteFailure
+from cybergold_candidate.route_work_slots import bootstrap_priority, engine_work
 from test_universal_quote import Quotes, Engine, CORE, request
 
 
@@ -146,6 +159,102 @@ class FundingWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 result = await Quoter.get(q, req)
         self.assertEqual(result['inputs'], req['inputs'])
         self.assertEqual(selected, [])
+
+    async def test_captured_useful_funding_publishes_while_unrelated_priority_work_continues(self):
+        # This is full serving/search integration with actual captured pool
+        # states and the installed SDK. Helpers replies are recorded actual
+        # contract bytes, bound to exact complete calldata/funding overrides;
+        # the test does not claim fresh EVM execution or a timing guarantee.
+        from test_core_funding import CoreFundingTests
+        from test_economic_quote_api import SharedStore
+        from test_quoter_plan_simulation import Rpc
+
+        q, root, captured = CoreFundingTests.captured_actual_service(self)
+        registry = q.engine.registry
+        q.conversion = MethodType(Quoter.conversion, q)
+        q.seed_routes = lambda *_: None  # This fixture owns four observed pools.
+        q.discover = AsyncMock()  # No remote inventory/connector supplier.
+        q.route_provider_factory = lambda: [CustomRoutes(registry)]
+        assets = root['plan']['body']['branches'][0]['data']['basketAssets']
+        q.basis_reader = AsyncMock(return_value=(deepcopy(assets), [600000, 400000]))
+        self.addAsyncCleanup(q.close)
+
+        def call_identity(params):
+            return hashlib.sha256(json.dumps(params, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+        recorded = captured['pricingReducedRpc']
+        contract = Web3().eth.contract(abi=ABI)
+        original_call = compile_call(root['request'], root['plan'], chain=31338,
+            helpers=q.helpers, core=q.core, contract=contract)
+        actual_root_wire = Web3.to_hex(Web3().codec.encode([collapse_if_tuple(METHOD['outputs'][0])],
+            [argument(root['pricingEvidence']['rawTradeResult'], METHOD['outputs'][0])]))
+        replies = {call_identity(original_call.params): {'result': actual_root_wire},
+                   recorded['paramsSha256']: recorded['response']}
+        observed_calls = []
+        class RecordedProvider:
+            async def make_request(self, method, params):
+                identity = call_identity(params)
+                observed_calls.append(identity)
+                if method != 'eth_call' or identity not in replies:
+                    # Other ordinary candidates lack a recorded observation.
+                    raise QuoteFailure('quote-no-route')
+                await asyncio.sleep(0)
+                return deepcopy(replies[identity])
+        registry.get_rpc = lambda: Rpc(RecordedProvider())
+        q.plan_simulator = HelpersPlanSimulation(q.settings, registry, helpers=q.helpers,
+            adapter=q.adapter, core=q.core, now=lambda: root['context']['observedAt'],
+            semaphore=q.engine.semaphore)
+        store = SharedStore()
+        store.memory_lookup = lambda *_args, **_kwargs: deepcopy(root)
+        store.memory_neighbors = lambda *_args, **_kwargs: [
+            {'family': root['routeFamily'], 'side': 'lower', 'quote': deepcopy(root)}]
+        service = EconomicQuotes(q, store)
+        self.addAsyncCleanup(service.close)
+
+        release_unrelated_tail, smaller_ready = asyncio.Event(), asyncio.Event()
+        completed_rounds = [0] * 64
+        selected = []
+        async def publish(frame):
+            value = frame.get('value') or {}
+            if (value and int(value['inputs'][0]['amount']) < int(root['inputs'][0]['amount'])
+                    and int(value['quotedOutput']) >= int(root['quotedOutput'])):
+                self.assertFalse(release_unrelated_tail.is_set())
+                selected.append(deepcopy(value))
+                smaller_ready.set()
+        pool = deepcopy(captured['pools'][0])
+        async def competitor(index):
+            with bootstrap_priority():
+                while not release_unrelated_tail.is_set():
+                    async with engine_work(q.engine.semaphore):
+                        await q.engine.sdk.request({'operation': 'quote', 'pools': [deepcopy(pool)],
+                            'poolId': pool['id'], 'mode': 'exactIn', 'zeroForOne': False,
+                            'amount': str(1_000_000+index*1000+completed_rounds[index])})
+                    completed_rounds[index] += 1
+                    await asyncio.sleep(0)
+
+        competitors = [asyncio.create_task(competitor(index)) for index in range(64)]
+        operation = asyncio.create_task(service.progressive(root['request'], publish))
+        ready = asyncio.create_task(smaller_ready.wait())
+        try:
+            # A cleanup allowance for a frozen test, not a product selection
+            # deadline: the unrelated priority tail stays ready until finally.
+            async with asyncio.timeout(10):
+                done, _ = await asyncio.wait((operation, ready), return_when=asyncio.FIRST_COMPLETED)
+                if operation in done:
+                    await operation
+                self.assertTrue(smaller_ready.is_set())
+            self.assertTrue(all(completed_rounds), 'The competing priority work must actually run')
+            self.assertIn(recorded['paramsSha256'], observed_calls)
+            for key, expected in recorded['expected'].items():
+                self.assertEqual(selected[-1][key], expected)
+            self.assertEqual(selected[-1]['inputs'][0]['amount'], '33134152568')
+            self.assertEqual(selected[-1]['quotedOutput'], '249741636318399242213')
+        finally:
+            release_unrelated_tail.set()
+            for task in (operation, ready, *competitors):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(operation, ready, *competitors, return_exceptions=True)
 
 
 if __name__ == '__main__':

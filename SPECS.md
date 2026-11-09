@@ -122,6 +122,14 @@ required input after percentage rounding. One forward replay advances the
 private pool state; complete Helpers simulation measures the recipient's net
 output and all applicable fees.
 
+The known Core-plus-residual and pure-Core sizing work uses the existing
+bootstrap priority within the shared eight engine permits. Complete funding
+proposals use that priority for their Helpers call. These scopes end before
+yielding a proposal or starting optional construction. SQL-neighbor priority
+also covers only the complete candidate call; its recovery and follow-up work
+does not inherit priority. Fresh routing and composition construction keep
+ordinary admission, and running work is not preempted.
+
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
 observation owns a finite pass over its alternatives; derived results do not
@@ -277,6 +285,16 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-09 - Scope ready Core funding to the existing pricing priority
+
+- Use the existing bootstrap admission lane for measured Core-plus-useful
+  residual and pure-Core sizing, and the Helpers calls for complete funding
+  proposals, within the unchanged eight engine permits.
+- End sizing priority before yielding. Scope SQL-neighbor priority to its
+  candidate call so optional follow-up discovery and recovery stay ordinary.
+- Preserve ordinary construction, permit cleanup, original input maxima,
+  fee arithmetic, proposal evaluation and output-first ranking.
 
 ### 2026-11-09 - Offer measured useful funding before fresh market discovery
 
