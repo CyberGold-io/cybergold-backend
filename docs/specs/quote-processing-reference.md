@@ -362,6 +362,14 @@ and quote-result writes keep their existing lock and drain behavior.
 
 ## Step 6: select, publish and display
 
+The economic NDJSON stream emits a blank newline when its next event-queue
+wait has been idle for 15 seconds. Empty lines keep HTTP body readers active;
+clients ignore them rather than parsing a quote frame. They carry no selected
+or full-funding frame metadata. The timeout wraps only `queue.get()`; it does
+not cancel the producer, stop search or mark completion. Real queued events
+retain their ordinary order, and disconnect retains the existing producer
+cancellation and drain ownership.
+
 The Backend quote book ranks complete observations that fit the request. A
 new observation of the same funded-route identity replaces that route's prior
 observation in either price direction. A concrete whole-plan Helpers disproof

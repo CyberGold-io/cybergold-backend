@@ -6,7 +6,7 @@ import io
 import logging
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -561,6 +561,7 @@ class StreamTransportTests(ProgressiveFixture):
     async def asgi_stream(self, service, *, spec='2.4', refresh=False, intent=0):
         inbox = asyncio.Queue(); frames, headers = [], {}
         ready, terminal = asyncio.Event(), asyncio.Event()
+        self.stream_idle_bytes = asyncio.Queue()
         body = json.dumps({**economic_request(intent), 'refresh': refresh}).encode()
         inbox.put_nowait({'type': 'http.request', 'body': body, 'more_body': False})
         async def receive(): return await inbox.get()
@@ -568,6 +569,11 @@ class StreamTransportTests(ProgressiveFixture):
             if message['type'] == 'http.response.start': headers.update(dict(message['headers']))
             if message['type'] == 'http.response.body' and message.get('body'):
                 for line in message['body'].splitlines():
+                    if not line.strip():
+                        self.assertNotIn('quote_frame_type', scope['state'])
+                        self.assertNotIn('quote_frame_full_funding', scope['state'])
+                        self.stream_idle_bytes.put_nowait(line)
+                        continue
                     frame = json.loads(line); frames.append(frame)
                     if frame['type'] == 'qualified': ready.set()
                     if frame['type'] in ('complete', 'error'): terminal.set()
@@ -606,6 +612,51 @@ class StreamTransportTests(ProgressiveFixture):
                 self.assertTrue(drained.is_set())
                 self.assertEqual([frame['type'] for frame in frames], ['qualified'])
                 self.assertEqual(next(iter(service.store.rows.values()))['quotedOutput'], '100')
+
+    async def test_idle_bytes_keep_one_producer_alive_without_quote_frames_then_disconnect_drains(self):
+        for spec in ('2.3', '2.4'):
+            with self.subTest(spec=spec):
+                first_quote, drained = asyncio.Event(), asyncio.Event()
+                producer_calls, producer_cleanups = [], []
+                async def script(value, callback, **_):
+                    producer_calls.append(1)
+                    try:
+                        await first_quote.wait()
+                        await callback({'type': 'qualified', 'value': self.value(100)})
+                        await asyncio.Event().wait()
+                    finally:
+                        producer_cleanups.append(1)
+                        drained.set()
+                service = self.service(script)
+                with patch('cybergold_candidate.economic_quotes.STREAM_KEEPALIVE_SECONDS', .02):
+                    task, inbox, frames, _, ready, terminal = await self.asgi_stream(service, spec=spec)
+                    for _ in range(2):
+                        self.assertEqual(await asyncio.wait_for(self.stream_idle_bytes.get(), 1), b'')
+                    self.assertEqual(frames, [])
+                    self.assertFalse(ready.is_set() or terminal.is_set() or drained.is_set())
+                    first_quote.set()
+                    await asyncio.wait_for(ready.wait(), 1)
+                    for _ in range(2):
+                        self.assertEqual(await asyncio.wait_for(self.stream_idle_bytes.get(), 1), b'')
+                    self.assertEqual([frame['type'] for frame in frames], ['qualified'])
+                    self.assertEqual(producer_calls, [1])
+                    self.assertFalse(task.done() or drained.is_set())
+                    inbox.put_nowait({'type': 'http.disconnect'})
+                    await asyncio.wait_for(task, 1)
+                self.assertTrue(drained.is_set())
+                self.assertEqual(producer_cleanups, [1])
+                self.assertFalse(terminal.is_set())
+                stages = [sample for family in self.stream_app.state.metrics.quote_stages.collect()
+                          for sample in family.samples if sample.name.endswith('_total')]
+                self.assertEqual(sum(sample.value for sample in stages
+                                     if sample.labels['stage'] == 'qualified'), 1)
+                self.assertFalse(any(sample.labels['stage'] in ('complete', 'error') for sample in stages))
+                flow_calls = [sample for family in self.stream_app.state.metrics.flow_stage_calls.collect()
+                              for sample in family.samples if sample.name.endswith('_total')
+                              and sample.labels['stage'] == 'publication.queue'
+                              and sample.labels['outcome'] == 'failed']
+                self.assertTrue(flow_calls)
+                self.assertEqual(sum(sample.value for sample in flow_calls), 0)
 
     async def test_stream_exactly_one_complete_and_full_terminal_improvement(self):
         ready = asyncio.Event()
