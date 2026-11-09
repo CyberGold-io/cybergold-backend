@@ -136,6 +136,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run ci-check
+      - name: Test repository-owned image release
+        run: python3 -B -m unittest discover -s tests -p test_image_release.py
       - name: Report npm advisory inventory for manual review
         continue-on-error: true
         run: npm audit --audit-level=high
@@ -158,24 +160,3 @@ jobs:
           persist-credentials: false
       - run: scripts/install-gitleaks.sh /tmp/gitleaks
       - run: /tmp/gitleaks git . --redact --no-banner
-
-  dispatch_b2b_deployment:
-    if: >-
-      ${{ !cancelled() && github.event_name == 'push'
-          && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-          && needs.quality.result == 'success' && needs['secret-scan'].result == 'success' }}
-    needs: [quality, secret-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch the existing branch-mapped B2B publisher
-        env:
-          GH_TOKEN: ${{ secrets.CYBERGOLD_BACKEND_DISPATCH }}
-        run: |
-          case "$GITHUB_REF" in
-            refs/heads/dev) target=sandbox ;;
-            refs/heads/main) target=mainnet ;;
-          esac
-          gh workflow run publish-b2b-backend.yml \
-            --repo CyberGold-io/cybergold-ops --ref main \
-            -f "target=${target}" -f "backend_commit=${GITHUB_SHA}" \
-            -f "backend_ci_run_id=${GITHUB_RUN_ID}"

@@ -1,0 +1,111 @@
+name: Publish Backend image
+
+on:
+  workflow_run:
+    workflows: [Backend CI]
+    types: [completed]
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-image-publication-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+  RELEASE_SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+  RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id }}
+
+jobs:
+  build:
+    if: >-
+      github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      target: ${{ steps.authority.outputs.target }}
+      config_image_id: ${{ steps.build.outputs.config_image_id }}
+      archive_name: ${{ steps.build.outputs.archive_name }}
+    steps:
+      - name: Check out the exact admitted Backend commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Require the current branch head and its exact successful Backend CI run
+        id: authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/require-image-release-authority.sh
+
+      - name: Build without registry credentials or private Ops inputs
+        id: build
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/backend-build-docker
+        run: bash scripts/build-release-image.sh
+
+      - name: Transfer the exact current-run image archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.build.outputs.archive_name }}
+          path: ${{ steps.build.outputs.archive_path }}
+          archive: false
+          overwrite: false
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    env:
+      TARGET: ${{ needs.build.outputs.target }}
+      CONFIG_IMAGE_ID: ${{ needs.build.outputs.config_image_id }}
+      IMAGE_ARCHIVE_NAME: ${{ needs.build.outputs.archive_name }}
+    steps:
+      - name: Check out publication tooling from the exact admitted Backend commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Download the exact current-run image without extraction
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build.outputs.archive_name }}
+          path: ${{ runner.temp }}/backend-image-download
+          skip-decompress: true
+          digest-mismatch: error
+
+      - name: Publish the immutable digest and update this target's desired tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ github.token }}
+          DOCKER_CONFIG: ${{ runner.temp }}/backend-publish-docker
+        run: bash scripts/publish-release-image.sh "$TARGET" "$RUNNER_TEMP/backend-image-download/$IMAGE_ARCHIVE_NAME"
+
+      - name: Remove registry credentials
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/backend-publish-docker
+        run: docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Retain publication evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/ghcr-publication/
+          if-no-files-found: warn
