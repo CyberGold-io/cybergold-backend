@@ -17,6 +17,9 @@ from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
 
 
+STREAM_KEEPALIVE_SECONDS = 15
+
+
 def economic_intent(value):
     return {'mode': 'issue-exact-in' if value['intent'] in (0, 2) else 'redeem-exact-in',
             'assetCount': len(value['inputs']), 'inputs': value['inputs']}
@@ -253,8 +256,20 @@ async def handle_economic_quote_stream(request, service):
         task = asyncio.create_task(produce())
         try:
             while True:
+                keepalive = False
                 with stage('publication.queue', kind='queue'):
-                    frame = await queue.get()
+                    try:
+                        frame = await asyncio.wait_for(queue.get(), STREAM_KEEPALIVE_SECONDS)
+                    except TimeoutError:
+                        keepalive = True
+                if keepalive:
+                    # Keep idle HTTP readers active without touching the
+                    # producer or publishing another quote observation.
+                    state = request.scope.setdefault('state', {})
+                    state.pop('quote_frame_type', None)
+                    state.pop('quote_frame_full_funding', None)
+                    yield '\n'
+                    continue
                 if frame is None:
                     break
                 with stage('http.encode', kind='cpu'):

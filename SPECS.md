@@ -188,6 +188,12 @@ passed to the server transport. The App's proxy forwards the stream without
 waiting for the search to finish. Both server and streaming proxy request that
 their receiving proxy avoid buffering; this control does not prove byte arrival.
 
+While the economic quote stream waits for its next queued event, 15 seconds
+without an event produces a blank newline to keep idle HTTP readers active.
+Clients ignore that empty line; it carries no quote or completion meaning.
+Only the queue wait is timed. Search continues, and disconnect still cancels
+and drains the stream's producer through its existing owner.
+
 Network chunks can split a record or contain several records. The browser
 accumulates a complete line, parses its JSON, and passes the selected quote to
 the current request's consumer. A late frame belonging to an obsolete request
@@ -285,6 +291,15 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-09 - Keep idle economic quote streams active
+
+- Emit a blank newline after a 15-second idle event-queue wait, without
+  publishing a quote frame or adding a producer/search deadline.
+- Preserve selected/full-funding diagnostics, quote arithmetic, ranking,
+  ordinary terminal frames and disconnect-owned cancellation/cleanup.
+- Update the transport reference; the delivery dependencies shown in the
+  current-process diagrams and linked PDF remain unchanged.
 
 ### 2026-11-09 - Scope ready Core funding to the existing pricing priority
 
