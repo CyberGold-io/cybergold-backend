@@ -104,11 +104,17 @@ which must receive its own complete Helpers observation.
 
 Funding alternatives use one proposal workflow while keeping their arithmetic
 specific to each case. A successful Core purchase supplies measured basket
-consumption. Backward exact-output pricing can nominate smaller acquisitions
-for those amounts, or for Core's amounts plus a useful market residual. A
-smaller Core-funded body can also be combined with a market purchase using
-the remaining request budget, in either order. Direct basket issuance uses
-the measured input vector without acquisition swaps.
+consumption and each existing continuation's useful input consumption. The
+workflow first reuses those measured amounts and encoded continuations to
+nominate smaller acquisitions for Core plus the useful residual. It also
+offers pure-Core funding before requesting fresh market paths. Backward
+exact-output pricing supplies both acquisition proposals; direct basket
+issuance uses the measured input vector without acquisition swaps.
+
+Those known proposals can then be combined with a market purchase using the
+remaining request budget, in either order. Fresh residual-route exploration
+and its resized proposals remain available afterward. Each alternative uses
+the same complete-plan evaluation and selection workflow.
 
 Core acquisition sizing uses exact-output SDK prices, including pool fees.
 A direct ceiling calculation funds every encoded path with at least its
@@ -271,6 +277,16 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-09 - Offer measured useful funding before fresh market discovery
+
+- Reuse existing Helpers-measured continuation consumption and encoded routes
+  to nominate Core-plus-useful-residual funding before optional route discovery.
+- Offer that proposal and pure-Core funding before their remaining-budget
+  market compositions; retain fresh residual rerouting and its compositions.
+- Keep exact-output acquisition sizing, complete Helpers evaluation, ordinary
+  proposal failures, input maxima and output-first ranking unchanged.
+- Update the technical reference, market/Core diagram and linked process PDF.
 
 ### 2026-11-09 - Correct encoded Core acquisition rounding
 

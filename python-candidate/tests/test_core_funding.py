@@ -1,6 +1,9 @@
 """Measured Core targets reach SDK inverses and complete Helpers bodies."""
 import asyncio
 from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -12,9 +15,13 @@ from cybergold_candidate.quoter.evaluate import encode_nomination
 from cybergold_candidate.quoter.plan_call import executable_body, compile_call
 from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, project_core_inputs
 from cybergold_candidate.quote_errors import QuoteFailure
+from cybergold_candidate.quote_publication import CanonicalPublication
 from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 from cybergold_candidate.routing_encoding import ZERO
-from quoter_fixture import service, synthetic_pool
+from cybergold_candidate.route_quote_engine import RouteQuoteEngine
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
+from quoter_fixture import Registry, service, synthetic_pool
+from cybergold_candidate.quoter import Quoter
 from test_quoter_plan_simulation import CODEC, Provider, Rpc, branches, encoded, measured, stage, NOW
 from test_universal_quote import (BLOCK, CORE, PAXG, OTHER, WETH, HELPERS, ADAPTER, USER,
                                  capacity_nominations, settings)
@@ -71,6 +78,24 @@ def root_value(q, pools, *, native=False, identity=False):
 
 
 class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
+    def captured_actual_service(self):
+        data = json.loads((Path(__file__).parent / 'fixtures/core-funding-usdt-100k-20261109.json').read_text())
+        value = data['root']
+        registry = Registry(data['pools'], LATEST_BLOCK)
+        registry.chain, registry.core = 31338, value['request']['outputCurrency']
+        anchor = value['plan']['conversions']['0:residual:0']['branches'][0]['hops'][0]['pool']['id']
+        registry.seed = registry.inventory[anchor]
+        configured = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338',
+            NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=registry.core,
+            NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=value['deployment']['helpers'],
+            CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS=value['deployment']['adapter'])
+        engine = RouteQuoteEngine(configured, registry)
+        self.addAsyncCleanup(engine.close)
+        self.addAsyncCleanup(registry.pending.close)
+        quoter = Quoter(configured, engine)
+        quoter.conversion = AsyncMock(side_effect=RuntimeError('Optional discovery unavailable'))
+        return quoter, value, data
+
     def service(self, *, identity=False, thin=True):
         source = PAXG if identity else WETH
         pools = [synthetic_pool(WETH, PAXG, 8901, 'v2'),
@@ -106,6 +131,106 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
             for index, asset in enumerate((PAXG, OTHER))])
         self.assertEqual(value, original)
         self.assertEqual(set(value), set(original))
+
+    async def test_actual_measured_useful_residual_and_pure_core_precede_optional_discovery(self):
+        # Actual captured Helpers/Core measurements and actual captured pool
+        # observations drive the installed SDK. This offline regression checks
+        # nomination/order, not fresh contract execution; the manual real-fork
+        # qualification exercises those complete proposals against contracts.
+        q, value, captured = self.captured_actual_service()
+        original = deepcopy(value)
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        try:
+            useful = await anext(alternatives)
+            self.assertEqual(useful['phase'], 'useful-core-residual')
+            q.conversion.assert_not_awaited()
+            core_only = await anext(alternatives)
+            self.assertEqual(core_only['phase'], 'core-consumption')
+            q.conversion.assert_not_awaited()
+            self.assertLess(int(core_only['inputs'][0]['amount']), int(useful['inputs'][0]['amount']))
+            self.assertLess(int(useful['inputs'][0]['amount']), int(value['inputs'][0]['amount']))
+            measured_inputs = project_core_inputs(value, 31338)
+            observed = {row['operation']: row for row in value['conversionObservations']}
+            bank, canonical = {}, {}
+            for index, row in enumerate(measured_inputs):
+                operation = f"{row['branch']}:acquire:{row['index']}"
+                residual_operation = f"{row['branch']}:residual:{row['index']}"
+                needed = row['consumed'] + int(observed[residual_operation]['consumedInput'])
+                chosen = useful['plan']['conversions'][operation]
+                acquisition = useful['plan']['body']['branches'][0]['data']['acquisitions'][index]
+                _, actual = await q.price_path(chosen['branches'][0]['hops'],
+                    int(acquisition['amountIn']), LATEST_BLOCK, bank, canonical)
+                self.assertGreaterEqual(actual, needed)
+            self.assertEqual(useful['plan']['conversions']['0:residual:0'],
+                             value['plan']['conversions']['0:residual:0'])
+            # Replay an actual production Helpers response only for the exact
+            # recorded calldata/overrides. Fees were paid in that EVM call;
+            # pricing=False prevents projecting the market fee a second time.
+            paid = captured['paidReducedRpc']
+            provider = Provider(paid['response'])
+            rpc = Rpc(provider)
+            registry = SimpleNamespace(chain=31338, get_rpc=lambda: rpc)
+            simulator = HelpersPlanSimulation(SimpleNamespace(), registry,
+                helpers=value['deployment']['helpers'], adapter=value['deployment']['adapter'],
+                core=value['request']['outputCurrency'], now=lambda: NOW)
+            result = await simulator({**value['request'], 'inputs': useful['inputs']},
+                useful['plan'], pricing=False, minimum=int(value['quotedOutput']),
+                block={'number': int(captured['sourceAnchor']['blockNumber']),
+                       'hash': captured['sourceAnchor']['blockHash']})
+            encoded_params = json.dumps(provider.calls[0][1], sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(hashlib.sha256(encoded_params).hexdigest(), paid['paramsSha256'])
+            for key, expected in paid['expected'].items():
+                self.assertEqual(result[key], expected)
+            published = []
+            async def publish(frame):
+                published.append(deepcopy(frame))
+            publication = CanonicalPublication(q, value['request'], publish)
+            await publication.enqueue({'type': 'candidate-repriced', 'value': value})
+            await publication.publish_selected()
+            result['request'] = deepcopy(value['request'])
+            await publication.enqueue({'type': 'candidate-repriced', 'value': result})
+            await publication.publish_selected()
+            self.assertEqual(published[-1]['value']['inputs'], useful['inputs'])
+            self.assertEqual(published[-1]['value']['quotedOutput'], value['quotedOutput'])
+            # Optional composition/rediscovery still runs afterward. Its
+            # ordinary failure cannot erase either already-emitted proposal.
+            # The fixture owns only coverage used by the measured nominees;
+            # a further full-residual replay can also demand uncaptured words.
+            with self.assertRaises((RuntimeError, AssertionError)) as caught:
+                await anext(alternatives)
+            self.assertIn(str(caught.exception), ('Optional discovery unavailable',
+                                                'Offline bitmap/tick coverage absent'))
+            self.assertTrue(q.conversion.await_count)
+            self.assertEqual(publication.best['inputs'], useful['inputs'])
+            self.assertEqual(value, original)
+        finally:
+            await alternatives.aclose()
+
+    async def test_missing_measured_basket_route_still_offers_independent_core_consumption(self):
+        q, value, _ = self.captured_actual_service()
+        value = deepcopy(value)
+        assets = value['plan']['body']['branches'][0]['data']['basketAssets']
+        lots = [row['fundedInput'] for row in value['pricingEvidence']['stages']
+                if row['stage'] in ('2', '4')]
+        value['request'] = {'intent': 2, 'inputs': [
+            {'currency': asset, 'amount': lot} for asset, lot in zip(assets, lots, strict=True)],
+            'outputCurrency': value['request']['outputCurrency']}
+        value['inputs'] = deepcopy(value['request']['inputs'])
+        value['plan']['body'] = {'continuations': value['plan']['body']['branches'][0]['data']['continuations']}
+        value['plan']['allocations'] = []
+        value['pricingEvidence']['stages'] = value['pricingEvidence']['stages'][2:]
+        del value['plan']['conversions']['0:residual:0']
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        try:
+            proposal = await anext(alternatives)
+            self.assertEqual(proposal['phase'], 'core-consumption')
+            self.assertEqual([row['amount'] for row in proposal['inputs']],
+                             ['4661111320113019730', '3107408'])
+            q.conversion.assert_not_awaited()
+            with self.assertRaises(KeyError):
+                await anext(alternatives)
+        finally:
+            await alternatives.aclose()
 
     async def test_sdk_core_sizing_preserves_native_and_identity_funding(self):
         for native, identity in ((False, False), (True, False), (False, True)):
@@ -250,11 +375,13 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
             (usdt.lower(), xaut.lower()): [(0, [hop(usdt, pools[3])])],
         })
         budget_amount, expected_net = 100_000 * 10**6, 241386318399242216435
-        # Independent capped-Core leaf: protocol 0.1%, Helpers 0.2%, both
-        # rounded up. This gross cap delivers the exact requested net amount.
-        gross_cap = 242112656368347258211
+        # Synthetic split-rounding fixture, not live-case acceptance. Mirror
+        # Core's protocol floor, followed by Helpers' floor on Core's net.
+        # Actual deployed-contract qualification remains a separate check.
+        gross_cap = 242112170686961727693
         def fees(gross):
-            return tuple((gross * rate + 999999) // 1000000 for rate in (1000, 2000))
+            protocol = gross * 1000 // 1000000
+            return protocol, (gross-protocol) * 2000 // 1000000
         self.assertEqual(gross_cap - sum(fees(gross_cap)), expected_net)
         request = {'intent': 0, 'inputs': [{'currency': usdt, 'amount': str(budget_amount)}],
                    'outputCurrency': CORE}
@@ -325,7 +452,7 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
                 consumed = (target * gross + gross_cap - 1) // gross_cap
                 residual = amount - consumed
                 residuals.append(residual)
-                stages.append(stage(len(stages), asset, CORE, amount, net if index == 0 else 0,
+                stages.append(stage(len(stages), asset, CORE, amount, gross-protocol_fee if index == 0 else 0,
                                     consumed=consumed, returned=residual))
                 self.assertEqual(continuations[index][0][3], ())
                 if residual:

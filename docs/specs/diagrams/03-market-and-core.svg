@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">The same market tools serve both path families</title><desc id="desc">Tools nominate AMM routes. Helpers measures complete plans; Core targets and useful residuals nominate exact-output path inputs, funded by direct upward split rounding before another complete simulation.</desc>
+<title id="title">The same market tools serve both path families</title><desc id="desc">Tools nominate AMM routes. Helpers measures complete plans. Existing useful continuation consumption and pure Core targets nominate smaller funding before fresh market discovery; each changed complete body returns to Helpers before selection.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -49,8 +49,8 @@
 <text x="57" y="481" class="body-large">Measures all AMM + Core actions, fees and shared-pool impact together.</text>
 <path d="M421 493 V506" class="line"/><polygon points="421,506 418,499 424,499" fill="#3e596d"/>
 <rect x="42" y="506" width="758" height="48" rx="8" class="node"/>
-<text x="57" y="526" class="heading">Optional funding alternatives after a complete observation</text>
-<text x="57" y="545" class="body">Core + residual targets → exact-output inputs + split rounding; remaining budget → market</text>
+<text x="57" y="526" class="heading">Measured useful residual + Core, then pure Core: exact-output funding</text>
+<text x="57" y="545" class="body">Offer both before fresh market discovery; then compose remaining budget and explore residual routes.</text>
 <path d="M800 530 H818 V467 H800" class="line"/><polygon points="800,467 807,464 807,470" fill="#3e596d"/>
 <rect x="42" y="562" width="758" height="20" rx="6" fill="#f6f8fa"/>
 <text x="54" y="576" class="body">One finite pass per root; each changed complete body returns to Helpers before selection.</text>

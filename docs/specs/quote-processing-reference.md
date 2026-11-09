@@ -152,6 +152,13 @@ decimals preserve their raw integer amounts.
 
 Backward target-output pricing nominates source funding for acquisitions of
 `C`, or of `C + U` when a nominated market continuation can use a residual `U`.
+The first useful-residual proposal reuses each existing continuation's
+Helpers-measured `consumedInput` and encoded route. It does not await fresh
+residual or primary-market discovery. That `C + U` proposal and pure `C`
+funding are offered before their remaining-budget market compositions.
+Fresh residual-route exploration follows those compositions and can still
+offer a different useful-residual body and its market combinations.
+
 First-hop underconsumption supplies a measured source amount; downstream partial
 fill uses the existing backward-prefix calculation. A revert remainder alone
 does not supply a Core-produced amount. Full-residual exploration remains
