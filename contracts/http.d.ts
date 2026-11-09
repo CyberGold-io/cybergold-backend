@@ -1365,7 +1365,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -1713,7 +1713,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -5248,7 +5248,7 @@ export interface components {
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -6911,7 +6911,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {
@@ -7446,7 +7446,7 @@ export interface components {
                     /** @constant */
                     scope: "selected-inventory";
                     /** @enum {string} */
-                    selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                    selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
                 };
                 /** @description Producer clocks, distinct from client request or browser journey duration. */
                 metrics?: {
@@ -11869,7 +11869,7 @@ export interface components {
                 /** @constant */
                 scope: "selected-inventory";
                 /** @enum {string} */
-                selectedPhase?: "backward-prefix" | "capacity-limited" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan";
+                selectedPhase?: "backward-prefix" | "capacity-limited" | "core-consumption" | "core-market-funding" | "detailed" | "first-result" | "nearby-lower" | "nearby-upper" | "route-family" | "route-family-exploration" | "saved-plan" | "useful-core-residual";
             };
             /** @description Producer clocks, distinct from client request or browser journey duration. */
             metrics?: {

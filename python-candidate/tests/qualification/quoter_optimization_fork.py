@@ -27,7 +27,7 @@ from cybergold_candidate.quoter import Quoter
 from cybergold_candidate.quoter.amm import PartialPath
 from cybergold_candidate.quoter.contracts import capture_paths
 from cybergold_candidate.quoter.discovery import market_plan
-from cybergold_candidate.quoter.funding import reconstruct
+from cybergold_candidate.quoter.funding import measured_funding_proposal
 from cybergold_candidate.quoter.prefix import repair_prefix
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
 from cybergold_candidate.tx_preparation import compile_execution
@@ -92,7 +92,9 @@ async def qualify(url, result):
             block = await registry.get_rpc().block(None)
             assets, weights = await q.basis(block)
             original = await q.candidate(request, 100, 'core-first', block, assets, weights, selected=selected)
-            reduced = await reconstruct(q, original, block, assets, weights, {})
+            funding, plan = measured_funding_proposal(original, registry.chain)
+            reduced = await q.candidate(funding, 100, 'core-first', block, assets, weights, selected=plan)
+            reduced['request'] = deepcopy(request)
             assert reduced['quotedOutput'] == original['quotedOutput']
             assert int(reduced['inputs'][0]['amount']) < int(original['inputs'][0]['amount'])
             assert not reduced['estimatedRetainedInputCharges']

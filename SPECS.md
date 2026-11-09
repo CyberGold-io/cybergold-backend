@@ -40,6 +40,8 @@ It is then a **limited-budget quote**, but its plan and simulation are complete.
 A **full-budget quote** allocates the complete ordered input vector to the plan;
 some assets may still be retained rather than exchanged. Neither term says
 that exploration is finished, the result is optimal or a real wallet can fund it.
+An unallocated part of the request stays outside the plan; an acquired asset
+returned by an encoded action is instead a disclosed retained charge.
 
 ## 1. Intent becomes a canonical economic request
 
@@ -99,6 +101,21 @@ An already encoded retained Core plan can proceed without fetching those fields
 again. A pure-market plan does not depend on the Core basket basis. A rejected
 Core issuance can nominate the implemented residual-retention alternative,
 which must receive its own complete Helpers observation.
+
+Funding alternatives use one proposal workflow while keeping their arithmetic
+specific to each case. A successful Core purchase supplies measured basket
+consumption. Backward exact-output pricing can nominate smaller acquisitions
+for those amounts, or for Core's amounts plus a useful market residual. A
+smaller Core-funded body can also be combined with a market purchase using
+the remaining request budget, in either order. Direct basket issuance uses
+the measured input vector without acquisition swaps.
+
+These amounts are proposals, including their split-path and rounding results.
+Each changed complete body returns to Helpers before selection. One root
+observation owns a finite pass over its alternatives; derived results do not
+recursively start another Core-sizing pass. A distinct funded route, measured
+result or provider revision can start further work. A smaller result does not
+establish a global input limit or promise that the best spending amount has been found.
 
 **Timing coverage:** the current evidence does not isolate every dependency of
 the ultimately selected candidate. Discovery, SDK work, Core reads and replay
@@ -248,6 +265,26 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-09 - Share funding proposals and size acquisitions from Core consumption
+
+- Centralize explicit funded-plan edits for measured unused input, partial-AMM
+  recovery, basket vectors and supply-limited sales. Neighboring-budget replay
+  retains its topology/ordering builder within the common proposal/evaluation
+  workflow.
+- Read Core consumption internally from the existing ordered Helpers stages;
+  add no public quote field, contract ABI or separate eligibility condition.
+- Reuse backward exact-output arithmetic to nominate Core-needed acquisitions,
+  useful residual quantities and resized Core/market combinations. Every changed
+  body still receives a complete Helpers observation before economic selection.
+- Keep each root's transformation pass finite and retain existing cancellation,
+  deduplication, error behavior, preparation bounds and output-first ranking.
+  Descriptive funding phases do not manufacture observed input-limit evidence.
+- Remove the disconnected reconstruction path after moving its economic
+  regression and owned-fork qualification consumers onto the active workflow.
+  Retain supported exact-output/numeric interfaces and their specialized solver.
+- Update the technical reference, implementation map, market/Core diagram and
+  linked process PDF with the mirrored implementation.
 
 ### 2026-11-08 - Explain the quote journey with dated timing examples
 

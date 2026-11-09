@@ -64,7 +64,8 @@ export type UniversalExactInputQuote = {
     /** Historical route/funding limitation, advisory only. */
     inputLimitObserved?: boolean;
     maxAmmHops: number; scope: "selected-inventory"; selectedPhase?: "saved-plan" | "first-result" | "detailed"
-      | "capacity-limited" | "route-family" | "route-family-exploration" | "backward-prefix" | "nearby-upper" | "nearby-lower" };
+      | "capacity-limited" | "route-family" | "route-family-exploration" | "backward-prefix" | "nearby-upper" | "nearby-lower"
+      | "core-consumption" | "useful-core-residual" | "core-market-funding" };
   /** Producer clocks, distinct from client request or browser journey duration. */
   metrics?: QuoteSelectionMetrics & { totalMs: number; timeToFirstWholePlanMs: number | null;
     searchMs: number | null; selectionReason: "complete" | "best-initial" | "first-extension" | "timeout" | null;

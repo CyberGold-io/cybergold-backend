@@ -82,6 +82,8 @@ python-candidate/.venv/bin/python python-candidate/tests/test_directional_bitmap
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_route_families.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_failure_history.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
+python-candidate/.venv/bin/python python-candidate/tests/test_core_funding.py
+python-candidate/.venv/bin/python python-candidate/tests/test_funding_workflow.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_reuse_routes.py
