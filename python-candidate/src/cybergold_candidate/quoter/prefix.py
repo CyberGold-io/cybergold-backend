@@ -2,8 +2,8 @@
 from copy import deepcopy
 
 from ..market_fee import get_market_fee_rate, quoted_fee
-from ..route_work_slots import engine_work
 from .discovery import market_plan, paths
+from .inverse import inverse_hops
 
 
 async def backward_input(quoter, trace):
@@ -19,19 +19,10 @@ async def backward_input(quoter, trace):
     target = trace.hops[partial].consumed
     if target <= 0:
         return None
-    for row in reversed(trace.hops[:partial]):
-        if row.pre_state is None:
-            return None
-        pool = deepcopy(row.pre_state)
-        async with engine_work(quoter.engine.semaphore):
-            value = await quoter.engine.sdk.request({'operation': 'quote', 'pools': [pool],
-                'poolId': pool['id'], 'mode': 'exactOut', 'amount': str(target),
-                'zeroForOne': row.hop['zeroForOne']})
-        # This is an amount proposal, not an SDK certification. Integer
-        # overdelivery, shared-pool effects and partial fills are measured by
-        # the complete Helpers execution before the proposal can be selected.
-        target = int(value['amountIn'])
-    return target
+    hops = trace.hops[:partial]
+    if any(row.pre_state is None for row in hops):
+        return None
+    return await inverse_hops(quoter, hops, target)
 
 
 async def repair_prefix(quoter, request, trace, block, *, origins=None):

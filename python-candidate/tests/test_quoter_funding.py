@@ -5,11 +5,23 @@ import unittest
 from cybergold_candidate.market_fee import quoted_fee
 from cybergold_candidate.quoter.contracts import capture_paths
 from cybergold_candidate.quoter.discovery import market_plan
-from cybergold_candidate.quoter.funding import exact_ppm_routes, reconstruct
-from cybergold_candidate.routing_encoding import split_runtime
+from cybergold_candidate.quoter.funding import funding_proposal, measured_funding_proposal, direct_basket_funding, supply_funding
+from cybergold_candidate.quoter.ranking import prefer_completed
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from quoter_fixture import historical_service, historical_data, historical_route, expand, service, basis
 from test_universal_quote import BLOCK, USER
+
+
+async def reprice_measured(q, value, block, assets, weights, observations):
+    """Consume the active pure funding proposal through ordinary candidate replay."""
+    proposal = measured_funding_proposal(value, q.engine.registry.chain)
+    if proposal is None:
+        return value
+    funded, plan = proposal
+    result = await q.candidate(funded, 100, 'core-first', block, assets, weights,
+                               selected=plan, observations=observations, selection=False)
+    result['request'] = deepcopy(value['request'])
+    return result if prefer_completed(result, value, scalar=True) else value
 
 
 class FundingTests(unittest.IsolatedAsyncioTestCase):
@@ -33,7 +45,7 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
             selected=market_plan(case['request']['inputs'][0]['currency'], q.core, historical_route(q, row), 500000000))
         budget = QuoteBudget(); budget.finish_selection('best-initial')
         with budget_context(budget):
-            smaller = await reconstruct(q, value, block, *case['basis'], {})
+            smaller = await reprice_measured(q, value, block, *case['basis'], {})
         self.assertEqual(smaller['inputs'][0]['amount'], '198627782')
         self.assertEqual(smaller['quotedOutput'], value['quotedOutput'])
         self.assertEqual(smaller['searchCoverage'], value['searchCoverage'])
@@ -58,16 +70,27 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
             return used, output
         q.price_path = programmed
         original = await q.candidate(request, 0, 'core-first', BLOCK, *await basis(BLOCK), selected=selected)
-        self.assertIs(await reconstruct(q, original, BLOCK, *await basis(BLOCK), {}), original)
+        self.assertIs(await reprice_measured(q, original, BLOCK, *await basis(BLOCK), {}), original)
         self.assertEqual(len(original['plan']['body']['branches']), 2)
 
-    def test_exact_ppm_intervals_and_unrepresentable_vector(self):
-        routes = [{'sharePpm': 600000, 'steps': []}, {'sharePpm': 0, 'steps': []}]
-        for desired in [[123456000, 876544000], [1, 2], [999999, 1]]:
-            result = exact_ppm_routes(routes, desired)
-            self.assertEqual(split_runtime(sum(desired), result), desired)
-        self.assertIsNone(exact_ppm_routes(routes, [198627782, 125000000]))
-        self.assertIsNone(exact_ppm_routes(routes, [0, 0]))
+    def test_whole_plan_builder_keeps_zero_acquisitions_and_owns_route_edits(self):
+        from test_universal_quote import WETH, CORE, PAXG, OTHER
+        request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '300'}], 'outputCurrency': CORE}
+        route = {'inputCurrency': WETH, 'outputCurrency': PAXG, 'routes': []}
+        plan = {'allocations': [{'kind': 0, 'amountIn': '300'}], 'conversions': {}, 'body': {'branches': [
+            {'kind': 0, 'amountIn': '300', 'data': {'basketAssets': [PAXG, OTHER],
+                'acquisitions': [{'amountIn': '100', 'route': deepcopy(route)},
+                                 {'amountIn': '200', 'route': deepcopy(route)}]}}]}}
+        before = deepcopy(plan)
+        chosen = {'inputCurrency': WETH, 'outputCurrency': PAXG, 'branches': [], 'template': route}
+        proposal = funding_proposal(request, plan, {'0:acquire:0': 0, '0:acquire:1': 70},
+                                    {'0:acquire:0': chosen})
+        self.assertEqual(proposal['inputs'][0]['amount'], '70')
+        self.assertEqual(proposal['plan']['allocations'][0]['amountIn'], '70')
+        self.assertEqual(proposal['plan']['body']['branches'][0]['data']['acquisitions'][0]['amountIn'], '0')
+        proposal['plan']['conversions']['0:acquire:0']['template']['routes'].append({})
+        self.assertEqual(plan, before)
+        self.assertEqual(chosen['template']['routes'], [])
 
     async def test_real_direct_and_both_mixed_orders_preserve_output(self):
         q, case = historical_service(self)
@@ -77,7 +100,7 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
             selected=market_plan(case['request']['inputs'][0]['currency'], q.core, historical_route(q, direct), 500000000))
         self.assertEqual(value['quotedOutput'], '1512123003848321271')
         old_observed = deepcopy(q.engine.registry.observed)
-        smaller = await reconstruct(q, value, block, *case['basis'], {})
+        smaller = await reprice_measured(q, value, block, *case['basis'], {})
         self.assertEqual(smaller['inputs'][0]['amount'], '198627782')
         self.assertEqual(smaller['quotedOutput'], value['quotedOutput'])
         self.assertEqual(smaller['estimatedRetainedInputCharges'], [])
@@ -92,7 +115,7 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
                     hop.pre_state.get(field) != q.engine.registry.observation(hop.hop['pool']).get(field)
                     for field in ('reserve0', 'reserve1', 'sqrtRatioX96', 'liquidity'))
                     for trace in traces for hop in trace.hops))
-                smaller = await reconstruct(q, value, block, *case['basis'], {})
+                smaller = await reprice_measured(q, value, block, *case['basis'], {})
                 self.assertEqual(smaller['inputs'][0]['amount'], '473627782')
                 self.assertEqual(smaller['quotedOutput'], original['quotedOutput'])
                 self.assertEqual(smaller['fees'], original['fees'])
@@ -102,6 +125,26 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(prepared['plan']['inputs'], smaller['inputs'])
                 self.assertEqual(prepared['economicQuote']['quotedOutput'], smaller['quotedOutput'])
         self.assertEqual(q.engine.registry.observed, old_observed)
+
+    def test_direct_basket_vector_and_redemption_supply_share_proposal_math(self):
+        from test_universal_quote import CORE, PAXG, OTHER
+        request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '90'},
+                                         {'currency': OTHER, 'amount': '6000000'}], 'outputCurrency': CORE}
+        state = {'conversions': [10**18, 10**30], 'weights': [600000, 400000],
+                 'supply': 20, 'maxSupply': 120, 'effectiveCap': 100}
+        vector = direct_basket_funding(request, state)
+        self.assertEqual(vector, [{'currency': PAXG, 'amount': '48'}, {'currency': OTHER, 'amount': '1'}])
+        plan = {'allocations': [], 'conversions': {}, 'body': {'continuations': []}}
+        proposal = funding_proposal(request, plan, inputs=vector)
+        self.assertEqual(proposal['inputs'], vector)
+        proposal['inputs'][0]['amount'] = '1'
+        self.assertEqual(request['inputs'][0]['amount'], '90')
+        self.assertEqual(vector[0]['amount'], '48')
+        for intent in (1, 3):
+            sale = {'intent': intent, 'inputs': [{'currency': CORE, 'amount': '200'}], 'outputCurrency': PAXG}
+            self.assertEqual(supply_funding(sale, state), [{'currency': CORE, 'amount': '20'}])
+            if intent == 3:
+                self.assertEqual(direct_basket_funding(sale, state), supply_funding(sale, state))
 
     async def test_recovered_e13_sale_fee_and_changed_minimum(self):
         data = historical_data()
@@ -117,7 +160,7 @@ class FundingTests(unittest.IsolatedAsyncioTestCase):
                 route = [{'pool': pool, 'zeroForOne': False}]
                 value = await q.candidate(request, 0, 'core-first', block, *await basis(block),
                     selected=market_plan(source, target, route, int(request['inputs'][0]['amount'])))
-                smaller = await reconstruct(q, value, block, *await basis(block), {})
+                smaller = await reprice_measured(q, value, block, *await basis(block), {})
                 self.assertEqual(smaller['quotedOutput'], value['quotedOutput'])
                 self.assertLess(int(smaller['inputs'][0]['amount']), int(value['inputs'][0]['amount']))
                 self.assertLess(int(smaller['fees']['marketFeeCygld']), int(value['fees']['marketFeeCygld']))

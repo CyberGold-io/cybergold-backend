@@ -11,6 +11,7 @@ from .amm import PartialPath
 from .contracts import HopTrace, capture_paths, path_nomination, path_operation
 from .evaluate import replay_conversion
 from .prefix import backward_input
+from .funding import funding_proposal
 
 
 def scaled_funding(amount, branch_funded, repaired_branch_funded):
@@ -91,9 +92,8 @@ async def recover_selected(quoter, request, selected, block, observations, *, un
                                if target is not None else None)
         return True, None
 
-    def proposal():
-        total = sum(int(row['amountIn']) for row in plan['allocations'])
-        return [{'inputs': [{**request['inputs'][0], 'amount': str(total)}], 'plan': plan}]
+    def proposal(operation, amount):
+        return [funding_proposal(request, plan, {operation: amount})]
 
     for index, branch in enumerate(plan['body']['branches']):
         if branch['kind'] == 1:
@@ -107,8 +107,7 @@ async def recover_selected(quoter, request, selected, block, observations, *, un
             if not settled:
                 if reduced is not None and 0 < reduced < routed:
                     funded = reduced + quoted_fee(reduced, rate) if request['intent'] == 1 else reduced
-                    branch['amountIn'] = plan['allocations'][index]['amountIn'] = str(funded)
-                    return proposal()
+                    return proposal(operation, funded)
                 return []
         elif request['intent'] == 0:
             data = branch['data']
@@ -120,10 +119,7 @@ async def recover_selected(quoter, request, selected, block, observations, *, un
                 settled, reduced = await conversion(operation, amount, plan['conversions'][operation])
                 if not settled:
                     if reduced is not None and 0 < reduced < amount:
-                        acquisition['amountIn'] = str(reduced)
-                        branch['amountIn'] = plan['allocations'][index]['amountIn'] = str(
-                            sum(int(row['amountIn']) for row in data['acquisitions']))
-                        return proposal()
+                        return proposal(operation, reduced)
                     return []
             if any(row['route']['routes'] for row in data['continuations']):
                 # Actual residual lots are produced inside Core/Helpers. Do not
