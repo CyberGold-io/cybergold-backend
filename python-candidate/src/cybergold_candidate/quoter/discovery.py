@@ -74,12 +74,14 @@ def current_topology():
 class TopologyCache:
     """One discovery owner's immutable walks and rendered-route identities.
 
-    Pool dictionaries, observations, amounts and origins are never cached.
+    Mutable pool, observation and origin objects and prices are never cached.
     Current representatives are bound on every read; metadata still owns the
-    existing repr-based ordering. Split combinations remain lazy and fresh.
+    existing repr-based ordering. One completed integer allocation-pattern set
+    can be reused while split nominations remain lazy and freshly bound.
     """
     def __init__(self):
         self.walks, self.validated = {}, {}
+        self.hint_union = None, ()
         self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
 
@@ -108,6 +110,7 @@ class TopologyCache:
     def clear(self):
         self.walks.clear()
         self.validated.clear()
+        self.hint_union = None, ()
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
 
     def paths(self, pools, source, target, weth, max_hops):

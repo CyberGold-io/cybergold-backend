@@ -151,11 +151,17 @@ calling the SDK or issuing RPC/API requests.
 The common adapter filters crossed split nominations and chooses compatible
 conversions against already selected operations. Crossed supplier hints reuse
 their union graph through existing discovery to recover shorter alternatives.
-One iterator-local memo retains the last completed compatible integer allocation
-patterns by total source amount and ordered physical-route identities. Repeated
-recoveries bind those patterns to current route/hop representatives and current
-origins. No pool data is cached; original compatible weights and the adapter's
-ordinary origin-merging deduplication remain unchanged.
+One memo retains the last completed compatible integer allocation patterns by
+total source amount and ordered physical-route identities. Sibling hint feeds
+share this single entry through the search's existing `TopologyCache.hint_union`;
+clearing the topology cache clears it. Without that scope, the same memo stays
+local to the iterator. Only fully consumed enumeration replaces the memo;
+partial consumption or cancellation does not publish an incomplete pattern set.
+Repeated recoveries still walk/rebind current paths and bind current route/hop
+representatives and origins. Its pattern values retain only immutable route
+indices and integer amount strings, not pool state, mutable bodies or prices. Original
+compatible weights and the adapter's ordinary origin-merging deduplication
+remain unchanged.
 An optional continuation without a compatible route keeps its existing
 retaining placeholder. Dormant-route enrichment follows the same rule.
 Measured quote projection, stored quote publication and fresh preparation
@@ -368,7 +374,16 @@ Candidate priority ends before recovery, publication callbacks or follow-up
 tasks are created. Sizing priority ends before yielding. Fresh route discovery,
 residual rerouting, market-composition construction and initial ordinary
 proposals retain ordinary admission. Running work is not preempted, and no
-lane reserves idle capacity. SDK state waits release their pricing lease.
+lane reserves idle capacity.
+
+The serialized SDK worker's lock is acquired while the caller's owned engine
+and scheduler leases are released through the existing `required_state_wait`.
+After the lock is granted, those leases are restored before any SDK exchange.
+The lock's cleanup is registered before restoration; cancellation while waiting
+for a lease therefore releases the already acquired lock. The `sdk.queue` span
+ends at lock acquisition and excludes lease restoration. Child serialization,
+the eight-slot engine capacity, priority and cancellation ownership remain
+unchanged. SDK required-state waits retain their existing lease release.
 Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
@@ -387,8 +402,10 @@ Tick-fill coalescing serializes its already-owned snapshot with the normalized
 observation identity without another snapshot copy. Latest search-baseline
 coverage is replaced before one owned snapshot copy, preserving the baseline
 scalars and independent metadata and coverage rows.
-Quick-pass topology descriptors are copied when offered to a consumer; the
-ready-list snapshot separately copies mutable origins. A retained single shared
+Quick-prefix feeds retain one feed per ready offer and their existing round-robin
+order. Each feed copies its topology descriptor only when consumed, so reading
+one offer does not first copy every unconsumed ready descriptor. The ready-list
+snapshot still separately copies mutable origins. A retained single shared
 read returns directly without scheduling a timer task. Multi-key reads carry
 completed values directly to their original positions and gather only pending
 futures. An entirely completed multi-key read retains one cooperative checkpoint.

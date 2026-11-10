@@ -329,7 +329,9 @@ class RouteBootstrap:
         # A quick whole-plan pass tries ready nominations before re-entering
         # lazy custom tails. Every ordinary feed remains available afterward.
         # Publication order belongs to this session, never to supplier metadata.
-        prefix = ([iter((deepcopy(offer),)) for offer in quick[1].get(key, ())]
+        # Keep one feed per offer for the same round-robin order, but copy a
+        # private body only when its feed is consumed.
+        prefix = ([map(deepcopy, (offer,)) for offer in quick[1].get(key, ())]
                   if quick is not None and quick[0] is self else [])
         return prefix + regular
 

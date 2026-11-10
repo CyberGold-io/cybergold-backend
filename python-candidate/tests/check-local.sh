@@ -124,6 +124,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_encoding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_quote_engine.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_scheduler.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_work_slots.py
+python-candidate/.venv/bin/python python-candidate/tests/test_quote_work_efficiency.py
 python-candidate/.venv/bin/python python-candidate/tests/test_initial_snapshot_scheduling.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_path_snapshots.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_preparation_overlap.py
