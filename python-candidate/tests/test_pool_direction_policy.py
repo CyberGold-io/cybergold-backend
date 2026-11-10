@@ -54,6 +54,13 @@ def request(intent=0, inputs=None, output=D):
 
 
 class PoolDirectionPolicyTests(unittest.TestCase):
+    def test_direction_projection_does_not_lower_routes_or_checksum_addresses(self):
+        branches = [branch(1, (A, B, D)), branch(1_000_000, (A, B, C, D))]
+        expected = list(branch_directions(branches))
+        with patch('cybergold_candidate.routing_encoding.route_steps',
+                   side_effect=AssertionError('A pure direction projection must not encode routes')):
+            self.assertEqual(list(branch_directions(branches)), expected)
+
     def test_same_direction_aliases_and_separate_trades_remain_allowed(self):
         one = branch(10, (A, B))
         alias = deepcopy(one)

@@ -146,6 +146,8 @@ Logical native payment and a physical wrapped input remain distinct.
 Within one trade, a physical pool can be shared only in the same direction.
 The key is the canonical pool identity and physical input token, so aliases
 and native wrappers do not create different pools or invert directions.
+Its pure projection reuses integer split arithmetic without encoding addresses,
+calling the SDK or issuing RPC/API requests.
 The common adapter filters crossed split nominations and chooses compatible
 conversions against already selected operations. Crossed supplier hints reuse
 their union graph through existing discovery to recover shorter alternatives.

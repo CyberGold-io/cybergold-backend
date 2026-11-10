@@ -319,6 +319,8 @@ preserves the full existing test contract.
 - Exclude opposed physical-pool use within one trade while retaining
   same-direction sharing. Rebuild crossed hints using their existing union graph;
   apply the same rule to measured quotes, stored publication and fresh preparation.
+- Share integer split weights with route encoding so the pure direction check
+  does not repeatedly lower routes or checksum their addresses.
 - Update this reference, the technical reference, market/Core diagram and linked
   process PDF together. No iterative amount solver, extra API discovery or new
   execution ABI is introduced.

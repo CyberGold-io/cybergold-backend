@@ -3,7 +3,7 @@
 These pure projections use executable funding and pool keys. Native wrappers
 are not pools, and an unknown Core-produced amount is never treated as zero.
 """
-from ..routing_encoding import ZERO, split_runtime, weighted_routes
+from ..routing_encoding import ZERO, split_runtime, weighted_shares
 from ..uniswap_routes import pool_identity
 
 
@@ -26,7 +26,8 @@ def branch_directions(branches, *, amount=None):
         total = sum(int(branch['amountIn']) for branch in branches)
         if not total:
             return
-        amounts = split_runtime(total if amount is None else amount, weighted_routes(branches))
+        amounts = split_runtime(total if amount is None else amount,
+                                [{'sharePpm': share} for share in weighted_shares(branches)])
     else:
         amounts = [int(branch['amountIn']) if 'amountIn' in branch else None for branch in branches]
     for branch, amount in zip(branches, amounts, strict=True):
