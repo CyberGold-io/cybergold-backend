@@ -56,3 +56,20 @@ f94ca2079249034cc1f9e89928bee6e45b78456d:python-candidate/tests/fixtures/core-fu
 7f15c438289263d7d6e3e9045970200bade137de:python-candidate/tests/fixtures/cygld-redemption-supply-20261110.json:generic-api-key:610
 7f15c438289263d7d6e3e9045970200bade137de:python-candidate/tests/fixtures/cygld-redemption-supply-20261110.json:generic-api-key:680
 7f15c438289263d7d6e3e9045970200bade137de:python-candidate/tests/fixtures/cygld-redemption-supply-20261110.json:generic-api-key:686
+
+# Actual zero-branch Helpers fixtures: public CYGLD, PAXG and XAUt token addresses.
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:368
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:683
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:716
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1063
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1096
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1210
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1216
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1653
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:1659
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2043
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2049
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2241
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2247
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2667
+39d488528e7293b06ef7b4e9f55ca8e3d8f612db:python-candidate/tests/fixtures/helpers-zero-branches-20261110.json:generic-api-key:2673

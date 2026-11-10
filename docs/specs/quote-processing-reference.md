@@ -191,6 +191,16 @@ fill uses the existing backward-prefix calculation. A revert remainder alone
 does not supply a Core-produced amount. Full-residual exploration remains
 available, and useful sibling continuations stay in the changed body.
 
+Measured unused scalar input can be removed when a whole branch consumes zero.
+The branch remains at its original index with its routes and metadata intact;
+only its explicit funded amount becomes zero. Helpers skips that zero branch.
+Aggregate funding must remain positive and smaller than the observed funding.
+For a mixed CYGLD sale, the Core redemption lot remains nominal and unchanged;
+each market lot uses measured input consumption plus the existing input-side
+market fee. Missing conversion evidence leaves that lot unchanged. The changed
+complete body is measured again, so removing an unused swap does not assume
+its effects on shared pools were neutral.
+
 For one path containing distinct physical pools and no internal native
 transition, the existing SDK directly quotes the required output from the
 preceding private pool state. There is no original-budget forward diagnostic.

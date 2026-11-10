@@ -106,8 +106,6 @@ def measured_funding_proposal(value, chain):
     request, plan = value['request'], value['plan']
     if request['intent'] not in (0, 1):
         return None
-    if request['intent'] == 1 and any(row['kind'] != 1 for row in plan['allocations']):
-        return None
     payment = request['inputs'][0]['currency'].lower()
     measured = {row['operation']: row for row in value.get('conversionObservations', [])}
 
@@ -121,11 +119,15 @@ def measured_funding_proposal(value, chain):
 
     amounts, total = {}, 0
     for index, branch in enumerate(plan['body']['branches']):
-        if branch['kind'] == 0:
+        if branch['kind'] == 0 and request['intent'] == 0:
             acquisitions = [consumed(f'{index}:acquire:{position}', int(row['amountIn']))
                             for position, row in enumerate(branch['data']['acquisitions'])]
             amounts.update({f'{index}:acquire:{position}': amount for position, amount in enumerate(acquisitions)})
             amount = sum(acquisitions)
+        elif branch['kind'] == 0:
+            # Core redemption keeps its nominal CYGLD lot; only market input
+            # consumption can nominate a reduction here.
+            amount = int(branch['amountIn'])
         elif request['intent'] == 1:
             original = int(branch['amountIn'])
             routed = consumed(f'{index}:market', original - int(branch['data']['feeCygld']))
@@ -135,10 +137,8 @@ def measured_funding_proposal(value, chain):
         else:
             amount = consumed(f'{index}:market', int(branch['amountIn']))
             amounts[f'{index}:market'] = amount
-        if amount <= 0:
-            return None
         total += amount
-    if total >= int(value['inputs'][0]['amount']):
+    if total <= 0 or total >= int(value['inputs'][0]['amount']):
         return None
     proposal = funding_proposal(request, plan, amounts)
     return {**request, 'inputs': proposal['inputs']}, proposal['plan']
