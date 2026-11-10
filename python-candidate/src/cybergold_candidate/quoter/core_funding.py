@@ -8,10 +8,12 @@ from copy import deepcopy
 
 from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import bootstrap_priority
+from ..uniswap_routes import pool_identity
 from .evaluate import replay_conversion
 from .funding import funding_proposal
 from .inverse import inverse_conversion
 from .plan_simulation import project_core_inputs
+from .pool_directions import body_directions, conflicting_pool, _route_directions
 from .reuse_routes import proposal_identity
 
 
@@ -19,6 +21,11 @@ def _retaining(asset, core):
     template = {'inputCurrency': asset, 'outputCurrency': core, 'routes': []}
     return {'inputCurrency': asset, 'outputCurrency': core,
             'branches': [], 'template': template}
+
+
+def _pools(chosen):
+    return {pool_identity(hop['pool']) for branch in chosen.get('branches', ())
+            for hop in branch['hops'] if 'pool' in hop}
 
 
 async def _replay(quoter, chosen, source, target, amount, block, bank, canonical):
@@ -70,6 +77,12 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
             inputs.append({'currency': row['currency'], 'amount': str(row['consumed'] + useful)})
             conversions[f'0:residual:{index}'] = selected or _retaining(row['currency'], core)
         return funding_proposal(request, original, conversions=conversions, inputs=inputs)
+    observed = {row['operation']: row for row in value.get('conversionObservations', ())}
+    planned = {**original['conversions'], **{
+        f"{row['branch']}:residual:{row['index']}": residuals.get(
+            (row['branch'], row['index']), (0, None))[1] or _retaining(row['currency'], core)
+        for row in measured}}
+    pools = {operation: _pools(chosen) for operation, chosen in planned.items()}
     for branch, row in enumerate(original['body']['branches']):
         if row['kind'] == 1:
             if not int(row['amountIn']):
@@ -84,11 +97,19 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
             desired = observation['consumed'] + useful
             operation = f'{branch}:acquire:{index}'
             if source.lower() == asset.lower() or not desired:
-                amount = desired
-                chosen = deepcopy(original['conversions'].get(operation))
+                # Identity/zero nominations need no route replacement and do
+                # not carry a priced conversion template. Change only the lot.
+                amount, chosen = desired, None
             else:
-                amount, chosen = await inverse_conversion(quoter, original['conversions'][operation],
-                    source, asset, int(acquisition['amountIn']), desired, block, bank, canonical)
+                previous = observed.get(operation)
+                independent = not any(pools[operation] & used for other, used in pools.items() if other != operation)
+                if previous is not None and desired == int(previous['output']) and independent:
+                    # Reuse a measured unchanged acquisition whose pools are
+                    # independent of every other operation in this proposal.
+                    amount, chosen = int(acquisition['amountIn']), deepcopy(original['conversions'][operation])
+                else:
+                    amount, chosen = await inverse_conversion(quoter, original['conversions'][operation],
+                        source, asset, int(acquisition['amountIn']), desired, block, bank, canonical)
             amounts[operation] = amount
             if chosen is not None:
                 conversions[operation] = chosen
@@ -116,6 +137,8 @@ def _measured_residuals(value, measured):
 async def _useful_residuals(quoter, value, measured, block, canonical):
     bank = await _acquisition_bank(quoter, value, block, canonical)
     result, core = {}, value['request']['outputCurrency']
+    directions = list(body_directions(value['request'], value['plan']['body'], known_funding={
+        f"{row['branch']}:residual:{row['index']}": 0 for row in measured}))
     for row in measured:
         branch, index, asset, residual = row['branch'], row['index'], row['currency'], row['residual']
         if not residual:
@@ -123,7 +146,7 @@ async def _useful_residuals(quoter, value, measured, block, canonical):
         chosen = {}
         try:
             await quoter.conversion(asset, core, residual, block, bank, canonical,
-                                     market=True, capture=chosen)
+                                     market=True, capture=chosen, directions=directions, unknown=True)
             useful = int(chosen['_observation']['consumedInput'])
             chosen.pop('_observation', None)
             chosen.pop('_funding', None)
@@ -137,11 +160,15 @@ async def _useful_residuals(quoter, value, measured, block, canonical):
                 continue
             useful, chosen = previous
         if useful:
+            used = list(_route_directions(chosen.get('template', {}), None))
+            if conflicting_pool((*directions, *used)) is not None:
+                continue
+            directions.extend(used)
             result[(branch, index)] = useful, chosen
     return result
 
 
-async def compose_remaining_budget(quoter, value, proposal, measured, block, canonical):
+async def compose_remaining_budget(quoter, value, proposal, measured, block, canonical, *, core_first=None):
     """Offer both orders of a fixed resized Core body and remaining-budget Market."""
     request, core = value['request'], value['request']['outputCurrency']
     if request['intent'] != 0:
@@ -169,7 +196,7 @@ async def compose_remaining_budget(quoter, value, proposal, measured, block, can
                 await _replay(quoter, proposal['plan']['conversions'][f'{old_index}:residual:{index}'],
                     asset, core, max(0, lot-consumed[index]), block, bank, canonical)
         route, _, _ = await quoter.conversion(source, core, remaining, block, bank, canonical,
-                                              market=True, capture=market)
+            market=True, capture=market, directions=tuple(body_directions(request, {'branches': [body]})))
         market.pop('_observation', None)
         market_funding = market.pop('_funding', remaining)
         market_body = {'kind': 1, 'amountIn': str(market_funding), 'data': {'route': route, 'feeCygld': '0'}}
@@ -184,9 +211,9 @@ async def compose_remaining_budget(quoter, value, proposal, measured, block, can
         plan['conversions'][f'{market_index}:market'] = market
         return {**funding_proposal(request, plan), 'phase': 'core-market-funding'}
     errors = []
-    for core_first in (True, False):
+    for ordering in (True, False) if core_first is None else (core_first,):
         try:
-            yield await compose(core_first)
+            yield await compose(ordering)
         except SnapshotChanged:
             raise
         except Exception as error:
@@ -205,7 +232,7 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         return
     canonical = observations if observations is not None else {}
     seen = {proposal_identity({'inputs': value['inputs'], 'plan': value['plan']})}
-    errors, ready = [], []
+    errors = []
     async def offer(proposal, phase):
         identity = proposal_identity(proposal)
         if identity in seen:
@@ -213,18 +240,6 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         seen.add(identity)
         yield {**proposal, 'phase': phase}
 
-    async def compositions(proposal):
-        if request['intent'] == 0 and not core_only:
-            try:
-                async for composed in compose_remaining_budget(quoter, value, proposal, measured, block, canonical):
-                    identity = proposal_identity(composed)
-                    if identity not in seen:
-                        seen.add(identity)
-                        yield composed
-            except SnapshotChanged:
-                raise
-            except Exception as error:
-                errors.append(error)
     # The root already measured these continuations. Offer their resized body
     # before optional new route discovery can delay the known useful result.
     # The finite sizing scopes end before yielding or exploring new routes.
@@ -239,7 +254,6 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
     else:
         if useful is not None:
             async for proposal in offer(useful, 'useful-core-residual'):
-                ready.append(proposal)
                 yield proposal
     try:
         with bootstrap_priority():
@@ -253,11 +267,7 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         # no sizing alternative and does not warrant another Helpers call.
         if reduced['inputs'] != value['inputs']:
             async for proposal in offer(reduced, 'core-consumption'):
-                ready.append(proposal)
                 yield proposal
-    for proposal in ready:
-        async for composed in compositions(proposal):
-            yield composed
     try:
         residuals = await _useful_residuals(quoter, value, measured, block, canonical)
     except SnapshotChanged:
@@ -275,7 +285,5 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
         else:
             async for proposal in offer(useful, 'useful-core-residual'):
                 yield proposal
-                async for composed in compositions(proposal):
-                    yield composed
     if errors:
         raise errors[0]  # Preserve the ordinary owned optional-work diagnostic.

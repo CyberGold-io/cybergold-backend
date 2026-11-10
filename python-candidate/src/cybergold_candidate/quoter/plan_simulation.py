@@ -11,12 +11,13 @@ from web3 import Web3
 
 from ..helpers_execution import ABI
 from ..market_fee import get_market_fee_rate, quoted_fee
-from ..preview_errors import preview_error
+from ..preview_errors import KnownPreviewError, preview_error
 from ..quote_errors import rpc_failure
 from ..recovery_rpc import abi_value
 from ..quote_flow import stage
 from .plan_call import METHOD, compile_call
 from .plan_transport import execute_plan_call
+from .pool_directions import conflicting_pool, quote_directions
 
 
 
@@ -287,4 +288,9 @@ class HelpersPlanSimulation:
                            for row in measured['stages']]})
         if request['intent'] != 2:
             value.update(quotedInput=request['inputs'][0]['amount'], inputMaximum=request['inputs'][0]['amount'])
+        opposed = conflicting_pool(quote_directions(value, self.registry.chain))
+        if opposed is not None:
+            raise KnownPreviewError('opposed-pool-directions',
+                'An exchange pool is used in opposite directions in one trade.',
+                constraint={'kind': 'opposed-pool-directions', 'pool': opposed})
         return value

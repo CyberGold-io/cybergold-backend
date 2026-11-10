@@ -4,6 +4,7 @@ from copy import deepcopy
 from ..pool_snapshot import copy_pool_bank
 from ..route_work_slots import engine_work
 from ..routing_encoding import exact_output_routes, split_runtime
+from ..uniswap_routes import pool_identity
 from .contracts import capture_paths
 from .evaluate import replay_conversion
 from .reuse_routes import _amounts
@@ -37,6 +38,26 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
     if not desired or source.lower() == target.lower():
         return int(desired), selected
     preceding = copy_pool_bank(bank)
+    physical = [hop['pool'] for branch in selected['branches']
+                for hop in branch['hops'] if 'pool' in hop]
+    if (len(selected['branches']) == 1 and physical
+            and len(physical) == len(selected['branches'][0]['hops'])
+            and len({pool_identity(pool) for pool in physical}) == len(physical)):
+        # One simple path needs only its target-output quote. There is no
+        # split-output proportion to recover from the original larger input.
+        branches = [{**deepcopy(selected['branches'][0]), 'amountIn': str(desired)}]
+        async with engine_work(quoter.engine.semaphore):
+            quoted = await quoter.engine.quote_sdk_branches(branches, 'exactOut', int(desired), block,
+                candidate=copy_pool_bank(preceding), canonical=canonical)
+        amount = int(quoted['amountIn'])
+        selected['branches'][0]['amountIn'] = str(amount)
+        advanced = copy_pool_bank(preceding)
+        await replay_conversion(quoter, selected, source, target, amount, block, advanced, canonical)
+        selected.pop('_observation', None)
+        selected.pop('_funding', None)
+        bank.clear()
+        bank.update(advanced)
+        return amount, selected
     with capture_paths() as traces:
         await replay_conversion(quoter, selected, source, target, int(funded), block,
                                 copy_pool_bank(preceding), canonical)

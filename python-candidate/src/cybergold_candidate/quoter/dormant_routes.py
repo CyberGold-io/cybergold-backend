@@ -9,6 +9,7 @@ from .discovery import paths
 from .reuse_routes import _conversion
 from ..routing_encoding import weighted_routes
 from ..uniswap_routes import pool_identity
+from .pool_directions import quote_directions, conflicting_pool, _route_directions
 
 
 def with_dormant_routes(value, seed=None):
@@ -16,6 +17,7 @@ def with_dormant_routes(value, seed=None):
         return value
     value = deepcopy(value)
     plan = value['plan']
+    directions = list(quote_directions(value))
     core = value['request']['outputCurrency']
     pools = [hop['pool'] for chosen in plan['conversions'].values()
              for branch in chosen['branches'] for hop in branch['hops'] if 'pool' in hop]
@@ -34,18 +36,22 @@ def with_dormant_routes(value, seed=None):
             if (operation in plan['conversions'] or asset.lower() == core.lower()
                     or route['routes'] or route['outputCurrency'].lower() != asset.lower()):
                 continue
-            selected = next((hops for hops in paths(pools, asset, core)
-                if pool_identity(next(hop['pool'] for hop in reversed(hops) if 'pool' in hop)) == anchor), None)
-            if selected is None:
-                continue  # No new quote eligibility requirement or discovery.
-            hops = deepcopy(selected)
-            physical_source = asset
-            if hops[0].get('kind') in ('wrap', 'unwrap'):
-                physical_source = hops.pop(0)['currencyOut']
-            template = {'inputCurrency': physical_source, 'outputCurrency': core,
-                        'routes': weighted_routes([{'amountIn': '1', 'hops': hops}])}
-            plan['conversions'][operation] = _conversion({'inputCurrency': asset, 'outputCurrency': core,
-                'branches': [{'hops': hops}], 'template': template})
-            plan['conversions'][operation]['topologyOrigin'] = 'cybergold-adapter'
-            continuation['route'] = deepcopy(template)
+            for selected in paths(pools, asset, core):
+                if pool_identity(next(hop['pool'] for hop in reversed(selected) if 'pool' in hop)) != anchor:
+                    continue
+                hops = deepcopy(selected)
+                physical_source = asset
+                if hops[0].get('kind') in ('wrap', 'unwrap'):
+                    physical_source = hops.pop(0)['currencyOut']
+                template = {'inputCurrency': physical_source, 'outputCurrency': core,
+                            'routes': weighted_routes([{'amountIn': '1', 'hops': hops}])}
+                added = tuple(_route_directions(template, None))
+                if conflicting_pool((*directions, *added)) is not None:
+                    continue
+                plan['conversions'][operation] = _conversion({'inputCurrency': asset, 'outputCurrency': core,
+                    'branches': [{'hops': hops}], 'template': template})
+                plan['conversions'][operation]['topologyOrigin'] = 'cybergold-adapter'
+                continuation['route'] = deepcopy(template)
+                directions.extend(added)
+                break  # No compatible path simply leaves the existing placeholder.
     return value

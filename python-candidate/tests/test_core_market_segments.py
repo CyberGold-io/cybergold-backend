@@ -17,6 +17,7 @@ from cybergold_candidate.quoter.custom_routes import CustomRoutes
 from cybergold_candidate.quoter.hosted_routes import UniRouteApiProvider, UniswapApiProvider
 from cybergold_candidate.quoter.market_segments import (
     market_segment_scope, observe_market_segments, observed_market_amount, observed_market_revision)
+from cybergold_candidate.quoter.pool_directions import conflicting_pool, quote_directions
 from cybergold_candidate.quoter.uniroute_routes import UnirouteLocal
 from cybergold_candidate.quoter.route_tools import RouteTool, CandidateFeed, PendingRouteTool
 from cybergold_candidate.quote_errors import QuoteFailure
@@ -241,7 +242,8 @@ class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
         other = synthetic_pool(WETH, OTHER, 7922, 'v2')
         thin = synthetic_pool(OTHER, PAXG, 7923, 'v3', liquidity=10**5)
         seed = synthetic_pool(PAXG, CORE, 7924, 'v4', liquidity=10**12)
-        q = service(self, [paxg, other, thin, seed])
+        full = synthetic_pool(OTHER, PAXG, 7925, 'v2')
+        q = service(self, [paxg, other, thin, full, seed])
         def route(pools, source):
             result = []
             for pool in pools:
@@ -249,7 +251,9 @@ class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
                 result.append({'pool': deepcopy(pool), 'zeroForOne': direction})
                 source = pool['token1' if direction else 'token0']['address']
             return result
-        bad, good = route((thin, seed), OTHER), route((other, paxg, seed), OTHER)
+        # Recovery uses an independent full pool rather than reversing the
+        # WETH/OTHER acquisition pool within this trade.
+        bad, good = route((thin, seed), OTHER), route((full, seed), OTHER)
         async def preview(mode, value, _):
             self.assertEqual(mode, 'issue-exact-in')
             return {'netCygldOut': '16000', 'amountsInExact': ['8000', '8000'],
@@ -258,13 +262,14 @@ class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
         async def discover(*_):
             pass
         q.preview, q.discover, q.seed_routes = preview, discover, lambda *_: None
-        leaf, attempts, queries = q.plan_simulator, [], []
+        leaf, attempts, queries, remainders = q.plan_simulator, [], [], []
         async def simulate(request, selected, **options):
             attempts.append(deepcopy(selected))
             value = await leaf(request, selected, **options)
             unmet = next((row for row in value['estimatedRetainedInputCharges']
                           if row['currency'].lower() == OTHER.lower()), None)
             if unmet is not None:
+                remainders.append(int(unmet['amount']))
                 error = QuoteFailure('quote-contract-reverted')
                 error.unsettled_intermediate = {'currency': OTHER, 'amount': int(unmet['amount'])}
                 raise error
@@ -286,15 +291,17 @@ class CoreMarketFailureBootstrapTests(unittest.IsolatedAsyncioTestCase):
         request = {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '20000'}], 'outputCurrency': CORE}
         async with asyncio.timeout(5):
             value = await q.get(request, core_only=True)
+        self.assertTrue(remainders)
         self.assertEqual(value['inputs'], request['inputs'])
         self.assertGreater(int(value['quotedOutput']), 18000)
         residual = next(row for row in value['conversionObservations'] if row['operation'] == '0:residual:1')
         self.assertGreater(int(residual['fundedInput']), 1000)
         self.assertIn((OTHER.lower(), CORE.lower(), int(residual['fundedInput'])), queries)
-        self.assertEqual(len(value['plan']['conversions']['0:residual:1']['branches'][0]['hops']), 3)
+        self.assertEqual(value['plan']['conversions']['0:residual:1']['branches'][0]['hops'], good)
+        self.assertIsNone(conflicting_pool(quote_directions(value)))
         repaired = next(plan for plan in attempts
                         if plan['conversions']['0:residual:1']['branches']
-                        and len(plan['conversions']['0:residual:1']['branches'][0]['hops']) == 3)
+                        and plan['conversions']['0:residual:1']['branches'][0]['hops'] == good)
         self.assertEqual(attempts[0]['body']['branches'][0]['data']['acquisitions'],
                          repaired['body']['branches'][0]['data']['acquisitions'])
 

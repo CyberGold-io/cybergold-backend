@@ -9,6 +9,7 @@ from ..routing_encoding import split_runtime, weighted_routes
 from .contracts import path_operation, path_nomination
 from .reuse_routes import _amounts
 from .market_segments import observed_market_amount
+from .pool_directions import conflicting_pool, _route_directions
 
 CORE_SHARES = (0, 25, 50, 75, 100)
 
@@ -17,16 +18,19 @@ def identity_template(currency):
     return {'inputCurrency': currency, 'outputCurrency': currency, 'routes': []}
 
 
-async def nominate_conversion(self, source, target, amount, block, *, market=False):
+async def nominate_conversion(self, source, target, amount, block, *, market=False,
+                              directions=(), unknown=False):
     """Encode a supplied topology without pricing its amount or pool state."""
     if not amount or source.lower() == target.lower():
         return identity_template(source), {'inputCurrency': source, 'outputCurrency': target, 'branches': []}
+    directions = tuple(directions)
     async with aclosing(self.amm.async_nominations(source, target, amount, block,
                                                   market=market, first=True)) as candidates:
-        candidate = await anext(candidates, None)
-    if candidate is None:
-        raise QuoteFailure('quote-no-route')
-    return encode_nomination(source, target, candidate)
+        async for candidate in candidates:
+            route, chosen = encode_nomination(source, target, candidate)
+            if conflicting_pool((*directions, *_route_directions(route, None if unknown else amount))) is None:
+                return route, chosen
+    raise QuoteFailure('quote-no-route')
 
 
 def encode_nomination(source, target, candidate):
@@ -88,6 +92,7 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
         plan = deepcopy(selected)
     else:
         bank, canonical, recorded = {}, observations if observations is not None else {}, {}
+        directions = []
         conversion_funding = {}
         input_limit_observed = False
         budget = current_budget()
@@ -99,30 +104,31 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
             observed = (observed_market_amount(request, share, order, operation, source, target, None)
                         if topology else None)
             nomination_amount = observed if observed is not None else lot
-            if first or (topology and observed is None):
-                try:
-                    route, chosen = await nominate_conversion(self, source, target, nomination_amount, block, market=market)
-                except QuoteFailure as error:
-                    if not optional or error.code != 'quote-no-route':
-                        raise
-                    # A currently zero Core residual/output does not require a
-                    # route. Leave a semantic identity; execution decides if a
-                    # positive lot makes this particular proposal unavailable.
-                    return identity_template(source)
-            else:
-                chosen = {}
-                with path_operation(operation, int(operation.split(':')[0]), 0):
-                    pending = self.conversion(source, target, nomination_amount, block, bank, canonical, first=False,
-                                              market=market, capture=chosen)
-                    route, _, _ = await budget.discovery(pending) if budget and selection else await pending
-                if topology:
-                    # The SDK ranks routes at a preceding Helpers observation.
-                    # It cannot resize a lot that Core produces in execution.
-                    chosen.pop('_funding', None)
+            try:
+                if first or (topology and observed is None):
+                    route, chosen = await nominate_conversion(self, source, target, nomination_amount, block,
+                        market=market, directions=directions, unknown=topology)
                 else:
-                    conversion_funding[operation] = chosen.pop('_funding', lot)
-                    input_limit_observed |= conversion_funding[operation] < lot
-                chosen.pop('_observation', None)
+                    chosen = {}
+                    with path_operation(operation, int(operation.split(':')[0]), 0):
+                        pending = self.conversion(source, target, nomination_amount, block, bank, canonical, first=False,
+                            market=market, capture=chosen, directions=directions, unknown=topology)
+                        route, _, _ = await budget.discovery(pending) if budget and selection else await pending
+                    if topology:
+                        # Core produces this lot in execution; observed sizing
+                        # cannot make a nominal split branch permanently zero.
+                        chosen.pop('_funding', None)
+                    else:
+                        conversion_funding[operation] = chosen.pop('_funding', lot)
+                        input_limit_observed |= conversion_funding[operation] < lot
+                    chosen.pop('_observation', None)
+            except QuoteFailure as error:
+                if not optional or error.code != 'quote-no-route':
+                    raise
+                # An optional incompatible/unavailable continuation keeps the
+                # existing identity placeholder for Helpers to settle.
+                return identity_template(source)
+            directions.extend(_route_directions(route, None if topology else conversion_funding.get(operation, lot)))
             recorded[operation] = deepcopy(chosen)
             return route
 
