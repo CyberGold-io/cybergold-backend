@@ -100,6 +100,11 @@ A trade may share a physical pool in the same direction. Opposite-direction
 use within that trade is excluded. Crossed supplier hints can supply a union
 of pools from which existing discovery finds shorter compatible paths. No
 additional API request is needed for that reconstruction.
+Successive recovery of the same ordered union routes at the same total input
+reuses the last completed compatible allocation patterns. Current pool metadata
+and supplier origins are rebound on every offer, with fresh branch/hop containers.
+Original compatible hint weights remain unchanged; ordinary adapter deduplication
+still merges origins before pricing. The memo is local to that hint iterator.
 
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
@@ -144,7 +149,8 @@ conversion template for a route that is not being replaced.
 
 The known Core-plus-residual and pure-Core sizing work uses the existing
 bootstrap priority within the shared eight engine permits. Complete funding
-proposals use that priority for their Helpers call. These scopes end before
+proposals, including measured unused-input reductions, use that priority for
+their Helpers call. These scopes end before
 yielding a proposal or starting optional construction. SQL-neighbor priority
 also covers only the complete candidate call; its recovery and follow-up work
 does not inherit priority. Fresh routing and composition construction keep
@@ -316,6 +322,18 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Prioritize complete measured funding and reuse union allocation work
+
+- Give measured unused-input proposals the same existing finite priority as
+  other complete funding proposals, only around their complete candidate call.
+- Reuse the last completed compatible allocation patterns for matching ordered
+  union routes and total funding. Rebind current pool metadata and origins;
+  preserve original compatible weights, adapter deduplication and route order.
+- Keep eight shared permits, fee arithmetic, Helpers validation and ordinary
+  optional construction unchanged. No new amount iteration or API call is added.
+- Update the technical reference. The current diagrams' known-body priority
+  and ordinary-discovery boundaries already describe this unchanged workflow.
 
 ### 2026-11-10 - Remove unused branch funding, including mixed CYGLD sales
 

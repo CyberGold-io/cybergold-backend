@@ -151,6 +151,11 @@ calling the SDK or issuing RPC/API requests.
 The common adapter filters crossed split nominations and chooses compatible
 conversions against already selected operations. Crossed supplier hints reuse
 their union graph through existing discovery to recover shorter alternatives.
+One iterator-local memo retains the last completed compatible integer allocation
+patterns by total source amount and ordered physical-route identities. Repeated
+recoveries bind those patterns to current route/hop representatives and current
+origins. No pool data is cached; original compatible weights and the adapter's
+ordinary origin-merging deduplication remain unchanged.
 An optional continuation without a compatible route keeps its existing
 retaining placeholder. Dormant-route enrichment follows the same rule.
 Measured quote projection, stored quote publication and fresh preparation
@@ -345,7 +350,8 @@ quoter does not actively call the retained amount-dependent Core-preview methods
 SDK jobs and Helpers evaluation currently share eight engine work slots and
 the Python event loop. Retained-body replay, SQL-neighbor candidate calls,
 known measured Core-plus-residual and pure-Core sizing, and Helpers calls for
-complete Core-funding proposals use the existing bootstrap priority lane.
+complete funding proposals (including measured unused-input reductions) use
+the existing bootstrap priority lane.
 Candidate priority ends before recovery, publication callbacks or follow-up
 tasks are created. Sizing priority ends before yielding. Fresh route discovery,
 residual rerouting, market-composition construction and initial ordinary
