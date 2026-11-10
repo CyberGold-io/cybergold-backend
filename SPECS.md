@@ -108,7 +108,12 @@ Core issuance can nominate the implemented residual-retention alternative,
 which must receive its own complete Helpers observation.
 
 Funding alternatives use one proposal workflow while keeping their arithmetic
-specific to each case. A successful Core purchase supplies measured basket
+specific to each case. Measured unused input can be removed even when a whole
+branch consumes zero: that branch keeps its position, routes and metadata with
+an explicit zero funded amount. The complete request must still fund a positive
+amount. For a mixed CYGLD sale, the Core redemption amount stays unchanged while
+market funding uses measured consumption plus the existing market fee.
+A successful Core purchase supplies measured basket
 consumption and each existing continuation's useful input consumption. The
 workflow first reuses those measured amounts and encoded continuations to
 nominate smaller acquisitions for Core plus the useful residual. It also
@@ -311,6 +316,17 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Remove unused branch funding, including mixed CYGLD sales
+
+- Allow a measured zero-consumption branch to carry zero funding without
+  preventing productive siblings from reducing their input. Keep branch
+  positions and conversion identities; require positive aggregate funding.
+- Preserve the nominal Core redemption amount in a mixed CYGLD sale while
+  sizing its market branches with the existing measured-input fee formula.
+- Retain complete Helpers validation and output-first selection. No branch
+  deletion, additional route discovery, inverse or amount iteration is added.
+- Update the technical reference, market/Core diagram and linked process PDF.
 
 ### 2026-11-10 - Direct Core funding and compatible pool directions
 
