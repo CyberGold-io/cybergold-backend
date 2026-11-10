@@ -22,6 +22,7 @@ from .route_tools import RouteQuery, round_robin
 from .cooperative import CHECKPOINT, close, values, async_values, async_finish, finish, sort_steps
 from .amm import PartialPath
 from .prefix import backward_input
+from .pool_directions import branch_directions, conflicting_pool, _route_directions
 
 
 def identity_template(currency):
@@ -64,11 +65,11 @@ def prioritize_steps(candidates, registry):
         close(iterator)
 
 
-def adapt_candidates(candidates, source, core, *, market=False, anchor=None):
-    return values(adapt_steps(candidates, source, core, market=market, anchor=anchor))
+def adapt_candidates(candidates, source, core, *, market=False, anchor=None, amount=None):
+    return values(adapt_steps(candidates, source, core, market=market, anchor=anchor, amount=amount))
 
 
-def adapt_steps(candidates, source, core, *, market=False, anchor=None):
+def adapt_steps(candidates, source, core, *, market=False, anchor=None, amount=None):
     seen = {}
     try:
         for value in candidates:
@@ -77,6 +78,8 @@ def adapt_steps(candidates, source, core, *, market=False, anchor=None):
                 continue
             candidate, origins = value
             try:
+                if conflicting_pool(branch_directions(candidate, amount=amount)) is not None:
+                    continue
                 topology = current_topology()
                 if topology is not None:
                     identity = topology.nomination_identity(candidate)
@@ -192,7 +195,7 @@ class CyberGoldAmmAdapter:
                 finally:
                     close(remaining)
             ordinary = initial_then(ordinary)
-        return adapt_steps(ordinary, source, self.core, market=market, anchor=anchor)
+        return adapt_steps(ordinary, source, self.core, market=market, anchor=anchor, amount=amount)
 
     def family_offers(self, source, target, amount, block):
         return finish(self.family_steps(source, target, amount, block))
@@ -234,13 +237,15 @@ class CyberGoldAmmAdapter:
             groups[(tuple(currencies), tuple(protocols))].append((route, origins))
 
     async def convert(self, source, target, amount, block, bank, canonical, *, market=False,
-                         first=False, branch=0, stage=0, capture=None, price_path=None):
+                         first=False, branch=0, stage=0, capture=None, price_path=None,
+                         directions=(), unknown=False):
         if not amount or source.lower() == target.lower():
             if capture is not None:
                 capture.update(inputCurrency=source, outputCurrency=target, branches=[],
                                _observation={'inputCurrency': source, 'fundedInput': str(amount),
                                              'consumedInput': str(amount), 'outputCurrency': target, 'output': str(amount)})
             return identity_template(source), amount, []
+        directions = tuple(directions)
         candidates = self.async_nominations(source, target, amount, block, market=market, first=first)
         best, rpc_error = None, None
         try:
@@ -256,7 +261,11 @@ class CyberGoldAmmAdapter:
                         for row in normalized:
                             row['hops'] = row['hops'][1:]
                     routes = weighted_routes(normalized)
+                    template = {'inputCurrency': physical_source, 'outputCurrency': target, 'routes': routes}
                     async def replay(funding):
+                        if conflicting_pool((*directions, *_route_directions(
+                                template, None if unknown else funding))) is not None:
+                            raise QuoteFailure('quote-no-route')
                         trial = copy_pool_bank(bank)
                         output, consumed, retained = 0, 0, []
                         for row, funded in zip(normalized, split_runtime(funding, routes), strict=True):
@@ -294,8 +303,6 @@ class CyberGoldAmmAdapter:
                 if retained:
                     retained = [{**retained[0], 'amount': str(sum(int(row['amount']) for row in retained))}]
                 if best is None or output > best[0] or (output == best[0] and funding < best[7]):
-                    template = {'inputCurrency': physical_source, 'outputCurrency': target,
-                                'routes': routes}
                     best = output, template, retained, trial, deepcopy(normalized), consumed, origins, funding
                     if first and output > 0:
                         break

@@ -40,7 +40,8 @@ from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
 from .funding import measured_funding_proposal, cached_core_funding, direct_basket_funding
-from .core_funding import core_funding_alternatives
+from .core_funding import core_funding_alternatives, compose_remaining_budget
+from .plan_simulation import project_core_inputs
 from .residual_retention import residual_retention_proposal
 from .reuse_routes import neighbor_proposals, proposal_identity, funded_route_identity
 from .path_families import quote_path_family
@@ -527,21 +528,32 @@ class Quoter:
                     if root not in funding_roots:
                         funding_roots.add(root)
                         async def refine_core():
+                            def offer(proposal):
+                                identity = root, proposal_identity(proposal)
+                                if identity in funding_proposals:
+                                    return False
+                                funding_proposals.add(identity)
+                                if funding_book.fits(proposal):
+                                    reconstruct_later(evaluate(share, order, False, selected=proposal['plan'],
+                                        funding=proposal['inputs'], phase=proposal['phase'], derived_funding=True,
+                                        bootstrap=True))
+                                return True
+                            async def compose(proposal, core_first):
+                                measured = project_core_inputs(value, registry.chain)
+                                async with aclosing(compose_remaining_budget(self, value, proposal, measured,
+                                        block, observations, core_first=core_first)) as alternatives:
+                                    async for composed in alternatives:
+                                        offer(composed)
                             async with aclosing(core_funding_alternatives(self, value, block, observations,
                                                                          core_only=core_only)) as alternatives:
                                 async for proposal in alternatives:
                                     # The same ordered input-maxima contract as
                                     # serving selection also covers diagnostic
                                     # callers of this lower-level search.
-                                    if not funding_book.fits(proposal):
-                                        continue
-                                    identity = root, proposal_identity(proposal)
-                                    if identity in funding_proposals:
-                                        continue
-                                    funding_proposals.add(identity)
-                                    await evaluate(share, order, False, selected=proposal['plan'],
-                                        funding=proposal['inputs'], phase=proposal['phase'], derived_funding=True,
-                                        bootstrap=True)
+                                    fresh = offer(proposal)
+                                    if fresh and request['intent'] == 0 and not core_only:
+                                        for core_first in (True, False):
+                                            reconstruct_later(compose(proposal, core_first))
                         reconstruct_later(refine_core())
                 # A lower-funding body is a new proposal. Price it alongside
                 # normal search, rather than adding a network tail afterward.
@@ -609,7 +621,7 @@ class Quoter:
                             try:
                                 return await evaluate(share, order, False, selected=proposal['plan'],
                                     funding=proposal['inputs'], phase='core-market-bootstrap', partial=True,
-                                    derived_funding=derived_funding)
+                                    derived_funding=False)
                             except SnapshotChanged:
                                 raise
                             except Exception as error:

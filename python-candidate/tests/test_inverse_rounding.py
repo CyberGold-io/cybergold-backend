@@ -119,6 +119,127 @@ class ExactOutputAllocationTests(unittest.TestCase):
 
 
 class EncodedInverseRoundingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_simple_path_prices_target_from_preceding_bank_without_original_replay(self):
+        pools = stablecoin_pools()
+        quoter = service(self, pools)
+        route = [hop(pools[0], USDT)]
+        chosen = encode_nomination(USDT, PAXG,
+            ([{'amountIn': str(FUNDED_USDT), 'hops': route}], []))[1]
+        bank, canonical = {}, {}
+        await quoter.price_path(route, 50000 * 10**6, BLOCK, bank, canonical)
+        preceding, original = deepcopy(bank), deepcopy(chosen)
+        state = preceding[pools[0]['id']]
+        source_key, target_key = ('reserve0', 'reserve1') if route[0]['zeroForOne'] else ('reserve1', 'reserve0')
+        expected_input = (int(state[source_key]) * TARGET_PAXG * 1000
+                          // ((int(state[target_key])-TARGET_PAXG) * 997) + 1)
+        requests = []
+        request = quoter.engine.sdk.request
+
+        async def record(payload, *args, **kwargs):
+            requests.append(deepcopy(payload))
+            return await request(payload, *args, **kwargs)
+
+        with patch.object(quoter.engine.sdk, 'request', record):
+            amount, resized = await inverse_conversion(quoter, chosen, USDT, PAXG,
+                FUNDED_USDT, TARGET_PAXG, BLOCK, bank, canonical)
+        self.assertEqual(requests[0]['operation'], 'simulateRoute')
+        self.assertEqual(requests[0]['mode'], 'exactOut')
+        self.assertEqual(int(requests[0]['amount']), TARGET_PAXG)
+        self.assertFalse(any(row.get('mode') == 'exactIn' and int(row['amount']) == FUNDED_USDT
+                             for row in requests))
+        self.assertEqual(amount, expected_input)
+        independent = deepcopy(preceding)
+        _, output, retained = await replay_conversion(quoter, deepcopy(resized), USDT,
+            PAXG, amount, BLOCK, independent, canonical)
+        self.assertGreaterEqual(output, TARGET_PAXG)
+        self.assertEqual(output, constant_product_output(resized, amount, preceding, pools))
+        self.assertEqual(retained, [])
+        self.assertEqual(bank, independent)
+        self.assertEqual(chosen, original)
+
+    async def test_simple_native_and_wrapped_paths_use_identical_physical_funding(self):
+        pools = stablecoin_pools()
+        quoter = service(self, pools)
+        route, funded = [hop(pools[2], WETH)], 30 * 10**18
+        wrap = {'kind': 'wrap', 'currencyOut': WETH}
+        native = encode_nomination(ZERO, PAXG,
+            ([{'amountIn': str(funded), 'hops': [wrap, *route]}], []))[1]
+        wrapped = encode_nomination(WETH, PAXG,
+            ([{'amountIn': str(funded), 'hops': route}], []))[1]
+        originals, native_bank, wrapped_bank, canonical = deepcopy((native, wrapped)), {}, {}, {}
+        native_input, native_sized = await inverse_conversion(quoter, native, ZERO,
+            PAXG, funded, TARGET_PAXG, BLOCK, native_bank, canonical)
+        wrapped_input, wrapped_sized = await inverse_conversion(quoter, wrapped, WETH,
+            PAXG, funded, TARGET_PAXG, BLOCK, wrapped_bank, canonical)
+        self.assertEqual(native_input, wrapped_input)
+        self.assertLess(native_input, funded)
+        self.assertEqual(native_sized['inputCurrency'], ZERO)
+        self.assertEqual(native_sized['template'], wrapped_sized['template'])
+        self.assertEqual(native_sized['template']['inputCurrency'].lower(), WETH.lower())
+        self.assertEqual(native_bank, wrapped_bank)
+        self.assertGreaterEqual(constant_product_output(native_sized, native_input, {}, pools), TARGET_PAXG)
+        self.assertEqual((native, wrapped), originals)
+
+    async def test_internal_unwrap_keeps_the_native_pool_path_available(self):
+        connector = stablecoin_pools()[1]
+        native_pool = synthetic_pool(ZERO, PAXG, 9941, 'v4', liquidity=10**24)
+        quoter = service(self, [connector, native_pool])
+        route = [hop(connector, USDT), {'kind': 'unwrap', 'currencyOut': ZERO},
+                 hop(native_pool, ZERO)]
+        chosen = encode_nomination(USDT, PAXG,
+            ([{'amountIn': str(FUNDED_USDT), 'hops': route}], []))[1]
+        original, bank, canonical = deepcopy(chosen), {}, {}
+        amount, resized = await inverse_conversion(quoter, chosen, USDT, PAXG,
+            FUNDED_USDT, TARGET_PAXG, BLOCK, bank, canonical)
+        independent = {}
+        _, output, retained = await replay_conversion(quoter, deepcopy(resized), USDT,
+            PAXG, amount, BLOCK, independent, canonical)
+        self.assertGreaterEqual(output, TARGET_PAXG)
+        self.assertLess(amount, FUNDED_USDT)
+        self.assertEqual(retained, [])
+        self.assertEqual(bank, independent)
+        self.assertEqual(resized['branches'][0]['hops'][1], route[1])
+        self.assertEqual(chosen, original)
+
+    async def test_mixed_single_path_commits_forward_state_for_next_shared_pool(self):
+        for protocol in ('v3', 'v4'):
+            with self.subTest(protocol=protocol):
+                connector = stablecoin_pools()[1]
+                tail = synthetic_pool(WETH, PAXG, 9940, protocol, liquidity=10**24)
+                quoter = service(self, [connector, tail])
+                route = [hop(connector, USDT), hop(tail, WETH)]
+                chosen = encode_nomination(USDT, PAXG,
+                    ([{'amountIn': str(FUNDED_USDT), 'hops': route}], []))[1]
+                bank, canonical, backward_banks = {}, {}, []
+                quote = quoter.engine.quote_sdk_branches
+
+                async def observe(branches, mode, amount, block, **kwargs):
+                    value = await quote(branches, mode, amount, block, **kwargs)
+                    if mode == 'exactOut':
+                        backward_banks.append(deepcopy(kwargs['candidate']))
+                    return value
+
+                with patch.object(quoter.engine, 'quote_sdk_branches', observe):
+                    amount, resized = await inverse_conversion(quoter, chosen, USDT, PAXG,
+                        FUNDED_USDT, TARGET_PAXG, BLOCK, bank, canonical)
+                independent = {}
+                _, output, retained = await replay_conversion(quoter, deepcopy(resized), USDT,
+                    PAXG, amount, BLOCK, independent, canonical)
+                self.assertGreaterEqual(output, TARGET_PAXG)
+                self.assertEqual(retained, [])
+                self.assertEqual(bank, independent)
+                # The 6-decimal connector's rounding surplus enters the next
+                # pool during exactIn execution. Its actual state differs from
+                # the backward quote, so later shared operations need replay.
+                self.assertNotEqual(bank[tail['id']], backward_banks[0][tail['id']])
+                next_route, next_input = [hop(tail, WETH)], 10**18
+                _, next_output = await quoter.price_path(next_route, next_input, BLOCK, bank, canonical)
+                _, expected = await quoter.price_path(next_route, next_input, BLOCK, independent, canonical)
+                _, untouched = await quoter.price_path(next_route, next_input, BLOCK, {}, canonical)
+                self.assertEqual(next_output, expected)
+                self.assertNotEqual(next_output, untouched)
+                self.assertEqual(bank, independent)
+
     async def assert_split_target(self, direct_weight):
         pools = stablecoin_pools()
         quoter = service(self, pools)

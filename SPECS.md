@@ -96,6 +96,11 @@ AlphaRouter, UniRoute local, UniRoute API and GuideStar API. They overlap; they
 are not five sequential services every quote must traverse. Their hints feed
 the same AMM adapter for market-only and market-plus-Core plans.
 
+A trade may share a physical pool in the same direction. Opposite-direction
+use within that trade is excluded. Crossed supplier hints can supply a union
+of pools from which existing discovery finds shorter compatible paths. No
+additional API request is needed for that reconstruction.
+
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
 again. A pure-market plan does not depend on the Core basket basis. A rejected
@@ -112,11 +117,17 @@ exact-output pricing supplies both acquisition proposals; direct basket
 issuance uses the measured input vector without acquisition swaps.
 
 Those known proposals can then be combined with a market purchase using the
-remaining request budget, in either order. Fresh residual-route exploration
-and its resized proposals remain available afterward. Each alternative uses
-the same complete-plan evaluation and selection workflow.
+remaining request budget, in either order. Their validation, both market
+compositions and fresh residual-route exploration progress independently;
+waiting for one does not serialize the others. Each alternative uses the
+same complete-plan evaluation and selection workflow.
 
 Core acquisition sizing uses exact-output SDK prices, including pool fees.
+A single path with distinct physical pools is priced directly at the required
+output, without replaying its original larger budget. An unchanged measured
+acquisition is reused when its pools are independent of all other operations
+in the proposal. Internal native transitions and split paths retain the existing
+ordered inverse arithmetic.
 A direct ceiling calculation funds every encoded path with at least its
 required input after percentage rounding. One forward replay advances the
 private pool state; complete Helpers simulation measures the recipient's net
@@ -149,6 +160,11 @@ engine permission or shares an identical call, then invokes Helpers through
 outputs, fees, retained charges and bounds. One unshared call normally measures
 all encoded market/Core actions in their actual order, including shared-pool
 effects; it is not one validation call per route leg.
+
+The projected executable routes must respect the same pool-direction rule.
+Receipt-proven zero residuals do not use their dormant routes; unknown amounts
+are not treated as zero. This rule also applies to stored quote publication
+and fresh transaction preparation. A rejection identifies the opposed pool.
 
 This is a simulation. Funding overrides supply only the synthetic payer's
 permitted balances and allowances. Protocol reserves, supply, pools and contract
@@ -291,6 +307,21 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Direct Core funding and compatible pool directions
+
+- Price a simple physical path directly with exact-output SDK arithmetic;
+  reuse an unchanged independent acquisition instead of replaying its larger
+  budget. Preserve existing split ceilings, pool fees and final Helpers authority.
+- Let funded-proposal validation, both remaining-budget compositions and fresh
+  residual exploration run under separate existing task owners. Give a repaired
+  route its own finite sizing pass; sizing-only children remain nonrecursive.
+- Exclude opposed physical-pool use within one trade while retaining
+  same-direction sharing. Rebuild crossed hints using their existing union graph;
+  apply the same rule to measured quotes, stored publication and fresh preparation.
+- Update this reference, the technical reference, market/Core diagram and linked
+  process PDF together. No iterative amount solver, extra API discovery or new
+  execution ABI is introduced.
 
 ### 2026-11-09 - Keep idle economic quote streams active
 

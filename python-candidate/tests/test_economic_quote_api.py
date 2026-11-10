@@ -284,7 +284,11 @@ class EconomicQuoteApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(current)
         self.assertEqual(current[0]['searchCoverage']['selectedPhase'], 'nearby-lower')
         self.assertIn('0:residual:0', qualified[0]['plan']['conversions'])
-        self.assertIn('0:residual:1', qualified[0]['plan']['conversions'])
+        # This asset's only path reverses the acquisition pool. Keep the
+        # retaining placeholder instead of inserting an opposed dormant route.
+        self.assertNotIn('0:residual:1', qualified[0]['plan']['conversions'])
+        self.assertEqual(qualified[0]['plan']['body']['branches'][0]['data']['continuations'][1]['route'],
+                         identity_template(OTHER))
 
     async def test_old_cached_quote_has_dormant_topology_before_json_or_stream_selection(self):
         store = SharedStore()

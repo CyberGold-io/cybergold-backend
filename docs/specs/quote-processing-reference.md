@@ -143,6 +143,21 @@ branch removal, basket ordering, conversion reindexing and redemption aliases.
 Weighted allocation, ppm splitting and fee arithmetic retain their own semantics.
 Logical native payment and a physical wrapped input remain distinct.
 
+Within one trade, a physical pool can be shared only in the same direction.
+The key is the canonical pool identity and physical input token, so aliases
+and native wrappers do not create different pools or invert directions.
+The common adapter filters crossed split nominations and chooses compatible
+conversions against already selected operations. Crossed supplier hints reuse
+their union graph through existing discovery to recover shorter alternatives.
+An optional continuation without a compatible route keeps its existing
+retaining placeholder. Dormant-route enrichment follows the same rule.
+Measured quote projection, stored quote publication and fresh preparation
+inspect executable templates independently of optional conversion metadata.
+Known zero lots are ignored, including receipt-proven zero Core residuals;
+unknown Core-produced lots remain potentially funded. A fresh violation uses
+the existing specific-error channel with code `opposed-pool-directions` and
+the exact pool key. This is a route-selection rule, not a new execution ABI.
+
 For a successful Core purchase, ordered Helpers stages identify consumed Core
 inputs `C` and actual residuals `R` by branch and basket asset. This projection
 reads the existing `pricingEvidence` stages internally; it adds no public field
@@ -156,8 +171,12 @@ The first useful-residual proposal reuses each existing continuation's
 Helpers-measured `consumedInput` and encoded route. It does not await fresh
 residual or primary-market discovery. That `C + U` proposal and pure `C`
 funding are offered before their remaining-budget market compositions.
-Fresh residual-route exploration follows those compositions and can still
-offer a different useful-residual body and its market combinations.
+The existing reconstruction owner independently schedules validation of each
+novel base proposal, both composition orders and fresh residual exploration.
+A pending Helpers call or primary-market discovery does not serialize the
+other alternatives. Fresh exploration can still offer a different useful-residual
+body and its market combinations. Equivalent proposals share one construction
+per order; an oversized base may still produce a fitting recomposition.
 The two known sizing calls use the existing bootstrap priority only while
 sizing; the scope exits before either proposal is yielded. Their optional
 composition construction and fresh residual rerouting use ordinary admission.
@@ -167,8 +186,17 @@ fill uses the existing backward-prefix calculation. A revert remainder alone
 does not supply a Core-produced amount. Full-residual exploration remains
 available, and useful sibling continuations stay in the changed body.
 
+For one path containing distinct physical pools and no internal native
+transition, the existing SDK directly quotes the required output from the
+preceding private pool state. There is no original-budget forward diagnostic.
+An acquisition with unchanged measured output is reused without SDK work when
+its pools are disjoint from every other operation in the changed proposal.
+One exact-input replay of a resized path commits its actual forward state;
+exact-output quotation does not commit an inverse state.
+
 Helpers measures aggregate conversions rather than individual split paths.
-Diagnostic SDK replay follows the selected conversion in execution order with
+For split paths or internal native transitions, diagnostic SDK replay follows
+the selected conversion in execution order with
 a private pool bank, obtaining path outputs and pre-swap states. Desired output
 is allocated in those observed output proportions; per-hop exact-output pricing
 nominates new path inputs `a_i`. Core acquisition sizing directly preserves
@@ -201,7 +229,8 @@ Each root observation owns a finite transformation pass over its existing route
 nominees. Derived proposals use the same pass rather than recursively starting
 another Core-sizing pass. Within a search, roots are deduplicated by funded-route
 identity, measured output/stage evidence and provider revision. A distinct route,
-measured result or revision can own another pass. Existing proposal identities
+measured result or revision can own another pass. A successful repaired topology
+has its own pass; direct funding children remain nonrecursive. Existing proposal identities
 deduplicate equivalent bodies and the existing owner cancels and drains its follow-up work. The valid incumbent
 is published before optional alternatives. Each complete changed body returns
 to the existing Helpers evaluator and quote book; ordinary proposal failure
@@ -211,7 +240,7 @@ The phases `core-consumption`, `useful-core-residual` and `core-market-funding`
 describe how a candidate was proposed. They do not themselves set
 `inputLimitObserved`, establish global capacity, or change output-first ranking.
 No iteration cap, zero-retention requirement, new provider predicate or
-additional preparation condition is introduced.
+additional preparation condition beyond the accepted pool-direction rule is introduced.
 
 Ordinary custom discovery walks and sorts its reachable single-path graph;
 the initial short-path prefix above does not await that walk. Both have
@@ -590,6 +619,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |
 | Shared funded-plan edits | `quoter/funding.py` |
 | Target-output inverse and partial-AMM recovery | `quoter/inverse.py`, `quoter/prefix.py`, `quoter/capacity_recovery.py` |
+| Shared pool-direction rule | `quoter/pool_directions.py`, `quoter/amm_adapter.py`, `quoter/plan_simulation.py`, `quoter/quote_book.py` |
 | Core consumption and useful residual funding | `quoter/core_funding.py`, `quoter/plan_simulation.py`, `quoter/search.py` |
 | Core residual-retention alternative | `quoter/residual_retention.py`, `quoter/search.py` |
 | Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |

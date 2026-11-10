@@ -85,6 +85,8 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quoter_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_core_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_inverse_rounding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_funding_workflow.py
+python-candidate/.venv/bin/python python-candidate/tests/test_pool_direction_policy.py
+python-candidate/.venv/bin/python python-candidate/tests/test_opposed_pool_quotes.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_prefix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_search_policy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_reuse_routes.py

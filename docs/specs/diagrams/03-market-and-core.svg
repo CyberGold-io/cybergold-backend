@@ -30,7 +30,7 @@
 <path d="M421 211 V237" class="line"/><polygon points="421.00,237.00 418.00,230.00 424.00,230.00" fill="#3e596d"/><circle cx="421" cy="221" r="10" class="step"/><text x="421" y="221" class="step-text">1</text>
 <rect x="42" y="237" width="758" height="60" rx="8" class="fresh"/>
 <text x="57" y="260" class="heading">CyberGold AMM adapter · one shared market-route API</text>
-<text x="57" y="281" class="body-large">Pool paths, split weights, native wrapping and local Core-anchor stitching</text>
+<text x="57" y="281" class="body-large">Native paths, encoded splits and Core anchor; no opposed use of a physical pool</text>
 <path d="M421 297 V316 H217 V339 M421 316 H625 V339" class="bus"/>
 <path d="M217 327 V339" class="line"/><polygon points="217.00,339.00 214.00,332.00 220.00,332.00" fill="#3e596d"/><circle cx="217" cy="317" r="10" class="step"/><text x="217" y="317" class="step-text">2</text>
 <path d="M625 327 V339" class="line"/><polygon points="625.00,339.00 622.00,332.00 628.00,332.00" fill="#3e596d"/><circle cx="625" cy="317" r="10" class="step"/><text x="625" y="317" class="step-text">2</text>
@@ -49,8 +49,8 @@
 <text x="57" y="481" class="body-large">Measures all AMM + Core actions, fees and shared-pool impact together.</text>
 <path d="M421 493 V506" class="line"/><polygon points="421,506 418,499 424,499" fill="#3e596d"/>
 <rect x="42" y="506" width="758" height="48" rx="8" class="node"/>
-<text x="57" y="526" class="heading">Measured useful residual + Core, then pure Core: exact-output funding</text>
-<text x="57" y="545" class="body">Offer both before fresh market discovery; then compose remaining budget and explore residual routes.</text>
+<text x="57" y="526" class="heading">Measured Core + useful residual: direct exact-output funding</text>
+<text x="57" y="545" class="body">Independent validation and market composition; fresh residual discovery progresses alongside.</text>
 <path d="M800 530 H818 V467 H800" class="line"/><polygon points="800,467 807,464 807,470" fill="#3e596d"/>
 <rect x="42" y="562" width="758" height="20" rx="6" fill="#f6f8fa"/>
 <text x="54" y="576" class="body">One finite pass per root; each changed complete body returns to Helpers before selection.</text>
