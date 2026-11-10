@@ -16,7 +16,7 @@ import time
 
 
 DISCOVERY_PROVIDERS = frozenset(('cybergold-custom', 'uniswap-alpharouter',
-    'uniswap-standard-api', 'uniswap-guidestar', 'uniroute', 'uniroute-api', 'uniroute-local'))
+    'uniswap-standard-api', 'uniswap-guidestar', 'uniroute', 'uniroute-api', 'uniroute-api-fastest', 'uniroute-local'))
 TRANSPORT_ORIGINS = DISCOVERY_PROVIDERS | frozenset(('cybergold-quoter', 'other'))
 RPC_METHODS = frozenset(('eth_call', 'eth_chainId', 'eth_getBlockByNumber', 'eth_getBlockByHash',
     'eth_getCode', 'eth_getStorageAt', 'eth_getBalance', 'eth_getLogs', 'eth_estimateGas',

@@ -91,10 +91,14 @@ plan before detailed SDK amount pricing. Continued exploration supplies other
 paths, allocations, splits and residual handling. Each is still a proposal until
 the whole plan has an economic observation.
 
-Market legs can draw on five demand-started suppliers: CyberGold discovery,
-AlphaRouter, UniRoute local, UniRoute API and GuideStar API. They overlap; they
-are not five sequential services every quote must traverse. Their hints feed
-the same AMM adapter for market-only and market-plus-Core plans.
+Market legs can draw on six demand-started suppliers: CyberGold discovery,
+AlphaRouter, UniRoute local, regular Trading API FASTEST and BEST_PRICE, and
+GuideStar API BEST_PRICE. The two regular API strategies are independent
+suppliers: FASTEST requests the first route, while BEST_PRICE requests deeper
+price optimization without guaranteeing a better result. Available hints feed
+the same AMM adapter for market-only and market-plus-Core plans; a completed
+supplier does not wait for the others. All three hosted suppliers share the
+existing queue, with a default of six HTTP starts per second.
 
 A trade may share a physical pool in the same direction. Opposite-direction
 use within that trade is excluded. Crossed supplier hints can supply a union
@@ -322,6 +326,19 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Run regular Trading API FASTEST and BEST_PRICE together
+
+- Add a separate regular API FASTEST supplier beside the existing BEST_PRICE
+  supplier; retain GuideStar API BEST_PRICE and the three local suppliers.
+- Omit protocol and hook options from FASTEST requests; retain the existing
+  BEST_PRICE payloads and local route parsing. Both strategies nominate
+  topology through the same adapter and complete Helpers validation.
+- Share the existing FIFO HTTP start-pacing queue across all three hosted
+  suppliers. Each queried market segment can make one additional hosted
+  request; response arrivals, origin merging and selection keep their existing
+  workflow. No measured latency or price improvement is claimed.
+- Update the technical reference, supplier diagrams and linked process PDF.
 
 ### 2026-11-10 - Prioritize complete measured funding and reuse union allocation work
 

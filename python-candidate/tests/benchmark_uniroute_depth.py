@@ -128,7 +128,7 @@ async def main(args):
             'Private full UniRoute service, live hosted latency, gas ranking and production economics are not represented.',
             'Failures, missed deadlines and worse results remain in denominators; no gain is required.'],
         'modeDefinitions': {mode: {'customFallback': True,
-            'otherProviders': 'normal-all-five-factory' if mode == 'parallel' else 'local-uniroute-only',
+            'otherProviders': 'normal-all-six-factory' if mode == 'parallel' else 'local-uniroute-only',
             'workerOption': {'finder-only': '--finder-only', 'deep-25': '--split-percentage=25',
                              'deep-5': '--split-percentage=5', 'parallel': 'production-default'}[mode]}
             for mode in modes},

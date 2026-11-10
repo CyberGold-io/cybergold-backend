@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">The same market tools serve both path families</title><desc id="desc">Tools nominate AMM routes. Helpers measures complete plans. Measured unused input and direct Core targets nominate smaller funding; zero-consumption branches retain their indices with zero funding. Each changed complete body returns to Helpers before selection.</desc>
+<title id="title">The same market tools serve both path families</title><desc id="desc">Six suppliers nominate AMM routes: three local tools, regular Trading API FASTEST and BEST_PRICE, and GuideStar BEST_PRICE. Helpers measures complete plans. Measured unused input and direct Core targets nominate smaller funding; zero-consumption branches retain their indices with zero funding. Each changed complete body returns to Helpers before selection.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -25,8 +25,15 @@
 <rect width="842" height="595" fill="#fff"/>
 <text x="42" y="30" class="eyebrow">CYBERGOLD · CURRENT QUOTER · 03</text>
 <text x="42" y="61" class="title">The same market tools serve both path families</text>
-<text x="42" y="81" class="subtitle">Tools nominate AMM routes; Helpers measures the complete plan</text><text x="42" y="110" class="body-large">Five parallel suppliers, started when a market-segment query is requested</text><rect x="42" y="126" width="138" height="66" rx="8" class="node"/><text x="54" y="151" class="heading">Custom</text><text x="54" y="173" class="body">Graph paths</text><path d="M111 192 V211" class="bus"/><rect x="197" y="126" width="138" height="66" rx="8" class="node"/><text x="209" y="151" class="heading">AlphaRouter</text><text x="209" y="173" class="body">Local worker</text><path d="M266 192 V211" class="bus"/><rect x="352" y="126" width="138" height="66" rx="8" class="node"/><text x="364" y="151" class="heading">UniRoute local</text><text x="364" y="173" class="body">Local worker</text><path d="M421 192 V211" class="bus"/><rect x="507" y="126" width="138" height="66" rx="8" class="node"/><text x="519" y="151" class="heading">UniRoute API</text><text x="519" y="173" class="body">Trading API</text><path d="M576 192 V211" class="bus"/><rect x="662" y="126" width="138" height="66" rx="8" class="node"/><text x="674" y="151" class="heading">GuideStar</text><text x="674" y="173" class="body">Trading API</text><path d="M731 192 V211" class="bus"/>
-<path d="M111 211 H731" class="bus"/>
+<text x="42" y="81" class="subtitle">Tools nominate AMM routes; Helpers measures the complete plan</text>
+<text x="42" y="110" class="body-large">Six parallel suppliers, started when a market-segment query is requested</text>
+<rect x="42" y="126" width="118" height="66" rx="8" class="node"/><text x="54" y="151" class="heading">Custom</text><text x="54" y="173" class="body">Graph paths</text><path d="M101 192 V211" class="bus"/>
+<rect x="170" y="126" width="118" height="66" rx="8" class="node"/><text x="182" y="151" class="heading">AlphaRouter</text><text x="182" y="173" class="body">Local worker</text><path d="M229 192 V211" class="bus"/>
+<rect x="298" y="126" width="118" height="66" rx="8" class="node"/><text x="310" y="151" class="heading">UniRoute local</text><text x="310" y="173" class="body">Local worker</text><path d="M357 192 V211" class="bus"/>
+<rect x="426" y="126" width="118" height="66" rx="8" class="node"/><text x="438" y="151" class="heading">Trading API</text><text x="438" y="173" class="body">FASTEST</text><path d="M485 192 V211" class="bus"/>
+<rect x="554" y="126" width="118" height="66" rx="8" class="node"/><text x="566" y="151" class="heading">Trading API</text><text x="566" y="173" class="body">BEST_PRICE</text><path d="M613 192 V211" class="bus"/>
+<rect x="682" y="126" width="118" height="66" rx="8" class="node"/><text x="694" y="151" class="heading">GuideStar API</text><text x="694" y="173" class="body">BEST_PRICE</text><path d="M741 192 V211" class="bus"/>
+<path d="M101 211 H741" class="bus"/>
 <path d="M421 211 V237" class="line"/><polygon points="421.00,237.00 418.00,230.00 424.00,230.00" fill="#3e596d"/><circle cx="421" cy="221" r="10" class="step"/><text x="421" y="221" class="step-text">1</text>
 <rect x="42" y="237" width="758" height="60" rx="8" class="fresh"/>
 <text x="57" y="260" class="heading">CyberGold AMM adapter · one shared market-route API</text>

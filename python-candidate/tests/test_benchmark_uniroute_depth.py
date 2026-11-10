@@ -52,7 +52,7 @@ class DepthComparisonTests(unittest.TestCase):
             self.assertEqual(len(tools[1].provider.command), 3)
         parallel = tools_for_mode(settings(), engine, mode='parallel')
         self.assertEqual({tool.name for tool in parallel}, {'cybergold-custom', 'uniswap-alpharouter',
-            'uniroute-local', 'uniroute-api', 'uniswap-guidestar'})
+            'uniroute-local', 'uniroute-api-fastest', 'uniroute-api', 'uniswap-guidestar'})
         self.assertTrue(all(not getattr(getattr(tool, 'provider', tool), 'api_key', None)
             for tool in parallel))
 

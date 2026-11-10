@@ -445,13 +445,15 @@ async def run_fixture(*, node, core_preview=False, slow_scalar_ms=6000, slow_cat
     better = [pool for pool in case.pools if pool['protocol']=='v4' or pool['feePips']==100]
     hosted_receipts=Counter()
     async def hosted(request):
+        payload=json.loads(request.content)
         guidestar=request.headers.get('x-universal-router-swapsteps')=='true'
-        hosted_receipts['uniswap-guidestar' if guidestar else 'uniroute-api']+=1
+        name = ('uniswap-guidestar' if guidestar else
+                'uniroute-api-fastest' if payload['routingPreference']=='FASTEST' else 'uniroute-api')
+        hosted_receipts[name]+=1
         await trace.early_finder.wait()
         await asyncio.sleep(.2)
         if strategy=='hosted-failure':
             return httpx.Response(503,json={'error':'offline-fixture-service-unavailable'})
-        payload=json.loads(request.content)
         return httpx.Response(200,json=hosted_document(better,payload['tokenIn'],payload['tokenOut'],
             guidestar=guidestar))
     suppliers=[]

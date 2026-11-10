@@ -277,8 +277,9 @@ without waiting for one supplier to finish before starting another:
 - CyberGold custom discovery;
 - AlphaRouter;
 - UniRoute local;
-- UniRoute API;
-- GuideStar API.
+- regular Trading API FASTEST (`uniroute-api-fastest`);
+- regular Trading API BEST_PRICE (`uniroute-api`);
+- GuideStar API BEST_PRICE (`uniswap-guidestar`).
 
 These are demand-started per market segment, not all queried globally at HTTP
 ingress. AlphaRouter and UniRoute local can emit topology hints before deeper
@@ -292,11 +293,22 @@ which undocumented server algorithm ran. Recorded response evidence determines
 attribution. On Sandbox, hosted discovery supplies the foreign market topology
 and the local adapter stitches the fork-only Core/PAXG anchor where required.
 
-The two hosted adapters share their own FIFO start-pacing queue, separate from
-the RPC broker. The implemented default is six starts per second; HTTP
-responses may overlap. HTTP status, queue wait and physical attempt accounting
-are recorded. A 429 cooldown affects later starts. A no-route result belongs
-to that supplier and is distinct from an RPC transport failure.
+The regular API has independent FASTEST and BEST_PRICE suppliers. FASTEST
+requests the first route; BEST_PRICE requests deeper price optimization, which
+does not guarantee a better result. FASTEST omits `protocols` and `hooksOptions`;
+the BEST_PRICE and GuideStar payloads retain V2/V3/V4 and `V4_NO_HOOKS`. The
+existing local parser and adapter still determine executable topology. Each
+supplier's available hints enter the shared pipeline without waiting for the
+other responses; duplicate paths merge their distinct supplier origins.
+
+The three hosted adapters share one FIFO start-pacing queue, separate from the
+RPC broker. The implemented default remains six starts per second across all
+three; HTTP responses may overlap. A queried segment can now issue three hosted
+requests instead of two, with one attempt per supplier query. HTTP status,
+queue wait and physical attempt accounting are recorded. A 429 cooldown affects
+later starts. A no-route result belongs to that supplier and is distinct from an
+RPC transport failure. This supplier change does not establish a measured
+latency or output-price improvement.
 
 ## Step 5: measure the complete proposal in Helpers
 
