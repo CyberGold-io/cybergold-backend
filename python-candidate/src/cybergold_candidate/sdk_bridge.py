@@ -1,21 +1,21 @@
 """JSONL transport stages; SDK request identity and continuation stay with its owner."""
 import json
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from .quote_flow import stage
+from .route_work_slots import required_state_wait
 
 
 @asynccontextmanager
 async def exchange_lock(lock):
-    with stage('sdk.queue', kind='queue'):
-        entered = await lock.__aenter__()
-    try:
+    # Waiting for the serialized worker uses no engine/scheduler capacity.
+    # Register lock cleanup before reacquiring leases: cancellation at that
+    # boundary must release the lock just as cancellation during an exchange.
+    async with AsyncExitStack() as stack:
+        async with required_state_wait():
+            with stage('sdk.queue', kind='queue'):
+                entered = await stack.enter_async_context(lock)
         yield entered
-    except BaseException as error:
-        if not await lock.__aexit__(type(error), error, error.__traceback__):
-            raise
-    else:
-        await lock.__aexit__(None, None, None)
 
 
 def encode(payload):

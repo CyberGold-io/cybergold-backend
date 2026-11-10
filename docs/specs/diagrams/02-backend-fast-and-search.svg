@@ -72,7 +72,7 @@
 <path d="M713 333 V371" class="line"/><polygon points="713.00,371.00 710.00,364.00 716.00,364.00" fill="#3e596d"/><circle cx="713" cy="351" r="10" class="step"/><text x="713" y="351" class="step-text">2</text>
 <rect x="245" y="371" width="547" height="62" rx="8" class="node"/>
 <text x="259" y="396" class="heading">Helpers + SDK share eight engine permits</text>
-<text x="259" y="416" class="body">Known-body priority; running work is not preempted.</text>
+<text x="259" y="416" class="body">SDK-lock/state waits release permits; running work is not preempted.</text>
 <rect x="50" y="392" width="161" height="100" rx="8" class="fresh"/>
 <text x="61" y="416" class="heading">Selected stream</text>
 <text x="61" y="434" class="heading">frame</text>
@@ -89,8 +89,8 @@
 <text x="248" y="523" class="body">Cannot gate scalar L1</text>
 <rect x="627" y="466" width="173" height="66" rx="8" class="node"/>
 <text x="638" y="487" class="heading">Shared loop CPU</text>
-<text x="638" y="507" class="body">Graph copies and tasks</text>
-<text x="638" y="523" class="body">can add contention</text>
+<text x="638" y="507" class="body">Copy offers on demand</text>
+<text x="638" y="523" class="body">Tasks can add contention</text>
 <text x="42" y="557" class="body-large">Stored delivery and Helpers repricing proceed independently. Later candidates can improve the winner.</text>
 <text x="42" y="579" class="source">Sources: progressive_quotes / quote_publication; quoter/search, evaluate, bootstrap, plan_transport; route_work_slots.</text>
 </svg>

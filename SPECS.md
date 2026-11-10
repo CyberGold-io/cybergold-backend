@@ -90,6 +90,9 @@ rediscovering its pools. An initial short topology can also construct a complete
 plan before detailed SDK amount pricing. Continued exploration supplies other
 paths, allocations, splits and residual handling. Each is still a proposal until
 the whole plan has an economic observation.
+Ready quick-pass offers keep their existing order and private copies. Each
+offer is copied only when its feed is consumed; taking the first offer does
+not copy the unconsumed tail. The ready snapshot still copies mutable origins.
 
 Market legs can draw on six demand-started suppliers: CyberGold discovery,
 AlphaRouter, UniRoute local, regular Trading API FASTEST and BEST_PRICE, and
@@ -108,7 +111,11 @@ Successive recovery of the same ordered union routes at the same total input
 reuses the last completed compatible allocation patterns. Current pool metadata
 and supplier origins are rebound on every offer, with fresh branch/hop containers.
 Original compatible hint weights remain unchanged; ordinary adapter deduplication
-still merges origins before pricing. The memo is local to that hint iterator.
+still merges origins before pricing. During a search, sibling hint feeds share
+one last-completed pattern set through its existing topology cache, cleared
+with that cache. Without this scope the memo remains local to the hint iterator.
+Partially consumed enumeration does not replace the completed memo. No pool
+state, mutable plan or price is retained by this pattern reuse.
 
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
@@ -159,6 +166,11 @@ yielding a proposal or starting optional construction. SQL-neighbor priority
 also covers only the complete candidate call; its recovery and follow-up work
 does not inherit priority. Fresh routing and composition construction keep
 ordinary admission, and running work is not preempted.
+Waiting for the serialized SDK worker releases owned engine and scheduler
+capacity. After obtaining the worker lock, the task reacquires that capacity
+before exchanging work with the child. Cancellation during reacquisition
+releases the worker lock. Required-state waiting keeps its existing release
+and reacquisition behavior; the shared engine capacity remains eight.
 
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
@@ -326,6 +338,23 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Avoid eager offer copies and release capacity during SDK lock waits
+
+- Copy each quick-prefix offer when consumed, preserving one feed per offer,
+  round-robin order, private bodies and the existing origins snapshot.
+- Release owned engine/scheduler leases while acquiring the serialized SDK
+  worker lock, then restore them before exchange. Register lock cleanup before
+  restoration so cancellation releases it. Keep eight engine permits, admission
+  priority and required-state waiting unchanged.
+- Share the last completed union-allocation pattern set across sibling feeds
+  through the existing search topology cache, keyed by total funding and ordered
+  physical routes. Rebind current metadata and origins; retain the local fallback
+  without a scope. Partial enumeration does not publish a shared pattern set.
+- Preserve route opportunities, fees, complete Helpers validation and selection.
+  No RPC/API request or search cutoff is added. No live latency improvement
+  is claimed.
+- Update the technical reference, admission/copy diagram and linked process PDF.
 
 ### 2026-11-10 - Run regular Trading API FASTEST and BEST_PRICE together
 

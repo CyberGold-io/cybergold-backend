@@ -1,7 +1,7 @@
 """Interleave available topology hints with ordinary candidates; never wait."""
 from itertools import product
 
-from .discovery import path_steps, route_candidates, route_identity
+from .discovery import current_topology, path_steps, route_candidates, route_identity
 from .cooperative import CHECKPOINT, close, values
 from .pool_directions import branch_directions, conflicting_pool
 
@@ -26,6 +26,7 @@ def normalize_steps(hints, source, target):
     rather than introducing a second route-validation policy.
     """
     previous_key, previous_patterns = None, ()
+    topology = current_topology()
     try:
         for offer in hints:
             yield CHECKPOINT
@@ -53,6 +54,8 @@ def normalize_steps(hints, source, target):
                         for hop in row['hops'] if 'pool' in hop], source, target)
                     amount = sum(int(row['amountIn']) for row in candidate)
                     key = amount, tuple(route_identity(route) for route in routes)
+                    if topology is not None:
+                        previous_key, previous_patterns = topology.hint_union
                     steps = ((value for pattern in previous_patterns for value in (CHECKPOINT, pattern))
                              if key == previous_key else _union_patterns(routes, amount))
                     patterns = []
@@ -67,6 +70,11 @@ def normalize_steps(hints, source, target):
                         yield [{'amountIn': funded, 'hops': [dict(hop) for hop in routes[index]]}
                                for index, funded in pattern], list(offer.get('origins', []))
                     previous_key, previous_patterns = key, tuple(patterns)
+                    if topology is not None:
+                        # Sibling feeds share only the last fully consumed
+                        # integer pattern set. Bind current paths/origins above;
+                        # no pool state, mutable body or price is retained.
+                        topology.hint_union = previous_key, previous_patterns
             except Exception:
                 # Ordinary malformed topology does not discard a sibling.
                 continue
