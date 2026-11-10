@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 from cybergold_candidate.app_tokens import TOKENS
 from cybergold_candidate.exact_input_plan import CORE_BUY, compile_plan
 from cybergold_candidate.quoter.core_funding import core_funding_alternatives, compose_remaining_budget, _useful_residuals
-from cybergold_candidate.quoter.evaluate import encode_nomination
+from cybergold_candidate.quoter.evaluate import encode_nomination, nominate_conversion
 from cybergold_candidate.quoter.funding import funding_proposal
 from cybergold_candidate.quoter.plan_call import executable_body, compile_call
 from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, project_core_inputs
@@ -303,22 +303,49 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await producer.aclose()
 
-    async def test_actual_native_wrapped_and_shared_stablecoin_families_preserve_net_and_fees(self):
+    async def test_actual_scalar_and_basket_families_preserve_net_and_fees(self):
         cases = (
             ('core-funding-eth-20-v2-20261110.json', '15114250421183902596'),
             ('core-funding-weth-100-v3-20261110.json', '64368122270919815842'),
             ('core-funding-usdc-100k-shared-20261110.json', '32069929677'),
+            ('core-funding-paxg-20-v3-20261110.json', '7766441008941070997'),
+            ('core-funding-xaut-20-v3-20261110.json', '7772618'),
+            ('core-funding-basket-large-20261110.json', None),
         )
         for fixture, expected_funding in cases:
             with self.subTest(fixture=fixture):
                 q, root, captured = self.captured_actual_service(fixture)
                 original, immutable = deepcopy(root), deepcopy(q.engine.registry.observed)
+                identity = None
+                if root['request']['intent'] == 0:
+                    data = root['plan']['body']['branches'][0]['data']
+                    source = root['request']['inputs'][0]['currency']
+                    for index, asset in enumerate(data['basketAssets']):
+                        if source.lower() == asset.lower():
+                            operation = f'0:acquire:{index}'
+                            route, chosen = await nominate_conversion(q, source, asset,
+                                int(data['acquisitions'][index]['amountIn']), LATEST_BLOCK)
+                            self.assertNotIn('template', chosen)
+                            self.assertEqual(chosen, root['plan']['conversions'][operation])
+                            self.assertEqual(route, data['acquisitions'][index]['route'])
+                            identity = index, operation, route, chosen
                 producer = core_funding_alternatives(q, root, LATEST_BLOCK, {})
                 try:
                     proposal = await anext(producer)
                     q.conversion.assert_not_awaited()
-                    self.assertEqual(proposal['inputs'][0]['amount'], expected_funding)
-                    self.assertLess(int(expected_funding), int(root['request']['inputs'][0]['amount']))
+                    if expected_funding is not None:
+                        self.assertEqual(proposal['inputs'][0]['amount'], expected_funding)
+                        self.assertLess(int(expected_funding), int(root['request']['inputs'][0]['amount']))
+                    else:
+                        self.assertEqual(proposal['inputs'], [
+                            {'currency': row['currency'], 'amount': str(row['consumed'])}
+                            for row in project_core_inputs(root, 31338)])
+                        self.assertTrue(all(int(row['amount']) < int(maximum['amount'])
+                            for row, maximum in zip(proposal['inputs'], root['inputs'], strict=True)))
+                    if identity is not None:
+                        index, operation, route, chosen = identity
+                        self.assertEqual(proposal['plan']['conversions'][operation], chosen)
+                        self.assertEqual(proposal['plan']['body']['branches'][0]['data']['acquisitions'][index]['route'], route)
                     neutral, paid = await self.assert_actual_funding_observation(q, root, captured, proposal)
                     if 'usdc' in fixture:
                         # Both acquisitions share the USDC→WETH pool in the
@@ -337,7 +364,7 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
                             _, output = await q.price_path(path, int(acquisition['amountIn']), LATEST_BLOCK, bank, canonical)
                             self.assertEqual(output, int(observed[operation]['output']))
                         self.assertEqual(paid['estimatedRetainedInputCharges'], captured['paidReducedRpc']['expected']['estimatedRetainedInputCharges'])
-                    else:
+                    elif 'xaut-20' not in fixture:
                         self.assertEqual(paid['estimatedRetainedInputCharges'], [])
                     self.assertEqual(root, original)
                     self.assertEqual(q.engine.registry.observed, immutable)
@@ -892,6 +919,31 @@ class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
         for proposal in proposals:
             core = next(row for row in proposal['plan']['body']['branches'] if row['kind'] == 0)
             self.assertEqual(core['data']['acquisitions'][2]['amountIn'], '0')
+
+    async def test_zero_acquisition_preserves_the_canonical_bare_nomination(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        source, asset = value['request']['inputs'][0]['currency'], '0x' + '77' * 20
+        route, chosen = await nominate_conversion(q, source, asset, 0, BLOCK)
+        self.assertEqual(chosen['branches'], [])
+        self.assertNotIn('template', chosen)
+        data = value['plan']['body']['branches'][0]['data']
+        data['basketAssets'].append(asset)
+        data['acquisitions'].append({'amountIn': '0', 'route': route})
+        data['continuations'].append({'route': retained(asset)['template'], 'feeCygld': '0'})
+        # This present, producer-shaped entry differs from the older fixture
+        # that omitted the unused conversion and already passed before the fix.
+        value['plan']['conversions']['0:acquire:2'] = chosen
+        value['pricingEvidence']['stages'].append({'inputCurrency': asset, 'outputCurrency': CORE,
+            'fundedInput': '0', 'consumedInput': '0', 'returnedInput': '0', 'amountOut': '0'})
+        original = deepcopy(value)
+        targets = project_core_inputs(value, 1)
+        proposal = await self.first(q, value)
+        self.assertEqual(proposal['plan']['conversions']['0:acquire:2'], chosen)
+        self.assertEqual(proposal['plan']['body']['branches'][0]['data']['acquisitions'][2],
+                         {'amountIn': '0', 'route': route})
+        self.assertEqual([row['consumed'] for row in targets], [4000, 4000, 0])
+        self.assertEqual(value, original)
 
     async def test_core_only_keeps_core_and_residual_sizing_without_primary_market(self):
         q, pools = self.service()

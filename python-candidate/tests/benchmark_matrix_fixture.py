@@ -99,7 +99,7 @@ def matrix_cases():
                    'Both ordinary Market and Core basket acquisition/continuation are evaluated.'),
         MatrixCase('core-shared-acquisition', 'market-plus-core', (standard, bridge, continuation_bridge, anchor),
                    deepcopy(request), True,
-                   'The two Core basket acquisitions share WETH/PAXG state; an independent V3 bridge continues the OTHER residual without reversing its V2 acquisition pool.'),
+                   'The two Core basket acquisitions share WETH/PAXG state; independent V2/V3 bridges allow a compatible OTHER residual continuation.'),
         MatrixCase('core-disjoint-asymmetric-amm', 'market-plus-core', (*disjoint_pools, anchor),
                    {**deepcopy(request), 'inputs': [{'currency': WETH, 'amount': '3000'}]}, True,
                    'Disjoint basket acquisitions each offer a thin V2 pool at a modest price premium and a deep V3 alternative; actual SDK curves expose a finer-than-25% split opportunity below the unchanged synthetic Core cap.'),

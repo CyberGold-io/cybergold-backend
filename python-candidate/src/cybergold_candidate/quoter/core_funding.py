@@ -97,8 +97,9 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
             desired = observation['consumed'] + useful
             operation = f'{branch}:acquire:{index}'
             if source.lower() == asset.lower() or not desired:
-                amount = desired
-                chosen = deepcopy(original['conversions'].get(operation))
+                # Identity/zero nominations need no route replacement and do
+                # not carry a priced conversion template. Change only the lot.
+                amount, chosen = desired, None
             else:
                 previous = observed.get(operation)
                 independent = not any(pools[operation] & used for other, used in pools.items() if other != operation)

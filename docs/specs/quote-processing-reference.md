@@ -166,6 +166,9 @@ reads the existing `pricingEvidence` stages internally; it adds no public field
 and does not subtract aggregate retained charges to guess Core requirements.
 Identity acquisitions, native wrappers, zero-weight assets and mixed token
 decimals preserve their raw integer amounts.
+For identity or zero acquisitions, only the lot changes; their existing body
+route and conversion description are preserved. Their canonical nominations
+need no priced template and are not offered as route replacements.
 
 Backward target-output pricing nominates source funding for acquisitions of
 `C`, or of `C + U` when a nominated market continuation can use a residual `U`.

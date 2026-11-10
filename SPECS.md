@@ -133,6 +133,10 @@ required input after percentage rounding. One forward replay advances the
 private pool state; complete Helpers simulation measures the recipient's net
 output and all applicable fees.
 
+Identity and zero acquisitions change only their funded amount. Their existing
+routes and unpriced metadata stay intact; resizing does not require a priced
+conversion template for a route that is not being replaced.
+
 The known Core-plus-residual and pure-Core sizing work uses the existing
 bootstrap priority within the shared eight engine permits. Complete funding
 proposals use that priority for their Helpers call. These scopes end before
@@ -321,6 +325,8 @@ preserves the full existing test contract.
   apply the same rule to measured quotes, stored publication and fresh preparation.
 - Share integer split weights with route encoding so the pure direction check
   does not repeatedly lower routes or checksum their addresses.
+- Resize identity and zero acquisitions without replacing their unchanged
+  routes or requiring metadata their original nominations do not carry.
 - Update this reference, the technical reference, market/Core diagram and linked
   process PDF together. No iterative amount solver, extra API discovery or new
   execution ABI is introduced.
