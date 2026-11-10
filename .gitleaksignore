@@ -14,3 +14,13 @@
 # Public CYGLD contract address in actual partial-funding recipient token fields.
 f94ca2079249034cc1f9e89928bee6e45b78456d:python-candidate/tests/fixtures/core-funding-usdt-100k-20261109.json:generic-api-key:545
 f94ca2079249034cc1f9e89928bee6e45b78456d:python-candidate/tests/fixtures/core-funding-usdt-100k-20261109.json:generic-api-key:662
+
+# Public CYGLD contract addresses in the exact November 10 Helpers fixtures.
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-eth-100-v3-20261110.json:generic-api-key:264
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-eth-100-v3-20261110.json:generic-api-key:392
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-eth-20-v2-20261110.json:generic-api-key:275
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-eth-20-v2-20261110.json:generic-api-key:414
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-usdc-100k-shared-20261110.json:generic-api-key:333
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-usdc-100k-shared-20261110.json:generic-api-key:450
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-weth-100-v3-20261110.json:generic-api-key:261
+05f63210621cc968a75148049e703b89dc1c9514:python-candidate/tests/fixtures/core-funding-weth-100-v3-20261110.json:generic-api-key:367
