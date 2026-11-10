@@ -47,7 +47,7 @@
 <text x="451" y="198" class="body">Direct / seed connector</text>
 <text x="451" y="215" class="body">Before full graph / SDK</text>
 <rect x="635" y="154" width="157" height="77" rx="8" class="node"/>
-<text x="646" y="178" class="heading">Five suppliers</text>
+<text x="646" y="178" class="heading">Six suppliers</text>
 <text x="646" y="198" class="body">Per AMM query</text>
 <text x="646" y="215" class="body">SDK market-leg work</text>
 <rect x="50" y="268" width="161" height="65" rx="8" class="node"/>

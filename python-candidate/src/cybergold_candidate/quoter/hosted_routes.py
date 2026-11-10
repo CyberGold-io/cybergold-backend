@@ -260,6 +260,8 @@ def proposed_splits(document, source, target, registry, max_hops=3):
 
 
 class UniswapApiProvider:
+    routing_preference = 'BEST_PRICE'
+
     def __init__(self, engine, settings, *, guidestar=False, client_factory=None, resolver=None):
         self.engine, self.settings, self.guidestar = engine, settings, guidestar
         self.name = 'uniswap-guidestar' if guidestar else 'uniswap-standard-api'
@@ -329,8 +331,9 @@ class UniswapApiProvider:
         payload = {'type': 'EXACT_INPUT', 'amount': str(amount), 'tokenIn': source,
                    'tokenOut': target, 'tokenInChainId': chain, 'tokenOutChainId': chain,
                    'swapper': self.swapper, 'autoSlippage': 'DEFAULT',
-                   'routingPreference': 'BEST_PRICE', 'protocols': ['V2', 'V3', 'V4'],
-                   'hooksOptions': 'V4_NO_HOOKS', 'includeRouteCandidates': True}
+                   'routingPreference': self.routing_preference, 'includeRouteCandidates': True}
+        if self.routing_preference == 'BEST_PRICE':
+            payload.update(protocols=['V2', 'V3', 'V4'], hooksOptions='V4_NO_HOOKS')
         if self.client is None:
             self.client = self.client_factory()
             self.clients.add(self.client)
@@ -388,9 +391,10 @@ class UniRouteApiProvider(UniswapApiProvider):
 
     ``includeRouteCandidates`` requests UniRoute's optional diagnostics, not a
     dedicated engine selector. Structured served topology remains useful when
-    the API does not disclose its backend engine. Runtime configuration replaces
-    the standard API provider with this adapter; it does not send both requests.
+    the API does not disclose its backend engine. Separate FASTEST and BEST_PRICE
+    instances use the same nomination and local pricing workflow.
     """
-    def __init__(self, engine, settings, *, client_factory=None, resolver=None):
+    def __init__(self, engine, settings, *, fastest=False, client_factory=None, resolver=None):
         super().__init__(engine, settings, client_factory=client_factory, resolver=resolver)
-        self.name = 'uniroute-api'
+        self.routing_preference = 'FASTEST' if fastest else 'BEST_PRICE'
+        self.name = 'uniroute-api-fastest' if fastest else 'uniroute-api'

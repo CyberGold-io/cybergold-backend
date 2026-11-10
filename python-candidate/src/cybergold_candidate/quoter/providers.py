@@ -10,5 +10,7 @@ def route_providers(settings, engine):
     from .alpha_routes import AlphaRoutes
     from .uniroute_routes import UnirouteLocal
     return [CustomRoutes(engine.registry), PendingRouteTool(engine.route_optimizer(AlphaRoutes).session()),
-            PendingRouteTool(engine.route_optimizer(UnirouteLocal).session()), PendingRouteTool(UniRouteApiProvider(engine, settings)),
+            PendingRouteTool(engine.route_optimizer(UnirouteLocal).session()),
+            PendingRouteTool(UniRouteApiProvider(engine, settings, fastest=True)),
+            PendingRouteTool(UniRouteApiProvider(engine, settings)),
             PendingRouteTool(UniswapApiProvider(engine, settings, guidestar=True))]

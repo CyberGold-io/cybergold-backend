@@ -58,7 +58,7 @@ async def run(args):
             'Child CPU includes primer, replay and cleanup and may not be interpreted as search-only CPU.'],
         'strategies':list(STRATEGIES),
         'strategyDefinitions':{'custom-only':'Quoter default CustomRoutes only',
-            'all-local':'Normal five-tool factory; hosted key absent, ordinary unavailable outcomes, no hosted HTTP',
+            'all-local':'Normal six-tool factory; hosted key absent, ordinary unavailable outcomes, no hosted HTTP',
             'hosted-failure':'Normal factory; dummy key and HTTPX503 fixture for both hosted request modes',
             'parallel':'Normal factory; dummy key and response-shaped successful hosted HTTPX fixtures'},
         'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),

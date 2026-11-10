@@ -7,7 +7,7 @@ Run through Ops' existing dedicated read-only authenticated RPC adapter:
     python-candidate/tests/probe_hosted_route_discovery.py --mode paired-rpc \\
     --node /path/to/node --output /private/tmp/routing-probe.json
 
-Use --mode hosted for UniRoute API + Guidestar only. The optional
+Use --mode hosted for both regular API quote modes + Guidestar only. The optional
 --api-env-file reads selected assignments as data, never executes shell, and
 does not copy credentials into the report or another file. The canonical
 CYBERGOLD_UNISWAP_API_KEY environment setting takes precedence. Missing keys
@@ -55,7 +55,7 @@ WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 # A quote-only public identity; no wallet, key, balance or signing is created.
 QUOTE_ONLY_SWAPPER = '0x0000000000000000000000000000000000000001'
-HOSTED = frozenset(('uniroute-api', 'uniswap-guidestar'))
+HOSTED = frozenset(('uniroute-api-fastest', 'uniroute-api', 'uniswap-guidestar'))
 SETTING_NAMES = frozenset(('CYBERGOLD_UNISWAP_API_KEY', 'CYBERGOLD_UNISWAP_API_SWAPPER',
                            'NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS'))
 SOURCE_PATHS = ('package.json', 'package-lock.json', 'src/uniswap-sdk', 'vendor/uniroute-public',

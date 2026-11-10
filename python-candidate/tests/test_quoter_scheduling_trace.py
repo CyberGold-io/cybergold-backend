@@ -7,7 +7,7 @@ from quoter_scheduling_trace import run_fixture
 
 NODE = os.environ.get('CYBERGOLD_TEST_NODE', 'node')
 PROVIDERS = {'cybergold-custom', 'uniswap-alpharouter', 'uniroute-local',
-             'uniroute-api', 'uniswap-guidestar'}
+             'uniroute-api-fastest', 'uniroute-api', 'uniswap-guidestar'}
 
 
 class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
@@ -37,13 +37,13 @@ class ServingSchedulingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(api.get('requests',0), 0)
             self.assertEqual(row['hostedFixtureReceivedRequests'], {})
         if strategy=='all-local':
-            for name in ('uniroute-api','uniswap-guidestar'):
+            for name in ('uniroute-api-fastest','uniroute-api','uniswap-guidestar'):
                 self.assertGreater(suppliers[name]['unavailable'], 0)
         if strategy=='hosted-failure':
             self.assertGreater(api['requests'], 0)
             self.assertEqual(api['errors'], api['requests'])
             self.assertEqual(api['requests'],sum(row['hostedFixtureReceivedRequests'].values()))
-            for name in ('uniroute-api','uniswap-guidestar'):
+            for name in ('uniroute-api-fastest','uniroute-api','uniswap-guidestar'):
                 self.assertGreater(suppliers[name]['error'], 0)
         if strategy!='custom-only':
             for name in ('uniroute-local','uniswap-alpharouter'):
