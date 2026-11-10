@@ -564,7 +564,7 @@ class Quoter:
                         try:
                             await evaluate(share, order, False, selected=plan,
                                 funding=reduced_request['inputs'], phase='measured-funding',
-                                derived_funding=derived_funding)
+                                derived_funding=derived_funding, bootstrap=True)
                         except SearchStopped:
                             pass
                         except Exception as error:

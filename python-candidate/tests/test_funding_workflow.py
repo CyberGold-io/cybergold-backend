@@ -56,6 +56,160 @@ class FundingWorkflowTests(unittest.IsolatedAsyncioTestCase):
         return {'inputs': [{**value['inputs'][0], 'amount': amount}], 'plan': plan,
                 'phase': 'core-consumption'}
 
+    async def funding_admission(self, *, through_core=False, cancel=False):
+        """Real search call sites; controlled candidate/Core/composition leaves.
+
+        The actual measured-funding builder owns the reduced body. A one-slot
+        fixture exposes admission order without SDK, RPC or EVM claims.
+        """
+        from cybergold_candidate.quoter.discovery import market_plan
+        from cybergold_candidate.quoter.funding import measured_funding_proposal
+        from cybergold_candidate.route_work_slots import PricingSlots, _bootstrap
+        from quoter_fixture import synthetic_pool
+        from test_universal_quote import WETH
+        q, req, _ = self.fixture()
+        req['inputs'][0]['currency'] = WETH
+        q.engine.registry.seed = None
+        q.engine.semaphore = slots = PricingSlots(1)
+        root = await q.candidate(req)
+        identity = {'inputCurrency': WETH, 'outputCurrency': WETH, 'routes': []}
+        pool = synthetic_pool(WETH, CORE, 8743, 'v2')
+        hop = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
+        market = market_plan(WETH, CORE, [hop], 5001)
+        core = {'kind': 0, 'amountIn': '5000', 'data': {
+            'basketAssets': [WETH], 'acquisitions': [{'amountIn': '5000', 'route': deepcopy(identity)}],
+            'continuations': [{'route': deepcopy(identity), 'feeCygld': '0'}]}}
+        root['plan'] = {'allocations': [{'kind': 0, 'amountIn': '5000'}, {'kind': 1, 'amountIn': '5001'}],
+            'body': {'branches': [core, market['body']['branches'][0]]},
+            'conversions': {'0:acquire:0': {'inputCurrency': WETH, 'outputCurrency': WETH, 'branches': []},
+                            '1:market': market['conversions']['0:market']}}
+        root['conversionObservations'] = [{'operation': '1:market', 'inputCurrency': WETH,
+            'consumedInput': '3000', 'outputCurrency': CORE, 'output': '1000'}]
+        original = deepcopy(root)
+        funded, plan = measured_funding_proposal(root, 1)
+        self.assertEqual(funded['inputs'][0]['amount'], '8000')
+        calls, grants, published, optional_scopes = [], [], [], []
+        entered, completed, drained, first_grant, blocker_entered, blocker_release, tail_release = (
+            asyncio.Event() for _ in range(7))
+        parked = asyncio.Event()
+        root_claimed = False
+
+        async def candidate(request, *args, selected=None, **kwargs):
+            nonlocal root_claimed
+            if selected is None:
+                if root_claimed:
+                    await parked.wait()
+                root_claimed = True
+                return deepcopy(root)
+            self.assertEqual(request['inputs'], funded['inputs'])
+            self.assertEqual(selected, plan)
+            calls.append({'bootstrap': _bootstrap.get(), 'inputs': deepcopy(request['inputs']),
+                          'plan': deepcopy(selected)})
+            entered.set()
+            try:
+                async with engine_work(slots, stage_name='helpers.permit'):
+                    grants.append('funding')
+                    first_grant.set()
+                value = deepcopy(root)
+                value.update(request=deepcopy(request), inputs=deepcopy(request['inputs']), plan=deepcopy(selected))
+                completed.set()
+                return value
+            finally:
+                drained.set()
+        q.candidate = candidate
+
+        async def alternatives(*args, **kwargs):
+            optional_scopes.append(_bootstrap.get())
+            if through_core:
+                yield {'inputs': deepcopy(funded['inputs']), 'plan': deepcopy(plan), 'phase': 'core-consumption'}
+
+        async def compositions(*args, **kwargs):
+            optional_scopes.append(_bootstrap.get())
+            if False:
+                yield None
+
+        async def publish(frame):
+            if frame['type'] == 'qualified':
+                published.append(frame['value']['inputs'][0]['amount'])
+
+        async def blocker():
+            async with engine_work(slots):
+                blocker_entered.set()
+                await blocker_release.wait()
+
+        async def optional():
+            with bootstrap_priority():
+                async with engine_work(slots):
+                    grants.append('optional')
+                    first_grant.set()
+                    await tail_release.wait()
+
+        held = asyncio.create_task(blocker())
+        await blocker_entered.wait()
+        tails, operation = [], None
+        completed_before_tail = False
+        with patch('cybergold_candidate.quoter.search.core_funding_alternatives', alternatives), \
+                patch('cybergold_candidate.quoter.search.compose_remaining_budget', compositions), \
+                patch('cybergold_candidate.quoter.search.measured_funding_proposal',
+                      (lambda *_: None) if through_core else measured_funding_proposal):
+            operation = asyncio.create_task(Quoter.get(q, req, on_update=publish))
+            try:
+                await asyncio.wait_for(entered.wait(), 2)
+                self.assertEqual(len(slots._ordinary) + len(slots._priority), 1)
+                tails = [asyncio.create_task(optional()) for _ in range(3)]
+                await asyncio.sleep(0)
+                self.assertEqual(len(slots._ordinary) + len(slots._priority), 4)
+                if cancel:
+                    operation.cancel()
+                    await asyncio.gather(operation, return_exceptions=True)
+                    self.assertTrue(drained.is_set())
+                    self.assertFalse(completed.is_set())
+                blocker_release.set()
+                await asyncio.wait_for(first_grant.wait(), 2)
+                completed_before_tail = completed.is_set()
+                tail_release.set()
+                # Let independent work consume the returned capacity before
+                # cleanup cancels any remaining search-owned tasks.
+                await asyncio.wait_for(asyncio.gather(*tails), 2)
+                if not cancel:
+                    await asyncio.wait_for(completed.wait(), 2)
+                    async with asyncio.timeout(2):
+                        while '8000' not in published:
+                            await asyncio.sleep(0)
+            finally:
+                blocker_release.set(); tail_release.set()
+                for task in [operation, held, *tails]:
+                    if task is not None and not task.done():
+                        task.cancel()
+                await asyncio.gather(operation, held, *tails, return_exceptions=True)
+        self.assertEqual(root, original)
+        self.assertEqual(len(calls), 1, 'The priority change must not create another Helpers-boundary call')
+        self.assertTrue(optional_scopes)
+        self.assertFalse(any(optional_scopes), 'Optional construction inherited funding priority')
+        self.assertFalse(_bootstrap.get(), 'Funding priority leaked to the caller')
+        self.assertEqual((slots._value, len(slots._ordinary), len(slots._priority)), (1, 0, 0))
+        return calls[0], grants, published, completed_before_tail
+
+    async def test_measured_funding_uses_the_same_finite_lane_as_known_core_funding(self):
+        outcomes = []
+        for through_core in (False, True):
+            with self.subTest(through_core=through_core):
+                call, grants, published, before_tail = await self.funding_admission(through_core=through_core)
+                self.assertEqual(grants, ['funding', 'optional', 'optional', 'optional'])
+                self.assertTrue(before_tail, 'Ready reduced funding waited for later optional priority work')
+                self.assertTrue(call['bootstrap'])
+                self.assertEqual(published, ['10001', '8000'])
+                outcomes.append(call)
+        if len(outcomes) == 2:
+            self.assertEqual(outcomes[0], outcomes[1], 'The existing lane changes order, not body or funding')
+
+    async def test_cancelled_measured_funding_drains_without_stealing_optional_capacity(self):
+        call, grants, published, before_tail = await self.funding_admission(cancel=True)
+        self.assertTrue(call['bootstrap'])
+        self.assertEqual(grants, ['optional', 'optional', 'optional'])
+        self.assertEqual(published, ['10001'])
+        self.assertFalse(before_tail)
+
     async def test_pending_useful_validation_does_not_block_independent_core_funding(self):
         # Control-flow observations only, not SDK or EVM economics acceptance.
         q, req, _ = self.fixture()
