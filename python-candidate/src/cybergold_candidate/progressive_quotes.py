@@ -20,8 +20,9 @@ async def progressive_quote(service, request, publish, *, refresh=False):
         previous = await cache.lookup() if not scalar and not refresh else None
         if previous is not None:
             offered = await service.cached_offer(request, previous, await cache.scope())
-            await publish({'type': 'qualified', 'value': deepcopy(offered)})
-            return offered
+            if offered is not None:
+                await publish({'type': 'qualified', 'value': deepcopy(offered)})
+                return offered
 
         publication = CanonicalPublication(service.quoter, request, publish, refresh=refresh, cache=cache)
         neighbors = cache.memory_neighbors() if scalar else []

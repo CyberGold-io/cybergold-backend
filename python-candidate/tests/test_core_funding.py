@@ -1,0 +1,959 @@
+"""Measured Core targets reach SDK inverses and complete Helpers bodies."""
+import asyncio
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+from types import SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, patch
+
+from cybergold_candidate.app_tokens import TOKENS
+from cybergold_candidate.exact_input_plan import CORE_BUY, compile_plan
+from cybergold_candidate.quoter.core_funding import core_funding_alternatives, compose_remaining_budget, _useful_residuals
+from cybergold_candidate.quoter.evaluate import encode_nomination, nominate_conversion
+from cybergold_candidate.quoter.funding import funding_proposal
+from cybergold_candidate.quoter.plan_call import executable_body, compile_call
+from cybergold_candidate.quoter.plan_simulation import HelpersPlanSimulation, project_core_inputs
+from cybergold_candidate.quote_errors import QuoteFailure
+from cybergold_candidate.quote_publication import CanonicalPublication
+from cybergold_candidate.quote_budget import QuoteBudget, budget_context
+from cybergold_candidate.routing_encoding import ZERO
+from cybergold_candidate.route_quote_engine import RouteQuoteEngine
+from cybergold_candidate.rpc_block_context import LATEST_BLOCK
+from cybergold_candidate import route_work_slots as work
+from quoter_fixture import Registry, service, synthetic_pool
+from cybergold_candidate.quoter import Quoter
+from test_quoter_plan_simulation import CODEC, Provider, Rpc, branches, encoded, measured, stage, NOW
+from test_universal_quote import (BLOCK, CORE, PAXG, OTHER, WETH, HELPERS, ADAPTER, USER,
+                                 capacity_nominations, settings)
+
+
+def retained(asset):
+    template = {'inputCurrency': asset, 'outputCurrency': CORE, 'routes': []}
+    return {'inputCurrency': asset, 'outputCurrency': CORE,
+            'branches': [], 'template': template}
+
+
+def root_value(q, pools, *, native=False, identity=False):
+    source = PAXG if identity else ZERO if native else WETH
+    physical = WETH if native else source
+    acquisitions, conversions, stages = [], {}, []
+    for index, asset in enumerate((PAXG, OTHER)):
+        if source.lower() == asset.lower():
+            template = {'inputCurrency': asset, 'outputCurrency': asset, 'routes': []}
+            chosen = {'inputCurrency': asset, 'outputCurrency': asset, 'branches': [], 'template': template}
+        else:
+            pool = pools[index]
+            hops = [{'pool': pool, 'zeroForOne': physical.lower() == pool['token0']['address'].lower()}]
+            if native:
+                hops.insert(0, {'kind': 'wrap', 'currencyOut': WETH})
+                stages.append(stage(len(stages), source, physical, 10000, 10000))
+            template, chosen = encode_nomination(source, asset, ([{'amountIn': '10000', 'hops': hops}], []))
+            stages.append(stage(len(stages), physical, asset, 10000, 9969))
+        acquisitions.append({'amountIn': '10000', 'route': deepcopy(template)})
+        conversions[f'0:acquire:{index}'] = chosen
+        conversions[f'0:residual:{index}'] = retained(asset)
+    for index, asset in enumerate((PAXG, OTHER)):
+        acquired = 10000 if source.lower() == asset.lower() else 9969
+        stages.append(stage(len(stages), asset, CORE, acquired, 100 if index == 0 else 0,
+                            consumed=4000, returned=acquired-4000))
+        stages.append(stage(len(stages), asset, CORE, acquired-4000, 0,
+                            consumed=0, returned=acquired-4000))
+    request = {'intent': 0, 'inputs': [{'currency': source, 'amount': '20000'}], 'outputCurrency': CORE}
+    plan = {'allocations': [{'kind': 0, 'amountIn': '20000'}], 'conversions': conversions,
+        'body': {'branches': [{'kind': 0, 'amountIn': '20000', 'data': {
+            'basketAssets': [PAXG, OTHER], 'acquisitions': acquisitions,
+            'continuations': [{'route': deepcopy(conversions[f'0:residual:{index}']['template']),
+                               'feeCygld': '0'} for index in range(2)]}}]}}
+    provider = Provider()
+    rpc = Rpc(provider)
+    q.engine.registry.get_rpc = lambda: rpc
+    simulator = HelpersPlanSimulation(settings(), q.engine.registry, helpers=HELPERS,
+        adapter=ADAPTER, core=CORE, now=lambda: NOW)
+    value = simulator.project(request, plan,
+        {**encoded(measured(100, stages=stages, fees=(1, 0, 0),
+                           retained=[(0, 0, WETH, 123)])), 'observedAt': NOW},
+        {'issued': 1, 'coalesced': 0, 'reused': 0}, rpc=rpc,
+        tag='latest', block=None, pricing=True, candidate=None)
+    return value, simulator, provider
+
+
+class CoreFundingTests(unittest.IsolatedAsyncioTestCase):
+    def captured_actual_service(self, fixture='core-funding-usdt-100k-20261109.json'):
+        data = json.loads((Path(__file__).parent / 'fixtures' / fixture).read_text())
+        value = data['root']
+        registry = Registry(data['pools'], LATEST_BLOCK)
+        registry.chain, registry.core = 31338, value['request']['outputCurrency']
+        residual = value['plan']['conversions']['0:residual:0']['branches']
+        anchor = residual[0]['hops'][0]['pool']['id'] if residual else data['pools'][0]['id']
+        registry.seed = registry.inventory[anchor]
+        configured = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338',
+            NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=registry.core,
+            NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=value['deployment']['helpers'],
+            CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS=value['deployment']['adapter'])
+        engine = RouteQuoteEngine(configured, registry)
+        self.addAsyncCleanup(engine.close)
+        self.addAsyncCleanup(registry.pending.close)
+        quoter = Quoter(configured, engine)
+        quoter.conversion = AsyncMock(side_effect=RuntimeError('Optional discovery unavailable'))
+        return quoter, value, data
+
+    def service(self, *, identity=False, thin=True):
+        source = PAXG if identity else WETH
+        pools = [synthetic_pool(WETH, PAXG, 8901, 'v2'),
+                 synthetic_pool(source, OTHER, 8902, 'v2'),
+                 synthetic_pool(PAXG, CORE, 8903, 'v4', liquidity=10**5 if thin else 10**9)]
+        return service(self, pools), pools
+
+    async def assert_actual_funding_observation(self, q, root, captured, proposal):
+        # Every response is bound to exact complete calldata and overrides.
+        # Source qualification performed these calls; this regression replays
+        # their bytes offline rather than substituting a Core model.
+        records = [captured[key] for key in ('pricingRootRpc', 'pricingReducedRpc', 'paidReducedRpc')]
+        provider = Provider(*(row['response'] for row in records))
+        rpc = Rpc(provider)
+        simulator = HelpersPlanSimulation(SimpleNamespace(),
+            SimpleNamespace(chain=31338, get_rpc=lambda: rpc),
+            helpers=root['deployment']['helpers'], adapter=root['deployment']['adapter'],
+            core=root['request']['outputCurrency'], now=lambda: NOW)
+        funded = {**root['request'], 'inputs': deepcopy(proposal['inputs'])}
+        block = {'number': int(captured['sourceAnchor']['blockNumber']),
+                 'hash': captured['sourceAnchor']['blockHash']}
+        observed_root = await simulator(root['request'], root['plan'], block=block)
+        neutral = await simulator(funded, proposal['plan'], block=block)
+        paid = await simulator(funded, neutral['plan'], block=block,
+                               pricing=False, minimum=int(root['quotedOutput']))
+        self.assertEqual(len(provider.calls), 3)
+        expected_core = project_core_inputs(root, 31338)
+        for index, value in enumerate((observed_root, neutral, paid)):
+            identity = hashlib.sha256(json.dumps(provider.calls[index][1], sort_keys=True,
+                separators=(',', ':')).encode()).hexdigest()
+            self.assertEqual(identity, records[index]['paramsSha256'])
+            for key, expected in records[index]['expected'].items():
+                self.assertEqual(value[key], expected)
+        for value in (neutral, paid):
+            self.assertGreaterEqual(int(value['quotedOutput']), int(root['quotedOutput']))
+            self.assertEqual(value['fees'], root['fees'])
+            measured = project_core_inputs(value, 31338)
+            self.assertEqual([row['consumed'] for row in measured],
+                             [row['consumed'] for row in expected_core])
+            self.assertTrue(all(row['acquired'] >= row['consumed'] for row in measured))
+        self.assertNotEqual(records[1]['paramsSha256'], records[2]['paramsSha256'])
+        published = []
+        async def publish(frame):
+            published.append(deepcopy(frame))
+        publication = CanonicalPublication(q, root['request'], publish)
+        await publication.enqueue({'type': 'candidate-repriced', 'value': root})
+        await publication.publish_selected()
+        paid['request'] = deepcopy(root['request'])
+        await publication.enqueue({'type': 'candidate-repriced', 'value': paid})
+        await publication.publish_selected()
+        self.assertEqual(published[-1]['value']['inputs'], proposal['inputs'])
+        self.assertEqual(publication.best['quotedOutput'], paid['quotedOutput'])
+        self.assertTrue(publication.book.fits(paid))
+        return neutral, paid
+
+    async def first(self, q, value):
+        alternatives = core_funding_alternatives(q, value, BLOCK, {})
+        try:
+            return await anext(alternatives)
+        finally:
+            await alternatives.aclose()
+
+    async def collect(self, q, value):
+        result = []
+        try:
+            async for proposal in core_funding_alternatives(q, value, BLOCK, {}):
+                result.append(proposal)
+        except QuoteFailure as error:
+            # An unavailable optional Market composition does not erase the
+            # independently emitted Core/useful-residual alternatives.
+            self.assertEqual(error.code, 'quote-no-route')
+        return result
+
+    async def test_core_stages_are_distinct_from_aggregate_retained_charges(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        original = deepcopy(value)
+        self.assertEqual(project_core_inputs(value, 1), [
+            {'branch': 0, 'index': index, 'currency': asset,
+             'acquired': 9969, 'consumed': 4000, 'residual': 5969}
+            for index, asset in enumerate((PAXG, OTHER))])
+        self.assertEqual(value, original)
+        self.assertEqual(set(value), set(original))
+
+    async def test_actual_measured_useful_residual_and_pure_core_precede_optional_discovery(self):
+        # Actual captured Helpers/Core measurements and actual captured pool
+        # observations drive the installed SDK. This offline regression checks
+        # nomination/order, not fresh contract execution; the manual real-fork
+        # qualification exercises those complete proposals against contracts.
+        q, value, captured = self.captured_actual_service()
+        original = deepcopy(value)
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        try:
+            useful = await anext(alternatives)
+            self.assertEqual(useful['phase'], 'useful-core-residual')
+            q.conversion.assert_not_awaited()
+            core_only = await anext(alternatives)
+            self.assertEqual(core_only['phase'], 'core-consumption')
+            q.conversion.assert_not_awaited()
+            self.assertLess(int(core_only['inputs'][0]['amount']), int(useful['inputs'][0]['amount']))
+            self.assertLess(int(useful['inputs'][0]['amount']), int(value['inputs'][0]['amount']))
+            measured_inputs = project_core_inputs(value, 31338)
+            observed = {row['operation']: row for row in value['conversionObservations']}
+            bank, canonical = {}, {}
+            for index, row in enumerate(measured_inputs):
+                operation = f"{row['branch']}:acquire:{row['index']}"
+                residual_operation = f"{row['branch']}:residual:{row['index']}"
+                needed = row['consumed'] + int(observed[residual_operation]['consumedInput'])
+                chosen = useful['plan']['conversions'][operation]
+                acquisition = useful['plan']['body']['branches'][0]['data']['acquisitions'][index]
+                _, actual = await q.price_path(chosen['branches'][0]['hops'],
+                    int(acquisition['amountIn']), LATEST_BLOCK, bank, canonical)
+                self.assertGreaterEqual(actual, needed)
+            self.assertEqual(useful['plan']['conversions']['0:residual:0'],
+                             value['plan']['conversions']['0:residual:0'])
+            # Replay an actual production Helpers response only for the exact
+            # recorded calldata/overrides. Fees were paid in that EVM call;
+            # pricing=False prevents projecting the market fee a second time.
+            paid = captured['paidReducedRpc']
+            provider = Provider(paid['response'])
+            rpc = Rpc(provider)
+            registry = SimpleNamespace(chain=31338, get_rpc=lambda: rpc)
+            simulator = HelpersPlanSimulation(SimpleNamespace(), registry,
+                helpers=value['deployment']['helpers'], adapter=value['deployment']['adapter'],
+                core=value['request']['outputCurrency'], now=lambda: NOW)
+            result = await simulator({**value['request'], 'inputs': useful['inputs']},
+                useful['plan'], pricing=False, minimum=int(value['quotedOutput']),
+                block={'number': int(captured['sourceAnchor']['blockNumber']),
+                       'hash': captured['sourceAnchor']['blockHash']})
+            encoded_params = json.dumps(provider.calls[0][1], sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(hashlib.sha256(encoded_params).hexdigest(), paid['paramsSha256'])
+            for key, expected in paid['expected'].items():
+                self.assertEqual(result[key], expected)
+            published = []
+            async def publish(frame):
+                published.append(deepcopy(frame))
+            publication = CanonicalPublication(q, value['request'], publish)
+            await publication.enqueue({'type': 'candidate-repriced', 'value': value})
+            await publication.publish_selected()
+            result['request'] = deepcopy(value['request'])
+            await publication.enqueue({'type': 'candidate-repriced', 'value': result})
+            await publication.publish_selected()
+            self.assertEqual(published[-1]['value']['inputs'], useful['inputs'])
+            self.assertEqual(published[-1]['value']['quotedOutput'], value['quotedOutput'])
+            # Fresh residual discovery stays in this producer. Its ordinary
+            # failure falls back to the already-measured continuation, whose
+            # identical proposal is deduplicated. Compositions have their own
+            # serving owner and do not prolong this sizing generator.
+            with self.assertRaises(StopAsyncIteration):
+                await anext(alternatives)
+            self.assertTrue(q.conversion.await_count)
+            with self.assertRaises(RuntimeError) as caught:
+                _ = [proposal async for proposal in compose_remaining_budget(
+                    q, value, useful, measured_inputs, LATEST_BLOCK, {}, core_first=False)]
+            self.assertEqual(str(caught.exception), 'Optional discovery unavailable')
+            with self.assertRaises(AssertionError) as caught:
+                _ = [proposal async for proposal in compose_remaining_budget(
+                    q, value, useful, measured_inputs, LATEST_BLOCK, {}, core_first=True)]
+            self.assertEqual(str(caught.exception), 'Offline bitmap/tick coverage absent')
+            self.assertEqual(publication.best['inputs'], useful['inputs'])
+            self.assertEqual(value, original)
+        finally:
+            await alternatives.aclose()
+
+    async def test_actual_100_eth_reuses_binding_paxg_and_sizes_only_surplus_xaut(self):
+        # This constructed body reproduces the reported 174.562 CYGLD and
+        # 18.125 XAUt display with actual pinned Helpers/Core observations.
+        # It does not claim the historical screenshot's request identity.
+        q, root, captured = self.captured_actual_service('core-funding-eth-100-v3-20261110.json')
+        original, calls = deepcopy(root), []
+        actual_sdk = q.engine.sdk.request
+
+        async def sdk(payload, **options):
+            calls.append({'mode': payload.get('mode'),
+                          'pools': [pool['id'] for pool in payload.get('pools', [])]})
+            return await actual_sdk(payload, **options)
+
+        q.engine.sdk.request = sdk
+        producer = core_funding_alternatives(q, root, LATEST_BLOCK, {})
+        try:
+            proposal = await anext(producer)
+            q.conversion.assert_not_awaited()
+            self.assertEqual(proposal['phase'], 'core-consumption')
+            self.assertEqual(proposal['inputs'][0]['amount'], '64368122270919815842')
+            acquisitions = proposal['plan']['body']['branches'][0]['data']['acquisitions']
+            self.assertEqual([row['amountIn'] for row in acquisitions],
+                             ['60000000000000000000', '4368122270919815842'])
+            paxg_pool = root['plan']['conversions']['0:acquire:0']['branches'][0]['hops'][0]['pool']['id']
+            xaut_pool = root['plan']['conversions']['0:acquire:1']['branches'][0]['hops'][0]['pool']['id']
+            self.assertTrue(all(paxg_pool not in row['pools'] for row in calls))
+            self.assertEqual(calls, [{'mode': mode, 'pools': [xaut_pool]}
+                                     for mode in ('exactOut', 'exactIn')])
+            self.assertEqual(proposal['plan']['conversions']['0:acquire:0'],
+                             root['plan']['conversions']['0:acquire:0'])
+
+            # These are new actual neutral and fee-paid responses for exactly
+            # the new 60-ETH binding leg. The old slightly smaller PAXG input
+            # has different calldata and cannot supply either reply.
+            _, paid = await self.assert_actual_funding_observation(q, root, captured, proposal)
+            self.assertEqual(paid['estimatedRetainedInputCharges'], [])
+            self.assertEqual(root, original)
+        finally:
+            await producer.aclose()
+
+    async def test_actual_scalar_and_basket_families_preserve_net_and_fees(self):
+        cases = (
+            ('core-funding-eth-20-v2-20261110.json', '15114250421183902596'),
+            ('core-funding-weth-100-v3-20261110.json', '64368122270919815842'),
+            ('core-funding-usdc-100k-shared-20261110.json', '32069929677'),
+            ('core-funding-paxg-20-v3-20261110.json', '7766441008941070997'),
+            ('core-funding-xaut-20-v3-20261110.json', '7772618'),
+            ('core-funding-basket-large-20261110.json', None),
+        )
+        for fixture, expected_funding in cases:
+            with self.subTest(fixture=fixture):
+                q, root, captured = self.captured_actual_service(fixture)
+                original, immutable = deepcopy(root), deepcopy(q.engine.registry.observed)
+                identity = None
+                if root['request']['intent'] == 0:
+                    data = root['plan']['body']['branches'][0]['data']
+                    source = root['request']['inputs'][0]['currency']
+                    for index, asset in enumerate(data['basketAssets']):
+                        if source.lower() == asset.lower():
+                            operation = f'0:acquire:{index}'
+                            route, chosen = await nominate_conversion(q, source, asset,
+                                int(data['acquisitions'][index]['amountIn']), LATEST_BLOCK)
+                            self.assertNotIn('template', chosen)
+                            self.assertEqual(chosen, root['plan']['conversions'][operation])
+                            self.assertEqual(route, data['acquisitions'][index]['route'])
+                            identity = index, operation, route, chosen
+                producer = core_funding_alternatives(q, root, LATEST_BLOCK, {})
+                try:
+                    proposal = await anext(producer)
+                    q.conversion.assert_not_awaited()
+                    if expected_funding is not None:
+                        self.assertEqual(proposal['inputs'][0]['amount'], expected_funding)
+                        self.assertLess(int(expected_funding), int(root['request']['inputs'][0]['amount']))
+                    else:
+                        self.assertEqual(proposal['inputs'], [
+                            {'currency': row['currency'], 'amount': str(row['consumed'])}
+                            for row in project_core_inputs(root, 31338)])
+                        self.assertTrue(all(int(row['amount']) < int(maximum['amount'])
+                            for row, maximum in zip(proposal['inputs'], root['inputs'], strict=True)))
+                    if identity is not None:
+                        index, operation, route, chosen = identity
+                        self.assertEqual(proposal['plan']['conversions'][operation], chosen)
+                        self.assertEqual(proposal['plan']['body']['branches'][0]['data']['acquisitions'][index]['route'], route)
+                    neutral, paid = await self.assert_actual_funding_observation(q, root, captured, proposal)
+                    if 'usdc' in fixture:
+                        # Both acquisitions share the USDC→WETH pool in the
+                        # same direction. Replay the new lots in execution
+                        # order and compare their outputs to actual Helpers.
+                        bank, canonical = {}, {}
+                        observed = {row['operation']: row for row in neutral['conversionObservations']}
+                        routes = proposal['plan']['conversions']
+                        first = routes['0:acquire:0']['branches'][0]['hops'][0]
+                        second = routes['0:acquire:1']['branches'][0]['hops'][0]
+                        self.assertEqual(first, second)
+                        for index, acquisition in enumerate(proposal['plan']['body']['branches'][0]['data']['acquisitions']):
+                            operation = f'0:acquire:{index}'
+                            path = routes[operation]['branches'][0]['hops']
+                            self.assertEqual(len(path), 2)
+                            _, output = await q.price_path(path, int(acquisition['amountIn']), LATEST_BLOCK, bank, canonical)
+                            self.assertEqual(output, int(observed[operation]['output']))
+                        self.assertEqual(paid['estimatedRetainedInputCharges'], captured['paidReducedRpc']['expected']['estimatedRetainedInputCharges'])
+                    elif 'xaut-20' not in fixture:
+                        self.assertEqual(paid['estimatedRetainedInputCharges'], [])
+                    self.assertEqual(root, original)
+                    self.assertEqual(q.engine.registry.observed, immutable)
+                finally:
+                    await producer.aclose()
+
+    @staticmethod
+    def scope_nominee(value, amount):
+        # Unpriced complete bodies control scope tests, not economic acceptance.
+        return funding_proposal(value['request'], value['plan'], amounts={
+            '0:acquire:0': amount * 3 // 5, '0:acquire:1': amount - amount * 3 // 5})
+
+    async def test_only_known_sizing_uses_priority_not_yields_or_optional_construction(self):
+        q, value, _ = self.captured_actual_service()
+        scopes, amounts = [], iter((33134152568, 32022705852, 34000000000))
+
+        async def sized(_q, _value, _measured, residuals, *_):
+            scopes.append(('sized', bool(residuals), work._bootstrap.get()))
+            await asyncio.sleep(0)
+            self.assertEqual(work._bootstrap.get(), scopes[-1][-1])
+            return self.scope_nominee(value, next(amounts))
+
+        async def compositions(*_):
+            scopes.append(('compose', work._bootstrap.get()))
+            for proposal in ():
+                yield proposal
+
+        async def fresh(*_):
+            scopes.append(('fresh', work._bootstrap.get()))
+            return {(0, 0): (1, value['plan']['conversions']['0:residual:0'])}
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized), \
+                patch('cybergold_candidate.quoter.core_funding.compose_remaining_budget', compositions), \
+                patch('cybergold_candidate.quoter.core_funding._useful_residuals', fresh):
+            proposals = []
+            async for proposal in core_funding_alternatives(q, value, LATEST_BLOCK, {}):
+                self.assertFalse(work._bootstrap.get(), 'Priority must end before yielding to the caller')
+                proposals.append(proposal)
+        self.assertEqual([row['phase'] for row in proposals],
+                         ['useful-core-residual', 'core-consumption', 'useful-core-residual'])
+        self.assertEqual(scopes, [('sized', True, True), ('sized', False, True),
+                                 ('fresh', False), ('sized', True, False)])
+        self.assertFalse(work._bootstrap.get())
+
+    async def test_failed_known_sizing_restores_priority_before_independent_proposal(self):
+        q, value, _ = self.captured_actual_service()
+        error, scopes = RuntimeError('Known sizing unavailable'), []
+
+        async def sized(*_):
+            scopes.append(work._bootstrap.get())
+            if len(scopes) == 1:
+                raise error
+            return self.scope_nominee(value, 32022705852)
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized), \
+                patch('cybergold_candidate.quoter.core_funding._useful_residuals', AsyncMock(return_value={})):
+            alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {}, core_only=True)
+            try:
+                self.assertEqual((await anext(alternatives))['phase'], 'core-consumption')
+                self.assertFalse(work._bootstrap.get())
+                with self.assertRaises(RuntimeError) as caught:
+                    await anext(alternatives)
+                self.assertIs(caught.exception, error)
+                self.assertFalse(work._bootstrap.get())
+            finally:
+                await alternatives.aclose()
+        self.assertEqual(scopes, [True, True])
+
+    async def test_cancelled_known_sizing_restores_its_callers_priority_context(self):
+        q, value, _ = self.captured_actual_service()
+        entered, restored = asyncio.Event(), []
+
+        async def sized(*_):
+            self.assertTrue(work._bootstrap.get())
+            entered.set()
+            await asyncio.Event().wait()
+
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        async def consume():
+            try:
+                await anext(alternatives)
+            finally:
+                restored.append(work._bootstrap.get())
+
+        with patch('cybergold_candidate.quoter.core_funding._sized', sized):
+            task = asyncio.create_task(consume())
+            try:
+                async with asyncio.timeout(3):
+                    await entered.wait()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                self.assertEqual(restored, [False])
+                self.assertFalse(work._bootstrap.get())
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await alternatives.aclose()
+
+    async def test_missing_measured_basket_route_still_offers_independent_core_consumption(self):
+        q, value, _ = self.captured_actual_service()
+        value = deepcopy(value)
+        assets = value['plan']['body']['branches'][0]['data']['basketAssets']
+        lots = [row['fundedInput'] for row in value['pricingEvidence']['stages']
+                if row['stage'] in ('2', '4')]
+        value['request'] = {'intent': 2, 'inputs': [
+            {'currency': asset, 'amount': lot} for asset, lot in zip(assets, lots, strict=True)],
+            'outputCurrency': value['request']['outputCurrency']}
+        value['inputs'] = deepcopy(value['request']['inputs'])
+        value['plan']['body'] = {'continuations': value['plan']['body']['branches'][0]['data']['continuations']}
+        value['plan']['allocations'] = []
+        value['pricingEvidence']['stages'] = value['pricingEvidence']['stages'][2:]
+        del value['plan']['conversions']['0:residual:0']
+        alternatives = core_funding_alternatives(q, value, LATEST_BLOCK, {})
+        try:
+            proposal = await anext(alternatives)
+            self.assertEqual(proposal['phase'], 'core-consumption')
+            self.assertEqual([row['amount'] for row in proposal['inputs']],
+                             ['4661111320113019730', '3107408'])
+            q.conversion.assert_not_awaited()
+            with self.assertRaises(KeyError):
+                await anext(alternatives)
+        finally:
+            await alternatives.aclose()
+
+    async def test_sdk_core_sizing_preserves_native_and_identity_funding(self):
+        for native, identity in ((False, False), (True, False), (False, True)):
+            with self.subTest(native=native, identity=identity):
+                q, pools = self.service(identity=identity)
+                value, _, _ = root_value(q, pools, native=native, identity=identity)
+                original = deepcopy(value)
+                proposal = await self.first(q, value)
+                self.assertEqual(proposal['phase'], 'core-consumption')
+                self.assertLess(int(proposal['inputs'][0]['amount']), 20000)
+                self.assertEqual(proposal['inputs'][0]['currency'], value['inputs'][0]['currency'])
+                data = proposal['plan']['body']['branches'][0]['data']
+                self.assertEqual(sum(int(row['amountIn']) for row in data['acquisitions']),
+                                 int(proposal['inputs'][0]['amount']))
+                for index, asset in enumerate((PAXG, OTHER)):
+                    acquisition = data['acquisitions'][index]
+                    if identity and index == 0:
+                        self.assertEqual(acquisition['amountIn'], '4000')
+                        continue
+                    chosen = proposal['plan']['conversions'][f'0:acquire:{index}']
+                    _, output = await q.price_path(chosen['branches'][0]['hops'],
+                        int(acquisition['amountIn']), BLOCK, {}, {})
+                    self.assertGreaterEqual(output, 4000)
+                    self.assertEqual(acquisition['route']['inputCurrency'].lower(),
+                                     (WETH if native else value['inputs'][0]['currency']).lower())
+                compiled = compile_plan({**value['request'], 'inputs': proposal['inputs'],
+                    'recipient': USER, 'deadline': '0'}, executable_body(proposal['plan']['body']), 99)
+                self.assertTrue(compiled['body'].startswith('0x'))
+                self.assertEqual(compiled['inputs'], proposal['inputs'])
+                self.assertEqual(value, original)
+
+    async def test_complete_helpers_observation_prices_proposal_and_retains_original(self):
+        q, pools = self.service()
+        value, simulator, provider = root_value(q, pools)
+        proposal = await self.first(q, value)
+        amounts = [int(row['amountIn']) for row in proposal['plan']['body']['branches'][0]['data']['acquisitions']]
+        stages = [stage(0, WETH, PAXG, amounts[0], 4000), stage(1, WETH, OTHER, amounts[1], 4000),
+                  stage(2, PAXG, CORE, 4000, 100), stage(3, OTHER, CORE, 4000, 0)]
+        provider.responses.append(encoded(measured(100, stages=stages, fees=(1, 0, 0))))
+        q.plan_simulator = simulator
+        result = await q.candidate({**value['request'], 'inputs': proposal['inputs']},
+                                  100, 'core-first', BLOCK, [PAXG, OTHER], [500000, 500000],
+                                  selected=proposal['plan'])
+        self.assertEqual(result['quotedOutput'], '100')
+        self.assertEqual(result['estimatedRetainedInputCharges'], [])
+        self.assertEqual(result['inputs'], proposal['inputs'])
+        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(provider.calls[0][1][1], 'latest')
+        self.assertNotIn('inputLimitObserved', result['searchCoverage'])
+        self.assertEqual(value['inputs'][0]['amount'], '20000')
+
+    async def test_search_publishes_full_incumbent_then_helpers_validated_core_reduction(self):
+        q, pools = self.service()
+        root, simulator, provider = root_value(q, pools)
+        q.discover = AsyncMock()
+        q.route_provider_factory = lambda: []
+        calls, responses = [], {}
+        async def wire(method, params):
+            provider.calls.append((method, deepcopy(params)))
+            return deepcopy(responses[params[0]['data']])
+        provider.make_request = wire
+        async def capped_helpers(request, selected, **options):
+            branches = selected['body']['branches']
+            if len(branches) != 1 or branches[0]['kind'] != 0:
+                raise QuoteFailure('quote-no-route')
+            data, stages, acquired, bank = branches[0]['data'], [], [], {}
+            for index, asset in enumerate(data['basketAssets']):
+                acquisition = data['acquisitions'][index]
+                amount = int(acquisition['amountIn'])
+                chosen = selected['conversions'][f'0:acquire:{index}']
+                _, output = await q.price_path(chosen['branches'][0]['hops'], amount, BLOCK, bank, {})
+                stages.append(stage(len(stages), WETH, asset, amount, output))
+                acquired.append(output)
+            used = min(4000, *acquired)
+            net = used * 100 // 4000
+            retained_rows = []
+            for index, (asset, amount) in enumerate(zip(data['basketAssets'], acquired, strict=True)):
+                stages.append(stage(len(stages), asset, CORE, amount, net if index == 0 else 0,
+                                    consumed=used, returned=amount-used))
+                if amount > used:
+                    stages.append(stage(len(stages), asset, CORE, amount-used, 0,
+                                        consumed=0, returned=amount-used))
+                    retained_rows.append((0, len(stages)-1, asset, amount-used))
+            # The independent leaf models a capped Core and unavailable surplus
+            # liquidity, then returns bytes through the actual Helpers decoder.
+            response = encoded(measured(net, stages=stages, fees=(1, 0, 0), retained=retained_rows))
+            compiled = compile_call(request, selected, chain=1, helpers=HELPERS,
+                                    core=CORE, contract=simulator.contract)
+            responses[compiled.params[0]['data']] = response
+            calls.append(int(request['inputs'][0]['amount']))
+            return await simulator(request, selected, **options)
+        q.plan_simulator = capped_helpers
+        events, budget = [], QuoteBudget()
+        async def update(event):
+            if event['type'] == 'qualified':
+                events.append(deepcopy(event['value']))
+                if int(event['value']['inputs'][0]['amount']) < 20000:
+                    budget.finish_selection('measured-core-reduction')
+        with patch('cybergold_candidate.quoter.search.CORE_SHARES', (100,)):
+            async with asyncio.timeout(10):
+                with budget_context(budget):
+                    result = await q.get(root['request'], update, seed=root)
+        self.assertEqual(events[0]['inputs'][0]['amount'], '20000')
+        self.assertEqual(events[0]['quotedOutput'], '100')
+        self.assertTrue(events[0]['estimatedRetainedInputCharges'])
+        self.assertEqual(result['quotedOutput'], '100')
+        self.assertLess(int(result['inputs'][0]['amount']), 20000)
+        self.assertEqual(result['estimatedRetainedInputCharges'], [])
+        self.assertNotIn('inputLimitObserved', result['searchCoverage'])
+        self.assertIn(20000, calls)
+        self.assertIn(int(result['inputs'][0]['amount']), calls)
+        self.assertTrue(all(row[0] == 'eth_call' for row in provider.calls))
+
+    async def test_100k_usdt_split_acquisitions_preserve_exact_net_core_output_after_fees(self):
+        usdt, xaut = (dict(TOKENS)[name] for name in ('usdt', 'xaut'))
+        decimals = {usdt.lower(): 6, xaut.lower(): 6, PAXG.lower(): 18, WETH.lower(): 18}
+        reserves = {usdt.lower(): 40_000_000 * 10**6, xaut.lower(): 10_000 * 10**6,
+                    PAXG.lower(): 10_000 * 10**18, WETH.lower(): 20_000 * 10**18}
+        pools = []
+        for number, (source, target) in enumerate(((usdt, PAXG), (usdt, WETH),
+                                                   (WETH, PAXG), (usdt, xaut)), 8910):
+            pool = synthetic_pool(source, target, number, 'v2')
+            for index in (0, 1):
+                currency = pool[f'token{index}']['address'].lower()
+                pool[f'token{index}']['decimals'] = decimals[currency]
+                pool[f'reserve{index}'] = str(reserves[currency])
+            pools.append(pool)
+        q = service(self, pools)
+        assets, targets = [PAXG, xaut], [4661111320113019730, 3107408]
+        async def basis(_):
+            return assets, [600000, 400000]
+        q.basis_reader, q.discover = basis, AsyncMock()
+        q.seed_routes = lambda *_: None
+        q.route_provider_factory = lambda: []
+        def hop(source, pool):
+            return {'pool': pool, 'zeroForOne': source.lower() == pool['token0']['address'].lower()}
+        paths = [[hop(usdt, pools[0])], [hop(usdt, pools[1]), hop(WETH, pools[2])]]
+        # Only acquisition topology is available: neither gold surplus nor
+        # remaining USDT can buy CYGLD on a market route in this fixture.
+        capacity_nominations(q.amm, {
+            (usdt.lower(), PAXG.lower()): [(500000, paths[0]), (0, paths[1])],
+            (usdt.lower(), xaut.lower()): [(0, [hop(usdt, pools[3])])],
+        })
+        budget_amount, expected_net = 100_000 * 10**6, 241386318399242216435
+        # Synthetic split-rounding fixture, not live-case acceptance. Mirror
+        # Core's protocol floor, followed by Helpers' floor on Core's net.
+        # Actual deployed-contract qualification remains a separate check.
+        gross_cap = 242112170686961727693
+        def fees(gross):
+            protocol = gross * 1000 // 1000000
+            return protocol, (gross-protocol) * 2000 // 1000000
+        self.assertEqual(gross_cap - sum(fees(gross_cap)), expected_net)
+        request = {'intent': 0, 'inputs': [{'currency': usdt, 'amount': str(budget_amount)}],
+                   'outputCurrency': CORE}
+        acquisitions, conversions = [], {}
+        for index, (asset, funded, selected_paths) in enumerate(zip(
+                assets, (60_000 * 10**6, 40_000 * 10**6), (paths, [[hop(usdt, pools[3])]]), strict=True)):
+            nominated = [{'amountIn': str(funded // len(selected_paths)), 'hops': path}
+                         for path in selected_paths]
+            template, chosen = encode_nomination(usdt, asset, (nominated, []))
+            acquisitions.append({'amountIn': str(funded), 'route': template})
+            conversions[f'0:acquire:{index}'] = chosen
+            conversions[f'0:residual:{index}'] = retained(asset)
+        plan = {'allocations': [{'kind': 0, 'amountIn': str(budget_amount)}], 'conversions': conversions,
+                'body': {'branches': [{'kind': 0, 'amountIn': str(budget_amount), 'data': {
+                    'basketAssets': assets, 'acquisitions': acquisitions,
+                    'continuations': [{'route': deepcopy(conversions[f'0:residual:{index}']['template']),
+                                       'feeCygld': '0'} for index in range(2)]}}]}}
+        provider, executions, sdk_calls = Provider(), [], []
+        rpc = Rpc(provider)
+        q.engine.registry.get_rpc = lambda: rpc
+        simulator = HelpersPlanSimulation(settings(), q.engine.registry, helpers=HELPERS,
+            adapter=ADAPTER, core=CORE, now=lambda: NOW)
+        real_sdk = q.engine.sdk.request
+        async def observe_sdk(payload, **options):
+            sdk_calls.append((payload.get('operation'), payload.get('mode')))
+            return await real_sdk(payload, **options)
+        q.engine.sdk.request = observe_sdk
+        async def execute_helpers(method, params):
+            provider.calls.append((method, deepcopy(params)))
+            self.assertEqual(method, 'eth_call')
+            _, values = simulator.contract.decode_function_input(params[0]['data'])
+            body = branches(values)
+            if len(body) != 1 or body[0][0] != 0:
+                raise QuoteFailure('quote-no-route')
+            encoded_assets, lots, continuations = CODEC.decode([CORE_BUY], body[0][2])[0]
+            self.assertEqual([asset.lower() for asset in encoded_assets], [asset.lower() for asset in assets])
+            self.assertEqual(sum(lot[0] for lot in lots), values['plan']['inputs'][0]['amount'])
+            acquired, stages, bank, split_lots = [], [], {}, []
+            # Decode the actual Helpers calldata and price its encoded ppm
+            # splits and physical hops, rather than using inverse nominations.
+            for asset, (funded, template) in zip(encoded_assets, lots, strict=True):
+                allocated, output, portions = 0, 0, []
+                for index, (share, steps) in enumerate(template[3]):
+                    portion = funded - allocated if index == len(template[3])-1 else funded * share // 1000000
+                    allocated += portion
+                    source, physical = template[0], []
+                    for kind, target, fee, _ in steps:
+                        self.assertEqual(kind, 0)
+                        pool = next(row for row in pools if {
+                            row['token0']['address'].lower(), row['token1']['address'].lower()
+                        } == {source.lower(), target.lower()})
+                        self.assertEqual(fee, pool['feePips'])
+                        physical.append(hop(source, pool))
+                        source = target
+                    used, received = await q.price_path(physical, portion, BLOCK, bank, {})
+                    self.assertEqual(used, portion)
+                    output += received
+                    portions.append(portion)
+                acquired.append(output)
+                split_lots.append(portions)
+                stages.append(stage(len(stages), usdt, asset, funded, output))
+            gross = min(gross_cap, *(amount * gross_cap // target
+                                     for amount, target in zip(acquired, targets, strict=True)))
+            protocol_fee, helper_fee = fees(gross)
+            net = gross - protocol_fee - helper_fee
+            residuals, retained_rows = [], []
+            for index, (asset, amount, target) in enumerate(zip(encoded_assets, acquired, targets, strict=True)):
+                consumed = (target * gross + gross_cap - 1) // gross_cap
+                residual = amount - consumed
+                residuals.append(residual)
+                stages.append(stage(len(stages), asset, CORE, amount, gross-protocol_fee if index == 0 else 0,
+                                    consumed=consumed, returned=residual))
+                self.assertEqual(continuations[index][0][3], ())
+                if residual:
+                    stages.append(stage(len(stages), asset, CORE, residual, 0, consumed=0, returned=residual))
+                    retained_rows.append((0, len(stages)-1, asset, residual))
+            executions.append({'funding': values['plan']['inputs'][0]['amount'], 'acquired': acquired,
+                               'gross': gross, 'net': net, 'fees': (protocol_fee, helper_fee),
+                               'retained': residuals, 'splitLots': split_lots})
+            return encoded(measured(net, stages=stages, fees=(protocol_fee, helper_fee, 0), retained=retained_rows))
+        provider.make_request, q.plan_simulator = execute_helpers, simulator
+        root = await simulator(request, plan)
+        self.assertEqual([row['consumed'] for row in project_core_inputs(root, 1)], targets)
+        self.assertEqual(root['quotedOutput'], str(expected_net))
+        self.assertEqual(plan['body']['branches'][0]['data']['acquisitions'][0]['route']['routes'][0]['sharePpm'], 500000)
+        initial_retained = executions[0]['retained']
+        events, budget = [], QuoteBudget()
+        async def update(event):
+            if event['type'] == 'qualified':
+                value = event['value']
+                events.append(deepcopy(value))
+                if int(value['inputs'][0]['amount']) < budget_amount and int(value['quotedOutput']) == expected_net:
+                    budget.finish_selection('equal-net-smaller-usdt-funding')
+        with patch('cybergold_candidate.quoter.search.CORE_SHARES', (100,)):
+            async with asyncio.timeout(15):
+                with budget_context(budget):
+                    result = await q.get(request, update, seed=root)
+        self.assertEqual(events[0]['inputs'][0]['amount'], str(budget_amount))
+        self.assertEqual(result['quotedOutput'], str(expected_net))
+        self.assertLess(int(result['inputs'][0]['amount']), budget_amount,
+                        [(row['funding'], row['net']) for row in executions])
+        selected = next(row for row in executions if row['funding'] == int(result['inputs'][0]['amount'])
+                        and row['net'] == expected_net)
+        self.assertEqual(selected['gross'], gross_cap)
+        self.assertGreater(selected['gross'], selected['net'])
+        self.assertEqual(result['fees']['coreProtocolFeeCygld'], str(selected['fees'][0]))
+        self.assertEqual(result['fees']['coreHelpersFeeCygld'], str(selected['fees'][1]))
+        self.assertTrue(all(fee > 0 for fee in selected['fees']))
+        self.assertEqual(result['fees']['marketFeeCygld'], '0')
+        self.assertEqual(result['estimatedRecipientOutputs'][0]['amount'], str(expected_net))
+        self.assertTrue(all(final < initial for final, initial in zip(selected['retained'], initial_retained, strict=True)))
+        self.assertTrue(all(amount >= target for amount, target in zip(selected['acquired'], targets, strict=True)))
+        self.assertEqual(len(selected['splitLots'][0]), 2)
+        self.assertTrue(any(mode == 'exactOut' for _, mode in sdk_calls))
+        self.assertTrue(any(mode == 'exactIn' for _, mode in sdk_calls))
+        self.assertNotIn('inputLimitObserved', result['searchCoverage'])
+        self.assertEqual(request['inputs'][0]['amount'], str(budget_amount))
+
+    async def test_primary_market_keeps_actual_sdk_downstream_partial_funding(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        reduced = await self.first(q, value)
+        rows = project_core_inputs(value, 1)
+        proposals = [row async for row in compose_remaining_budget(q, value, reduced, rows, BLOCK, {})]
+        self.assertEqual(len(proposals), 2)
+        available = 20000 - int(reduced['inputs'][0]['amount'])
+        for proposal in proposals:
+            branch = next(row for row in proposal['plan']['body']['branches'] if row['kind'] == 1)
+            self.assertGreater(int(branch['amountIn']), 0)
+            self.assertLess(int(branch['amountIn']), available)
+            self.assertEqual(int(proposal['inputs'][0]['amount']),
+                             int(reduced['inputs'][0]['amount']) + int(branch['amountIn']))
+        market_first = next(row for row in proposals if row['plan']['body']['branches'][0]['kind'] == 1)
+        chosen = market_first['plan']['conversions']['0:market']
+        self.assertGreater(len(chosen['branches'][0]['hops']), 1)
+        _, output = await q.price_path(chosen['branches'][0]['hops'],
+            int(market_first['plan']['body']['branches'][0]['amountIn']), BLOCK, {}, {})
+        self.assertGreater(output, 0)
+
+    async def test_useful_partial_residual_keeps_untradable_sibling_and_both_market_orders(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        convert = q.conversion
+        async def liquidity(source, *args, **kwargs):
+            if source.lower() == OTHER.lower():
+                raise QuoteFailure('quote-no-route')
+            return await convert(source, *args, **kwargs)
+        q.conversion = liquidity
+        proposals = await self.collect(q, value)
+        reduced = next(row for row in proposals if row['phase'] == 'core-consumption')
+        useful = next(row for row in proposals if row['phase'] == 'useful-core-residual')
+        self.assertGreater(int(useful['inputs'][0]['amount']), int(reduced['inputs'][0]['amount']))
+        self.assertLess(int(useful['inputs'][0]['amount']), 20000)
+        continuations = useful['plan']['body']['branches'][0]['data']['continuations']
+        self.assertTrue(continuations[0]['route']['routes'])
+        self.assertEqual(continuations[1]['route']['routes'], [])
+        self.assertTrue(all(route['steps'] for route in continuations[0]['route']['routes']))
+        measured_inputs = project_core_inputs(value, 1)
+        compositions = [row async for row in compose_remaining_budget(
+            q, value, reduced, measured_inputs, BLOCK, {})]
+        self.assertEqual(len(compositions), 2)
+        self.assertEqual({tuple(branch['kind'] for branch in row['plan']['body']['branches'])
+                          for row in compositions}, {(0, 1), (1, 0)})
+        for row in compositions:
+            self.assertLessEqual(int(row['inputs'][0]['amount']), 20000)
+            self.assertEqual(int(row['inputs'][0]['amount']), sum(int(branch['amountIn'])
+                for branch in row['plan']['body']['branches']))
+            core_index = next(index for index, branch in enumerate(row['plan']['body']['branches']) if branch['kind'] == 0)
+            self.assertIn(f'{core_index}:acquire:0', row['plan']['conversions'])
+            self.assertIn(f'{1-core_index}:market', row['plan']['conversions'])
+
+    async def test_fresh_residual_direction_uses_encoded_zero_paths_and_unknown_final_remainder(self):
+        # Scope/direction control only. The supplied continuation deliberately
+        # has capture-style branches without amounts; its template owns which
+        # paths can receive a lot. No synthetic Core outcome is acceptance.
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        original = deepcopy(value)
+        tail = synthetic_pool(WETH, CORE, 8999, 'v2')
+        def hop(source, pool):
+            return {'pool': pool, 'zeroForOne': source.lower() == pool['token0']['address'].lower()}
+        opposed = [hop(PAXG, pools[0]), hop(WETH, tail)]
+        allowed = [hop(PAXG, pools[2])]
+        measured = project_core_inputs(value, 1)
+        for final_opposed in (False, True):
+            with self.subTest(final_opposed=final_opposed):
+                branches = ([{'amountIn': '1', 'hops': allowed}, {'amountIn': '1', 'hops': opposed}]
+                            if final_opposed else
+                            [{'amountIn': '0', 'hops': opposed}, {'amountIn': '1', 'hops': allowed}])
+                _, chosen = encode_nomination(PAXG, CORE, (branches, []))
+                self.assertTrue(all('amountIn' not in row for row in chosen['branches']))
+                async def conversion(source, *args, capture, **kwargs):
+                    # Unknown Core lots must be checked before the adapter
+                    # selects and commits any candidate's private pool bank.
+                    self.assertIs(kwargs.get('unknown'), True)
+                    if source.lower() == OTHER.lower():
+                        raise QuoteFailure('quote-no-route')
+                    capture.update(deepcopy(chosen), _observation={'consumedInput': '50'})
+                q.conversion = AsyncMock(side_effect=conversion)
+                with patch('cybergold_candidate.quoter.core_funding._acquisition_bank', AsyncMock(return_value={})):
+                    residuals = await _useful_residuals(q, value, measured, BLOCK, {})
+                if final_opposed:
+                    self.assertEqual(residuals, {}, 'A zero-weight final path can receive a fractional remainder')
+                else:
+                    self.assertEqual(residuals[(0, 0)], (50, chosen),
+                                     'A permanently zero nonfinal path cannot oppose the acquisition')
+                    self.assertNotIn((0, 1), residuals)
+                self.assertEqual(value, original)
+
+    async def test_direct_basket_uses_measured_vector_without_inverse_or_scalar_sum(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        value['request'] = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '9969'},
+            {'currency': OTHER, 'amount': '9969'}], 'outputCurrency': CORE}
+        value['inputs'] = deepcopy(value['request']['inputs'])
+        value['plan']['body'] = {'continuations': value['plan']['body']['branches'][0]['data']['continuations']}
+        value['plan']['allocations'] = []
+        value['pricingEvidence']['stages'] = value['pricingEvidence']['stages'][2:]
+        with patch('cybergold_candidate.quoter.core_funding.inverse_conversion',
+                   side_effect=AssertionError('Basket input is already the asset vector')):
+            proposal = await self.first(q, value)
+        self.assertEqual(proposal['inputs'], [{'currency': PAXG, 'amount': '4000'},
+                                             {'currency': OTHER, 'amount': '4000'}])
+        self.assertEqual(proposal['plan']['allocations'], [])
+
+    async def test_missing_core_evidence_and_market_only_do_no_sdk_work(self):
+        q = SimpleNamespace(engine=SimpleNamespace(registry=SimpleNamespace(chain=1)), conversion=AsyncMock())
+        for value in ({'request': {'intent': 1}}, {'request': {'intent': 0}, 'pricingEvidence': {}},
+                {'request': {'intent': 0, 'inputs': [{'currency': WETH, 'amount': '1'}], 'outputCurrency': CORE},
+                 'plan': {'body': {'branches': []}}, 'pricingEvidence': {'stages': []}}):
+            self.assertEqual([row async for row in core_funding_alternatives(q, value, BLOCK, {})], [])
+        q.conversion.assert_not_awaited()
+
+    async def test_fully_consumed_basket_does_not_reprice_unused_continuations(self):
+        request = {'intent': 2, 'inputs': [{'currency': PAXG, 'amount': '100'},
+            {'currency': OTHER, 'amount': '100'}], 'outputCurrency': CORE}
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        value.update(request=request, inputs=deepcopy(request['inputs']),
+            plan={'allocations': [], 'conversions': {}, 'body': {'continuations': [
+                {'route': {'inputCurrency': asset, 'outputCurrency': asset, 'routes': []}, 'feeCygld': '0'}
+                for asset in (PAXG, OTHER)]}})
+        value['pricingEvidence']['stages'] = [
+            {'inputCurrency': asset, 'outputCurrency': CORE, 'fundedInput': '100',
+             'consumedInput': '100', 'returnedInput': '0', 'amountOut': '100' if index == 0 else '0'}
+            for index, asset in enumerate((PAXG, OTHER))]
+        self.assertEqual([row async for row in core_funding_alternatives(q, value, BLOCK, {})], [])
+
+    async def test_failed_inverse_still_allows_independent_useful_residual_proposal(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        from cybergold_candidate.quoter.inverse import inverse_conversion
+        called = False
+        async def first_fails(*args, **kwargs):
+            nonlocal called
+            if not called:
+                called = True
+                raise QuoteFailure('quote-no-route')
+            return await inverse_conversion(*args, **kwargs)
+        with patch('cybergold_candidate.quoter.core_funding.inverse_conversion', first_fails):
+            proposals = await self.collect(q, value)
+        self.assertTrue(any(row['phase'] == 'useful-core-residual' for row in proposals))
+
+    async def test_zero_weight_acquisition_needs_no_unused_route_metadata(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        asset = '0x' + '77' * 20
+        data = value['plan']['body']['branches'][0]['data']
+        data['basketAssets'].append(asset)
+        data['acquisitions'].append({'amountIn': '0', 'route': {
+            'inputCurrency': WETH, 'outputCurrency': asset, 'routes': []}})
+        data['continuations'].append({'route': retained(asset)['template'], 'feeCygld': '0'})
+        value['pricingEvidence']['stages'].append({'inputCurrency': asset, 'outputCurrency': CORE,
+            'fundedInput': '0', 'consumedInput': '0', 'returnedInput': '0', 'amountOut': '0'})
+        proposals = await self.collect(q, value)
+        self.assertTrue(any(row['phase'] == 'useful-core-residual' for row in proposals))
+        for proposal in proposals:
+            core = next(row for row in proposal['plan']['body']['branches'] if row['kind'] == 0)
+            self.assertEqual(core['data']['acquisitions'][2]['amountIn'], '0')
+
+    async def test_zero_acquisition_preserves_the_canonical_bare_nomination(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        source, asset = value['request']['inputs'][0]['currency'], '0x' + '77' * 20
+        route, chosen = await nominate_conversion(q, source, asset, 0, BLOCK)
+        self.assertEqual(chosen['branches'], [])
+        self.assertNotIn('template', chosen)
+        data = value['plan']['body']['branches'][0]['data']
+        data['basketAssets'].append(asset)
+        data['acquisitions'].append({'amountIn': '0', 'route': route})
+        data['continuations'].append({'route': retained(asset)['template'], 'feeCygld': '0'})
+        # This present, producer-shaped entry differs from the older fixture
+        # that omitted the unused conversion and already passed before the fix.
+        value['plan']['conversions']['0:acquire:2'] = chosen
+        value['pricingEvidence']['stages'].append({'inputCurrency': asset, 'outputCurrency': CORE,
+            'fundedInput': '0', 'consumedInput': '0', 'returnedInput': '0', 'amountOut': '0'})
+        original = deepcopy(value)
+        targets = project_core_inputs(value, 1)
+        proposal = await self.first(q, value)
+        self.assertEqual(proposal['plan']['conversions']['0:acquire:2'], chosen)
+        self.assertEqual(proposal['plan']['body']['branches'][0]['data']['acquisitions'][2],
+                         {'amountIn': '0', 'route': route})
+        self.assertEqual([row['consumed'] for row in targets], [4000, 4000, 0])
+        self.assertEqual(value, original)
+
+    async def test_core_only_keeps_core_and_residual_sizing_without_primary_market(self):
+        q, pools = self.service()
+        value, _, _ = root_value(q, pools)
+        proposals = [row async for row in core_funding_alternatives(q, value, BLOCK, {}, core_only=True)]
+        self.assertIn('core-consumption', {row['phase'] for row in proposals})
+        self.assertIn('useful-core-residual', {row['phase'] for row in proposals})
+        self.assertTrue(all(branch['kind'] == 0 for row in proposals
+                            for branch in row['plan']['body']['branches']))
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -11,12 +11,13 @@ from web3 import Web3
 
 from ..helpers_execution import ABI
 from ..market_fee import get_market_fee_rate, quoted_fee
-from ..preview_errors import preview_error
+from ..preview_errors import KnownPreviewError, preview_error
 from ..quote_errors import rpc_failure
 from ..recovery_rpc import abi_value
 from ..quote_flow import stage
 from .plan_call import METHOD, compile_call
 from .plan_transport import execute_plan_call
+from .pool_directions import conflicting_pool, quote_directions
 
 
 
@@ -62,13 +63,18 @@ class StageProjection:
         return output
 
 
-def project_buy_fees(request, body, stages, chain, core):
+def project_buy_fees(request, body, stages, chain, core, *, core_inputs=None):
     """Fee-neutral swaps have identical inputs/state; fees are paid at the end."""
     projection, total, continued = StageProjection(stages), 0, False
     def residuals(assets, continuations, branch):
         nonlocal total, continued
         for index, (asset, row) in enumerate(zip(assets, continuations, strict=True)):
-            residual = int(projection.take()['returnedInput'])
+            measured = projection.take()
+            residual = int(measured['returnedInput'])
+            if core_inputs is not None:
+                core_inputs.append({'branch': branch, 'index': index, 'currency': asset,
+                    'acquired': int(measured['fundedInput']),
+                    'consumed': int(measured['consumedInput']), 'residual': residual})
             if not residual:
                 row['feeCygld'] = '0'
                 continue
@@ -96,6 +102,23 @@ def project_buy_fees(request, body, stages, chain, core):
                                           f'{index}:acquire:{asset_index}')
                 residuals(data['basketAssets'], data['continuations'], index)
     return total, projection.observations, continued
+
+
+def project_core_inputs(value, chain):
+    """Read Core consumption from the same ordered stages used for buy fees.
+
+    These request-local construction amounts are not additional quote fields.
+    Aggregate retained charges can also contain AMM returns, so they cannot
+    supply this per-Core, per-asset consumption.
+    """
+    evidence = value.get('pricingEvidence') or {}
+    stages = evidence.get('stages', evidence.get('rawTradeResult', {}).get('stages'))
+    if stages is None or value['request']['intent'] not in (0, 2):
+        return []
+    result = []
+    project_buy_fees(value['request'], deepcopy(value['plan']['body']), stages, chain,
+                     value['request']['outputCurrency'], core_inputs=result)
+    return result
 
 
 def project_sell_results(request, body, measured):
@@ -265,4 +288,9 @@ class HelpersPlanSimulation:
                            for row in measured['stages']]})
         if request['intent'] != 2:
             value.update(quotedInput=request['inputs'][0]['amount'], inputMaximum=request['inputs'][0]['amount'])
+        opposed = conflicting_pool(quote_directions(value, self.registry.chain))
+        if opposed is not None:
+            raise KnownPreviewError('opposed-pool-directions',
+                'An exchange pool is used in opposite directions in one trade.',
+                constraint={'kind': 'opposed-pool-directions', 'pool': opposed})
         return value

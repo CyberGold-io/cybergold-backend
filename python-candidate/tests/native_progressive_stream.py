@@ -8,7 +8,7 @@ from copy import deepcopy
 import json
 import socket
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import uvicorn
@@ -47,7 +47,6 @@ class NativeProgressiveStream(ProgressiveFixture):
         service = self.service(script)
         original_save = service.store.save
         async def save(*args, **kwargs):
-            self.assertTrue(search_drained.is_set())
             value = await original_save(*args, **kwargs)
             saved.set(); return value
         service.store.save = AsyncMock(side_effect=save)
@@ -59,6 +58,9 @@ class NativeProgressiveStream(ProgressiveFixture):
                 frame = json.loads(await anext(response.aiter_lines()))
                 self.assertEqual(frame['type'], 'qualified')
                 self.assertEqual(frame['value']['quotedOutput'], '100')
+                # Completed ready observations persist independently of the
+                # still-running search; caller disconnect owns its later drain.
+                await asyncio.wait_for(saved.wait(), 2)
                 self.assertFalse(search_drained.is_set())
                 # Closing this actual TCP response simulates stopping the
                 # caller's search; no explicit cancel/session endpoint exists.
@@ -87,6 +89,50 @@ class NativeProgressiveStream(ProgressiveFixture):
         self.assertEqual([row['type'] for row in remaining], ['qualified', 'complete'])
         self.assertEqual(remaining[0]['value']['quotedOutput'], '200')
         self.assertEqual(remaining[-1]['value'], remaining[0]['value'])
+
+    async def test_idle_tcp_reads_receive_blank_bytes_while_same_producer_waits_then_complete(self):
+        release, drained = asyncio.Event(), asyncio.Event()
+        producer_calls = []
+        async def script(value, callback, **_):
+            producer_calls.append(1)
+            try:
+                await callback({'type': 'qualified', 'value': self.value(100)})
+                await release.wait()
+                return self.value(100)
+            finally:
+                drained.set()
+        endpoint = await self.launch(self.service(script))
+        pending = None
+        with patch('cybergold_candidate.economic_quotes.STREAM_KEEPALIVE_SECONDS', .02):
+            try:
+                async with httpx.AsyncClient(timeout=3) as client:
+                    async with client.stream('POST', endpoint+'/api/economic-quotes/stream',
+                                             json=economic_request()) as response:
+                        chunks = response.aiter_raw()
+                        first = await anext(chunks)
+                        frames = [json.loads(line) for line in first.splitlines() if line.strip()]
+                        self.assertEqual([frame['type'] for frame in frames], ['qualified'])
+                        for _ in range(3):
+                            pending = asyncio.create_task(anext(chunks))
+                            # The idle probe does not cancel the real read or
+                            # producer. Only caller cleanup owns cancellation.
+                            done, _ = await asyncio.wait((pending,), timeout=.5)
+                            self.assertFalse(release.is_set() or drained.is_set())
+                            self.assertTrue(done, 'The held producer left its HTTP stream idle')
+                            self.assertEqual(pending.result().strip(), b'')
+                            pending = None
+                        self.assertEqual(producer_calls, [1])
+                        release.set()
+                        remaining = b''.join([chunk async for chunk in chunks])
+                        frames.extend(json.loads(line) for line in remaining.splitlines() if line.strip())
+                        self.assertEqual([frame['type'] for frame in frames], ['qualified', 'complete'])
+                        self.assertEqual(frames[-1]['value']['quotedOutput'], '100')
+                        self.assertTrue(drained.is_set())
+            finally:
+                if pending is not None and not pending.done():
+                    pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+                release.set()
 
 
 if __name__ == '__main__':

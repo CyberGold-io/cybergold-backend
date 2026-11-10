@@ -63,6 +63,7 @@ def matrix_cases():
     other = synthetic_pool(WETH, OTHER, 905, 'v3', liquidity=10**10)
     bridge = synthetic_pool(PAXG, OTHER, 906, 'v2')
     bridge.update(reserve0='10000000', reserve1='10000000')
+    continuation_bridge = synthetic_pool(PAXG, OTHER, 913, 'v3', liquidity=10**10)
     prefix_connector = synthetic_pool(WETH, PAXG, 907, 'v2')
     prefix_connector.update(reserve0=str(10**12), reserve1=str(10**12))
     narrow_anchor = synthetic_pool(PAXG, CORE, 908, 'v3', liquidity=10**6)
@@ -96,9 +97,9 @@ def matrix_cases():
         MatrixCase('market-plus-core', 'market-plus-core', (standard, other, bridge, anchor),
                    deepcopy(request), True,
                    'Both ordinary Market and Core basket acquisition/continuation are evaluated.'),
-        MatrixCase('core-shared-acquisition', 'market-plus-core', (standard, bridge, anchor),
+        MatrixCase('core-shared-acquisition', 'market-plus-core', (standard, bridge, continuation_bridge, anchor),
                    deepcopy(request), True,
-                   'One supported scalar input: its two Core basket acquisitions share WETH/PAXG state.'),
+                   'The two Core basket acquisitions share WETH/PAXG state; independent V2/V3 bridges allow a compatible OTHER residual continuation.'),
         MatrixCase('core-disjoint-asymmetric-amm', 'market-plus-core', (*disjoint_pools, anchor),
                    {**deepcopy(request), 'inputs': [{'currency': WETH, 'amount': '3000'}]}, True,
                    'Disjoint basket acquisitions each offer a thin V2 pool at a modest price premium and a deep V3 alternative; actual SDK curves expose a finer-than-25% split opportunity below the unchanged synthetic Core cap.'),

@@ -40,6 +40,8 @@ It is then a **limited-budget quote**, but its plan and simulation are complete.
 A **full-budget quote** allocates the complete ordered input vector to the plan;
 some assets may still be retained rather than exchanged. Neither term says
 that exploration is finished, the result is optimal or a real wallet can fund it.
+An unallocated part of the request stays outside the plan; an acquired asset
+returned by an encoded action is instead a disclosed retained charge.
 
 ## 1. Intent becomes a canonical economic request
 
@@ -94,11 +96,66 @@ AlphaRouter, UniRoute local, UniRoute API and GuideStar API. They overlap; they
 are not five sequential services every quote must traverse. Their hints feed
 the same AMM adapter for market-only and market-plus-Core plans.
 
+A trade may share a physical pool in the same direction. Opposite-direction
+use within that trade is excluded. Crossed supplier hints can supply a union
+of pools from which existing discovery finds shorter compatible paths. No
+additional API request is needed for that reconstruction.
+
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
 again. A pure-market plan does not depend on the Core basket basis. A rejected
 Core issuance can nominate the implemented residual-retention alternative,
 which must receive its own complete Helpers observation.
+
+Funding alternatives use one proposal workflow while keeping their arithmetic
+specific to each case. Measured unused input can be removed even when a whole
+branch consumes zero: that branch keeps its position, routes and metadata with
+an explicit zero funded amount. The complete request must still fund a positive
+amount. For a mixed CYGLD sale, the Core redemption amount stays unchanged while
+market funding uses measured consumption plus the existing market fee.
+A successful Core purchase supplies measured basket
+consumption and each existing continuation's useful input consumption. The
+workflow first reuses those measured amounts and encoded continuations to
+nominate smaller acquisitions for Core plus the useful residual. It also
+offers pure-Core funding before requesting fresh market paths. Backward
+exact-output pricing supplies both acquisition proposals; direct basket
+issuance uses the measured input vector without acquisition swaps.
+
+Those known proposals can then be combined with a market purchase using the
+remaining request budget, in either order. Their validation, both market
+compositions and fresh residual-route exploration progress independently;
+waiting for one does not serialize the others. Each alternative uses the
+same complete-plan evaluation and selection workflow.
+
+Core acquisition sizing uses exact-output SDK prices, including pool fees.
+A single path with distinct physical pools is priced directly at the required
+output, without replaying its original larger budget. An unchanged measured
+acquisition is reused when its pools are independent of all other operations
+in the proposal. Internal native transitions and split paths retain the existing
+ordered inverse arithmetic.
+A direct ceiling calculation funds every encoded path with at least its
+required input after percentage rounding. One forward replay advances the
+private pool state; complete Helpers simulation measures the recipient's net
+output and all applicable fees.
+
+Identity and zero acquisitions change only their funded amount. Their existing
+routes and unpriced metadata stay intact; resizing does not require a priced
+conversion template for a route that is not being replaced.
+
+The known Core-plus-residual and pure-Core sizing work uses the existing
+bootstrap priority within the shared eight engine permits. Complete funding
+proposals use that priority for their Helpers call. These scopes end before
+yielding a proposal or starting optional construction. SQL-neighbor priority
+also covers only the complete candidate call; its recovery and follow-up work
+does not inherit priority. Fresh routing and composition construction keep
+ordinary admission, and running work is not preempted.
+
+These amounts are proposals, including their split-path and rounding results.
+Each changed complete body returns to Helpers before selection. One root
+observation owns a finite pass over its alternatives; derived results do not
+recursively start another Core-sizing pass. A distinct funded route, measured
+result or provider revision can start further work. A smaller result does not
+establish a global input limit or promise that the best spending amount has been found.
 
 **Timing coverage:** the current evidence does not isolate every dependency of
 the ultimately selected candidate. Discovery, SDK work, Core reads and replay
@@ -112,6 +169,11 @@ engine permission or shares an identical call, then invokes Helpers through
 outputs, fees, retained charges and bounds. One unshared call normally measures
 all encoded market/Core actions in their actual order, including shared-pool
 effects; it is not one validation call per route leg.
+
+The projected executable routes must respect the same pool-direction rule.
+Receipt-proven zero residuals do not use their dormant routes; unknown amounts
+are not treated as zero. This rule also applies to stored quote publication
+and fresh transaction preparation. A rejection identifies the opposed pool.
 
 This is a simulation. Funding overrides supply only the synthetic payer's
 permitted balances and allowances. Protocol reserves, supply, pools and contract
@@ -150,6 +212,12 @@ The selected tuple is encoded as a complete newline-delimited JSON record and
 passed to the server transport. The App's proxy forwards the stream without
 waiting for the search to finish. Both server and streaming proxy request that
 their receiving proxy avoid buffering; this control does not prove byte arrival.
+
+While the economic quote stream waits for its next queued event, 15 seconds
+without an event produces a blank newline to keep idle HTTP readers active.
+Clients ignore that empty line; it carries no quote or completion meaning.
+Only the queue wait is timed. Search continues, and disconnect still cancels
+and drains the stream's producer through its existing owner.
 
 Network chunks can split a record or contain several records. The browser
 accumulates a complete line, parses its JSON, and passes the selected quote to
@@ -248,6 +316,95 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-10 - Remove unused branch funding, including mixed CYGLD sales
+
+- Allow a measured zero-consumption branch to carry zero funding without
+  preventing productive siblings from reducing their input. Keep branch
+  positions and conversion identities; require positive aggregate funding.
+- Preserve the nominal Core redemption amount in a mixed CYGLD sale while
+  sizing its market branches with the existing measured-input fee formula.
+- Retain complete Helpers validation and output-first selection. No branch
+  deletion, additional route discovery, inverse or amount iteration is added.
+- Update the technical reference, market/Core diagram and linked process PDF.
+
+### 2026-11-10 - Direct Core funding and compatible pool directions
+
+- Price a simple physical path directly with exact-output SDK arithmetic;
+  reuse an unchanged independent acquisition instead of replaying its larger
+  budget. Preserve existing split ceilings, pool fees and final Helpers authority.
+- Let funded-proposal validation, both remaining-budget compositions and fresh
+  residual exploration run under separate existing task owners. Give a repaired
+  route its own finite sizing pass; sizing-only children remain nonrecursive.
+- Exclude opposed physical-pool use within one trade while retaining
+  same-direction sharing. Rebuild crossed hints using their existing union graph;
+  apply the same rule to measured quotes, stored publication and fresh preparation.
+- Share integer split weights with route encoding so the pure direction check
+  does not repeatedly lower routes or checksum their addresses.
+- Resize identity and zero acquisitions without replacing their unchanged
+  routes or requiring metadata their original nominations do not carry.
+- Update this reference, the technical reference, market/Core diagram and linked
+  process PDF together. No iterative amount solver, extra API discovery or new
+  execution ABI is introduced.
+
+### 2026-11-09 - Keep idle economic quote streams active
+
+- Emit a blank newline after a 15-second idle event-queue wait, without
+  publishing a quote frame or adding a producer/search deadline.
+- Preserve selected/full-funding diagnostics, quote arithmetic, ranking,
+  ordinary terminal frames and disconnect-owned cancellation/cleanup.
+- Update the transport reference; the delivery dependencies shown in the
+  current-process diagrams and linked PDF remain unchanged.
+
+### 2026-11-09 - Scope ready Core funding to the existing pricing priority
+
+- Use the existing bootstrap admission lane for measured Core-plus-useful
+  residual and pure-Core sizing, and the Helpers calls for complete funding
+  proposals, within the unchanged eight engine permits.
+- End sizing priority before yielding. Scope SQL-neighbor priority to its
+  candidate call so optional follow-up discovery and recovery stay ordinary.
+- Preserve ordinary construction, permit cleanup, original input maxima,
+  fee arithmetic, proposal evaluation and output-first ranking.
+
+### 2026-11-09 - Offer measured useful funding before fresh market discovery
+
+- Reuse existing Helpers-measured continuation consumption and encoded routes
+  to nominate Core-plus-useful-residual funding before optional route discovery.
+- Offer that proposal and pure-Core funding before their remaining-budget
+  market compositions; retain fresh residual rerouting and its compositions.
+- Keep exact-output acquisition sizing, complete Helpers evaluation, ordinary
+  proposal failures, input maxima and output-first ranking unchanged.
+- Update the technical reference, market/Core diagram and linked process PDF.
+
+### 2026-11-09 - Correct encoded Core acquisition rounding
+
+- Use direct ceiling division over the
+  exact-output path inputs and their encoded percentage shares.
+- Preserve tiny positive path inputs with a positive share; the final path
+  keeps the integer remainder. Replay the resulting acquisition once to advance
+  private pool state, then use complete Helpers evaluation for net output/fees.
+- Keep fee pricing, quote ranking, prefix arithmetic and ordinary proposal
+  failure unchanged; update regressions, technical reference and diagram/PDF.
+
+### 2026-11-09 - Share funding proposals and size acquisitions from Core consumption
+
+- Centralize explicit funded-plan edits for measured unused input, partial-AMM
+  recovery, basket vectors and supply-limited sales. Neighboring-budget replay
+  retains its topology/ordering builder within the common proposal/evaluation
+  workflow.
+- Read Core consumption internally from the existing ordered Helpers stages;
+  add no public quote field, contract ABI or separate eligibility condition.
+- Reuse backward exact-output arithmetic to nominate Core-needed acquisitions,
+  useful residual quantities and resized Core/market combinations. Every changed
+  body still receives a complete Helpers observation before economic selection.
+- Keep each root's transformation pass finite and retain existing cancellation,
+  deduplication, error behavior, preparation bounds and output-first ranking.
+  Descriptive funding phases do not manufacture observed input-limit evidence.
+- Remove the disconnected reconstruction path after moving its economic
+  regression and owned-fork qualification consumers onto the active workflow.
+  Retain supported exact-output/numeric interfaces and their specialized solver.
+- Update the technical reference, implementation map, market/Core diagram and
+  linked process PDF with the mirrored implementation.
 
 ### 2026-11-08 - Explain the quote journey with dated timing examples
 

@@ -35,10 +35,13 @@ from ..rpc_block_context import LATEST_BLOCK, rpc_block_parameter
 from .amm import price_path, PartialPath
 from .discovery import paths, route_candidates
 from .ranking import prefer_completed
+from .quote_book import QuoteBook
 from .reuse_estimate import input_limit_observed
 from .contracts import SearchSession
 from .exploration import explore
-from .funding import measured_funding_proposal, cached_core_funding
+from .funding import measured_funding_proposal, cached_core_funding, direct_basket_funding
+from .core_funding import core_funding_alternatives, compose_remaining_budget
+from .plan_simulation import project_core_inputs
 from .residual_retention import residual_retention_proposal
 from .reuse_routes import neighbor_proposals, proposal_identity, funded_route_identity
 from .path_families import quote_path_family
@@ -344,38 +347,8 @@ class Quoter:
         return request
 
     async def direct_basket_funding(self, request, block):
-        """Offer proportional/capacity funding from cached construction facts.
-
-        This is only a nomination. It never reads a supply/amount preview before
-        trying the ordinary full plan; Helpers measures any resulting body.
-        """
-        from ..basket_arithmetic import ceil_div
-        state = deepcopy(self.core_state_cache.value)
-        if request['intent'] == 3:
-            supply = state.get('supply')
-            if supply is None:
-                return None
-            amount = min(int(request['inputs'][0]['amount']), int(supply))
-            return ([{**request['inputs'][0], 'amount': str(amount)}]
-                    if amount and amount < int(request['inputs'][0]['amount']) else None)
-        if request['intent'] != 2:
-            return None
-        units, weights = state.get('conversions'), state.get('weights')
-        if not units or not weights:
-            return None
-        budgets = [int(row['amount']) for row in request['inputs']]
-        try:
-            gross = min((budget * int(unit) // 10**18) * 1_000_000 // int(weight)
-                        for budget, unit, weight in zip(budgets, units, weights, strict=True) if int(weight))
-            if all(name in state for name in ('supply', 'maxSupply', 'effectiveCap')):
-                gross = min(gross, max(0, min(int(state['maxSupply']), int(state['effectiveCap']))-int(state['supply'])))
-            amounts = [ceil_div(ceil_div(gross * int(weight), 1_000_000) * 10**18, int(unit)) if int(weight) else 0
-                       for unit, weight in zip(units, weights, strict=True)]
-        except (ValueError, ZeroDivisionError):
-            return None
-        if not any(amounts) or amounts == budgets:
-            return None
-        return [{**row, 'amount': str(amount)} for row, amount in zip(request['inputs'], amounts, strict=True)]
+        """Nominate from already observed construction facts; Helpers prices it."""
+        return direct_basket_funding(request, deepcopy(self.core_state_cache.value))
 
     @market_segment_entry
     async def _get(self, request, on_update=None, *, core_only=False, seed=None, neighbor_task=None,
@@ -436,6 +409,8 @@ class Quoter:
         repair_started = set()
         core_repairs = {}
         residual_retention_jobs = {}
+        funding_roots, funding_proposals = set(), set()
+        funding_book = QuoteBook(request)
         def reconstruct_later(operation):
             async def owned():
                 try:
@@ -457,7 +432,8 @@ class Quoter:
             return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
         async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
-                           failure_sink=None, limited_funding=None, retained=False):
+                           failure_sink=None, limited_funding=None, retained=False, derived_funding=False,
+                           bootstrap=False):
             nonlocal best
             record_error = remember_failure if failure_sink is None else failure_sink.append
             try:
@@ -471,10 +447,10 @@ class Quoter:
                         funded_request, self.core_state_cache.value, selected)
                 try:
                     async def produce_candidate():
-                        # A cached body uses the same finite bootstrap lane as
-                        # SQL neighbors. Scope it to Helpers so later recovery
-                        # and SDK exploration retain their ordinary priority.
-                        with bootstrap_priority() if retained else nullcontext():
+                        # Saved bodies and complete funding proposals use the
+                        # finite bootstrap lane only for this Helpers call.
+                        # Recovery and new exploration keep ordinary priority.
+                        with bootstrap_priority() if retained or bootstrap else nullcontext():
                             return await self.candidate(funded_request, share, order, block, assets, weights,
                                 first=first, observations=observations, selected=selected)
                     shared = current_search_observations()
@@ -539,6 +515,46 @@ class Quoter:
                     best = value
                     if on_update and on_candidate is None:
                         await on_update({'type': 'qualified', 'value': value})
+                # One root owns a finite set of changed-funding alternatives.
+                # Their observations publish normally; they do not recursively
+                # start the same transformation over ever-smaller rounding lots.
+                if not derived_funding:
+                    evidence = value.get('pricingEvidence') or {}
+                    measured_stages = evidence.get('stages', evidence.get('rawTradeResult', {}).get('stages'))
+                    root = (funded_route_identity(value), value['quotedOutput'],
+                            json.dumps(measured_stages if measured_stages is not None
+                                       else value.get('conversionObservations', []), sort_keys=True),
+                            route_bootstrap.revision if route_bootstrap else 0)
+                    if root not in funding_roots:
+                        funding_roots.add(root)
+                        async def refine_core():
+                            def offer(proposal):
+                                identity = root, proposal_identity(proposal)
+                                if identity in funding_proposals:
+                                    return False
+                                funding_proposals.add(identity)
+                                if funding_book.fits(proposal):
+                                    reconstruct_later(evaluate(share, order, False, selected=proposal['plan'],
+                                        funding=proposal['inputs'], phase=proposal['phase'], derived_funding=True,
+                                        bootstrap=True))
+                                return True
+                            async def compose(proposal, core_first):
+                                measured = project_core_inputs(value, registry.chain)
+                                async with aclosing(compose_remaining_budget(self, value, proposal, measured,
+                                        block, observations, core_first=core_first)) as alternatives:
+                                    async for composed in alternatives:
+                                        offer(composed)
+                            async with aclosing(core_funding_alternatives(self, value, block, observations,
+                                                                         core_only=core_only)) as alternatives:
+                                async for proposal in alternatives:
+                                    # The same ordered input-maxima contract as
+                                    # serving selection also covers diagnostic
+                                    # callers of this lower-level search.
+                                    fresh = offer(proposal)
+                                    if fresh and request['intent'] == 0 and not core_only:
+                                        for core_first in (True, False):
+                                            reconstruct_later(compose(proposal, core_first))
+                        reconstruct_later(refine_core())
                 # A lower-funding body is a new proposal. Price it alongside
                 # normal search, rather than adding a network tail afterward.
                 proposal = measured_funding_proposal(value, registry.chain) if not core_only else None
@@ -547,7 +563,8 @@ class Quoter:
                     async def reprice():
                         try:
                             await evaluate(share, order, False, selected=plan,
-                                funding=reduced_request['inputs'], phase='measured-funding')
+                                funding=reduced_request['inputs'], phase='measured-funding',
+                                derived_funding=derived_funding)
                         except SearchStopped:
                             pass
                         except Exception as error:
@@ -559,7 +576,7 @@ class Quoter:
                     # actual Core-produced market lots now seed exploration;
                     # retaining this owner keeps providers alive for the pass.
                     await evaluate(share, order, False, funding=funded_request['inputs'],
-                        phase='observed-market-segments')
+                        phase='observed-market-segments', derived_funding=derived_funding)
                 return value
             except SnapshotChanged:
                 raise
@@ -585,7 +602,7 @@ class Quoter:
                         if task is None:
                             task = residual_retention_jobs[identity] = reconstruct_later(evaluate(
                                 share, order, False, selected=proposal['plan'], funding=proposal['inputs'],
-                                phase='residual-retention'))
+                                phase='residual-retention', derived_funding=derived_funding))
                         if selected is None:
                             await wait_reconstruction(task)
                 if failed is not None and getattr(error, 'unsettled_intermediate', None) is not None:
@@ -603,7 +620,8 @@ class Quoter:
                             session.repairs += 1
                             try:
                                 return await evaluate(share, order, False, selected=proposal['plan'],
-                                    funding=proposal['inputs'], phase='core-market-bootstrap', partial=True)
+                                    funding=proposal['inputs'], phase='core-market-bootstrap', partial=True,
+                                    derived_funding=False)
                             except SnapshotChanged:
                                 raise
                             except Exception as error:
@@ -622,7 +640,7 @@ class Quoter:
                         for proposal in proposals:
                             session.repairs += 1
                             await evaluate(share, order, False, selected=proposal['plan'],
-                                funding=proposal['inputs'], phase='backward-prefix')
+                                funding=proposal['inputs'], phase='backward-prefix', derived_funding=derived_funding)
                     # Concurrent producers of the same failed topology share
                     # its recovery owner. A later provider revision may expose
                     # new alternatives and receives its own recovery pass.
@@ -797,13 +815,12 @@ class Quoter:
                         try:
                             errors = []
                             previous = retained if retained is not None else job['quote']
-                            with bootstrap_priority():
-                                value = await evaluate(100, 'core-first', False,
-                                    selected=proposal['plan'], funding=proposal['inputs'],
-                                    phase='nearby-'+source['side'], failure_sink=errors,
-                                    limited_funding=previous['inputs']
-                                        if input_limit_observed(previous) else None,
-                                    retained=retained is not None)
+                            value = await evaluate(100, 'core-first', False,
+                                selected=proposal['plan'], funding=proposal['inputs'],
+                                phase='nearby-'+source['side'], failure_sink=errors,
+                                limited_funding=previous['inputs']
+                                    if input_limit_observed(previous) else None,
+                                retained=retained is not None, bootstrap=True)
                             if retained is not None:
                                 await repriced_source(retained, value, errors)
                             observation['completed'] = value is not None

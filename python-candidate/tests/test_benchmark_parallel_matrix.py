@@ -6,8 +6,10 @@ from pathlib import Path
 import unittest
 
 from cybergold_candidate.route_observations import RouteObservations, route_observation_scope
+from cybergold_candidate.quoter.pool_directions import conflicting_pool, quote_directions
 from cybergold_candidate.basket_preview import InvalidPreview
 from cybergold_candidate.rpc_transport import rpc_provider
+from cybergold_candidate.uniswap_routes import pool_identity
 from cybergold_candidate.uniswap_v4 import STATE_VIEW
 from web3 import Web3
 from benchmark_matrix_fixture import BLOCK, MatrixService, LoopbackState, matrix_cases
@@ -94,6 +96,12 @@ class MatrixAcquisitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value['routeFamily'], 'mixed')
         self.assertGreater(service.preview_calls, 0)
         self.assertTrue(topology['sharedPhysicalPools'])
+        acquisitions = [value['plan']['conversions'][f'0:acquire:{index}']['branches'][0]['hops']
+                        for index in range(len(assets))]
+        self.assertEqual(pool_identity(acquisitions[0][0]['pool']),
+                         pool_identity(acquisitions[1][0]['pool']))
+        self.assertEqual(acquisitions[0][0]['zeroForOne'], acquisitions[1][0]['zeroForOne'])
+        self.assertIsNone(conflicting_pool(quote_directions(value)))
         replay = await service.quoter.evaluate_selected(case.request, value['plan'])
         self.assertEqual(replay['quotedOutput'], value['quotedOutput'])
         self.assertEqual(transport.counts()['unsupported'], {})

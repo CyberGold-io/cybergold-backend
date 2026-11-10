@@ -35,16 +35,37 @@ def encode_routing(plan):
         (exact_in, int(plan['limit']), int(plan['deadline']), branches)]))
 
 
+def weighted_shares(branches):
+    """Compute only the encoded ppm weights; the final route owns remainder."""
+    total = sum(int(branch['amountIn']) for branch in branches)
+    return [0 if index == len(branches)-1 else int(branch['amountIn']) * 1_000_000 // total
+            for index, branch in enumerate(branches)]
+
+
 def weighted_routes(branches):
     """The final route owns integer remainder, exactly as the Solidity template."""
-    total = sum(int(branch['amountIn']) for branch in branches)
     routes = []
-    for index, branch in enumerate(branches):
-        share = 0 if index == len(branches) - 1 else int(branch['amountIn']) * 1_000_000 // total
+    for branch, share in zip(branches, weighted_shares(branches), strict=True):
         routes.append({'sharePpm': share, 'steps': [
             {'kind': kind, 'currencyOut': output, 'fee': fee, 'tickSpacing': spacing}
             for kind, output, fee, spacing in route_steps(branch['hops'])]})
     return routes
+
+
+def exact_output_routes(branches):
+    """Round funding up so encoded path lots cover their exact-output inputs."""
+    amounts = [int(branch['amountIn']) for branch in branches]
+    total = sum(amounts)
+    routes = weighted_routes(branches)
+    # Reserve one ppm for every positive path, including sub-ppm inputs.
+    remaining = 1_000_000 - sum(amount > 0 for amount in amounts)
+    for amount, route in zip(amounts[:-1], routes[:-1], strict=True):
+        route['sharePpm'] = 1 + amount * remaining // total if amount else 0
+    shares = [route['sharePpm'] for route in routes[:-1]]
+    shares.append(1_000_000 - sum(shares))
+    funding = max((amount * 1_000_000 + share - 1) // share
+                  for amount, share in zip(amounts, shares, strict=True) if amount)
+    return funding, routes
 
 
 def split_runtime(amount, routes):

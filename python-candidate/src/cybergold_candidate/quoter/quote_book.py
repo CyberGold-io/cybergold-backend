@@ -7,6 +7,7 @@ from .ranking import prefer_completed
 from .reuse_estimate import attach_reuse_sample
 from .reuse_routes import funded_route_identity
 from .dormant_routes import with_dormant_routes
+from .pool_directions import conflicting_pool, quote_directions
 
 
 class QuoteBook:
@@ -30,6 +31,10 @@ class QuoteBook:
 
     def observe(self, value, *, identity=None, replaces=None, current=True, sequence=None):
         identity = identity or funded_route_identity(value)
+        if value is not None and conflicting_pool(quote_directions(value)) is not None:
+            if not current:
+                return False
+            value = None
         if not current:
             if identity in self.observed or not self.fits(value):
                 return False

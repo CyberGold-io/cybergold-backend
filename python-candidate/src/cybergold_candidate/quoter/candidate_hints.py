@@ -1,8 +1,9 @@
 """Interleave available topology hints with ordinary candidates; never wait."""
 from itertools import product
 
-from .discovery import path_steps
+from .discovery import path_steps, route_candidates
 from .cooperative import CHECKPOINT, close, values
+from .pool_directions import branch_directions, conflicting_pool
 
 
 def normalize_hints(hints, source, target):
@@ -24,13 +25,28 @@ def normalize_steps(hints, source, target):
             try:
                 candidate = offer['branches']
                 alternatives = []
+                opposed = False
                 for row in candidate:
                     alternatives.append((yield from path_steps(
                         [hop['pool'] for hop in row['hops'] if 'pool' in hop], source, target)))
                 for routes in product(*alternatives) if alternatives else ():
                     yield CHECKPOINT
-                    yield ([{'amountIn': row['amountIn'], 'hops': route}
-                            for row, route in zip(candidate, routes, strict=True)], list(offer.get('origins', [])))
+                    branches = [{'amountIn': row['amountIn'], 'hops': route}
+                                for row, route in zip(candidate, routes, strict=True)]
+                    if conflicting_pool(branch_directions(branches)) is not None:
+                        opposed = True
+                        continue
+                    yield branches, list(offer.get('origins', []))
+                if opposed:
+                    # A crossed split can expose shorter compatible paths in
+                    # its union graph. Reuse ordinary lazy singles/splits.
+                    routes = yield from path_steps([hop['pool'] for row in candidate
+                        for hop in row['hops'] if 'pool' in hop], source, target)
+                    amount = sum(int(row['amountIn']) for row in candidate)
+                    for branches in route_candidates(routes, amount):
+                        yield CHECKPOINT
+                        if conflicting_pool(branch_directions(branches)) is None:
+                            yield branches, list(offer.get('origins', []))
             except Exception:
                 # Ordinary malformed topology does not discard a sibling.
                 continue

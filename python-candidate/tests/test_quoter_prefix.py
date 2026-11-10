@@ -10,6 +10,9 @@ from cybergold_candidate.quoter.contracts import capture_paths
 from cybergold_candidate.quoter.discovery import market_plan
 from cybergold_candidate.quoter.prefix import repair_prefix
 from cybergold_candidate.quoter.capacity_recovery import recover_selected
+from cybergold_candidate.quoter.evaluate import encode_nomination, replay_conversion
+from cybergold_candidate.quoter.inverse import inverse_conversion
+from cybergold_candidate.routing_encoding import split_runtime
 from cybergold_candidate.tx_preparation import TransactionPreparation
 from quoter_fixture import service, synthetic_pool, basis
 from test_universal_quote import BLOCK, CORE, PAXG, OTHER, WETH, USER
@@ -255,6 +258,135 @@ class PrefixTests(unittest.IsolatedAsyncioTestCase):
         native = {**request, 'inputs': [{'currency': '0x' + '00'*20, 'amount': '10000'}]}
         trace = PathTrace([{'pool': pool, 'zeroForOne': True}], 10000, '0:market', 0, 0)
         self.assertIsNone(await repair_prefix(q, native, trace, BLOCK))
+
+
+class InverseConversionTests(unittest.IsolatedAsyncioTestCase):
+    def chosen(self, routes, source=WETH, target=CORE):
+        return encode_nomination(source, target, (routes, ['uniroute-local']))[1]
+
+    async def test_native_single_path_target_and_private_state_are_forward_replayed(self):
+        from cybergold_candidate.routing_encoding import ZERO
+        pool = synthetic_pool(WETH, CORE, 701, 'v2')
+        hop = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
+        chosen = self.chosen([{'amountIn': '10000', 'hops': [{'kind': 'wrap', 'currencyOut': WETH}, hop]}],
+                             source=ZERO)
+        original = deepcopy(chosen)
+        q = service(self, [pool])
+        bank, canonical = {}, {}
+        amount, resized = await inverse_conversion(q, chosen, ZERO, CORE, 10000, 5000, BLOCK, bank, canonical)
+        self.assertLess(amount, 10000)
+        self.assertEqual(resized['inputCurrency'], ZERO)
+        self.assertEqual(resized['template']['inputCurrency'].lower(), WETH.lower())
+        independent = {}
+        _, output, retained = await replay_conversion(q, deepcopy(resized), ZERO, CORE, amount,
+                                                       BLOCK, independent, canonical)
+        self.assertEqual(output, 5000)
+        self.assertEqual(retained, [])
+        self.assertEqual(bank, independent)
+        self.assertEqual(chosen, original)
+        self.assertEqual(q.engine.registry.observed, q.engine.registry.inventory)
+
+    async def test_split_shared_pool_uses_actual_ppm_lots_and_changed_forward_state(self):
+        pool = synthetic_pool(WETH, CORE, 702, 'v2')
+        hop = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
+        chosen = self.chosen([{'amountIn': '50000000', 'hops': [hop]},
+                              {'amountIn': '50000000', 'hops': [hop]}])
+        original = deepcopy(chosen)
+        q = service(self, [pool])
+        bank, canonical = {}, {}
+        amount, resized = await inverse_conversion(q, chosen, WETH, CORE, 100000000, 45000001,
+                                                    BLOCK, bank, canonical)
+        self.assertLess(amount, 100000000)
+        lots = split_runtime(amount, resized['template']['routes'])
+        self.assertEqual(sum(lots), amount)
+        # An independent constant-product calculation observes each split's
+        # updated reserve, rather than treating both paths as independent pools.
+        x = y = 10**9
+        expected = 0
+        for lot in lots:
+            received = lot * 997 * y // (x * 1000 + lot * 997)
+            expected += received
+            x, y = x + lot, y - received
+        independent = {}
+        _, output, retained = await replay_conversion(q, deepcopy(resized), WETH, CORE, amount,
+                                                       BLOCK, independent, canonical)
+        self.assertEqual(output, expected)
+        self.assertEqual(retained, [])
+        self.assertEqual(bank, independent)
+        self.assertEqual(chosen, original)
+        self.assertEqual(q.engine.registry.observed, q.engine.registry.inventory)
+
+    async def test_inverse_failure_keeps_preceding_bank_and_original_topology(self):
+        pool = synthetic_pool(WETH, CORE, 703, 'v2')
+        hop = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
+        chosen = self.chosen([{'amountIn': '10000', 'hops': [hop]}])
+        q = service(self, [pool])
+        bank = {pool['id']: deepcopy(pool)}
+        bank[pool['id']]['reserve0'] = '1000000001'
+        original, before = deepcopy(chosen), deepcopy(bank)
+        request = q.engine.sdk.request
+        async def unavailable(value, *args, **kwargs):
+            if value.get('mode') == 'exactOut':
+                raise ValueError('ordinary inverse failure')
+            return await request(value, *args, **kwargs)
+        q.engine.sdk.request = unavailable
+        with self.assertRaisesRegex(ValueError, 'ordinary inverse failure'):
+            await inverse_conversion(q, chosen, WETH, CORE, 10000, 5000, BLOCK, bank, {})
+        self.assertEqual(bank, before)
+        self.assertEqual(chosen, original)
+
+    async def test_one_unit_split_target_keeps_zero_lot_topology_and_rounds_at_execution(self):
+        pools = [synthetic_pool(WETH, CORE, number, 'v2') for number in (704, 705)]
+        branches = [{'amountIn': '5000', 'hops': [{'pool': pool,
+            'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}]} for pool in pools]
+        chosen = self.chosen(branches)
+        q = service(self, pools)
+        bank, canonical = {}, {}
+        amount, resized = await inverse_conversion(q, chosen, WETH, CORE, 10000, 1, BLOCK, bank, canonical)
+        self.assertEqual(split_runtime(amount, resized['template']['routes']), [0, amount])
+        self.assertEqual(len(resized['branches']), 2)
+        _, output, retained = await replay_conversion(q, deepcopy(resized), WETH, CORE, amount,
+                                                       BLOCK, {}, canonical)
+        self.assertEqual(output, 1)
+        self.assertEqual(retained, [])
+
+    async def test_repeated_pool_occurrences_advance_the_changed_plan_once(self):
+        pool = synthetic_pool(WETH, PAXG, 706, 'v2')
+        finish = synthetic_pool(WETH, CORE, 707, 'v2')
+        first = {'pool': pool, 'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
+        route = [first, {**deepcopy(first), 'zeroForOne': not first['zeroForOne']},
+                 {'pool': finish, 'zeroForOne': finish['token0']['address'].lower() == WETH.lower()}]
+        chosen = self.chosen([{'amountIn': '100000000', 'hops': route}])
+        q = service(self, [pool, finish])
+        bank, canonical = {}, {}
+        amount, resized = await inverse_conversion(q, chosen, WETH, CORE, 100000000, 25000000,
+                                                    BLOCK, bank, canonical)
+        self.assertLess(amount, 100000000)
+        expected, states = amount, {p['id']: [10**9, 10**9] for p in (pool, finish)}
+        for hop in route:
+            reserves = states[hop['pool']['id']]
+            left, right = (0, 1) if hop['zeroForOne'] else (1, 0)
+            received = expected * 997 * reserves[right] // (reserves[left] * 1000 + expected * 997)
+            reserves[left] += expected
+            reserves[right] -= received
+            expected = received
+        independent = {}
+        _, output, retained = await replay_conversion(q, deepcopy(resized), WETH, CORE, amount,
+                                                       BLOCK, independent, canonical)
+        self.assertEqual(output, expected)
+        self.assertEqual(retained, [])
+        self.assertEqual(bank, independent)
+        self.assertEqual(q.engine.registry.observed, q.engine.registry.inventory)
+
+    async def test_identity_and_zero_targets_need_no_sdk_or_route_metadata(self):
+        chosen = {'logical': 'identity'}
+        q = SimpleNamespace()
+        for source, target, desired in [(WETH, WETH, 7), (WETH, CORE, 0)]:
+            amount, resized = await inverse_conversion(q, chosen, source, target, 10000, desired,
+                                                        BLOCK, {}, {})
+            self.assertEqual(amount, desired)
+            self.assertEqual(resized, chosen)
+            self.assertIsNot(resized, chosen)
 
 
 if __name__ == '__main__':

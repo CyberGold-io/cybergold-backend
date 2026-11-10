@@ -8423,13 +8423,16 @@
                 "enum": [
                   "backward-prefix",
                   "capacity-limited",
+                  "core-consumption",
+                  "core-market-funding",
                   "detailed",
                   "first-result",
                   "nearby-lower",
                   "nearby-upper",
                   "route-family",
                   "route-family-exploration",
-                  "saved-plan"
+                  "saved-plan",
+                  "useful-core-residual"
                 ],
                 "type": "string"
               }
@@ -9830,13 +9833,16 @@
                     "enum": [
                       "backward-prefix",
                       "capacity-limited",
+                      "core-consumption",
+                      "core-market-funding",
                       "detailed",
                       "first-result",
                       "nearby-lower",
                       "nearby-upper",
                       "route-family",
                       "route-family-exploration",
-                      "saved-plan"
+                      "saved-plan",
+                      "useful-core-residual"
                     ],
                     "type": "string"
                   }
@@ -24286,13 +24292,16 @@
                                 "enum": [
                                   "backward-prefix",
                                   "capacity-limited",
+                                  "core-consumption",
+                                  "core-market-funding",
                                   "detailed",
                                   "first-result",
                                   "nearby-lower",
                                   "nearby-upper",
                                   "route-family",
                                   "route-family-exploration",
-                                  "saved-plan"
+                                  "saved-plan",
+                                  "useful-core-residual"
                                 ],
                                 "type": "string"
                               }
@@ -30945,13 +30954,16 @@
                     "enum": [
                       "backward-prefix",
                       "capacity-limited",
+                      "core-consumption",
+                      "core-market-funding",
                       "detailed",
                       "first-result",
                       "nearby-lower",
                       "nearby-upper",
                       "route-family",
                       "route-family-exploration",
-                      "saved-plan"
+                      "saved-plan",
+                      "useful-core-residual"
                     ],
                     "type": "string"
                   }
@@ -33136,13 +33148,16 @@
                                 "enum": [
                                   "backward-prefix",
                                   "capacity-limited",
+                                  "core-consumption",
+                                  "core-market-funding",
                                   "detailed",
                                   "first-result",
                                   "nearby-lower",
                                   "nearby-upper",
                                   "route-family",
                                   "route-family-exploration",
-                                  "saved-plan"
+                                  "saved-plan",
+                                  "useful-core-residual"
                                 ],
                                 "type": "string"
                               }
@@ -51162,13 +51177,16 @@
                 "enum": [
                   "backward-prefix",
                   "capacity-limited",
+                  "core-consumption",
+                  "core-market-funding",
                   "detailed",
                   "first-result",
                   "nearby-lower",
                   "nearby-upper",
                   "route-family",
                   "route-family-exploration",
-                  "saved-plan"
+                  "saved-plan",
+                  "useful-core-residual"
                 ],
                 "type": "string"
               }

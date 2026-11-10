@@ -132,6 +132,131 @@ state is warmed independently, cached and invalidated through the implemented
 generation/event mechanisms; missing fields are coalesced and independent
 reads can run concurrently.
 
+### Funding alternatives after a complete observation
+
+The universal search shares the `{inputs, plan}` proposal representation and
+whole-plan evaluation across unused-input reduction, partial-AMM recovery,
+direct basket vectors, supply-limited sales and neighboring-budget replay.
+Explicit funding edits share acquisition sums, branch allocations and aggregate
+funding changes. Neighbor blueprints retain their distinct topology builder for
+branch removal, basket ordering, conversion reindexing and redemption aliases.
+Weighted allocation, ppm splitting and fee arithmetic retain their own semantics.
+Logical native payment and a physical wrapped input remain distinct.
+
+Within one trade, a physical pool can be shared only in the same direction.
+The key is the canonical pool identity and physical input token, so aliases
+and native wrappers do not create different pools or invert directions.
+Its pure projection reuses integer split arithmetic without encoding addresses,
+calling the SDK or issuing RPC/API requests.
+The common adapter filters crossed split nominations and chooses compatible
+conversions against already selected operations. Crossed supplier hints reuse
+their union graph through existing discovery to recover shorter alternatives.
+An optional continuation without a compatible route keeps its existing
+retaining placeholder. Dormant-route enrichment follows the same rule.
+Measured quote projection, stored quote publication and fresh preparation
+inspect executable templates independently of optional conversion metadata.
+Known zero lots are ignored, including receipt-proven zero Core residuals;
+unknown Core-produced lots remain potentially funded. A fresh violation uses
+the existing specific-error channel with code `opposed-pool-directions` and
+the exact pool key. This is a route-selection rule, not a new execution ABI.
+
+For a successful Core purchase, ordered Helpers stages identify consumed Core
+inputs `C` and actual residuals `R` by branch and basket asset. This projection
+reads the existing `pricingEvidence` stages internally; it adds no public field
+and does not subtract aggregate retained charges to guess Core requirements.
+Identity acquisitions, native wrappers, zero-weight assets and mixed token
+decimals preserve their raw integer amounts.
+For identity or zero acquisitions, only the lot changes; their existing body
+route and conversion description are preserved. Their canonical nominations
+need no priced template and are not offered as route replacements.
+
+Backward target-output pricing nominates source funding for acquisitions of
+`C`, or of `C + U` when a nominated market continuation can use a residual `U`.
+The first useful-residual proposal reuses each existing continuation's
+Helpers-measured `consumedInput` and encoded route. It does not await fresh
+residual or primary-market discovery. That `C + U` proposal and pure `C`
+funding are offered before their remaining-budget market compositions.
+The existing reconstruction owner independently schedules validation of each
+novel base proposal, both composition orders and fresh residual exploration.
+A pending Helpers call or primary-market discovery does not serialize the
+other alternatives. Fresh exploration can still offer a different useful-residual
+body and its market combinations. Equivalent proposals share one construction
+per order; an oversized base may still produce a fitting recomposition.
+The two known sizing calls use the existing bootstrap priority only while
+sizing; the scope exits before either proposal is yielded. Their optional
+composition construction and fresh residual rerouting use ordinary admission.
+
+First-hop underconsumption supplies a measured source amount; downstream partial
+fill uses the existing backward-prefix calculation. A revert remainder alone
+does not supply a Core-produced amount. Full-residual exploration remains
+available, and useful sibling continuations stay in the changed body.
+
+Measured unused scalar input can be removed when a whole branch consumes zero.
+The branch remains at its original index with its routes and metadata intact;
+only its explicit funded amount becomes zero. Helpers skips that zero branch.
+Aggregate funding must remain positive and smaller than the observed funding.
+For a mixed CYGLD sale, the Core redemption lot remains nominal and unchanged;
+each market lot uses measured input consumption plus the existing input-side
+market fee. Missing conversion evidence leaves that lot unchanged. The changed
+complete body is measured again, so removing an unused swap does not assume
+its effects on shared pools were neutral.
+
+For one path containing distinct physical pools and no internal native
+transition, the existing SDK directly quotes the required output from the
+preceding private pool state. There is no original-budget forward diagnostic.
+An acquisition with unchanged measured output is reused without SDK work when
+its pools are disjoint from every other operation in the changed proposal.
+One exact-input replay of a resized path commits its actual forward state;
+exact-output quotation does not commit an inverse state.
+
+Helpers measures aggregate conversions rather than individual split paths.
+For split paths or internal native transitions, diagnostic SDK replay follows
+the selected conversion in execution order with
+a private pool bank, obtaining path outputs and pre-swap states. Desired output
+is allocated in those observed output proportions; per-hop exact-output pricing
+nominates new path inputs `a_i`. Core acquisition sizing directly preserves
+those required inputs through ppm encoding. It reserves one ppm for each
+positive path, then distributes the remaining ppm proportionally. The final
+path retains the integer remainder. For effective shares `p_i`, total funding
+is `max(ceil(a_i * 1_000_000 / p_i))` over positive inputs. Every executed path
+lot therefore covers its nominated exact-output input, including tiny paths
+that ordinary percentage truncation could round to zero.
+
+One replay from the preceding private pool state advances the changed plan;
+its returned branch amounts match the actual encoded lots. There is no funding
+search or repeated correction. This calculation guarantees input allocation,
+not a globally minimal input or target output under changed shared-pool states.
+Prefix capacity recovery retains its existing maximum-settleable arithmetic.
+
+Pool fees are already included in SDK pricing. No generic fee is added to the
+measured physical Core target; complete Helpers evaluation recomputes all Core,
+Helpers and market fees and compares net recipient output. These advisory SDK
+calculations do not certify the changed whole plan's output or shared-pool state.
+
+Direct basket issuance can nominate the measured input vector without swaps.
+A resized scalar Core body can also be combined with a primary market branch
+using remaining original budget. Conversion identities are reindexed with the
+body, and both Core-first and market-first orders remain available. Acquisitions
+fund only the nominated Core and residual amounts; continuations keep their
+existing ABI and operate on the actual runtime residual.
+
+Each root observation owns a finite transformation pass over its existing route
+nominees. Derived proposals use the same pass rather than recursively starting
+another Core-sizing pass. Within a search, roots are deduplicated by funded-route
+identity, measured output/stage evidence and provider revision. A distinct route,
+measured result or revision can own another pass. A successful repaired topology
+has its own pass; direct funding children remain nonrecursive. Existing proposal identities
+deduplicate equivalent bodies and the existing owner cancels and drains its follow-up work. The valid incumbent
+is published before optional alternatives. Each complete changed body returns
+to the existing Helpers evaluator and quote book; ordinary proposal failure
+leaves independent search and the incumbent available.
+
+The phases `core-consumption`, `useful-core-residual` and `core-market-funding`
+describe how a candidate was proposed. They do not themselves set
+`inputLimitObserved`, establish global capacity, or change output-first ranking.
+No iteration cap, zero-retention requirement, new provider predicate or
+additional preparation condition beyond the accepted pool-direction rule is introduced.
+
 Ordinary custom discovery walks and sorts its reachable single-path graph;
 the initial short-path prefix above does not await that walk. Both have
 cooperative checkpoints, while split enumeration remains lazy. Initial prefix
@@ -218,9 +343,15 @@ they can still incur RPCs while other proposals are measured. The economic
 quoter does not actively call the retained amount-dependent Core-preview methods.
 
 SDK jobs and Helpers evaluation currently share eight engine work slots and
-the Python event loop. Retained-body replay uses the existing bootstrap
-priority lane; initial ordinary proposals use ordinary admission. SDK state
-waits release their pricing lease. Independent missing pools/tick requests
+the Python event loop. Retained-body replay, SQL-neighbor candidate calls,
+known measured Core-plus-residual and pure-Core sizing, and Helpers calls for
+complete Core-funding proposals use the existing bootstrap priority lane.
+Candidate priority ends before recovery, publication callbacks or follow-up
+tasks are created. Sizing priority ends before yielding. Fresh route discovery,
+residual rerouting, market-composition construction and initial ordinary
+proposals retain ordinary admission. Running work is not preempted, and no
+lane reserves idle capacity. SDK state waits release their pricing lease.
+Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
 
@@ -275,6 +406,14 @@ and quote-result writes keep their existing lock and drain behavior.
 
 ## Step 6: select, publish and display
 
+The economic NDJSON stream emits a blank newline when its next event-queue
+wait has been idle for 15 seconds. Empty lines keep HTTP body readers active;
+clients ignore them rather than parsing a quote frame. They carry no selected
+or full-funding frame metadata. The timeout wraps only `queue.get()`; it does
+not cancel the producer, stop search or mark completion. Real queued events
+retain their ordinary order, and disconnect retains the existing producer
+cancellation and drain ownership.
+
 The Backend quote book ranks complete observations that fit the request. A
 new observation of the same funded-route identity replaces that route's prior
 observation in either price direction. A concrete whole-plan Helpers disproof
@@ -313,6 +452,25 @@ still use their real token metadata. Basket edits use their immediate-input
 handling rather than the token typing debounce.
 
 ## Selection is followed by separate transaction preparation
+
+### Retained specialized quote interfaces
+
+The current App form creates input-driven economic requests. The runtime still
+constructs `QuoteIntent` for `POST /api/quotes/intent/stream` and for the retained
+exact-output/selected-plan branches of `POST /api/quotes/trade/stream`.
+With the universal release configured, the direct recipient-less Core endpoint
+returns numerical `readOnly` results for modes other than `issue-exact-out`.
+Exact-output Core sales can use the specialized solver's solved input to obtain
+fresh universal execution bytes with the accepted minima.
+
+These supported interfaces and component diagnostics are retained for deferred
+output-target consumers; they are not the ordinary App's exact-input producer.
+Its fresh exact-input trade requests and cached economic estimates bypass the
+specialized solver. The universal funding workflow reuses inverse arithmetic
+without invoking that solver's full preview/qualification pipeline. No public
+endpoint, exact-output contract interface or deferred UI mode is retired here.
+
+### Prepare the accepted universal body
 
 On selection for execution, the App captures the accepted whole tuple and
 stops that selection's refinement. Preparation checks the accepted funding,
@@ -474,6 +632,10 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Backend ranking and publication | `quote_publication.py`, `quoter/quote_book.py`, `quoter/ranking.py` |
 | Retained families/reconstruction | `quoter/reuse_routes.py`, `quoter/path_families.py`, `quoter/reuse_estimate.py` |
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |
+| Shared funded-plan edits | `quoter/funding.py` |
+| Target-output inverse and partial-AMM recovery | `quoter/inverse.py`, `quoter/prefix.py`, `quoter/capacity_recovery.py` |
+| Shared pool-direction rule | `quoter/pool_directions.py`, `quoter/amm_adapter.py`, `quoter/plan_simulation.py`, `quoter/quote_book.py` |
+| Core consumption and useful residual funding | `quoter/core_funding.py`, `quoter/plan_simulation.py`, `quoter/search.py` |
 | Core residual-retention alternative | `quoter/residual_retention.py`, `quoter/search.py` |
 | Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |
 | Local/hosted workers and API pacing | `quoter/alpha_routes.py`, `quoter/hosted_routes.py`, `sdk_worker.py`, `uniswap_api_queue.py` |
@@ -481,6 +643,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Capacity and sharing | `route_work_slots.py`, `shared_reads.py`, `route_quote_engine.py` |
 | Core warm state | `quoter/core_state.py`, `app.py` |
 | Later execution preparation | `tx_preparation.py` |
+| Retained specialized Core quote interfaces | `quote_intent.py`, `trade_quote.py`, `quote_cache.py`, `runtime.py`, `app.py` |
 | Request and owner observations | `quote_flow.py`, `telemetry.py`, `trade_observation.py` |
 
 App context is implemented in `app/[locale]/page.tsx`,

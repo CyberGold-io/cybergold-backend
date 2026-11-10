@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">The same market tools serve both path families</title><desc id="desc">Tools nominate AMM routes; Helpers measures the complete plan</desc>
+<title id="title">The same market tools serve both path families</title><desc id="desc">Tools nominate AMM routes. Helpers measures complete plans. Measured unused input and direct Core targets nominate smaller funding; zero-consumption branches retain their indices with zero funding. Each changed complete body returns to Helpers before selection.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -30,24 +30,29 @@
 <path d="M421 211 V237" class="line"/><polygon points="421.00,237.00 418.00,230.00 424.00,230.00" fill="#3e596d"/><circle cx="421" cy="221" r="10" class="step"/><text x="421" y="221" class="step-text">1</text>
 <rect x="42" y="237" width="758" height="60" rx="8" class="fresh"/>
 <text x="57" y="260" class="heading">CyberGold AMM adapter · one shared market-route API</text>
-<text x="57" y="281" class="body-large">Pool paths, split weights, native wrapping and local Core-anchor stitching</text>
+<text x="57" y="281" class="body-large">Native paths, encoded splits and Core anchor; no opposed use of a physical pool</text>
 <path d="M421 297 V316 H217 V339 M421 316 H625 V339" class="bus"/>
 <path d="M217 327 V339" class="line"/><polygon points="217.00,339.00 214.00,332.00 220.00,332.00" fill="#3e596d"/><circle cx="217" cy="317" r="10" class="step"/><text x="217" y="317" class="step-text">2</text>
 <path d="M625 327 V339" class="line"/><polygon points="625.00,339.00 622.00,332.00 628.00,332.00" fill="#3e596d"/><circle cx="625" cy="317" r="10" class="step"/><text x="625" y="317" class="step-text">2</text>
-<rect x="42" y="339" width="350" height="95" rx="8" class="node"/>
+<rect x="42" y="339" width="350" height="75" rx="8" class="node"/>
 <text x="57" y="363" class="heading">Pure market plan</text>
 <text x="57" y="385" class="body-large">Input → AMM trade(s) → output</text>
 <text x="57" y="405" class="body-large">No Core issue or redeem action</text>
-<rect x="450" y="339" width="350" height="95" rx="8" class="node"/>
+<rect x="450" y="339" width="350" height="75" rx="8" class="node"/>
 <text x="465" y="363" class="heading">Market + Core plan</text>
 <text x="465" y="385" class="body">Issue: AMM acquisitions → Core → residual handling</text>
 <text x="465" y="405" class="body">Redeem: Core → AMM output conversions</text>
-<path d="M217 434 V453 H625 V434" class="bus"/>
-<path d="M421 453 V478" class="line"/><polygon points="421.00,478.00 418.00,471.00 424.00,471.00" fill="#3e596d"/><circle cx="421" cy="465" r="10" class="step"/><text x="421" y="465" class="step-text">3</text>
-<rect x="42" y="478" width="758" height="60" rx="8" class="fresh"/>
-<text x="57" y="502" class="heading">One latest Helpers executeExactInput eth_call for each complete proposal</text>
-<text x="57" y="523" class="body-large">Measures all AMM + Core actions, fees and shared-pool impact together.</text>
-<rect x="42" y="550" width="758" height="25" rx="6" fill="#f6f8fa"/>
-<text x="54" y="567" class="body">Later preparation replays the accepted plan with execution bounds; it is separate from first-quote delivery.</text>
-<text x="42" y="589" class="source">Sources: quoter/providers, route_tools, amm_adapter, evaluate, hosted_routes, plan_simulation; tx_preparation.</text>
+<path d="M217 414 V426 H625 V414" class="bus"/>
+<path d="M421 426 V439" class="line"/><polygon points="421,439 418,432 424,432" fill="#3e596d"/><circle cx="421" cy="426" r="10" class="step"/><text x="421" y="426" class="step-text">3</text>
+<rect x="42" y="439" width="758" height="54" rx="8" class="fresh"/>
+<text x="57" y="461" class="heading">One latest Helpers executeExactInput eth_call for each complete proposal</text>
+<text x="57" y="481" class="body-large">Measures all AMM + Core actions, fees and shared-pool impact together.</text>
+<path d="M421 493 V506" class="line"/><polygon points="421,506 418,499 424,499" fill="#3e596d"/>
+<rect x="42" y="506" width="758" height="48" rx="8" class="node"/>
+<text x="57" y="526" class="heading">Measured funding: unused input or direct Core targets</text>
+<text x="57" y="545" class="body">Keep zero branches; validate each proposal while optional discovery progresses.</text>
+<path d="M800 530 H818 V467 H800" class="line"/><polygon points="800,467 807,464 807,470" fill="#3e596d"/>
+<rect x="42" y="562" width="758" height="20" rx="6" fill="#f6f8fa"/>
+<text x="54" y="576" class="body">One finite pass per root; each changed complete body returns to Helpers before selection.</text>
+<text x="42" y="589" class="source">Sources: quoter/providers, amm_adapter, evaluate, funding, inverse, core_funding, plan_simulation; tx_preparation.</text>
 </svg>

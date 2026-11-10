@@ -12,9 +12,13 @@ from .quoter.types import EconomicRequest
 from .quoter.reuse_estimate import attach_reuse_sample
 from .quoter.dormant_routes import with_dormant_routes
 from .quoter.ranking import prefer_completed
+from .quoter.pool_directions import conflicting_pool, quote_directions
 from .recovery_rpc import SnapshotChanged
 from .trade_observation import QuoteObservation, failure
 from .telemetry import operation_work, observe
+
+
+STREAM_KEEPALIVE_SECONDS = 15
 
 
 def economic_intent(value):
@@ -157,12 +161,14 @@ class EconomicQuotes:
         This remains a DB-only historical lookup. Scalar offers seed ordinary
         optimization of both path families as well as explicit Refresh.
         """
-        offered = previous
+        offered = previous if previous is None or conflicting_pool(quote_directions(previous)) is None else None
         if request['intent'] in (0, 1):
             try:
                 rows = (await self.store.neighbors(request, scope=scope)) if neighbors is None else neighbors
                 for neighbor in rows:
-                    if neighbor['side'] == 'lower' and prefer_completed(neighbor['quote'], offered, scalar=True):
+                    if (neighbor['side'] == 'lower'
+                            and conflicting_pool(quote_directions(neighbor['quote'])) is None
+                            and prefer_completed(neighbor['quote'], offered, scalar=True)):
                         offered = {**deepcopy(neighbor['quote']), 'request': deepcopy(request)}
             except Exception:
                 pass  # Optional neighbor failure leaves the exact cache hit.
@@ -253,8 +259,20 @@ async def handle_economic_quote_stream(request, service):
         task = asyncio.create_task(produce())
         try:
             while True:
+                keepalive = False
                 with stage('publication.queue', kind='queue'):
-                    frame = await queue.get()
+                    try:
+                        frame = await asyncio.wait_for(queue.get(), STREAM_KEEPALIVE_SECONDS)
+                    except TimeoutError:
+                        keepalive = True
+                if keepalive:
+                    # Keep idle HTTP readers active without touching the
+                    # producer or publishing another quote observation.
+                    state = request.scope.setdefault('state', {})
+                    state.pop('quote_frame_type', None)
+                    state.pop('quote_frame_full_funding', None)
+                    yield '\n'
+                    continue
                 if frame is None:
                     break
                 with stage('http.encode', kind='cpu'):
