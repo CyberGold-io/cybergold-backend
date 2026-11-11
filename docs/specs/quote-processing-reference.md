@@ -185,13 +185,18 @@ Backward target-output pricing nominates source funding for acquisitions of
 `C`, or of `C + U` when a nominated market continuation can use a residual `U`.
 The first useful-residual proposal reuses each existing continuation's
 Helpers-measured `consumedInput` and encoded route. It does not await fresh
-residual or primary-market discovery. That `C + U` proposal and pure `C`
-funding are offered before their remaining-budget market compositions.
-The existing reconstruction owner independently schedules validation of each
-novel base proposal, both composition orders and fresh residual exploration.
-A pending Helpers call or primary-market discovery does not serialize the
-other alternatives. Fresh exploration can still offer a different useful-residual
-body and its market combinations. Equivalent proposals share one construction
+residual or primary-market discovery. Each yielded base proposal is considered
+for validation before its own remaining-budget market compositions are scheduled.
+Within the generator, known `C + U` sizing is awaited first when measured useful
+consumption exists, then pure `C` sizing, then fresh residual exploration. These
+construction steps do not all start together. The existing reconstruction owner
+schedules validation of each yielded novel base proposal and, for scalar
+purchases, both composition orders as separate jobs, without awaiting one job
+before scheduling its siblings or resuming the generator. A pending validation or
+composition does not serialize those scheduled jobs, but shared engine/SDK/event-
+loop work can still delay them.
+Fresh exploration can offer another useful-residual body and its market
+combinations. Equivalent proposals share one construction
 per order; an oversized base may still produce a fitting recomposition.
 The two known sizing calls use the existing bootstrap priority only while
 sizing; the scope exits before either proposal is yielded. Their optional
@@ -394,6 +399,13 @@ residual rerouting, market-composition construction and initial ordinary
 proposals retain ordinary admission. Running work is not preempted, and no
 lane reserves idle capacity.
 
+Bootstrap priority is consumed by `PricingSlots` engine admission. It does not
+reorder the generic SDK worker's separate `asyncio.Lock`, whose existing waiters
+remain FIFO, or preempt a running exchange. It is not an end-to-end fast lane:
+route construction, observation dependencies, child serialization and event-loop
+work can precede completion. The runtime promises no maximum time to nominate or
+validate a lower-spend alternative.
+
 The serialized SDK worker's lock is acquired while the caller's owned engine
 and scheduler leases are released through the existing `required_state_wait`.
 After the lock is granted, those leases are restored before any SDK exchange.
@@ -475,6 +487,13 @@ not by itself invalidate its historical observation.
 An independently weaker route does not erase a better remaining candidate.
 Historical versions do not restore an already superseded current observation.
 
+A valid full-budget incumbent remains selectable while optional smaller-funding
+work is pending or fails. Its retained charges are disclosed, not subtracted to
+invent a lower funded input or used alone to reject the whole observation. A
+smaller body must complete Helpers pricing and then enter the same comparison.
+For equal scalar output, lower funding can win; a smaller input with worse output
+does not win that comparison merely because it spends less.
+
 The publication owner emits the selected whole tuple when it changes, and
 emits invalidation if its winner disappears. It retains family observations
 for reuse. Origins distinguish discovery providers from the Helpers economic
@@ -490,6 +509,18 @@ not validated full-budget output. A current-search quote, full funding or
 observed input limit ends this overlay. It does
 not wait for terminal search completion. A new amount or Refresh creates a new
 owner; an obsolete owner's late frame cannot overwrite the new intent.
+
+**Observed Sandbox example, 11 November 2026:** request
+`1ef0b232-15f3-4968-8eca-a4ac783f706b` on Backend `5e830712` selected a stored
+100 ETH quote at 175.3 ms from browser stream dispatch and a fresh 100 ETH quote
+at 487.9 ms. At 104,652.4 ms, another selected observation used
+15.331953017324193645 ETH for the same exact quoted output,
+241.386318399242216435 CYGLD. Its phase was `core-consumption`, with no estimated
+retained-input charges. These are browser selected-frame callback times, not
+SDK sizing times, exact paint times or a search-completion deadline. The phase
+does not identify an exact earlier parent plan or prove which shared resource
+caused the wait. The observation establishes that lower-spend refinement arrived
+in this request; it does not promise that timing or a globally minimal input.
 
 Search can continue improving the result. The streaming flow has no 5 s/15 s
 whole-search finish window. A transport ending and an economic quote becoming
