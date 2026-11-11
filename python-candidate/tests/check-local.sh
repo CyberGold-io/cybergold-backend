@@ -50,6 +50,8 @@ node --import tsx python-candidate/tests/node-worker-engine-reference.ts > "$can
 export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_integration.py
+python-candidate/.venv/bin/python python-candidate/tests/test_plan_call_diagnostics.py
+python-candidate/.venv/bin/python python-candidate/tests/test_plan_preparation_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_telemetry.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_scheduling.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_latency.py
@@ -101,6 +103,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refre
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_simulation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_latest_uniswap_state.py
+python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_getter_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py
 python-candidate/.venv/bin/python python-candidate/tests/test_nearby_economic_estimates.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_preparation.py

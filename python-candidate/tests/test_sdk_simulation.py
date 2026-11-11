@@ -1,15 +1,18 @@
 """Real arithmetic sharing preserves private state, demand and pricing ownership."""
 import asyncio
 from copy import deepcopy
+import json
 import unittest
+from unittest.mock import patch
 
 from cybergold_candidate.route_quote_engine import RouteQuoteEngine
 from cybergold_candidate.route_work_slots import engine_work
 from cybergold_candidate.rpc_block_context import LATEST_BLOCK
-from cybergold_candidate.sdk_worker import SdkInputTooSmall
+from cybergold_candidate.sdk_worker import SdkInputTooSmall, SdkWorkerError, MissingPoolState
+from cybergold_candidate.sdk_simulation import simulate_sdk
 from cybergold_candidate.search_observations import search_observation_scope
 from quoter_fixture import Registry, synthetic_pool
-from test_universal_quote import WETH, PAXG, settings
+from test_universal_quote import WETH, PAXG, OTHER, settings
 
 
 async def until(predicate):
@@ -97,7 +100,7 @@ class SdkSimulationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(engine.sdk.sequence, 9)
         self.assertEqual((registry.heads, registry.verifications, engine.semaphore._value), (0, 0, 8))
 
-    async def test_required_read_error_and_too_small_arithmetic_remain_retryable(self):
+    async def test_required_read_error_remains_retryable(self):
         pool, registry, engine = self.engine()
         calls = 0
         expected = OSError('ordinary state acquisition failure')
@@ -115,10 +118,150 @@ class SdkSimulationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(engine.sdk.sequence, 2)
             self.assertEqual(await self.quote(engine, pool), result)
             self.assertEqual(engine.sdk.sequence, 2)
-            pair, _, pair_engine = self.engine('v2')
-            for _ in range(2):
-                with self.assertRaises(SdkInputTooSmall): await self.quote(pair_engine, pair, amount=1)
-            self.assertEqual(pair_engine.sdk.sequence, 2)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_typed_no_quote_is_reused_only_for_same_full_payload_and_search(self):
+        pool, registry, engine = self.engine('v2')
+        errors = []
+        async with search_observation_scope() as observations:
+            for _ in range(4):
+                bank = {}
+                with self.assertRaises(SdkInputTooSmall) as raised:
+                    await self.quote(engine, pool, amount=1, candidate=bank)
+                errors.append(raised.exception)
+                self.assertEqual(bank, {})
+            self.assertEqual(engine.sdk.sequence, 1, 'Four identical mathematical failures need one SDK calculation')
+            self.assertEqual(len({id(error) for error in errors}), 4, 'Subscribers receive fresh typed errors')
+            stored = next(iter(observations.reads.completed.values()))['value']
+            json.dumps(stored)  # A retained marker must not own an exception or its traceback frames.
+            self.assertEqual(stored['demands'], [])
+            changed_amount = await self.quote(engine, pool, amount=2)
+            self.assertEqual(changed_amount['amountOut'], '1')
+            changed = deepcopy(pool)
+            output_reserve = 'reserve1' if pool['token0']['address'].lower() == WETH.lower() else 'reserve0'
+            changed[output_reserve] = str(int(changed[output_reserve])*2)
+            changed_state = await self.quote(engine, pool, amount=1, candidate={pool['id']: changed})
+            self.assertEqual(changed_state['amountOut'], '1')
+            self.assertEqual(engine.sdk.sequence, 3, 'Changed amount and private state each require fresh arithmetic')
+        async with search_observation_scope():
+            with self.assertRaises(SdkInputTooSmall): await self.quote(engine, pool, amount=1)
+        self.assertEqual(engine.sdk.sequence, 4)
+        for _ in range(2):
+            with self.assertRaises(SdkInputTooSmall): await self.quote(engine, pool, amount=1)
+        self.assertEqual(engine.sdk.sequence, 6, 'No cross-search or unscoped negative reuse')
+        self.assertEqual((registry.heads, registry.verifications, engine.semaphore._value), (0, 0, 8))
+
+    def mixed_dust(self, pool, registry):
+        pair = synthetic_pool(PAXG, OTHER, 8502, 'v2')
+        registry.inventory[pair['id']] = deepcopy(pair)
+        return pair, [{'amountIn': '3', 'hops': [self.branch(pool, 3)[0]['hops'][0],
+            {'pool': pair, 'zeroForOne': pair['token0']['address'].lower() == PAXG.lower()}]}]
+
+    async def test_typed_failure_replays_required_coverage_without_committing_private_post_state(self):
+        pool, registry, engine = self.engine()
+        pair, branches = self.mixed_dust(pool, registry)
+        demands = []
+        async def extend(_snapshot, requests, _block):
+            demands.append(deepcopy(requests))
+            return deepcopy(pool)
+        registry.extend_ticks = extend
+        originals = deepcopy((pool, pair, branches))
+        canonicals, errors = [], []
+        async with search_observation_scope() as observations:
+            for _ in range(4):
+                canonical = {pool['id']: self.initial(pool), pair['id']: deepcopy(pair)}
+                bank = {}
+                with self.assertRaises(SdkInputTooSmall) as raised:
+                    await self.quote(engine, pool, amount=3, branches=branches, candidate=bank, canonical=canonical)
+                canonicals.append(canonical)
+                errors.append(raised.exception)
+                self.assertEqual(bank, {}, 'A failed mixed route never commits its earlier V3 post-state')
+                self.assertTrue(canonical[pool['id']]['bitmapWords'])
+            self.assertEqual(engine.sdk.sequence, 1)
+            self.assertEqual(len(demands), 4, 'Each owner still receives the original required observations')
+            self.assertTrue(all(request == demands[0] for request in demands))
+            self.assertEqual(len({id(error) for error in errors}), 4)
+            for stored in observations.reads.completed.values(): json.dumps(stored)
+        self.assertEqual((pool, pair, branches), originals)
+        self.assertEqual(canonicals[0], canonicals[1])
+        canonicals[0][pool['id']]['bitmapWords'][0]['bitmap'] = 'private mutation'
+        self.assertNotEqual(canonicals[0], canonicals[1])
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_cached_failure_demand_error_propagates_and_retry_replays_before_typed_error(self):
+        pool, registry, engine = self.engine()
+        pair, branches = self.mixed_dust(pool, registry)
+        calls, unavailable = 0, OSError('follower coverage unavailable')
+        async def extend(*_args):
+            nonlocal calls
+            calls += 1
+            if calls == 2: raise unavailable
+            return deepcopy(pool)
+        registry.extend_ticks = extend
+        async def quote():
+            canonical = {pool['id']: self.initial(pool), pair['id']: deepcopy(pair)}
+            return await self.quote(engine, pool, amount=3, branches=branches, canonical=canonical)
+        async with search_observation_scope():
+            with self.assertRaises(SdkInputTooSmall): await quote()
+            with self.assertRaises(OSError) as raised: await quote()
+            self.assertIs(raised.exception, unavailable, 'Cached math cannot mask a follower observation error')
+            with self.assertRaises(SdkInputTooSmall): await quote()
+            self.assertEqual((engine.sdk.sequence, calls), (1, 3))
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_cancelled_no_quote_subscriber_preserves_survivor_and_its_demand_replay(self):
+        pool, registry, engine = self.engine()
+        pair, branches = self.mixed_dust(pool, registry)
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+        async def extend(*_args):
+            nonlocal calls
+            calls += 1
+            entered.set()
+            await release.wait()
+            return deepcopy(pool)
+        registry.extend_ticks = extend
+        canonicals = [{pool['id']: self.initial(pool), pair['id']: deepcopy(pair)} for _ in range(2)]
+        async with search_observation_scope() as observations:
+            tasks = [asyncio.create_task(self.quote(engine, pool, amount=3, branches=branches, canonical=canonicals[0]))]
+            try:
+                await asyncio.wait_for(entered.wait(), 3)
+                tasks.append(asyncio.create_task(self.quote(engine, pool, amount=3, branches=branches, canonical=canonicals[1])))
+                await until(lambda: any(entry.users == 2 for entry in observations.reads.pending.values()))
+                tasks[0].cancel()
+                with self.assertRaises(asyncio.CancelledError): await tasks[0]
+                release.set()
+                with self.assertRaises(SdkInputTooSmall): await tasks[1]
+                self.assertTrue(canonicals[1][pool['id']]['bitmapWords'])
+                self.assertEqual((engine.sdk.sequence, calls), (1, 2))
+                with self.assertRaises(SdkInputTooSmall):
+                    await self.quote(engine, pool, amount=3, branches=branches,
+                        canonical={pool['id']: self.initial(pool), pair['id']: deepcopy(pair)})
+                self.assertEqual(engine.sdk.sequence, 1)
+            finally:
+                release.set()
+                for task in tasks:
+                    if not task.done(): task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_other_sdk_and_observation_errors_are_not_negative_cached(self):
+        pool, _, engine = self.engine('v2')
+        payload = {'operation': 'quote', 'mode': 'exactIn', 'amount': '1', 'pools': [pool],
+                   'poolId': pool['id'], 'zeroForOne': True}
+        async def unused(_requests): raise AssertionError('No controlled state demand')
+        errors = [SdkWorkerError('ordinary SDK failure'), OSError('RPC unavailable'), TimeoutError('timeout'),
+                  MissingPoolState([{'poolId': pool['id'], 'wordPositions': [0], 'ticks': []}])]
+        for error in errors:
+            with self.subTest(error=type(error).__name__):
+                async with search_observation_scope() as observations:
+                    with patch.object(engine.sdk, 'request', side_effect=error) as request:
+                        for _ in range(2):
+                            with self.assertRaises(type(error)) as raised:
+                                await simulate_sdk(engine, payload, unused)
+                            self.assertIs(raised.exception, error)
+                        self.assertEqual(request.await_count, 2)
+                    self.assertEqual(observations.reads.completed, {})
         self.assertEqual(engine.semaphore._value, 8)
 
     async def test_cancelled_initial_subscriber_preserves_survivor_and_its_v3_bank(self):

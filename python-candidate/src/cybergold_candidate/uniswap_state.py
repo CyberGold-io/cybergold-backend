@@ -28,6 +28,8 @@ from .pool_activity import baseline, checkpoint, append_range, pool_identity
 from .pool_snapshot import copy_pool_descriptor, copy_pool_snapshot, copy_pool_state
 from .pool_initialization import record_pool_initialization
 from .quote_flow import stage
+from .rpc_diagnostics import rpc_call
+from .telemetry import rpc_exchange
 
 ZERO = '0x'+'00'*20
 V2_FACTORY = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'
@@ -148,37 +150,72 @@ class UniswapRpc(PoolRpc):
         self.before_request = None
 
     async def read_function(self, address, signature, input_types, args, output_types, block):
-        data = Web3.keccak(text=signature)[:4]+self.w3.codec.encode(input_types, args)
-        key = (self.chain_id, block['hash'].lower(), address.lower(), Web3.to_hex(data).lower())
-        def decode(response):
+        values = await self.read_functions([(address, signature, input_types, args, output_types)], block)
+        return values[0]
+
+    async def read_functions(self, calls, block):
+        """Batch the missing members of an already-known independent read set."""
+        encoded = []
+        for address, signature, input_types, args, output_types in calls:
+            data = Web3.to_hex(Web3.keccak(text=signature)[:4]+self.w3.codec.encode(input_types, args))
+            key = (self.chain_id, block['hash'].lower(), address.lower(), data.lower())
+            encoded.append((key, ('eth_call', [
+                {'to': Web3.to_checksum_address(address), 'data': data}, rpc_block_parameter(block)]), output_types))
+        by_key = {key: (request, output_types) for key, request, output_types in encoded}
+        def decode(response, output_types):
             if 'error' in response:
                 raise rpc_failure(response['error'])
             return self.w3.codec.decode(output_types, bytes.fromhex(response['result'][2:]))
-        async def produce(_keys):
+        async def produce(missing):
             async with self.semaphore:
                 if self.before_request:
                     await self.before_request()
-                response = await self.w3.provider.make_request('eth_call', [
-                    {'to': Web3.to_checksum_address(address), 'data': Web3.to_hex(data)},
-                    rpc_block_parameter(block)])
-            decode(response)  # A failed typed observation is never retained.
-            return [response]
+                requests = [by_key[key][0] for key in missing]
+                if len(requests) == 1:
+                    responses = [await self.w3.provider.make_request(*requests[0])]
+                else:
+                    secrets = getattr(self.w3.provider, 'diagnostic_secrets', ())
+                    with rpc_exchange(len(requests)), rpc_call('eth_call', secrets=secrets) as call:
+                        try:
+                            responses = await self.w3.provider.make_batch_request(requests)
+                        except TimeoutError:
+                            from .quote_errors import RpcTimeout
+                            raise RpcTimeout('RPC request timed out') from None
+                        if isinstance(responses, dict):
+                            responses = [responses] * len(requests)
+                        responses = [{**row, 'error': call.rpc_error(row['error'])}
+                            if 'error' in row else row for row in responses]
+            result = []
+            for key, response in zip(missing, responses, strict=True):
+                try:
+                    decode(response, by_key[key][1])
+                except Exception as error:
+                    # Preserve this member's typed failure and cache only its
+                    # independently valid siblings in the existing read bank.
+                    response = error
+                result.append(response)
+            return result
         counts = {}
         observations = current_search_observations() if is_latest(block) else None
         reads = observations.reads if observations is not None else self.reads
         try:
-            rows, _ = await reads.many([key], produce,
+            rows, _ = await reads.many([key for key, _, _ in encoded], produce,
                 retain=observations is not None or self.chain_id == 1 and not is_latest(block), counts=counts)
         finally:
             from .telemetry import getter_reads
             getter_reads(counts)
-        try:
-            return decode(rows[0])
-        except Exception:
-            # Legacy eligibility treats malformed getter replies as unknown.
-            # They must not make a later typed retry reuse the same failure.
-            reads.completed.pop(key, None)
-            raise
+        values, errors = [], []
+        for (key, _, output_types), response in zip(encoded, rows, strict=True):
+            try:
+                values.append(decode(response, output_types))
+            except Exception as error:
+                # Also invalidate a retained raw envelope if this caller's ABI
+                # cannot decode it, just as the single-getter path does.
+                reads.completed.pop(key, None)
+                errors.append(error)
+        if errors:
+            raise errors[0]
+        return values
 
     async def logs(self, query):
         async with self.semaphore:
@@ -532,10 +569,13 @@ class PoolRegistry:
                         ['uint112', 'uint112', 'uint32'], block)
                     return {'reserve0': str(r0), 'reserve1': str(r1)}
                 if pool['protocol'] == 'v3':
-                    slot, liquidity = await owned_reads(
-                        rpc.read_function(state['address'], 'slot0()', [], [],
-                            ['uint160', 'int24', 'uint16', 'uint16', 'uint16', 'uint8', 'bool'], block),
-                        rpc.read_function(state['address'], 'liquidity()', [], [], ['uint128'], block))
+                    calls = [(state['address'], 'slot0()', [], [],
+                                ['uint160', 'int24', 'uint16', 'uint16', 'uint16', 'uint8', 'bool']),
+                             (state['address'], 'liquidity()', [], [], ['uint128'])]
+                    if hasattr(rpc, 'read_functions'):
+                        slot, liquidity = await rpc.read_functions(calls, block)
+                    else:
+                        slot, liquidity = await owned_reads(*(rpc.read_function(*call, block) for call in calls))
                     return {'sqrtRatioX96': str(slot[0]), 'tick': slot[1], 'liquidity': str(liquidity[0]),
                             'protocolFee': slot[5], 'lpFee': int(pool['feePips'])}
                 return await read_pool_state(rpc.read_function, rpc.state_view, pool['id'], block)

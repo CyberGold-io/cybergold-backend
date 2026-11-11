@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">The same market tools serve both path families</title><desc id="desc">Six suppliers nominate AMM routes: three local tools, regular Trading API FASTEST and BEST_PRICE, and GuideStar BEST_PRICE. AlphaRouter and UniRoute local each limit response-outstanding price callbacks to eight across calculations, before payload construction. Helpers measures complete plans. Known Core target sizing runs in sequence with priority at engine and SDK admission; yielded funding proposals validate separately. Pending or failed optional funding does not erase a valid incumbent. Zero-consumption branches retain their indices with zero funding. Each changed complete body returns to Helpers before selection.</desc>
+<title id="title">The same market tools serve both path families</title><desc id="desc">Six suppliers nominate AMM routes: three local tools, regular Trading API FASTEST and BEST_PRICE, and GuideStar BEST_PRICE. AlphaRouter and UniRoute local each limit response-outstanding price callbacks to eight across calculations, before payload construction. Exact SDK successes and typed mathematical no-quote share with required observation replay; independent V3 price/liquidity reads batch without collection delay. Plan encoding shares by exact execution inputs while caller plans and fees remain private. Identical successful Helpers calls share within a search; failures stay uncached and are fingerprinted diagnostically. Known Core target sizing runs in sequence with priority at engine and SDK admission; yielded funding proposals validate separately. No opposed physical-pool use is allowed. Pending or failed optional funding does not erase a valid incumbent. Zero-consumption branches retain their indices with zero funding. Each changed complete body returns to Helpers before selection.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -37,7 +37,7 @@
 <path d="M421 211 V237" class="line"/><polygon points="421.00,237.00 418.00,230.00 424.00,230.00" fill="#3e596d"/><circle cx="421" cy="221" r="10" class="step"/><text x="421" y="221" class="step-text">1</text>
 <rect x="42" y="237" width="758" height="60" rx="8" class="fresh"/>
 <text x="57" y="260" class="heading">CyberGold AMM adapter · one shared market-route API</text>
-<text x="57" y="281" class="body-large">Native paths, encoded splits and Core anchor; no opposed use of a physical pool</text>
+<text x="57" y="281" class="body-large">Exact SDK reuse + paired V3 reads; native/split paths; no opposed physical-pool use</text>
 <path d="M421 297 V316 H217 V339 M421 316 H625 V339" class="bus"/>
 <path d="M217 327 V339" class="line"/><polygon points="217.00,339.00 214.00,332.00 220.00,332.00" fill="#3e596d"/><circle cx="217" cy="317" r="10" class="step"/><text x="217" y="317" class="step-text">2</text>
 <path d="M625 327 V339" class="line"/><polygon points="625.00,339.00 622.00,332.00 628.00,332.00" fill="#3e596d"/><circle cx="625" cy="317" r="10" class="step"/><text x="625" y="317" class="step-text">2</text>
@@ -52,8 +52,8 @@
 <path d="M217 414 V426 H625 V414" class="bus"/>
 <path d="M421 426 V439" class="line"/><polygon points="421,439 418,432 424,432" fill="#3e596d"/><circle cx="421" cy="426" r="10" class="step"/><text x="421" y="426" class="step-text">3</text>
 <rect x="42" y="439" width="758" height="54" rx="8" class="fresh"/>
-<text x="57" y="461" class="heading">One latest Helpers executeExactInput eth_call for each complete proposal</text>
-<text x="57" y="481" class="body-large">Measures all AMM + Core actions, fees and shared-pool impact together.</text>
+<text x="57" y="461" class="heading">Reuse exact encoding; share identical successful Helpers calls within search</text>
+<text x="57" y="481" class="body-large">Latest complete-plan validation measures AMM + Core actions and fees; failures stay uncached.</text>
 <path d="M421 493 V506" class="line"/><polygon points="421,506 418,499 424,499" fill="#3e596d"/>
 <rect x="42" y="506" width="758" height="48" rx="8" class="node"/>
 <text x="57" y="526" class="heading">Measured funding: unused input or direct Core targets</text>

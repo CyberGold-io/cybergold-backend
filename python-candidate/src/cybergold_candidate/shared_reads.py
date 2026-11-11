@@ -33,6 +33,11 @@ class SharedReads:
         try:
             values = await produce([key for key, _ in entries])
             for (key, entry), value in zip(entries, values, strict=True):
+                if isinstance(value, Exception):
+                    if not entry.future.done():
+                        entry.future.set_exception(value)
+                        entry.future.exception()
+                    continue
                 if retain and 'error' not in value:
                     self.completed[key] = value
                     self.completed.move_to_end(key)
