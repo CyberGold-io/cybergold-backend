@@ -1,5 +1,6 @@
 """Owned optional Market work, alongside unchanged ordinary candidate jobs."""
 import random
+from contextlib import nullcontext
 
 from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
@@ -9,6 +10,7 @@ from .contracts import capture_paths
 from .discovery import market_plan, route_identity
 from .prefix import repair_prefix
 from .capacity_recovery import recover_selected
+from .bootstrap import current_bootstrap
 
 
 async def explore(quoter, request, block, session, evaluate, incumbent, *, observations,
@@ -28,13 +30,19 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         async def feed(routes):
             for route, origins in routes:
                 identity = route_identity(route)
-                if identity not in session.resolved:
+                bootstrap = current_bootstrap()
+                already_offered = (bootstrap is not None and bootstrap.new_arrival_only()
+                                   and identity in session.started and not bootstrap.family_affected(identity))
+                if identity not in session.resolved and not already_offered:
                     yield identity, route, origins
         return [feed(routes) for _, routes in groups]
 
     async def one(_index, item):
         identity, route, origins = item
-        if identity in session.resolved or identity in session.pending:
+        bootstrap = current_bootstrap()
+        if (identity in session.resolved or identity in session.pending
+                or bootstrap is not None and bootstrap.new_arrival_only()
+                and identity in session.started and not bootstrap.family_affected(identity)):
             return
         session.pending.add(identity)
         # SDK-head bounds cannot disprove a latest Helpers-priced quote.
@@ -42,7 +50,9 @@ async def explore(quoter, request, block, session, evaluate, incumbent, *, obser
         session.claim()
         session.started.add(identity)
         try:
-            with capture_paths():
+            dependencies = (bootstrap.consuming(bootstrap.family_queries(identity))
+                            if bootstrap is not None else nullcontext())
+            with dependencies, capture_paths():
                 selected = market_plan(source, target, route, amount, origins=origins)
                 try:
                     value = await evaluate(0, 'core-first', False, selected=selected,

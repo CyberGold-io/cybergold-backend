@@ -73,11 +73,13 @@ class CoveredTicks implements TickDataProvider {
     if (bitmap === undefined) throw new MissingPoolState(this.pool.id, [position]);
     // Bitmap proves absence as well as presence. Use SDK traversal, not an
     // incomplete TickListDataProvider that would assert global net liquidity.
+    const emptyBoundary = lte ? (position << 8) * spacing : (((position + 1) << 8) - 1) * spacing;
+    if (bitmap === 0n) return [emptyBoundary, false];
     const indexes: number[] = [];
     for (let bit = 0; bit < 256; bit++) {
       if (bitmap & (1n << BigInt(bit))) indexes.push(((position << 8) + bit) * spacing);
     }
-    if (indexes.length === 0) return [lte ? (position << 8) * spacing : (((position + 1) << 8) - 1) * spacing, false];
+    if (indexes.length === 0) return [emptyBoundary, false];
     const ticks = indexes.map(index => ({ index, liquidityGross: j("0"), liquidityNet: j("0") }));
     return TickList.nextInitializedTickWithinOneWord(ticks, tick, lte, spacing);
   }

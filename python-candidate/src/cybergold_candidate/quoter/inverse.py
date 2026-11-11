@@ -4,6 +4,7 @@ from copy import deepcopy
 from ..pool_snapshot import copy_pool_bank
 from ..route_work_slots import engine_work
 from ..routing_encoding import exact_output_routes, split_runtime
+from ..sdk_simulation import simulate_sdk
 from ..uniswap_routes import pool_identity
 from .contracts import capture_paths
 from .evaluate import replay_conversion
@@ -18,7 +19,7 @@ async def inverse_hops(quoter, hops, desired):
     for row in reversed(hops):
         pool = deepcopy(row.pre_state)
         async with engine_work(quoter.engine.semaphore):
-            value = await quoter.engine.sdk.request({'operation': 'quote', 'pools': [pool],
+            value = await simulate_sdk(quoter.engine, {'operation': 'quote', 'pools': [pool],
                 'poolId': pool['id'], 'mode': 'exactOut', 'amount': str(target),
                 'zeroForOne': row.hop['zeroForOne']})
         target = int(value['amountIn'])

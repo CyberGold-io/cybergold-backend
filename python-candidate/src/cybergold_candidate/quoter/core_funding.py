@@ -83,9 +83,11 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
             (row['branch'], row['index']), (0, None))[1] or _retaining(row['currency'], core)
         for row in measured}}
     pools = {operation: _pools(chosen) for operation, chosen in planned.items()}
+    last_core = max((index for index, row in enumerate(original['body']['branches'])
+                     if row['kind'] == 0), default=-1)
     for branch, row in enumerate(original['body']['branches']):
         if row['kind'] == 1:
-            if not int(row['amountIn']):
+            if branch > last_core or not int(row['amountIn']):
                 continue
             await _replay(quoter, original['conversions'][f'{branch}:market'], source, core,
                           int(row['amountIn']), block, bank, canonical)
@@ -114,10 +116,14 @@ async def _sized(quoter, value, measured, residuals, block, canonical):
             if chosen is not None:
                 conversions[operation] = chosen
             conversions[f'{branch}:residual:{index}'] = continuation or _retaining(asset, core)
-        for index, asset in enumerate(data['basketAssets']):
-            useful, _ = residuals.get((branch, index), (0, None))
-            await _replay(quoter, conversions[f'{branch}:residual:{index}'], asset, core,
-                          useful, block, bank, canonical)
+        # This diagnostic bank is consumed only by following Core inverses.
+        # Terminal continuations/Market still execute in complete Helpers
+        # validation; advancing their discarded bank cannot size anything.
+        if branch < last_core:
+            for index, asset in enumerate(data['basketAssets']):
+                useful, _ = residuals.get((branch, index), (0, None))
+                await _replay(quoter, conversions[f'{branch}:residual:{index}'], asset, core,
+                              useful, block, bank, canonical)
     return funding_proposal(request, original, amounts=amounts, conversions=conversions)
 
 

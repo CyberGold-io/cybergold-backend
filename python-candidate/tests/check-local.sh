@@ -66,6 +66,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_topology_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cooperative_enumeration.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_quoter_bootstrap.py
+python-candidate/.venv/bin/python python-candidate/tests/test_arrival_work_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_scheduling_trace.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_parallel_matrix.py
 python-candidate/.venv/bin/python python-candidate/tests/test_benchmark_uniroute_depth.py
@@ -89,6 +90,8 @@ python-candidate/.venv/bin/python python-candidate/tests/test_core_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cygld_partial_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_zero_branch_funding.py
 python-candidate/.venv/bin/python python-candidate/tests/test_inverse_rounding.py
+python-candidate/.venv/bin/python python-candidate/tests/test_inverse_work_reuse.py
+python-candidate/.venv/bin/python python-candidate/tests/test_funding_replay_dependencies.py
 python-candidate/.venv/bin/python python-candidate/tests/test_funding_workflow.py
 python-candidate/.venv/bin/python python-candidate/tests/test_pool_direction_policy.py
 python-candidate/.venv/bin/python python-candidate/tests/test_hint_union_reuse.py

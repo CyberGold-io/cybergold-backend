@@ -431,7 +431,18 @@ class Quoter:
         async def wait_reconstruction(task):
             return await asyncio.shield(task)
         neighbor_metrics = {'starts': 0, 'completed': 0, 'sources': []}
-        async def evaluate(share, order, first, selected=None, funding=None, phase=None, partial=False,
+        candidate_queries, exploration_queries = {}, set()
+        def candidate_owner(share, order, first, funding=None):
+            return (share, order, first, json.dumps(
+                funding if funding is not None else default_funding or request['inputs'], sort_keys=True))
+        async def evaluate(share, order, first, selected=None, funding=None, **options):
+            queries = (candidate_queries.setdefault(candidate_owner(share, order, first, funding), set())
+                       if selected is None else None)
+            # Descendant funding/recovery tasks inherit their actual parent's
+            # query set; a new residual route must wake that parent too.
+            with route_bootstrap.consuming(queries) if queries is not None else nullcontext():
+                return await evaluate_body(share, order, first, selected=selected, funding=funding, **options)
+        async def evaluate_body(share, order, first, selected=None, funding=None, phase=None, partial=False,
                            failure_sink=None, limited_funding=None, retained=False, derived_funding=False,
                            bootstrap=False):
             nonlocal best
@@ -446,7 +457,10 @@ class Quoter:
                     funded_request, selected = cached_core_funding(
                         funded_request, self.core_state_cache.value, selected)
                 try:
+                    produced = False
                     async def produce_candidate():
+                        nonlocal produced
+                        produced = True
                         # Saved bodies and complete funding proposals use the
                         # finite bootstrap lane only for this Helpers call.
                         # Recovery and new exploration keep ordinary priority.
@@ -461,7 +475,15 @@ class Quoter:
                         pending = shared.read(identity, produce_candidate)
                     else:
                         pending = produce_candidate()
-                    value = await budget.discovery(pending)
+                    try:
+                        value = await budget.discovery(pending)
+                    finally:
+                        owner = candidate_owner(share, order, first, funding)
+                        if selected is None and not produced and not candidate_queries.get(owner):
+                            # A shared producer may have another pre-normalized
+                            # funding owner. Unknown dependencies stay eligible,
+                            # including when that shared call fails/cancels.
+                            candidate_queries.pop(owner, None)
                 except SnapshotChanged as error:
                     # The SDK only constructs proposals. A failed exploratory
                     # snapshot says nothing about an independent Helpers quote.
@@ -900,8 +922,7 @@ class Quoter:
 
                 await owned_reads(*(operation(job) for job in jobs.values() for operation in (replay, expand)))
             async def ordinary_body():
-                ordinary = owned_reads(explore(self, request, block, session, evaluate, lambda: best,
-                    observations=observations, seeded=seed is not None, core_only=core_only), limited(),
+                ordinary = owned_reads(explore_family(), limited(),
                     owned_reads(*(evaluate(share, order, True) for share, order in grid)), discovered())
                 if neighbor_task is None:
                     await ordinary
@@ -914,28 +935,40 @@ class Quoter:
                 await owned_reads(retained_routes(),
                     alongside_bootstrap(ordinary_body(), seeded(), incumbent=lambda: best))
 
+            async def explore_family():
+                with route_bootstrap.consuming(exploration_queries):
+                    await explore(self, request, block, session, evaluate, lambda: best,
+                        observations=observations, seeded=seed is not None, core_only=core_only)
+
             async def provider_arrival():
                 # Late AMM nominations receive the same optional family and
                 # partial-prefix work as the initial/catalog snapshots. Reuse
                 # the existing successful observation bank and selection clock;
                 # ordinary whole-plan improvements publish independently.
-                await owned_reads(explore(self, request, block, session, evaluate, lambda: best,
-                    observations=observations, seeded=seed is not None, core_only=core_only),
-                    owned_reads(*(evaluate(share, order, False, phase='provider-arrival')
-                                  for share, order in grid)))
+                family = [explore_family()] if route_bootstrap.affected(exploration_queries) else []
+                await owned_reads(*family, *(evaluate(share, order, False, phase='provider-arrival')
+                    for share, order in grid if route_bootstrap.affected(
+                        candidate_queries.get(candidate_owner(share, order, False)))))
 
             async def provider_quick():
                 # Ready nominations can qualify while an older detailed pass
                 # still owns slow state reads. These remain complete economic
                 # candidates under the same comparator and selection budget.
                 await owned_reads(*(evaluate(share, order, True, phase='provider-arrival-quick')
-                                    for share, order in grid))
+                                    for share, order in grid if route_bootstrap.affected(
+                                        candidate_queries.get(candidate_owner(share, order, True)))))
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
             route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True, block=block)
+            def merge_arrival_origins():
+                for value in family_best.values():
+                    route_bootstrap.merge_quote_origins(value)
+                if best is not None:
+                    route_bootstrap.merge_quote_origins(best)
             with bootstrap_scope(route_bootstrap):
-                await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
+                await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick,
+                                          origins=merge_arrival_origins)
                 while reconstructions:
                     completed = tuple(reconstructions)
                     await asyncio.gather(*completed, return_exceptions=True)

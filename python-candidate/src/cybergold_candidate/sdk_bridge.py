@@ -4,6 +4,10 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from .quote_flow import stage
 from .route_work_slots import required_state_wait
+from .sdk_timing import begin_exchange, observe
+from contextvars import ContextVar
+
+_exchange_timing = ContextVar('sdk_exchange_timing', default=None)
 
 
 @asynccontextmanager
@@ -33,6 +37,9 @@ async def write(process, payload):
 async def read(process):
     with stage('sdk.read'):
         line = await process.stdout.readline()
+        timing = _exchange_timing.get()
+        if timing is not None:
+            observe(timing.consumed_line)
     if not line:
         return None
     with stage('sdk.decode', kind='cpu'):
@@ -40,6 +47,18 @@ async def read(process):
 
 
 async def exchange(process, payload):
-    with stage('sdk.exchange'):
-        await write(process, payload)
-        return await read(process)
+    timing = observe(lambda: begin_exchange(payload))
+    token = _exchange_timing.set(timing)
+    try:
+        with stage('sdk.exchange'):
+            await write(process, {**payload, '_sdkTiming': True} if timing is not None else payload)
+            response = await read(process)
+        if timing is not None:
+            observe(lambda: timing.finish(response))
+        return response
+    except BaseException as error:
+        if timing is not None:
+            observe(lambda: timing.finish(error=error))
+        raise
+    finally:
+        _exchange_timing.reset(token)

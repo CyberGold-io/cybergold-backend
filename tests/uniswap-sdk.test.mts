@@ -19,6 +19,51 @@ const concentrated: PoolSnapshot = { id:'pool', protocol:'v3', token0:t0, token1
          {index:600,liquidityGross:'1000000000000000000',liquidityNet:'-1000000000000000000'}],
   bitmapWords:[{wordPosition:-1,bitmap:(1n<<246n).toString()},{wordPosition:0,bitmap:(1n<<10n).toString()}] };
 
+test('optional worker timing preserves legacy/result/error frames and separates state resumes', { timeout: 10000 }, async () => {
+  const child = spawn(process.execPath, ['src/uniswap-sdk/worker.ts'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const lines = createInterface({ input: child.stdout }), reader = lines[Symbol.asyncIterator]();
+  const send = (value: any) => child.stdin.write(JSON.stringify(value)+'\n');
+  const next = async () => JSON.parse((await reader.next()).value!);
+  const check = (frame: any) => {
+    const row = frame._sdkTiming;
+    assert(row);
+    assert(BigInt(row.receivedNs) <= BigInt(row.startedNs));
+    assert(BigInt(row.startedNs) <= BigInt(row.computedNs));
+    assert(BigInt(row.computedNs) <= BigInt(row.writeStartedNs));
+    assert(row.processCpuUserUs >= 0 && row.processCpuSystemUs >= 0);
+  };
+  try {
+    const quote = { operation: 'quote', mode: 'exactIn', amount: '1000', poolId: pair.id,
+      zeroForOne: true, pools: [pair] };
+    send({ ...quote, id: 'legacy' });
+    const legacy = await next();
+    assert.equal(legacy._sdkTiming, undefined);
+    send({ ...quote, id: 'observed', _sdkTiming: true });
+    const observed = await next(); check(observed);
+    assert.deepEqual(observed.result, legacy.result);
+    send({ ...quote, id: 'math-error', amount: '1', zeroForOne: false, _sdkTiming: true });
+    const error = await next(); check(error);
+    assert.equal(error.error.code, 'SDK_INPUT_TOO_SMALL');
+    send({ operation: 'quote', mode: 'exactIn', amount: '1000000000000', poolId: concentrated.id,
+      zeroForOne: true, pools: [{ ...concentrated, ticks: [], bitmapWords: [] }],
+      id: 'paused', continueState: true, _sdkTiming: true });
+    const paused = await next(); check(paused);
+    assert(paused.stateRequest);
+    // A paused timed request cannot attach its timing to another owner.
+    send({ ...quote, id: 'sibling-legacy' });
+    assert.equal((await next())._sdkTiming, undefined);
+    send({ id: 'paused', operation: 'resume', _sdkTiming: true,
+      coverage: [{ id: concentrated.id, ticks: concentrated.ticks, bitmapWords: concentrated.bitmapWords }] });
+    const resumed = await next(); check(resumed);
+    assert(resumed.result);
+    assert(BigInt(resumed._sdkTiming.receivedNs) >= BigInt(paused._sdkTiming.writeStartedNs));
+    assert.equal(resumed.id, 'paused');
+  } finally {
+    lines.close();
+    const exited = once(child, 'exit'); child.kill(); await exited;
+  }
+});
+
 test('V2 SDK exact input and output use raw-unit rounding', async()=>{
   const input=await quotePool(pair,'exactIn','1000',true);
   assert.equal(input.amountOut,'1992');

@@ -57,7 +57,8 @@ async def observed_json(request, intent, execute, *, kind, source, phase, invali
             result = await request_operation(request, execute)
         except (asyncio.CancelledError, ClientDisconnect) as error:
             observe(lambda: observation.finish('cancelled', frame={'economicEvidence': evidence(work,
-                operationKind=kind, resultSource=source, operationPhase=phase)}))
+                operationKind=kind, resultSource=source, operationPhase=phase,
+                producerMetrics=getattr(error, 'quoter_metrics', None))}))
             if isinstance(error, ClientDisconnect):
                 return Response(status_code=499)
             raise
@@ -92,10 +93,15 @@ async def request_operation(request, execute):
         while (await request.receive())['type'] != 'http.disconnect':
             pass
     waiting = None
+    producer_metrics, cancellation = None, None
     async def execute_operation():
+        nonlocal producer_metrics
         try:
             with stage('http.operation'):
                 return await execute()
+        except asyncio.CancelledError as error:
+            producer_metrics = getattr(error, 'quoter_metrics', None)
+            raise
         finally:
             if waiting is not None:
                 waiting.ready()
@@ -108,12 +114,17 @@ async def request_operation(request, execute):
                 return await operation
             await caller
             raise ClientDisconnect()
+    except (asyncio.CancelledError, ClientDisconnect) as error:
+        cancellation = error
+        raise
     finally:
         with stage('http.cleanup'):
             for task in (operation, caller):
                 if not task.done():
                     task.cancel()
             await asyncio.gather(operation, caller, return_exceptions=True)
+            if cancellation is not None and producer_metrics is not None:
+                cancellation.quoter_metrics = producer_metrics
 
 
 class EconomicQuotes:
@@ -247,8 +258,8 @@ async def handle_economic_quote_stream(request, service):
                     result = await service.progressive(value, publish, refresh=refresh)
                     finish('succeeded', {'value': result})
                     await publish({'type': 'complete', 'value': result})
-                except asyncio.CancelledError:
-                    finish('cancelled')
+                except asyncio.CancelledError as error:
+                    finish('cancelled', producer_metrics=getattr(error, 'quoter_metrics', None))
                     raise
                 except Exception as error:
                     payload = observation.error(error)

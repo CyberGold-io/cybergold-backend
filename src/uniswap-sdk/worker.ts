@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { runRequest } from "./engine.ts";
 import { MissingPoolState } from "./types.ts";
 import type { PoolCoverage, SdkRequest } from "./types.ts";
+import { WorkerTiming } from './worker-timing.ts';
 
 const require = createRequire(import.meta.url);
 const { InsufficientInputAmountError } = require("@uniswap/v2-sdk") as typeof import("@uniswap/v2-sdk");
@@ -14,7 +15,14 @@ const continued = new Set<string | number>();
 const abandoned = new Set<string | number>();
 const jobs = new Map<string | number, Promise<void>>();
 let pumping = false;
-const reply = (value: unknown) => process.stdout.write(JSON.stringify(value) + "\n");
+const timings = new Map<string | number, WorkerTiming>();
+const reply = (value: any) => {
+  const timing = timings.get(value.id);
+  timings.delete(value.id);
+  let line: string | undefined;
+  try { if (timing) line = timing.frame(value); } catch { /* Optional evidence never changes a reply. */ }
+  process.stdout.write(line ?? JSON.stringify(value) + "\n");
+};
 async function pump() {
   if (pumping) return;
   pumping = true;
@@ -25,6 +33,7 @@ async function pump() {
   pumping = false;
 }
 async function handle(request: SdkRequest) {
+  try { timings.get(request.id)?.start(); } catch { timings.delete(request.id); }
   const controller = controllers.get(request.id)!;
   const load = (missing: MissingPoolState): Promise<PoolCoverage[]> => new Promise((resolve, reject) => {
     controller.signal.throwIfAborted();
@@ -59,6 +68,7 @@ async function handle(request: SdkRequest) {
   } finally {
     controllers.delete(request.id); waiting.delete(request.id);
     continued.delete(request.id); abandoned.delete(request.id);
+    timings.delete(request.id);
   }
 }
 async function cancel(request: SdkRequest) {
@@ -74,9 +84,14 @@ async function cancel(request: SdkRequest) {
   if (request.acknowledge) reply({ id: request.id, cancelled: true });
 }
 input.on("line", line => {
+  const received = process.hrtime.bigint();
   try {
     const request = JSON.parse(line) as SdkRequest;
+    if ((request as SdkRequest & { _sdkTiming?: boolean })._sdkTiming === true) {
+      try { timings.set(request.id, new WorkerTiming(received)); } catch { /* No timing is required to quote. */ }
+    }
     if (request.operation === "resume") {
+      try { timings.get(request.id)?.start(); } catch { timings.delete(request.id); }
       const state = waiting.get(request.id);
       if (!state) { reply({ id: request.id, error: { code: "SDK_ERROR", message: "Continuation unavailable" } }); return; }
       waiting.delete(request.id); state.resolve(request.coverage ?? []); return;

@@ -1,15 +1,21 @@
 """Real subprocess lifecycle checks; upstream SDK arithmetic is qualified separately."""
 import asyncio
+import json
 import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from cybergold_candidate.sdk_worker import SdkWorker, SdkWorkerError
 from cybergold_candidate.recovery_rpc import SnapshotChanged
 from cybergold_candidate.quote_errors import public_quote_error
 from cybergold_candidate.rpc_diagnostics import quote_work_scope, route_work_scope
+from cybergold_candidate import sdk_bridge
+from cybergold_candidate.quote_flow import Flow, flow_scope, producer_flow
+from cybergold_candidate.sdk_timing import ChildClock, operation_timing, RoundTrips
 
 
 SCRIPT = '''import json, pathlib, sys, time
@@ -277,6 +283,116 @@ class SdkWorkerLifecycle(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(worker.process)
             worker.timeout = ordinary_timeout
             self.assertEqual(await worker.request({'value': 'after timeout'}), 'after timeout')
+
+
+class SdkTimingTests(unittest.IsolatedAsyncioTestCase):
+    def test_monotonic_calibration_does_not_assume_matching_origins(self):
+        clock = ChildClock()
+        first = clock.join(100, 500, 550, 200)
+        self.assertEqual(first, (0.0, .00005, .00005, False))
+        self.assertEqual(clock.join(1000, 1380, 1400, 1025), (0.0, .000005, .000005, False))
+        lower, upper, uncertainty, _ = clock.join(2000, 2375, 2385, 2280)
+        self.assertEqual((lower, upper, uncertainty), (.000270, .000270, 0.0))
+        # Different child origin/discontinuous calibration resets evidence only.
+        self.assertTrue(clock.join(3000, 100, 110, 3020)[-1])
+        with self.assertRaises(ValueError): clock.join(1, 100, 99, 200)
+
+    async def test_legacy_worker_and_malformed_metadata_keep_business_results_private(self):
+        broken = '''import json,sys
+for line in sys.stdin:
+ request=json.loads(line)
+ print(json.dumps({'id':request['id'],'result':request.get('value'),
+                   '_sdkTiming':{'receivedNs':'invalid'}}),flush=True)
+'''
+        for script, field in [(SCRIPT, 'legacyOrMissingFrames'), (broken, 'invalidChildFrames')]:
+            worker = SdkWorker([sys.executable, '-u', '-c', script])
+            self.addAsyncCleanup(worker.close)
+            flow = Flow('test', kind='search')
+            with flow_scope(flow):
+                self.assertEqual(await worker.request({'value': 'private-input-value'}), 'private-input-value')
+            rows = flow.snapshot()['sdkRoundTrips']['rows']
+            self.assertEqual((len(rows), rows[0][field]), (1, 1))
+            self.assertNotIn('private-input-value', json.dumps(flow.snapshot()['sdkRoundTrips']))
+
+    async def test_real_child_start_resume_and_cpu_join_reach_search_flow(self):
+        worker = SdkWorker([os.environ.get('CYBERGOLD_TEST_NODE', 'node'), 'src/uniswap-sdk/worker.ts'])
+        self.addAsyncCleanup(worker.close)
+        tokens = [{'address': '0x'+value*40, 'decimals': 18, 'chainId': 1} for value in ('1','2')]
+        pair = {'id': 'private-pool-identity', 'protocol': 'v2', 'token0': tokens[0], 'token1': tokens[1],
+                'reserve0': '1000000', 'reserve1': '2000000', 'feePips': 3000}
+        pool = {**pair, 'protocol': 'v3', 'tickSpacing': 60, 'sqrtRatioX96': str(2**96),
+                'tick': 0, 'liquidity': '1000000', 'bitmapWords': [], 'ticks': []}
+        records, demands = [], []
+        flow = Flow('test', kind='search', sink=records.append)
+        async def fill(requests):
+            demands.append(requests)
+            with producer_flow('required-state'):
+                return [{'id': pool['id'], 'bitmapWords': [
+                    {'wordPosition': -1, 'bitmap': str(1 << 255)}, {'wordPosition': 0, 'bitmap': '2'}],
+                    'ticks': [{'index': -60, 'liquidityGross': '1000000', 'liquidityNet': '1000000'},
+                              {'index': 60, 'liquidityGross': '1000000', 'liquidityNet': '-1000000'}]}]
+        with flow_scope(flow):
+            for _ in range(2):
+                result = await worker.request({'operation': 'quote', 'mode': 'exactIn', 'pools': [pair],
+                    'poolId': pair['id'], 'amount': '1000', 'zeroForOne': True})
+                self.assertEqual(result['amountOut'], '1992')
+                self.assertNotIn('_sdkTiming', result)
+            result = await worker.request({'operation': 'quote', 'mode': 'exactIn', 'pools': [pool],
+                'poolId': pool['id'], 'amount': '1000', 'zeroForOne': True}, on_state=fill)
+            self.assertEqual(result['amountOut'], '996')
+        flow.finish('succeeded')
+        search = next(row for row in records if row['flowKind'] == 'search')
+        census = search['sdkRoundTrips']
+        starts = next(row for row in census['rows'] if row['phase'] == 'start')
+        resumes = next(row for row in census['rows'] if row['phase'] == 'resume')
+        self.assertEqual(starts['started'], 3)
+        self.assertEqual(starts['stateRequestFrames'], 1)
+        self.assertEqual(resumes['started'], len(demands))
+        self.assertTrue(all(row['childFrames'] == row['completed'] for row in census['rows']))
+        self.assertTrue(all(row['invalidChildFrames'] == 0 for row in census['rows']))
+        self.assertTrue(all(row['childProcessCpuMs'] >= 0 for row in census['rows']))
+        for row in census['rows']:
+            self.assertLessEqual(row['responseToReadLowerMs'], row['responseToReadUpperMs'])
+            slow = row['slowest']
+            self.assertLessEqual(slow['childResponseWriteMsLower'], slow['childResponseWriteMsUpper'])
+            self.assertLessEqual(slow['childResponseWriteMsUpper'], slow['parentReadConsumedMs'])
+        self.assertNotIn(pool['id'], json.dumps(census))
+        self.assertTrue(all('sdkRoundTrips' not in row for row in records if row['flowKind'] == 'required-state'))
+
+    async def test_foreign_task_cannot_inherit_exchange_timing_ownership(self):
+        sent = []
+        async def drain(): pass
+        async def line(): return b'{"id":"1","result":"unchanged"}\n'
+        process = SimpleNamespace(stdin=SimpleNamespace(write=lambda raw: sent.append(json.loads(raw)), drain=drain),
+                                  stdout=SimpleNamespace(readline=line))
+        flow = Flow('test', kind='search')
+        with flow_scope(flow), operation_timing(ChildClock(), 'quote', 'exactIn'):
+            result = await asyncio.create_task(sdk_bridge.exchange(process, {'id': '1', 'operation': 'quote'}))
+        self.assertEqual(result['result'], 'unchanged')
+        self.assertNotIn('_sdkTiming', sent[0])
+        self.assertNotIn('sdkRoundTrips', flow.snapshot())
+
+    async def test_cancelled_read_and_broken_observer_never_replace_protocol_outcomes(self):
+        entered = asyncio.Event()
+        async def drain(): pass
+        async def read():
+            entered.set()
+            await asyncio.Event().wait()
+        process = SimpleNamespace(stdin=SimpleNamespace(write=lambda _raw: None, drain=drain),
+                                  stdout=SimpleNamespace(readline=read))
+        flow = Flow('test', kind='search')
+        async def request():
+            with operation_timing(ChildClock(), 'simulateRoute', 'exactOut'):
+                return await sdk_bridge.exchange(process, {'operation': 'simulateRoute'})
+        with flow_scope(flow):
+            task = asyncio.create_task(request())
+            await entered.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError): await task
+        row = flow.snapshot()['sdkRoundTrips']['rows'][0]
+        self.assertEqual((row['started'], row['cancelled'], row['completed']), (1, 1, 0))
+        with patch.object(RoundTrips, 'snapshot', side_effect=RuntimeError('optional observer failed')):
+            self.assertNotIn('sdkRoundTrips', flow.snapshot())
 
 
 if __name__ == '__main__':

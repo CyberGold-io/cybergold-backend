@@ -17,6 +17,7 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
 from ..pool_initialization import observed_uninitialized
+from ..routing_encoding import ZERO, weighted_shares
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
 from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
@@ -25,6 +26,8 @@ from .cooperative import CHECKPOINT
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
 _quick_offers = ContextVar('route_discovery_quick_offers', default=None)
+_query_consumers = ContextVar('route_query_consumers', default=())
+_arrival_queries = ContextVar('route_arrival_queries', default=None)
 
 
 def current_bootstrap():
@@ -62,6 +65,9 @@ class RouteBootstrap:
             lambda pool: not observed_uninitialized(catalog, pool, block))
             if catalog is not None and block is not None else None)
         self._completed_offers = {}
+        self._known_offers, self._offer_origins = {}, {}
+        self._family_queries = {}
+        self._query_revisions, self._catalog_changed_revision = {}, 0
         self._publication_sequence = 0
         self._close_errors = []
         self._changed = asyncio.Event()
@@ -78,7 +84,95 @@ class RouteBootstrap:
         self._catalog_input = self._catalog_identity()
         self._catalog_load = None
         self._handled_catalog_load = None
+        self._merge_origins = None
         self.watch_catalog_load()
+
+    @contextmanager
+    def consuming(self, queries):
+        """Children retain the existing candidate owner's input dependencies."""
+        token = _query_consumers.set((*_query_consumers.get(), (self, queries)))
+        try:
+            yield
+        finally:
+            _query_consumers.reset(token)
+
+    def affected(self, queries):
+        arrival = _arrival_queries.get()
+        return (arrival is None or arrival[0] is not self or arrival[1] is None
+                or queries is None or bool(queries & arrival[1]))
+
+    def new_arrival_only(self):
+        arrival = _arrival_queries.get()
+        return arrival is not None and arrival[0] is self and arrival[1] is not None
+
+    def family_queries(self, identity):
+        return self._family_queries.setdefault(identity, set())
+
+    def family_affected(self, identity):
+        return self.affected(self._family_queries.get(identity))
+
+    def _changed_queries(self, revision):
+        if self._catalog_changed_revision > revision:
+            return None  # A changed graph can alter any existing walk.
+        return {key for key, changed in self._query_revisions.items() if changed > revision}
+
+    def _query_changed(self, key):
+        self.revision += 1
+        self._query_revisions[key] = self.revision
+        self._changed.set()
+
+    @staticmethod
+    def _nomination_identity(branches, *, lots=True, shares=None):
+        # Canonical path/ppm identities, including explicit native transitions.
+        # Resolved authority and token precision can affect SDK construction;
+        # supplier prices/coverage are not authoritative observations here.
+        paths = []
+        leading = [row['hops'][0].get('kind') for row in branches if row['hops']]
+        strip = (not lots and len(leading) == len(branches) and leading
+                 and leading[0] in ('wrap', 'unwrap') and all(kind == leading[0] for kind in leading))
+        for row in branches:
+            hops = row['hops'][1:] if strip else row['hops']
+            extras = tuple(((hop['pool'].get('address') or '').lower(),
+                            (hop['pool'].get('poolManager') or '').lower(),
+                            int(hop['pool'].get('tickSpacing') or 0), (hop['pool'].get('hooks') or ZERO).lower(),
+                            tuple((hop['pool'][name]['address'].lower(), hop['pool'][name].get('chainId'),
+                                   hop['pool'][name].get('decimals'))
+                                  for name in ('token0', 'token1')))
+                           for hop in hops if 'pool' in hop)
+            paths.append((route_identity(hops), extras))
+        weights = (tuple(int(row['amountIn']) for row in branches) if lots else
+                   weighted_shares(branches) if shares is None else shares)
+        return tuple(zip(weights, paths, strict=True))
+
+    def _remember_offer(self, key, offer):
+        try:
+            identity = self._nomination_identity(offer['branches'])
+            origin_key = self._nomination_identity(offer['branches'], lots=False)
+        except Exception:
+            return True  # Malformed nominations keep their ordinary consumer errors.
+        known = self._known_offers.setdefault(key, set())
+        fresh = identity not in known
+        known.add(identity)
+        self._offer_origins.setdefault(key[:2], {}).setdefault(origin_key, set()).update(offer['origins'])
+        return fresh
+
+    def merge_quote_origins(self, value):
+        """Enrich private completed quote metadata without another price."""
+        from .provenance import attach_origins
+        for chosen in value.get('plan', {}).get('conversions', {}).values():
+            if not isinstance(chosen, dict) or not chosen.get('branches') or 'template' not in chosen:
+                continue
+            try:
+                key = chosen['inputCurrency'].lower(), chosen['outputCurrency'].lower()
+                identity = self._nomination_identity(chosen['branches'], lots=False,
+                    shares=[int(row['sharePpm']) for row in chosen['template']['routes']])
+            except Exception:
+                continue  # Optional nomination metadata cannot veto a quote.
+            names = set(origin_names(chosen.get('discoveryOrigins')))
+            names.update(self._offer_origins.get(key, {}).get(identity, ()))
+            if names:
+                chosen['discoveryOrigins'] = sorted(names)
+        attach_origins(value)
 
     def _catalog_identity(self):
         # The existing execution pool keys establish graph connectivity.
@@ -137,6 +231,7 @@ class RouteBootstrap:
         # its initial calculation will already receive this latest catalog.
         if self._queries:
             self.revision += 1
+            self._catalog_changed_revision = self.revision
             self._changed.set()
         return True
 
@@ -274,15 +369,16 @@ class RouteBootstrap:
         if identity in rows:
             offer = rows[identity][1]
             offer['origins'].extend(name for name in names if name not in offer['origins'])
+            self._remember_offer(key, offer)
             return False
         offer = {'branches': [{'amountIn': str(query.amount), 'hops': topology}], 'origins': names}
         self._publication_sequence += 1
         rows[identity] = self._publication_sequence, offer
+        fresh = self._remember_offer(key, offer)
         # Future consumers read this ready hint when they first ask. Only a
         # query already consumed by this search has an older choice to revisit.
-        if key in self._queries:
-            self.revision += 1
-            self._changed.set()
+        if fresh and key in self._queries:
+            self._query_changed(key)
         return True
 
     def has_ready_offers(self, source, target, amount):
@@ -306,6 +402,9 @@ class RouteBootstrap:
         if self._closed:
             return []
         key = source.lower(), target.lower(), int(amount)
+        for owner, queries in _query_consumers.get():
+            if owner is self:
+                queries.add(key)
         if key not in self._queries:
             self._queries[key] = []
             query = RouteQuery(*key, block)
@@ -352,12 +451,15 @@ class RouteBootstrap:
                            for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
         return result
 
-    async def _quick_pass(self, callback, offers):
-        token = _quick_offers.set((self, offers))
+    async def _arrival_pass(self, callback, queries, offers=None):
+        arrival = _arrival_queries.set((self, queries))
+        token = _quick_offers.set((self, offers)) if offers is not None else None
         try:
             return await callback()
         finally:
-            _quick_offers.reset(token)
+            if token is not None:
+                _quick_offers.reset(token)
+            _arrival_queries.reset(arrival)
 
     def _start_entry(self, entry):
         attempt = {'provider': entry['name'], 'status': 'pending', 'candidates': 0, 'batches': 0,
@@ -409,7 +511,10 @@ class RouteBootstrap:
                 attempt['candidates'] += 1
                 if attempt['firstCandidateMs'] is None:
                     attempt['firstCandidateMs'] = self._elapsed_ms()
-                yield {'branches': deepcopy(candidate), 'origins': [attempt['provider']]}
+                offer = {'branches': deepcopy(candidate), 'origins': [attempt['provider']]}
+                query = entry['query']
+                self._remember_offer((query.source, query.target, query.amount), offer)
+                yield offer
         except SnapshotChanged:
             if not self.nomination_only:
                 raise
@@ -429,6 +534,9 @@ class RouteBootstrap:
                     attempt['feedErrors'] += 1
 
     def _publish_batch(self, response, entry, attempt):
+        # Other canonical producers share this registry. Preserve the broad
+        # wake when their graph changed before this query-specific arrival.
+        self.refresh_catalog()
         rows = deepcopy(list(response))
         attribution = getattr(response, 'engine_attribution', None)
         if isinstance(attribution, dict):
@@ -442,11 +550,15 @@ class RouteBootstrap:
         if rows:
             if attempt['firstCandidateMs'] is None:
                 attempt['firstCandidateMs'] = self._elapsed_ms()
-            self.revision += 1
             self._publication_sequence += 1
-            entry['offers'].extend({'branches': row, 'origins': [attempt['provider']]} for row in rows)
+            offers = [{'branches': row, 'origins': [attempt['provider']]} for row in rows]
+            query = entry['query']
+            key = query.source, query.target, query.amount
+            fresh = [self._remember_offer(key, offer) for offer in offers]
+            entry['offers'].extend(offers)
             entry['offer_revisions'].extend([self._publication_sequence] * len(rows))
-            self._changed.set()
+            if any(fresh):
+                self._query_changed(key)
 
     async def _discover(self, feed, entry, attempt):
         try:
@@ -489,8 +601,9 @@ class RouteBootstrap:
                 self._start_entry(entry)
         self._changed.set()
 
-    async def run(self, ordinary, reevaluate, *, quick=None):
+    async def run(self, ordinary, reevaluate, *, quick=None, origins=None):
         """Keep ordinary completion independent and consume late arrivals."""
+        self._merge_origins = origins
         ordinary_task = asyncio.create_task(ordinary)
         round_task, changed_task = None, None
         completed_revision, round_revision = 0, 0
@@ -520,13 +633,15 @@ class RouteBootstrap:
                 if stopped is not None and stopped.done():
                     raise SearchStopped()
                 if quick is not None and self.revision > quick_revision:
+                    queries = self._changed_queries(quick_revision)
                     quick_revision = self.revision
                     self.quick_reevaluations += 1
-                    quick_tasks.add(asyncio.create_task(self._quick_pass(quick, self._ready_offers())))
+                    quick_tasks.add(asyncio.create_task(self._arrival_pass(quick, queries, self._ready_offers())))
                 if round_task is None and self.revision > completed_revision:
+                    queries = self._changed_queries(completed_revision)
                     round_revision = self.revision
                     self.reevaluations += 1
-                    round_task = asyncio.create_task(reevaluate())
+                    round_task = asyncio.create_task(self._arrival_pass(reevaluate, queries))
                 providers_pending = any(not task.done() for task in self._tasks)
                 if ordinary_task.done() and round_task is None and not quick_tasks and not providers_pending:
                     self._raise_failure()
@@ -593,6 +708,17 @@ class RouteBootstrap:
                               and (self.nomination_only or not isinstance(error, SnapshotChanged))]
         self._finished_ms = self._elapsed_ms()
         with stage('discovery.clear', kind='cpu'):
+            try:
+                if self._merge_origins is not None:
+                    self._merge_origins()
+            except Exception as error:
+                self._close_errors.append(error)  # Optional origins do not veto execution.
+            finally:
+                self._merge_origins = None
+                self._known_offers.clear()
+                self._offer_origins.clear()
+                self._query_revisions.clear()
+                self._family_queries.clear()
             self.topology.clear()
         disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
         if disproof is not None and not self.nomination_only:
