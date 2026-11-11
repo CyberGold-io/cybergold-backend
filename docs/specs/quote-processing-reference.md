@@ -294,6 +294,24 @@ started lazily. The generic SDK arithmetic child is also reused and lazy.
 Initial custom-prefix nominations contribute to their supplier's candidate
 count and first-candidate time; lazy-feed reads remain a separate measurement.
 
+Before graph/path and split expansion, discovery omits a V3/V4 physical pool
+only when this search has a successful canonical `PoolRegistry.snapshot`
+observation of `sqrtRatioX96 == 0`. Request-local facts cover both pinned and
+latest snapshots and bind the captured registry chain/generation, requested
+block and physical authority. A fresh search does not inherit exclusions.
+Unknown state and ordinary read failures remain eligible, as do initialized
+pools whose current liquidity is zero. Raw descriptors and hypothetical
+candidate state cannot establish this fact.
+
+The shared predicate applies to custom/seeded paths and topology-cache reads,
+before hint Cartesian products and union splits, and to new local optimizer
+payloads and in-flight callbacks. Hint reconstruction preserves compatible
+sibling paths with the whole nomination's funding. The first observed zero
+ends ordinary exploration of that pool before tick expansion or SDK arithmetic.
+This uses observations already acquired by ordinary work: it adds no RPC/API
+read, await barrier, provider restart or retained error. Inventory remains
+intact, and independent whole-plan Helpers replay retains its own execution.
+
 Hosted adapters use Uniswap Trading API endpoints. Their labels do not prove
 which undocumented server algorithm ran. Recorded response evidence determines
 attribution. On Sandbox, hosted discovery supplies the foreign market topology
@@ -667,6 +685,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Backend ranking and publication | `quote_publication.py`, `quoter/quote_book.py`, `quoter/ranking.py` |
 | Retained families/reconstruction | `quoter/reuse_routes.py`, `quoter/path_families.py`, `quoter/reuse_estimate.py` |
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |
+| Observed pool initialization | `pool_initialization.py`, `uniswap_state.py`, `quoter/discovery.py`, `quoter/alpha_routes.py` |
 | Shared funded-plan edits | `quoter/funding.py` |
 | Target-output inverse and partial-AMM recovery | `quoter/inverse.py`, `quoter/prefix.py`, `quoter/capacity_recovery.py` |
 | Shared pool-direction rule | `quoter/pool_directions.py`, `quoter/amm_adapter.py`, `quoter/plan_simulation.py`, `quoter/quote_book.py` |

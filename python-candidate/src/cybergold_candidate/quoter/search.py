@@ -933,7 +933,7 @@ class Quoter:
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
-            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True)
+            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True, block=block)
             with bootstrap_scope(route_bootstrap):
                 await route_bootstrap.run(ordinary_search(), provider_arrival, quick=provider_quick)
                 while reconstructions:

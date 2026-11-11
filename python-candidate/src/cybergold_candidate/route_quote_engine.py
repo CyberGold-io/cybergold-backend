@@ -7,6 +7,7 @@ import asyncio
 from .route_work_slots import engine_work, PricingSlots, required_state_wait
 from copy import deepcopy
 from .pool_snapshot import copy_pool_snapshot
+from .pool_initialization import observed_uninitialized
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -329,6 +330,8 @@ class RouteQuoteEngine:
                         async with required_state_wait():
                             canonical[identity] = (await reads[identity] if reads
                                 else await self.registry.snapshot(pool, block))
+                if observed_uninitialized(self.registry, pool, block):
+                    raise InvalidPreview('Observed pool is uninitialized (sqrtRatioX96=0).')
                 private = bank_state(candidate, pool)
                 snapshots[identity] = {**copy_pool_snapshot(private if private is not None else canonical[identity]), 'id': identity}
         finally:

@@ -103,6 +103,15 @@ the same AMM adapter for market-only and market-plus-Core plans; a completed
 supplier does not wait for the others. All three hosted suppliers share the
 existing queue, with a default of six HTTP starts per second.
 
+Discovery excludes a V3/V4 pool from further route and split expansion only
+after a successful canonical snapshot in this search observes
+`sqrtRatioX96 == 0`. The fact is scoped to the registry chain, generation,
+requested block and physical pool authority; a fresh search starts without it.
+Unknown state, read failures, descriptor/private-state values and initialized
+pools with zero liquidity do not establish exclusion. The same rule covers
+seeded/cached discovery paths, supplier hints and local optimizer work, without
+extra reads or a supplier wait. Independent whole-plan Helpers replay is unchanged.
+
 A trade may share a physical pool in the same direction. Opposite-direction
 use within that trade is excluded. Crossed supplier hints can supply a union
 of pools from which existing discovery finds shorter compatible paths. No
@@ -338,6 +347,22 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Exclude observed-uninitialized pools before route expansion
+
+- Record only successful canonical V3/V4 snapshots with `sqrtRatioX96 == 0`
+  as uninitialized within the current search, for pinned and latest requests.
+  Bind the fact to the registry chain/generation, block and physical authority.
+- Apply that fact before graph/path and split expansion, including seeded and
+  cached discovery paths, hint normalization, new local optimizer payloads and
+  in-flight callbacks. Preserve compatible sibling paths and their full funding.
+- Keep unknown pools, read failures and initialized zero-liquidity pools
+  eligible for ordinary discovery/pricing. Descriptor and hypothetical private
+  state are not evidence. Do not delete inventory or retain a global blacklist.
+- Keep independent Helpers whole-plan replay, provider ownership and selection
+  unchanged. No additional RPC/API read, wait barrier, provider restart, error
+  cache, route cap or search cutoff is added. No live latency gain is claimed.
+- Update the technical reference, search diagram and linked process PDF.
 
 ### 2026-11-10 - Avoid eager offer copies and release capacity during SDK lock waits
 

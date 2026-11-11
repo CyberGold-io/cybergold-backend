@@ -26,6 +26,7 @@ from .recovery_rpc import RecoveryApiError, SnapshotChanged
 from .rpc_block_context import is_latest, rpc_block_parameter
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
 from .pool_snapshot import copy_pool_descriptor, copy_pool_snapshot, copy_pool_state
+from .pool_initialization import record_pool_initialization
 from .quote_flow import stage
 
 ZERO = '0x'+'00'*20
@@ -572,6 +573,7 @@ class PoolRegistry:
                 if acquired.get('acquisition'):
                     state['acquisition'] = deepcopy(acquired['acquisition'])
             self.publish_observation(state)
+        record_pool_initialization(self, state, block, generation, requested=pool)
         return state
 
     async def extend_ticks(self, snapshot, requests, block):

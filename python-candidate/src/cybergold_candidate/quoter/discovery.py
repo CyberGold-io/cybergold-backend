@@ -21,6 +21,8 @@ def _enumerate_path_steps(pools, source, target, weth=WETH, max_hops=3):
     unique = {}
     for pool in pools:
         yield CHECKPOINT
+        if not pool_available(pool):
+            continue
         identity = pool_identity(pool)
         if identity not in unique or pool.get('address'):
             unique[identity] = pool
@@ -71,6 +73,15 @@ def current_topology():
     return _topology.get()
 
 
+def pool_available(pool):
+    cache = current_topology()
+    return cache is None or cache.pool_available(pool)
+
+
+def route_available(route):
+    return all(pool_available(hop['pool']) for hop in route if 'pool' in hop)
+
+
 class TopologyCache:
     """One discovery owner's immutable walks and rendered-route identities.
 
@@ -79,7 +90,8 @@ class TopologyCache:
     existing repr-based ordering. One completed integer allocation-pattern set
     can be reused while split nominations remain lazy and freshly bound.
     """
-    def __init__(self):
+    def __init__(self, pool_available=None):
+        self.pool_available = pool_available or (lambda pool: True)
         self.walks, self.validated = {}, {}
         self.hint_union = None, ()
         self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
@@ -117,7 +129,7 @@ class TopologyCache:
         return finish(self.path_steps(pools, source, target, weth, max_hops))
 
     def path_steps(self, pools, source, target, weth, max_hops):
-        pools = list(pools)
+        pools = [pool for pool in pools if self.pool_available(pool)]
         if len(pools) == len(self._catalog_objects) and self._catalog_objects == frozenset(map(id, pools)):
             unique, graph = self._catalog_unique, self._catalog_graph
         else:
@@ -178,11 +190,20 @@ def path_steps(pools, source, target, weth=WETH, max_hops=3):
             _enumerate_path_steps(pools, source, target, weth, max_hops))
 
 
-def route_candidates(routes, amount):
+def route_candidates(routes, amount, *, observed=True):
+    available = route_available if observed else lambda route: True
     for route in routes:
-        yield [{'amountIn': str(amount), 'hops': route}]
+        if available(route):
+            yield [{'amountIn': str(amount), 'hops': route}]
+    # Recheck after the singles have been consumed, before the quadratic pair
+    # walk. Existing lazy feeds may have learned new initialization facts.
+    routes = [route for route in routes if available(route)]
     for left, right in combinations(routes, 2):
         for share in (25, 50, 75):
+            # A lazy feed can outlive the canonical observation that disproved
+            # one of its paths. Do not expand its remaining allocations.
+            if not available(left) or not available(right):
+                continue
             first = amount * share // 100
             if first and amount - first:
                 yield [{'amountIn': str(first), 'hops': left}, {'amountIn': str(amount - first), 'hops': right}]
@@ -202,6 +223,8 @@ def seeded_path_steps(pools, seed, source, target, weth=WETH):
     unique = {}
     for pool in pools:
         yield CHECKPOINT
+        if not pool_available(pool):
+            continue
         identity = pool_identity(pool)
         if identity not in unique or pool.get('address'):
             unique[identity] = pool
