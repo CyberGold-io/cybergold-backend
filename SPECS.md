@@ -193,6 +193,25 @@ during restoration releases the worker lock. Other required-state waits retain
 their existing admission behavior; engine capacity stays eight and SDK exchange
 capacity stays one.
 
+Route scheduling separately limits unfinished candidate evaluations, including
+parked work, to its existing `limit` (eight by default) per scheduler invocation.
+A waiting evaluation still releases execution permits; another evaluation from
+that scheduler waits until one finishes. One prefetched candidate per feed and
+the existing feed fairness remain. This is not a global bound across nested
+schedulers or concurrent quotes.
+
+Each local AlphaRouter/UniRoute driver admits eight response-outstanding price
+callbacks across its simultaneous calculations. Route/amount jobs are consumed
+lazily, with admission before callback payload construction and emission. The
+Python reader continues draining all protocol frames. The two drivers therefore
+have at most sixteen response-outstanding callbacks per engine, not a global
+sixteen-task bound: Python writer cleanup can overlap a returned callback slot.
+Direct known Core sizing keeps its existing engine/SDK priority and does not
+take these callback credits. These counts do not bound total memory, route
+graphs, retained results or work across engines. Existing errors, cancellation
+and timeouts can still end a search before every candidate is observed; no
+deadline, call limit, fee arithmetic or ranking change is introduced.
+
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
 observation owns a finite pass over its alternatives; derived results do not
@@ -365,6 +384,24 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Bound route evaluations and local optimizer callbacks
+
+- Count unfinished evaluations, including parked work, against each route
+  scheduler's existing limit of eight by default. Retain one prefetched candidate
+  per feed, feed fairness and CandidateWork permit release/reacquisition.
+- Admit eight response-outstanding price callbacks per local optimizer driver
+  across its calculations, before constructing/emitting callback payloads.
+  Consume route/amount jobs lazily through one shared bounded-work helper; keep
+  result order, early hints and the multiplexed Python reader's normal drain.
+- Return callback capacity on response/error or retirement. The two drivers'
+  sixteen response slots are not a global Python-task or RSS bound; writer
+  cleanup, graphs, retained results and other engines remain outside that count.
+- Preserve known-work engine/SDK priority, complete Helpers validation, fees,
+  ranking, existing cancellation and timeout policies. No hard deadline, RPC/API
+  call limit or economic route rejection is added; no live speedup is claimed.
+- Update the reference, producer-limit diagrams and linked process PDF as part
+  of the owner-authorized coordinated admission change.
 
 ### 2026-11-11 - Prioritize known SDK exchanges and lock-holder permit restoration
 

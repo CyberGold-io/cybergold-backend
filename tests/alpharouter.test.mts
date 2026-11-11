@@ -26,6 +26,7 @@ test('terminal calculation errors retire pending callbacks and silence late work
     return [];
   }, value => { frames.push(value); }, error => (error as Error).message);
   session.receive({ id: 'first' });
+  await setImmediate();
   const callback = frames.find(frame => frame.operation === 'quote');
   fail!(new Error('ordinary failure'));
   await setImmediate();
@@ -56,6 +57,7 @@ test('closing a calculation session retires callbacks without publishing a termi
     return [];
   }, value => { frames.push(value); }, () => 'ordinary failure');
   session.receive({ id: 'closing' });
+  await setImmediate();
   assert.equal(frames.length, 1);
   session.close();
   await setImmediate();
@@ -72,6 +74,7 @@ test('active calculation callbacks resolve and retain the existing unknown-frame
     return [[result.quote]];
   }, value => { frames.push(value); }, () => 'ordinary failure');
   session.receive({ id: 'active' });
+  await setImmediate();
   const callback = frames[0];
   assert.equal(session.receive({ id: 'unknown', operation: 'quoteResult', quoteId: callback.quoteId,
     result: { quote: 'bad' } }), false);
@@ -96,6 +99,7 @@ test('ordered cancellation removes retired query records and acknowledges after 
   for (let index = 0; index < 100; index++) {
     const id = String(index);
     session.receive({ id, amount: '100' });
+    await setImmediate();
     const callback = frames.at(-1);
     session.receive({ id, operation: 'quoteResult', quoteId: callback.quoteId, result: { quote: '200' } });
     await setImmediate();

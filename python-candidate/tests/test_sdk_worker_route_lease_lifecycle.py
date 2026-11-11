@@ -130,7 +130,7 @@ class SdkWorkerRouteLeaseLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(process.returncode)
         return stats
 
-    async def test_normal_sdk_resume_releases_work_for_later_candidate(self):
+    async def test_parked_sdk_frees_engine_and_respects_its_scheduler_scope(self):
         parked, release, fast = asyncio.Event(), asyncio.Event(), asyncio.Event()
         results = []
         async def fill(requests):
@@ -144,19 +144,31 @@ class SdkWorkerRouteLeaseLifecycle(unittest.IsolatedAsyncioTestCase):
                 fast.set()
         task = self.schedule(evaluate, ('parked', 'fast'))
         await asyncio.wait_for(parked.wait(), 3)
-        await asyncio.wait_for(fast.wait(), 3)
         process = self.worker.process
-        self.assertEqual(results, ['fast'])
+        scheduled = self.leases[0].slots is not None
+        if not scheduled:
+            # The standalone subclass has no scheduler lifetime limit: its
+            # already-created sibling still progresses during the state wait.
+            await asyncio.wait_for(fast.wait(), 3)
+        # Independent SDK/engine work progresses even when a scheduler is full.
+        async with work.engine_work(self.engine):
+            independent = await self.worker.request(payload('independent', noState=True), on_state=fill)
+        self.assertEqual(independent, 'independent')
+        self.assertEqual(fast.is_set(), not scheduled)
+        self.assertEqual(results, [] if scheduled else ['fast'])
+        self.assertEqual(len(self.leases), 1 if scheduled else 2)
         self.assertFalse(task.done())
         self.assertFalse(self.leases[0].owned)
         self.assertEqual(self.engine._value, 1)
         release.set()
         await asyncio.wait_for(task, 3)
-        self.assertEqual(results, ['fast', 'parked'])
+        self.assertEqual(results, ['parked', 'fast'] if scheduled else ['fast', 'parked'])
+        self.assertTrue(fast.is_set())
         self.assert_permits_restored()
         stats = await self.assert_clean_child(process)
         self.assertEqual([row['operation'] for row in stats['events']],
-                         ['simulateRoute', 'simulateRoute', 'resume', 'stats'])
+                         ['simulateRoute', 'simulateRoute', 'resume', 'simulateRoute', 'stats'] if scheduled
+                         else ['simulateRoute', 'simulateRoute', 'simulateRoute', 'resume', 'stats'])
 
     async def test_ordinary_parked_callback_error_preserves_exception_and_cancels_session(self):
         expected = OSError('inert required observation failed')

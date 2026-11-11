@@ -79,7 +79,7 @@ test('actual published deep5 improves the canonical asymmetric split over deep25
   assert.equal(JSON.stringify(request.pools), original);
 });
 
-test('raw finder publishes before all independent percentage callbacks start and settle', async () => {
+test('raw finder publishes before bounded percentage jobs and every ordered split survives', async () => {
   const request = asymmetric(), order: string[] = [];
   const linears = await discoverLocal(request);
   const expected = await quoteLocalSplits(request, linears, canonical(request));
@@ -98,9 +98,12 @@ test('raw finder publishes before all independent percentage callbacks start and
     await started;
     assert.equal(order[0], 'finder');
     assert.deepEqual(published, [linears]);
-    assert.equal(callbacks.length, 40, 'both paths must start all 20 percentages while the first is held');
+    assert.equal(callbacks.length, 8, 'holding the first batch must not construct all 40 callback payloads');
     assert(order.slice(1).every(stage => stage === 'quote'));
     assert.equal(settled, false, 'optimized results cannot finish while their observations are held');
+    release();
+    assert.deepEqual(await operation, expected, 'bounded observations retain every ordered split result');
+    assert.equal(callbacks.length, 40);
     for (const candidate of published[0]) {
       const path = candidate[0].hops;
       const amounts = callbacks.filter(callback => callback.branches[0].hops === path)
@@ -108,8 +111,6 @@ test('raw finder publishes before all independent percentage callbacks start and
       assert.deepEqual(amounts, Array.from({ length: 20 }, (_, index) =>
         (BigInt(request.amount)*BigInt(100-index*5)/100n).toString()));
     }
-    release();
-    assert.deepEqual(await operation, expected, 'held concurrent observations retain every ordered split result');
   } finally {
     // An assertion failure must also release and drain every owned callback.
     release();

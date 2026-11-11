@@ -3,6 +3,7 @@
  * Supplied SDK objects never price swaps or claim complete tick observations.
  */
 import { createRequire } from "node:module";
+import { mapQuoteJobs } from './callback-work.ts';
 const require = createRequire(import.meta.url);
 const sor = require("@uniswap/smart-order-router");
 const sdk: any = { sor, core: require("@uniswap/sdk-core"), v2: require("@uniswap/v2-sdk"),
@@ -23,7 +24,8 @@ type QuoteRequest = { route: any; amount: any; mode: "exactIn" | "exactOut"; poo
 type QuoteObservation = { quote: string | null; sqrtPriceX96AfterList?: string[]; initializedTicksCrossedList?: number[]; gasEstimate?: string };
 type AlphaOptions = { chainId: number; blockNumber: number; pools: PoolSnapshot[];
   nominateRoutes?: (routes: any[]) => void;
-  quoteRoute: (request: QuoteRequest) => Promise<QuoteObservation>; gasSupportPools?: PoolSnapshot[] };
+  quoteRoute: (request: QuoteRequest) => Promise<QuoteObservation>; gasSupportPools?: PoolSnapshot[];
+  quoteSignal?: AbortSignal };
 // The product Sandbox inherits these Mainnet deployments. Register the
 // dependency addresses/currencies under its real ID; no quote/callback is
 // labelled Mainnet and this offline router never owns a chain transport.
@@ -208,19 +210,23 @@ export function createAlphaRouter(options: AlphaOptions) {
   const quoteMany = async (amounts: any[], routes: any[], mode: 'exactIn' | 'exactOut') => {
     record('quote.'+mode, { routes: routes.length, amounts: amounts.map(amount => amount.quotient.toString()) });
     options.nominateRoutes?.(routes);
-    const routesWithQuotes = await Promise.all(routes.map(async route => {
-      const pools = (route.pools ?? route.pairs).map((pool: any) => snapshotBySdkPool.get(pool));
-      const observations = await Promise.all(amounts.map(async amount => {
-        const result = await options.quoteRoute({ route, amount, mode, pools, blockNumber });
-        record('quote.amount', { protocol: route.protocol, mode, pools: pools.map((row: any) => row?.id),
-          amount: amount.quotient.toString(), quote: result.quote });
-        return { amount, quote: result.quote === null ? null : BigNumber.from(result.quote),
-          sqrtPriceX96AfterList: result.sqrtPriceX96AfterList?.map((value: string) => BigNumber.from(value)) ?? [],
-          initializedTicksCrossedList: result.initializedTicksCrossedList ?? [],
-          gasEstimate: BigNumber.from(result.gasEstimate ?? 0), gasLimit: BigNumber.from(0) };
-      }));
-      return [route, observations];
-    }));
+    const poolRows = new Map<number, any[]>();
+    const observations = await mapQuoteJobs(routes.length*amounts.length, async index => {
+      const routeIndex = Math.floor(index/amounts.length), route = routes[routeIndex];
+      const amount = amounts[index%amounts.length];
+      if (!poolRows.has(routeIndex)) poolRows.set(routeIndex,
+        (route.pools ?? route.pairs).map((pool: any) => snapshotBySdkPool.get(pool)));
+      const pools = poolRows.get(routeIndex)!;
+      const result = await options.quoteRoute({ route, amount, mode, pools, blockNumber });
+      record('quote.amount', { protocol: route.protocol, mode, pools: pools.map((row: any) => row?.id),
+        amount: amount.quotient.toString(), quote: result.quote });
+      return { amount, quote: result.quote === null ? null : BigNumber.from(result.quote),
+        sqrtPriceX96AfterList: result.sqrtPriceX96AfterList?.map((value: string) => BigNumber.from(value)) ?? [],
+        initializedTicksCrossedList: result.initializedTicksCrossedList ?? [],
+        gasEstimate: BigNumber.from(result.gasEstimate ?? 0), gasLimit: BigNumber.from(0) };
+    }, options.quoteSignal);
+    const routesWithQuotes = routes.map((route, index) => [route,
+      observations.slice(index*amounts.length, (index+1)*amounts.length)]);
     return { routesWithQuotes, blockNumber: BigNumber.from(blockNumber) };
   };
   const onChainQuoteProvider = {

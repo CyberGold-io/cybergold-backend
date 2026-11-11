@@ -2,6 +2,8 @@
 import { createRequire } from 'node:module';
 import { discoverLocal } from './uniroute-local.ts';
 import type { LocalRequest } from './uniroute-local.ts';
+import { mapQuoteJobs, requestQuote } from './callback-work.ts';
+import type { QuoteCallback } from './callback-work.ts';
 
 const require = createRequire(import.meta.url);
 const { DeepQuoteStrategy } = require('../../vendor/uniroute-public/runtime/core/strategy/DeepQuoteStrategy.js');
@@ -16,7 +18,7 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 type Hop = { pool?: any; zeroForOne?: boolean; kind?: string; currencyOut?: string };
 export type LocalCandidate = { amountIn: string; hops: Hop[] }[];
-export type LocalQuote = (request: { mode: 'exactIn'; amount: string; branches: LocalCandidate }) => Promise<{ quote: string | null }>;
+export type LocalQuote = QuoteCallback<{ mode: 'exactIn'; amount: string; branches: LocalCandidate }, { quote: string | null }>;
 export type DeepOptions = { finderOnly?: boolean; percentageStep?: 5 | 25 };
 
 /** Same physical execution keys as Python pool_identity, independent of aliases. */
@@ -60,11 +62,14 @@ export async function quoteLocalSplits(request: LocalRequest, linears: LocalCand
   const fetcher = { async fetchQuotes(_chain: unknown, _input: unknown, _output: unknown,
       amount: bigint, percentageRoutes: any[], _mode: unknown, _context: unknown, _tags: unknown,
       _block: unknown, _tokens: unknown, _overrides: unknown, report: { droppedRoutes: number }) {
-    const observations = await Promise.all(percentageRoutes.map(async route => {
-      const portion = amount*BigInt(route.percentage)/100n;
+    const observations = await mapQuoteJobs(percentageRoutes.length, async index => {
+      const route = percentageRoutes[index];
       try {
-        const result = await quote({ mode: 'exactIn', amount: portion.toString(),
-          branches: [{ amountIn: portion.toString(), hops: semantic.get(route.path)! }] });
+        const result = await requestQuote(quote, () => {
+          const portion = amount*BigInt(route.percentage)/100n;
+          return { mode: 'exactIn' as const, amount: portion.toString(),
+            branches: [{ amountIn: portion.toString(), hops: semantic.get(route.path)! }] };
+        });
         return result.quote === null ? null : new QuoteBasic(route, BigInt(result.quote));
       } catch {
         // A missing percentage observation cannot retract the early finder
@@ -72,7 +77,7 @@ export async function quoteLocalSplits(request: LocalRequest, linears: LocalCand
         report.droppedRoutes += 1;
         return null;
       }
-    }));
+    }, quote.signal);
     return observations.filter(observation => observation !== null);
   } };
   const selector = new SimpleQuoteSelector();

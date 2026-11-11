@@ -18,8 +18,8 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
     """Interleave leg feeds without waiting for one discovery/quote tail.
 
     One prefetched candidate per leg keeps slow graph enumeration separate from
-    completed quote delivery. The limit bounds held pricing-work permits;
-    additional parked candidate tasks remain owned and drained. Cancellation
+    completed quote delivery. The limit bounds unfinished candidate evaluations,
+    including parked work; engine permits still return during required waits. Cancellation
     drains only tasks created here, leaving shared read ownership
     to the engine's ordinary subscription contract. A feed factory may prepare
     its groups cooperatively before returning the ordinary per-leg iterators.
@@ -73,7 +73,7 @@ async def schedule_routes(make_feeds, evaluate, *, discover=None, on_completed=N
         await start_feeds()
         while active or pending_next or ready or (discovery is not None and not expanded):
             # Each leg gets one turn before another candidate from that leg.
-            while ready and not slots.locked():
+            while ready and not slots.locked() and len(active) < limit:
                 for offset in range(len(feeds)):
                     index = (cursor + offset) % len(feeds)
                     if index in ready:

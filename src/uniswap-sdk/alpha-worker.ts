@@ -3,6 +3,8 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import { createAlphaRouter } from "./alpha-provider.ts";
 import { createCalculationSession } from "./calculation-session.ts";
+import { requestQuote } from './callback-work.ts';
+import type { QuoteCallback } from './callback-work.ts';
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -39,7 +41,7 @@ export function forwardHops(router: any, pools: any[], source: string, target: s
   return hops;
 }
 
-export async function routeRequest(request: Request, quote: (value: any) => Promise<any>,
+export async function routeRequest(request: Request, quote: QuoteCallback,
                                    publish: (candidates: any[]) => void = () => {}) {
   const offered = new Set<string>();
   let adapter: ReturnType<typeof createAlphaRouter>;
@@ -65,10 +67,13 @@ export async function routeRequest(request: Request, quote: (value: any) => Prom
   };
   adapter = createAlphaRouter({ chainId: request.chainId, blockNumber: request.blockNumber, pools: request.pools,
     nominateRoutes: nominate,
+    quoteSignal: quote.signal,
     quoteRoute: async ({ route, amount, mode }) => {
-      const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
-      const result = await quote({ mode, amount: amount.quotient.toString(),
-        branches: [{ amountIn: mode === "exactIn" ? amount.quotient.toString() : "0", hops }] });
+      const result = await requestQuote(quote, () => {
+        const hops = forwardHops(adapter, route.pools ?? route.pairs, request.source, request.target);
+        return { mode, amount: amount.quotient.toString(),
+          branches: [{ amountIn: mode === "exactIn" ? amount.quotient.toString() : "0", hops }] };
+      });
       return { quote: result.quote, gasEstimate: "0",
         sqrtPriceX96AfterList: [], initializedTicksCrossedList: [] };
     } });

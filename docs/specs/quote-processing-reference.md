@@ -426,10 +426,43 @@ preceding simulation result.
 The engine and SDK admission lanes each retain FIFO order. A cancelled waiter
 is removed by its future identity in constant time, without scanning the lane;
 a grant cancelled before its owner resumes returns its permit. The eight-slot limit bounds held
-pricing permits. Parked candidate tasks remain owned and are drained when their
-producer stops. Completion notifications are registered once per owned task;
+pricing permits. A separate `len(active) < limit` admission condition bounds
+unfinished route evaluations, including tasks parked on SDK/observation waits,
+to the existing scheduler limit (eight by default). Their CandidateWork leases
+still release and reacquire execution permits normally. Free engine capacity
+does not admit a ninth live evaluation in that same scheduler invocation.
+One candidate may still be prefetched per feed. This is a per-invocation bound,
+not a global count across nested schedulers or simultaneous quotes. Parked tasks
+remain owned and are drained when their producer stops.
+Completion notifications are registered once per owned task;
 completion and released capacity wake the scheduler without rebuilding a wait
 set containing every parked candidate. Per-leg admission retains round-robin order.
+
+Local optimizer drivers separately admit eight response-outstanding price
+callbacks each, shared across every calculation on that driver. AlphaRouter and
+UniRoute local use the same bounded-work helper to consume route/amount jobs
+lazily. `createCalculationSession` owns the shared `CallbackCredits` window;
+`mapQuoteJobs` preserves matrix result indices while pulling a bounded set of
+jobs. Admission precedes callback payload/hop construction and JSONL emission,
+so the unadmitted matrix tail does not create one expensive callback body or
+Python task per cell. Output indices and duplicate jobs retain their ordinary
+meaning, and early raw route hints remain independently publishable.
+
+Callback capacity lasts through its result/error or retirement. Cancellation
+withdraws waiting work and prevents future jobs from constructing callbacks;
+each admitted slot is returned once. The multiplexed Python reader continues
+draining callback results, candidates, terminal and cancellation frames rather
+than waiting on callback admission. Python writer cleanup can outlive the
+response, so the two drivers' sixteen response slots per engine are not a strict
+global sixteen-task count. Direct known Core sizing does not acquire these
+driver callback slots and retains its accepted engine/SDK priority.
+
+These are concurrency limits, not route, call, memory or deadline limits. Route
+graphs, completed observations, private state of other work, and multiple
+engines/quotes remain outside the counts. A ninth job can wait behind eight slow
+ones; existing error, cancellation and timeout policies can stop a search before
+every route is evaluated. Fees, arithmetic, complete Helpers validation and
+whole-quote ranking remain unchanged; no live speedup is established by the rule.
 
 Candidate banks and SDK payloads retain private mutable pool state. Their
 snapshot copier owns the scalar tick/bitmap rows and deep-copies other metadata.
@@ -460,7 +493,8 @@ finishes through cancellation before starting fresh SDK pricing. Already-started
 SDK work remains owned and drains normally. This closes the gap in which
 cooperative cancellation can release slots before every queued callback has
 received cancellation. Active-query answers, shared-read ownership and the
-eight-permit capacity remain unchanged; no callback/route cap is added.
+eight-permit capacity remain unchanged. The separate producer-lifetime and
+response-outstanding callback limits above apply before new work is created.
 
 After all of a closing query's callback writers drain, the existing keep-worker
 branch enqueues its complete cancel JSONL frame synchronously. That enqueue does
@@ -731,11 +765,15 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |
 | Local/hosted workers and API pacing | `quoter/alpha_routes.py`, `quoter/hosted_routes.py`, `sdk_worker.py`, `uniswap_api_queue.py` |
 | Complete Helpers evaluation | `quoter/plan_call.py`, `quoter/plan_transport.py`, `quoter/plan_simulation.py` |
-| Capacity and sharing | `route_work_slots.py`, `shared_reads.py`, `route_quote_engine.py` |
+| Capacity and sharing | `route_scheduler.py`, `route_work_slots.py`, `shared_reads.py`, `route_quote_engine.py` |
 | Core warm state | `quoter/core_state.py`, `app.py` |
 | Later execution preparation | `tx_preparation.py` |
 | Retained specialized Core quote interfaces | `quote_intent.py`, `trade_quote.py`, `quote_cache.py`, `runtime.py`, `app.py` |
 | Request and owner observations | `quote_flow.py`, `telemetry.py`, `trade_observation.py` |
+
+Local callback production is implemented in the repository's `src/uniswap-sdk/`
+directory through `callback-work.ts`, `calculation-session.ts`,
+`alpha-provider.ts`, `alpha-worker.ts` and `uniroute-deep.ts`.
 
 App context is implemented in `app/[locale]/page.tsx`,
 `app/hooks/flows/quotes/useEconomicQuote.ts`, `app/utils/economicQuoteSearch.ts`,
