@@ -151,3 +151,7 @@ class InverseWorkReuseTests(unittest.IsolatedAsyncioTestCase):
                         if not task.done(): task.cancel()
                     await asyncio.gather(*tasks, return_exceptions=True)
         self.assertEqual(q.engine.semaphore._value, 8)
+
+
+if __name__ == '__main__':
+    unittest.main()

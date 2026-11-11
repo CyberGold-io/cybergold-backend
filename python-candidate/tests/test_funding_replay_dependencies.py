@@ -131,3 +131,7 @@ class FundingReplayDependencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row['amountIn'] for row in result['plan']['body']['branches']], ['8100', '8075'])
         self.assertEqual(result['inputs'][0]['amount'], '16175')
         self.assertEqual(value, original)
+
+
+if __name__ == '__main__':
+    unittest.main()
