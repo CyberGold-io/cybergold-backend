@@ -1,7 +1,7 @@
 """Interleave available topology hints with ordinary candidates; never wait."""
 from itertools import product
 
-from .discovery import current_topology, path_steps, route_candidates, route_identity
+from .discovery import current_topology, path_steps, route_candidates, route_identity, route_available
 from .cooperative import CHECKPOINT, close, values
 from .pool_directions import branch_directions, conflicting_pool
 
@@ -12,7 +12,9 @@ def normalize_hints(hints, source, target):
 
 def _union_patterns(routes, amount):
     positions = {id(route): index for index, route in enumerate(routes)}
-    for branches in route_candidates(routes, amount):
+    # Memoize structural integer patterns, independently of observations that
+    # can change while this lazy expansion is consumed. Emission checks them.
+    for branches in route_candidates(routes, amount, observed=False):
         yield CHECKPOINT
         if conflicting_pool(branch_directions(branches)) is None:
             yield tuple((positions[id(row['hops'])], row['amountIn']) for row in branches)
@@ -35,12 +37,19 @@ def normalize_steps(hints, source, target):
             try:
                 candidate = offer['branches']
                 alternatives = []
-                opposed = False
-                for row in candidate:
-                    alternatives.append((yield from path_steps(
-                        [hop['pool'] for hop in row['hops'] if 'pool' in hop], source, target)))
+                opposed = any(not route_available(row['hops']) for row in candidate)
+                if not opposed:
+                    for row in candidate:
+                        alternatives.append((yield from path_steps(
+                            [hop['pool'] for hop in row['hops'] if 'pool' in hop], source, target)))
+                # Cooperative walks may have learned a zero-price leg while
+                # building alternatives, including an empty later path set.
+                opposed = opposed or any(not route_available(row['hops']) for row in candidate)
                 for routes in product(*alternatives) if alternatives else ():
                     yield CHECKPOINT
+                    if any(not route_available(route) for route in routes):
+                        opposed = True
+                        continue
                     branches = [{'amountIn': row['amountIn'], 'hops': route}
                                 for row, route in zip(candidate, routes, strict=True)]
                     if conflicting_pool(branch_directions(branches)) is not None:
@@ -48,8 +57,8 @@ def normalize_steps(hints, source, target):
                         continue
                     yield branches, list(offer.get('origins', []))
                 if opposed:
-                    # A crossed split can expose shorter compatible paths in
-                    # its union graph. Reuse ordinary lazy singles/splits.
+                    # A crossed or disproved split can still expose compatible
+                    # paths in its remaining graph. Reuse lazy singles/splits.
                     routes = yield from path_steps([hop['pool'] for row in candidate
                         for hop in row['hops'] if 'pool' in hop], source, target)
                     amount = sum(int(row['amountIn']) for row in candidate)
@@ -64,6 +73,8 @@ def normalize_steps(hints, source, target):
                             yield CHECKPOINT
                             continue
                         patterns.append(pattern)
+                        if any(not route_available(routes[index]) for index, _ in pattern):
+                            continue
                         # Reuse only integer allocations. Current pools,
                         # metadata and supplier origins remain live, and each
                         # consumer receives its own branch/hop containers.

@@ -13,6 +13,7 @@ class SearchObservations:
     def __init__(self):
         self.reads = SharedReads()
         self.pool_states = {}
+        self.pool_initializations = {}
 
     async def read(self, key, produce):
         """Share pending work and own successful decoded values for this search."""
@@ -24,6 +25,7 @@ class SearchObservations:
     async def close(self):
         await self.reads.close()
         self.pool_states.clear()
+        self.pool_initializations.clear()
 
 
 def current_search_observations():

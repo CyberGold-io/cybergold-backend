@@ -10,6 +10,7 @@ from ..route_scheduler import raise_snapshot_disproof
 from ..route_work_slots import engine_work, required_state_wait
 from ..uniswap_routes import pool_identity
 from ..uniswap_state import same_observed_pool
+from ..pool_initialization import observed_uninitialized
 from .contracts import HopTrace, new_path_trace, current_nomination
 from .bootstrap import current_bootstrap
 from .route_tools import RouteQuery
@@ -46,6 +47,8 @@ async def initial_snapshots(engine, route, block, canonical, candidate):
         state = observed(pool)
         if state is None:
             state = await engine.registry.snapshot(pool, block)
+        if observed_uninitialized(engine.registry, pool, block):
+            raise InvalidPreview('Observed pool is uninitialized (sqrtRatioX96=0).')
         if pool['protocol'] in ('v3', 'v4'):
             try:
                 word = ((int(state['tick']) // int(state['tickSpacing']))

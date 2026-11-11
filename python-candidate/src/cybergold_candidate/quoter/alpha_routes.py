@@ -15,6 +15,7 @@ from ..route_work_slots import engine_work
 from ..search_observations import current_search_observations
 from .bootstrap import ProviderUnavailable
 from .cooperative import QUANTUM
+from .discovery import pool_available, route_available
 
 
 class AlphaRouteError(RuntimeError):
@@ -259,7 +260,7 @@ class AlphaRoutes:
                 fields = ('id', 'protocol', 'token0', 'token1', 'feePips', 'lpFee',
                           'tickSpacing', 'hooks', 'poolManager', 'address')
                 pools = [{key: deepcopy(value) for key, value in pool.items() if key in fields}
-                         for pool in list(self.engine.registry.inventory.values())]
+                         for pool in list(self.engine.registry.inventory.values()) if pool_available(pool)]
                 await self._write(process, {'id': identity, 'chainId': int(self.engine.registry.chain),
                     'blockNumber': int(block['number']), 'source': source, 'target': target,
                     'amount': str(amount), 'pools': pools})
@@ -299,6 +300,8 @@ class AlphaRoutes:
         branches = [{'amountIn': row['amountIn'],
                      'hops': [hop for hop in row['hops'] if 'pool' in hop]}
                     for row in request['branches']]
+        if any(not route_available(row['hops']) for row in branches):
+            return {'quote': None}
         if all(not row['hops'] for row in branches):
             return {'quote': str(amount)}
         async def calculate():

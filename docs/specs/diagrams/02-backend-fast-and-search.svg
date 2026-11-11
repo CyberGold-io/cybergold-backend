@@ -91,6 +91,7 @@
 <text x="638" y="487" class="heading">Shared loop CPU</text>
 <text x="638" y="507" class="body">Copy offers on demand</text>
 <text x="638" y="523" class="body">Tasks can add contention</text>
-<text x="42" y="557" class="body-large">Stored delivery and Helpers repricing proceed independently. Later candidates can improve the winner.</text>
-<text x="42" y="579" class="source">Sources: progressive_quotes / quote_publication; quoter/search, evaluate, bootstrap, plan_transport; route_work_slots.</text>
+<text x="42" y="550" class="body-large">Before route/split expansion: skip only V3/V4 pools observed with sqrtRatioX96 = 0 in this search.</text>
+<text x="42" y="566" class="body">Unknown and initialized zero-liquidity pools remain eligible. Stored delivery and Helpers replay stay independent.</text>
+<text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; pool_initialization; quoter/search, discovery, bootstrap; route_work_slots.</text>
 </svg>

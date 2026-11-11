@@ -16,6 +16,7 @@ from ..quote_flow import stage
 from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
+from ..pool_initialization import observed_uninitialized
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
 from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
@@ -45,7 +46,7 @@ class ProviderUnavailable(RuntimeError):
 
 
 class RouteBootstrap:
-    def __init__(self, providers, *, catalog=None, nomination_only=False):
+    def __init__(self, providers, *, catalog=None, nomination_only=False, block=None):
         self._loop = asyncio.get_running_loop()
         self._budget = current_budget()
         self._started_mono = self._loop.time()
@@ -57,7 +58,9 @@ class RouteBootstrap:
                          for provider in providers])
         self.providers = [(provider.name, provider) for provider in self._owners]
         self._queries, self._attempts, self._tasks = {}, [], set()
-        self.topology = TopologyCache()
+        self.topology = TopologyCache(pool_available=(
+            lambda pool: not observed_uninitialized(catalog, pool, block))
+            if catalog is not None and block is not None else None)
         self._completed_offers = {}
         self._publication_sequence = 0
         self._close_errors = []
