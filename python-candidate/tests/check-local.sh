@@ -130,6 +130,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_initial_snapshot_s
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_path_snapshots.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_preparation_overlap.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_worker_route_lease_lifecycle.py
+python-candidate/.venv/bin/python python-candidate/tests/test_sdk_known_work_priority.py
 python-candidate/.venv/bin/python python-candidate/tests/test_unified_route_pipeline.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_market.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_canonical_anchor.py

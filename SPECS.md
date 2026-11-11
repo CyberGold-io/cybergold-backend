@@ -178,15 +178,20 @@ yielding a proposal or starting optional construction. SQL-neighbor priority
 also covers only the complete candidate call; its recovery and follow-up work
 does not inherit priority. Fresh routing and composition construction keep
 ordinary admission, and running work is not preempted.
-This priority applies to engine-permit admission, not every dependency or queue.
-The SDK worker has a separate FIFO lock: priority sizing cannot overtake its
-existing waiters or interrupt an exchange. There is no bound on when an optional
-smaller-funding proposal will be produced or validated.
+The serialized SDK worker also uses the existing two admission lanes for its
+single exchange slot. Work already marked as known bootstrap work precedes
+ordinary queued work after the current exchange. Each lane remains FIFO, and
+no running exchange is preempted. Priority does not cover every dependency or
+bound when an optional smaller-funding proposal will be produced or validated.
 Waiting for the serialized SDK worker releases owned engine and scheduler
 capacity. After obtaining the worker lock, the task reacquires that capacity
-before exchanging work with the child. Cancellation during reacquisition
-releases the worker lock. Required-state waiting keeps its existing release
-and reacquisition behavior; the shared engine capacity remains eight.
+before exchanging work with the child. The scheduler reservation is reacquired
+unchanged; only the lock holder's engine-permit restoration joins the existing
+priority lane, behind earlier priority waiters. That temporary scope ends before
+the exchange and does not promote the caller's later ordinary work. Cancellation
+during restoration releases the worker lock. Other required-state waits retain
+their existing admission behavior; engine capacity stays eight and SDK exchange
+capacity stays one.
 
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
@@ -360,6 +365,20 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Prioritize known SDK exchanges and lock-holder permit restoration
+
+- Reuse the existing two FIFO admission lanes for the SDK worker's single
+  exchange slot. Already-marked known work precedes ordinary waiters after the
+  current exchange; running work remains nonpreemptive.
+- Give the SDK lock holder priority only while restoring engine permits, after
+  its unchanged scheduler reservation. Earlier priority waiters stay ahead.
+  Restore the caller's original lane before the exchange and later work.
+- Keep required-state ownership/cancellation, eight engine permits, one SDK
+  exchange, arithmetic, Helpers validation and whole-quote selection unchanged.
+- Preserve the earlier FIFO documentation correction as history, and identify
+  its live timing example as preceding this scheduling change. No measured live
+  improvement is claimed. Update the reference, diagrams and linked PDF.
 
 ### 2026-11-11 - Clarify optional funding latency and admission boundaries
 

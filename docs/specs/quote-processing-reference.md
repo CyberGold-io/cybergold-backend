@@ -399,28 +399,33 @@ residual rerouting, market-composition construction and initial ordinary
 proposals retain ordinary admission. Running work is not preempted, and no
 lane reserves idle capacity.
 
-Bootstrap priority is consumed by `PricingSlots` engine admission. It does not
-reorder the generic SDK worker's separate `asyncio.Lock`, whose existing waiters
-remain FIFO, or preempt a running exchange. It is not an end-to-end fast lane:
-route construction, observation dependencies, child serialization and event-loop
-work can precede completion. The runtime promises no maximum time to nominate or
-validate a lower-spend alternative.
+The generic SDK worker reuses `PricingSlots(1)` for serialized exchange admission.
+Callers already carrying the known-work bootstrap flag use its priority lane;
+ordinary callers use its ordinary lane. After an active exchange releases the
+slot, queued known work precedes queued ordinary work, with FIFO order inside
+each lane. Running exchanges are not preempted. This is not an end-to-end fast
+lane: route construction, observation dependencies, child serialization and
+event-loop work can still delay completion. There is no maximum time to nominate
+or validate a lower-spend alternative.
 
 The serialized SDK worker's lock is acquired while the caller's owned engine
 and scheduler leases are released through the existing `required_state_wait`.
-After the lock is granted, those leases are restored before any SDK exchange.
+After the lock is granted, the scheduler reservation is reacquired without
+promotion. Only the lock holder's engine-permit restoration uses bootstrap
+priority, after existing priority waiters. The temporary restoration scope ends
+before the SDK exchange, restoring the caller's original lane for later work.
 The lock's cleanup is registered before restoration; cancellation while waiting
 for a lease therefore releases the already acquired lock. The `sdk.queue` span
-ends at lock acquisition and excludes lease restoration. Child serialization,
-the eight-slot engine capacity, priority and cancellation ownership remain
-unchanged. SDK required-state waits retain their existing lease release.
+ends at lock acquisition and excludes lease restoration. SDK exchange capacity
+remains one, engine capacity remains eight, and cancellation ownership is
+unchanged. Other required-state waits retain their existing admission behavior.
 Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.
 
-Both admission lanes retain FIFO order. A cancelled waiter is removed by its
-future identity in constant time, without scanning the lane; a grant cancelled
-before its owner resumes returns its permit. The eight-slot limit bounds held
+The engine and SDK admission lanes each retain FIFO order. A cancelled waiter
+is removed by its future identity in constant time, without scanning the lane;
+a grant cancelled before its owner resumes returns its permit. The eight-slot limit bounds held
 pricing permits. Parked candidate tasks remain owned and are drained when their
 producer stops. Completion notifications are registered once per owned task;
 completion and released capacity wake the scheduler without rebuilding a wait
@@ -511,7 +516,8 @@ not wait for terminal search completion. A new amount or Refresh creates a new
 owner; an obsolete owner's late frame cannot overwrite the new intent.
 
 **Observed Sandbox example, 11 November 2026:** request
-`1ef0b232-15f3-4968-8eca-a4ac783f706b` on Backend `5e830712` selected a stored
+`1ef0b232-15f3-4968-8eca-a4ac783f706b` on Backend `5e830712`, before the SDK
+priority changes described above, selected a stored
 100 ETH quote at 175.3 ms from browser stream dispatch and a fresh 100 ETH quote
 at 487.9 ms. At 104,652.4 ms, another selected observation used
 15.331953017324193645 ETH for the same exact quoted output,
