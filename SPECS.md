@@ -103,6 +103,18 @@ the same AMM adapter for market-only and market-plus-Core plans; a completed
 supplier does not wait for the others. All three hosted suppliers share the
 existing queue, with a default of six HTTP starts per second.
 
+Supplier arrivals distinguish new executable choices from additional origins
+for an existing choice. Duplicate choices keep their supplier attribution but
+do not restart pricing. An arrival revisits candidate owners that consumed its
+source/target/amount query, including dependencies used by their funding and
+recovery children. Owners whose dependencies are unknown remain eligible.
+A changed pool graph still requests a full pass. Arrival-only family exploration
+offers new paths and retries attempted paths whose recovery dependencies changed.
+It does not resubmit attempted paths with unchanged inputs; ordinary exploration
+keeps its existing retry behavior.
+This schedules discovery work, without retaining failed `latest` prices or
+changing complete Helpers validation.
+
 Discovery excludes a V3/V4 pool from further route and split expansion only
 after a successful canonical snapshot in this search observes
 `sqrtRatioX96 == 0`. The fact is scoped to the registry chain, generation,
@@ -165,6 +177,10 @@ A direct ceiling calculation funds every encoded path with at least its
 required input after percentage rounding. One forward replay advances the
 private pool state; complete Helpers simulation measures the recipient's net
 output and all applicable fees.
+Core sizing advances Market and residual pool state only when a later Core
+operation needs that bank. It does not await a terminal state advance whose
+result has no consumer. The encoded Market/residual operations remain in the
+proposal and are still measured by complete Helpers execution.
 
 Identity and zero acquisitions change only their funded amount. Their existing
 routes and unpriced metadata stay intact; resizing does not require a priced
@@ -213,11 +229,17 @@ and timeouts can still end a search before every candidate is observed; no
 deadline, call limit, fee arithmetic or ranking change is introduced.
 
 Identical full SDK payloads share successful arithmetic within the search.
+This includes per-hop inverse calculations, with the worker and required-state
+continuation capability in their identity. A direct inverse without a state
+callback keeps its ordinary missing-state behavior.
 They also share the specific mathematical result that the input cannot produce
 one raw output unit. Each follower still obtains the producer's required pool
 observations before receiving its own typed no-quote error; no partial private
 pool state is committed. Changed amounts or observed state calculate separately.
 Missing state, timeouts, cancellation and other SDK failures remain retryable.
+An observed empty bitmap word returns its tick-word boundary directly; unknown
+coverage still requests the required observation. Initialized zero-liquidity
+pools remain eligible.
 Already-known independent V3 price/liquidity getters use one JSON-RPC batch for
 their missing members. A single missing member uses one ordinary call. Successful
 members keep their existing read-cache identity; a failed member is not retained.
@@ -233,6 +255,14 @@ establish a global input limit or promise that the best spending amount has been
 **Timing coverage:** the current evidence does not isolate every dependency of
 the ultimately selected candidate. Discovery, SDK work, Core reads and replay
 overlap. Their totals cannot be summed into a serial “route-building time.”
+Optional bounded SDK diagnostics separate child segment work from the interval
+between its pre-write response timestamp and Python's line consumption. Clock-calibration
+bounds retain their uncertainty; that interval includes pipe transport and
+Python scheduling. Child process CPU includes background threads, not only
+arithmetic. Missing diagnostic frames do not change quote behavior.
+After cancellation drains the producer, outcome diagnostics retain its final
+current-work metrics separately from an incumbent's historical quote metrics.
+The stored quote's source and economic observation remain unchanged.
 
 ## 4. Helpers turns a complete plan into a validated observation
 
@@ -412,6 +442,24 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Remove redundant quote work and expose SDK round-trip timing
+
+- Reuse exact inverse-hop calculations with their actual worker/state-callback
+  contract. Keep missing state and ordinary SDK failures retryable.
+- Omit Market/residual bank advances with no later Core consumer; preserve
+  ordered state used by later operations and complete Helpers validation.
+- Return observed empty bitmap boundaries directly with unchanged V3/V4
+  rounding, fees, missing coverage and zero-liquidity eligibility.
+- Distinguish new executable supplier choices from duplicate origins, wake
+  dependent query consumers, keep unknown consumers conservative and retain
+  broad graph invalidation. Arrival-only family walks revisit attempted paths
+  only when their input dependencies changed. No failed price is cached or
+  amount loop added.
+- Retain drained current producer metrics on cancellation alongside historical
+  incumbent evidence. Add bounded optional SDK child/parent timing brackets,
+  explicit process-CPU scope and calibration uncertainty without extra calls.
+- Update the technical reference and linked process diagrams/PDF together.
 
 ### 2026-11-11 - Reuse equivalent quote work and batch independent getters
 

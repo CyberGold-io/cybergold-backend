@@ -69,6 +69,7 @@ class Flow:
         self.outcome = None
         self.emitted = False
         self.helpers_calls = None
+        self.sdk_roundtrips = None
 
     def row(self, name, kind):
         key = name, kind
@@ -120,6 +121,7 @@ class Flow:
 
     def snapshot(self):
         now = self.clock()
+        sdk_roundtrips = _safe(self.sdk_roundtrips.snapshot) if self.sdk_roundtrips is not None else None
         rows = []
         for row in self.rows.values():
             value = {key: round(item, 3) if isinstance(item, float) else item
@@ -137,6 +139,7 @@ class Flow:
                 'milestonesMs': dict(self.milestones),
                 'stages': sorted(rows, key=lambda row: (row['stage'], row['kind'])),
                 **({'helpersCalls': self.helpers_calls} if self.helpers_calls is not None else {}),
+                **({'sdkRoundTrips': sdk_roundtrips} if sdk_roundtrips is not None else {}),
                 'sharedOwners': [{'flowId': owner, 'relation': relation, 'subscriptions': count}
                                  for (owner, relation), count in self.links.items()]}
 

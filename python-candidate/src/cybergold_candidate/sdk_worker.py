@@ -8,6 +8,7 @@ from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_
 from .route_work_slots import PricingSlots, required_state_wait
 from .quote_flow import stage
 from . import sdk_bridge
+from .sdk_timing import ChildClock, operation_timing
 
 
 class SdkWorkerError(RuntimeError):
@@ -35,6 +36,7 @@ class SdkWorker:
         # ordinary queued work; an active exchange is never preempted.
         self.lock = PricingSlots(1)
         self.sequence = 0
+        self.timing_clock = ChildClock()
 
     async def request(self, payload, on_state=None):
         pools = payload.get('pools')
@@ -61,6 +63,7 @@ class SdkWorker:
                                 try:
                                     with stage('sdk.start'):
                                         self.process = await asyncio.shield(starting)
+                                    self.timing_clock.reset()
                                 except asyncio.CancelledError:
                                     # Cancellation can arrive after the OS child
                                     # exists but before its handle is returned.
@@ -81,7 +84,8 @@ class SdkWorker:
                             outgoing = {'id': request_id, 'operation': 'resume', 'coverage': coverage}
                         try:
                             async with asyncio.timeout(self.timeout):
-                                response = await sdk_bridge.exchange(process, outgoing)
+                                with operation_timing(self.timing_clock, payload.get('operation'), payload.get('mode')):
+                                    response = await sdk_bridge.exchange(process, outgoing)
                                 if response is None:
                                     raise SdkWorkerError('SDK worker exited')
                                 if response.get('id') != request_id:

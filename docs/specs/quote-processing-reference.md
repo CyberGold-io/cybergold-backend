@@ -224,6 +224,11 @@ An acquisition with unchanged measured output is reused without SDK work when
 its pools are disjoint from every other operation in the changed proposal.
 One exact-input replay of a resized path commits its actual forward state;
 exact-output quotation does not commit an inverse state.
+During `_sized`, Market and residual replays advance that private bank only
+if a later Core branch will use it. Terminal advances have no consumer and are
+omitted; the encoded operations remain in the complete proposal. Market before
+Core and each inverse conversion's own forward replay retain their ordered
+state effects.
 
 Helpers measures aggregate conversions rather than individual split paths.
 For split paths or internal native transitions, diagnostic SDK replay follows
@@ -296,6 +301,23 @@ These are demand-started per market segment, not all queried globally at HTTP
 ingress. AlphaRouter and UniRoute local can emit topology hints before deeper
 optimization finishes. Their engine-owned child processes are reused but are
 started lazily. The generic SDK arithmetic child is also reused and lazy.
+
+Bootstrap records executable offer identities for each source/target/raw-amount
+query. Branch lots, ordered physical routes, native transitions and the resolved
+authority/token precision used by construction distinguish choices. Supplier
+origins are merged separately; the same choice from another provider does not
+advance the executable revision or restart the whole-plan grids. Provider batch
+and candidate metrics still count the supplied observations.
+Each ordinary allocation/order/first-mode owner records the queries it consumes;
+its asynchronous funding/recovery children inherit that dependency set. Arrival
+passes revisit owners intersecting the changed query set. An unknown dependency
+set, including a shared-candidate follower without observed inputs, remains
+conservatively eligible. A physical graph change still invalidates broadly.
+Arrival-only optional family walks offer previously unattempted paths and
+attempted paths whose recorded recovery-query inputs changed, while
+ordinary/catalog walks retain their previous retry eligibility. This is work
+dependency reuse, not caching an RPC failure against `latest`. Completed private
+quote metadata can merge matching supplier origins without another price.
 Initial custom-prefix nominations contribute to their supplier's candidate
 count and first-candidate time; lazy-feed reads remain a separate measurement.
 
@@ -495,6 +517,19 @@ its demands. No caller commits partial candidate post-state. Other exceptions,
 timeouts, cancellation and missing-state failures are not retained. The existing
 full-payload identity continues to include observed scalars and coverage; a
 changed amount, private state or coverage can require another calculation.
+Direct per-hop inverse quotes use the same search-local arithmetic bank.
+Identity also includes worker identity and whether the request supports
+required-state continuation. A request without a callback still passes no
+callback to the worker and raises ordinary missing-state errors; it does not
+gain continuation merely by joining another calculation. Successful callers
+receive private results and no additional price, state read or amount loop is
+introduced.
+
+Covered tick traversal returns the existing word boundary immediately when an
+observed bitmap is zero. Unknown coverage still requests its word, initialized
+bits retain SDK traversal, and initialized pools with zero active liquidity
+remain eligible. The shortcut preserves directional boundary and fee/rounding
+arithmetic for V3 and V4.
 
 `UniswapRpc.read_functions` groups only an already-known independent set. The V3
 scalar snapshot uses it for `slot0` and liquidity. Existing completed/pending
@@ -644,6 +679,11 @@ was observed or prepared.
 ## Diagnostics describe their own clocks
 
 - Request and producer IDs link shared work without merging subscriber clocks.
+- After producer cancellation/drain, its attached final metrics populate current
+  `producerMetrics`; an incumbent's earlier metrics remain separate
+  `observedQuoteMetrics`. An incumbent from storage keeps its stored source and
+  economic observation. Its historical discovery counts do not replace the
+  just-drained search's counters.
 - Stage wall/CPU/queue measurements are separate; nested totals overlap.
 - An await stage does not sample CPU. In particular, `http.cleanup` measures
   the stream owner's wait for its producer to drain; zero CPU in that row does
@@ -677,6 +717,23 @@ was observed or prepared.
 - `plan.compile` includes every logical preparation attempt, private copies and
   memo lookup; `plan.encode` measures actual ABI/funding encoding on a memo miss.
   Both use event-loop thread CPU, not whole-process or SDK child CPU.
+- `sdkRoundTrips` adds optional bounded rows for SDK operation, amount mode and
+  start/resume phase to the owning flow. Counters distinguish completed,
+  failed/cancelled, missing legacy and invalid diagnostic frames.
+  Completed exchanges may carry an SDK error or missing-state response; they
+  do not count successful economic quotes. No raw
+  payload, request ID or per-frame log is retained in this aggregate. Required
+  chain-state pauses are outside each child segment. Child operation wall,
+  response encoding and child process CPU are separate measurements; process
+  CPU covers background threads and is not exclusive arithmetic CPU.
+  Parent-send/child-receive and child-prewrite/parent-read brackets calibrate
+  clock-origin offset without assuming the two monotonic origins match.
+  Response-to-read lower/upper bounds include pipe transport and Python
+  readiness, with explicit uncertainty and one slowest sample per row. They
+  are not a pure Python wake-delay timer or an additive critical-path partition.
+  Inconsistent calibration resets optional diagnostics; absent legacy frames
+  and diagnostic errors never reject, retry or alter a quote. No extra IPC
+  message, timer, RPC or API request is added.
 - The final search flow's `helpersCalls` records post-Helpers-sharing provider
   dispatch count, closed
   outcome categories and exact repeated error-envelope fingerprints. Identity

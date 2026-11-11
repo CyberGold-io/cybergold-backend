@@ -51,20 +51,27 @@ def economic_evidence(value, evidence):
         origins = project_route_origins(value.get('routeOrigins'))
         if origins:
             result['routeOrigins'] = origins
-        metrics = value.get('metrics') or evidence.get('producerMetrics') or {}
-        safe = {}
-        for key in ('timeToFirstWholePlanMs', 'searchMs', 'totalMs', 'finalizationMs'):
-            number = metrics.get(key)
-            if type(number) in (int, float) and math.isfinite(number) and 0 <= number <= 1e12:
-                safe[key] = number
-        if metrics.get('selectionReason') in ('complete', 'best-initial', 'first-extension', 'timeout'):
-            safe['selectionReason'] = metrics['selectionReason']
-        discovery = project_route_discovery(metrics.get('routeDiscovery') or
-            (evidence.get('producerMetrics') or {}).get('routeDiscovery'))
-        if discovery:
-            safe['routeDiscovery'] = discovery
-        if safe:
-            result['observedQuoteMetrics' if result.get('resultSource') == 'stored-quote' else 'producerMetrics'] = safe
+        def project_metrics(metrics):
+            safe = {}
+            for key in ('timeToFirstWholePlanMs', 'searchMs', 'totalMs', 'finalizationMs'):
+                number = metrics.get(key)
+                if type(number) in (int, float) and math.isfinite(number) and 0 <= number <= 1e12:
+                    safe[key] = number
+            if metrics.get('selectionReason') in ('complete', 'best-initial', 'first-extension', 'timeout'):
+                safe['selectionReason'] = metrics['selectionReason']
+            discovery = project_route_discovery(metrics.get('routeDiscovery'))
+            if discovery:
+                safe['routeDiscovery'] = discovery
+            return safe
+        current = evidence.get('producerMetrics')
+        observed = project_metrics(value.get('metrics') or {})
+        if observed:
+            historical = result.get('resultSource') == 'stored-quote' or isinstance(current, dict)
+            result['observedQuoteMetrics' if historical else 'producerMetrics'] = observed
+        if isinstance(current, dict):
+            projected = project_metrics(current)
+            if projected:
+                result['producerMetrics'] = projected
     rpc = evidence.get('rpc', {})
     projected = {}
     for section, scope, keys in (

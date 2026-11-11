@@ -200,6 +200,96 @@ class EconomicObservabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row['outcome'], 'cancelled')
         self.assertNotIn('code', row)
 
+    async def test_stream_disconnect_retains_stored_tuple_and_drained_current_metrics(self):
+        quoter, quotes = service(SharedStore())
+        self.addAsyncCleanup(quotes.close)
+        value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        stored = await quoter.quote(value)
+        stored['metrics'] = {'totalMs': 10, 'routeDiscovery': {'revision': 1}}
+        quotes.store.memory_lookup = lambda *_args, **_kwargs: deepcopy(stored)
+        entered, drained, delivered = (asyncio.Event() for _ in range(3))
+        current = {'totalMs': 200, 'routeDiscovery': {'revision': 9, 'reevaluations': 4}}
+        async def pending(*_args, **_kwargs):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError as error:
+                error.quoter_metrics = deepcopy(current)
+                raise
+            finally:
+                drained.set()
+        quoter.quote = pending
+        app = create_app(economic_quotes=quotes)
+        incoming, sent = asyncio.Queue(), []
+        incoming.put_nowait({'type': 'http.request', 'body': json.dumps(value).encode(), 'more_body': False})
+        async def send(message):
+            sent.append(message)
+            if message['type'] == 'http.response.body' and b'"qualified"' in message.get('body', b''):
+                delivered.set()
+        path = '/api/economic-quotes/stream'
+        scope = {'type': 'http', 'asgi': {'version': '3.0', 'spec_version': '2.4'},
+            'http_version': '1.1', 'method': 'POST', 'scheme': 'http', 'path': path,
+            'raw_path': path.encode(), 'query_string': b'', 'root_path': '',
+            'headers': [(b'content-type', b'application/json')],
+            'server': ('test', 80), 'client': ('127.0.0.1', 1)}
+        task = asyncio.create_task(app(scope, incoming.get, send))
+        try:
+            await asyncio.wait_for(delivered.wait(), 1)
+            await asyncio.wait_for(entered.wait(), 1)
+            incoming.put_nowait({'type': 'http.disconnect'})
+            await asyncio.wait_for(task, 1)
+        finally:
+            if not task.done(): task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(drained.is_set())
+        row, = self.outcomes()
+        self.assertEqual(row['outcome'], 'cancelled')
+        self.assertEqual(row['resultSource'], 'stored-quote')
+        self.assertEqual(row['quotedOutput'], stored['quotedOutput'])
+        self.assertEqual(row['observedQuoteMetrics'], stored['metrics'])
+        self.assertEqual(row['producerMetrics'], current)
+        frames = [json.loads(line) for message in sent for line in message.get('body', b'').splitlines() if line]
+        self.assertEqual([frame['type'] for frame in frames], ['qualified'])
+        self.assertNotIn('code', row)
+
+    async def test_json_disconnect_forwards_metrics_after_its_owned_search_drains(self):
+        entered, drained = asyncio.Event(), asyncio.Event()
+        current = {'totalMs': 200, 'routeDiscovery': {'revision': 9}}
+        async def pending(*_args, **_kwargs):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError as error:
+                error.quoter_metrics = deepcopy(current)
+                raise
+            finally:
+                drained.set()
+        app = create_app(economic_quotes=SimpleNamespace(get=pending))
+        value = {key: request()[key] for key in ('intent', 'inputs', 'outputCurrency')}
+        incoming, sent = asyncio.Queue(), []
+        incoming.put_nowait({'type': 'http.request', 'body': json.dumps(value).encode(), 'more_body': False})
+        async def send(message): sent.append(message)
+        path = '/api/economic-quotes'
+        scope = {'type': 'http', 'asgi': {'version': '3.0', 'spec_version': '2.4'},
+            'http_version': '1.1', 'method': 'POST', 'scheme': 'http', 'path': path,
+            'raw_path': path.encode(), 'query_string': b'', 'root_path': '',
+            'headers': [(b'content-type', b'application/json')],
+            'server': ('test', 80), 'client': ('127.0.0.1', 1)}
+        task = asyncio.create_task(app(scope, incoming.get, send))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            incoming.put_nowait({'type': 'http.disconnect'})
+            await asyncio.wait_for(task, 1)
+        finally:
+            if not task.done(): task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(drained.is_set())
+        self.assertEqual([message['status'] for message in sent if message['type'] == 'http.response.start'], [499])
+        row, = self.outcomes()
+        self.assertEqual(row['outcome'], 'cancelled')
+        self.assertEqual(row['producerMetrics'], current)
+        self.assertNotIn('code', row)
+
     def test_projection_excludes_wallet_material_and_untrusted_metric_fields(self):
         value = {'quotedOutput': '123', 'inputs': [{'currency': PAXG, 'amount': '1000'}],
             'metrics': {'totalMs': 20, 'requestBody': 'private', 'searchMs': float('nan')},

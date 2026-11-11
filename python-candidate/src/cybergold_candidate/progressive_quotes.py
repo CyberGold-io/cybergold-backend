@@ -39,12 +39,22 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             await asyncio.sleep(0)
         seeds = cache.route_seeds(neighbors) if scalar else []
         consumer = asyncio.create_task(publication.run())
-        producer = asyncio.create_task(service.quoter.quote(request, publication.enqueue,
-            seed=previous, seed_lookup=cache.sql_lookup if scalar or refresh else None,
-            neighbors=cache.sql_neighbors if scalar else None,
-            on_family=publication.observe_family if scalar else None,
-            on_candidate=publication.enqueue,
-            **({'route_seeds': seeds} if seeds else {})))
+        producer_metrics = None
+        async def produce():
+            nonlocal producer_metrics
+            try:
+                return await service.quoter.quote(request, publication.enqueue,
+                    seed=previous, seed_lookup=cache.sql_lookup if scalar or refresh else None,
+                    neighbors=cache.sql_neighbors if scalar else None,
+                    on_family=publication.observe_family if scalar else None,
+                    on_candidate=publication.enqueue,
+                    **({'route_seeds': seeds} if seeds else {}))
+            except asyncio.CancelledError as error:
+                # gather synthesizes cancellation results; capture the actual
+                # producer's drained counters before its exception is lost.
+                producer_metrics = getattr(error, 'quoter_metrics', None)
+                raise
+        producer = asyncio.create_task(produce())
         async def historical_offer():
             async def offer(read, *, nearby):
                 try:
@@ -63,6 +73,7 @@ async def progressive_quote(service, request, publish, *, refresh=False):
                 await asyncio.gather(*readers, return_exceptions=True)
         historical = asyncio.create_task(historical_offer()) if scalar else None
         owned = (producer, consumer, historical) if historical is not None else (producer, consumer)
+        cancellation = None
         try:
             done, _ = await asyncio.wait((producer, consumer), return_when=asyncio.FIRST_COMPLETED)
             if consumer in done:
@@ -78,11 +89,16 @@ async def progressive_quote(service, request, publish, *, refresh=False):
             publication.queue.put_nowait(('terminal', deepcopy(terminal)))
             publication.queue.put_nowait(None)
             await consumer
+        except asyncio.CancelledError as error:
+            cancellation = error
+            raise
         finally:
             publication.closed = True
             for task in owned:
                 if not task.done(): task.cancel()
             outcomes = await asyncio.gather(*owned, return_exceptions=True)
+            if cancellation is not None and producer_metrics is not None:
+                cancellation.quoter_metrics = producer_metrics
             disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
             if disproof is not None:
                 if publication.context is not None:

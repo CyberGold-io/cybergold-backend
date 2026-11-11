@@ -259,11 +259,11 @@ class InitializationRoutingTests(unittest.IsolatedAsyncioTestCase):
                     for offered in feeds:
                         values.extend(normalize_hints(offered, A, B))
                     return values
-                values = await session._quick_pass(consume, {key: offers})
+                values = await session._arrival_pass(consume, None, {key: offers})
                 self.assertEqual(values, [([{'amountIn': '100', 'hops': route(good, A)}], ['old-good'])])
                 async def adapted():
                     return list(adapter.nominations(A, B, 100, PIN))
-                self.assertEqual(await session._quick_pass(adapted, {key: offers}), values)
+                self.assertEqual(await session._arrival_pass(adapted, None, {key: offers}), values)
         finally:
             await session.close()
 

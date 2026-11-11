@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Exact plan encoding and SDK results, including typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound.</desc>
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Executable arrival changes wake dependent plan owners; duplicate origins do not reprice. Exact plan encoding and SDK results, including inverse and typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -49,7 +49,7 @@
 <rect x="635" y="154" width="157" height="77" rx="8" class="node"/>
 <text x="646" y="178" class="heading">Six suppliers</text>
 <text x="646" y="198" class="body">Per AMM query</text>
-<text x="646" y="215" class="body">SDK market-leg work</text>
+<text x="646" y="215" class="body">Query-aware arrivals</text>
 <rect x="50" y="268" width="161" height="65" rx="8" class="node"/>
 <text x="61" y="292" class="heading">Backend quote book</text>
 <text x="61" y="313" class="body">Select before new search</text>
@@ -61,7 +61,7 @@
 <text x="451" y="313" class="body">Ordinary admission</text>
 <rect x="635" y="268" width="157" height="65" rx="8" class="node"/>
 <text x="646" y="292" class="heading">More proposals</text>
-<text x="646" y="313" class="body">Ordinary admission</text>
+<text x="646" y="313" class="body">Only affected plans</text>
 <path d="M130 231 V268" class="line"/><polygon points="130.00,268.00 127.00,261.00 133.00,261.00" fill="#3e596d"/><circle cx="130" cy="249" r="10" class="step"/><text x="130" y="249" class="step-text">1</text>
 <path d="M325 231 V268" class="line"/><polygon points="325.00,268.00 322.00,261.00 328.00,261.00" fill="#3e596d"/><circle cx="325" cy="249" r="10" class="step"/><text x="325" y="249" class="step-text">1</text>
 <path d="M520 231 V268" class="line"/><polygon points="520.00,268.00 517.00,261.00 523.00,261.00" fill="#3e596d"/><circle cx="520" cy="249" r="10" class="step"/><text x="520" y="249" class="step-text">1</text>
@@ -72,7 +72,7 @@
 <path d="M713 333 V371" class="line"/><polygon points="713.00,371.00 710.00,364.00 716.00,364.00" fill="#3e596d"/><circle cx="713" cy="351" r="10" class="step"/><text x="713" y="351" class="step-text">2</text>
 <rect x="245" y="371" width="547" height="62" rx="8" class="node"/>
 <text x="259" y="396" class="heading">Helpers + SDK share eight engine permits</text>
-<text x="259" y="416" class="body">Reuse exact encodings and SDK results; known jobs first. No preemption.</text>
+<text x="259" y="416" class="body">Exact SDK reuse includes inverse; known jobs first. No preemption.</text>
 <rect x="50" y="392" width="161" height="100" rx="8" class="fresh"/>
 <text x="61" y="416" class="heading">Selected stream</text>
 <text x="61" y="434" class="heading">frame</text>
@@ -91,7 +91,7 @@
 <text x="638" y="487" class="heading">Producer admission</text>
 <text x="638" y="507" class="body">8 live / scheduler</text>
 <text x="638" y="523" class="body">8 callbacks / driver</text>
-<text x="42" y="550" class="body-large">Before route/split expansion: skip only V3/V4 pools observed with sqrtRatioX96 = 0 in this search.</text>
-<text x="42" y="566" class="body">Unknown and initialized zero-liquidity pools stay eligible. Producer limits are local counts, not a global memory bound.</text>
+<text x="42" y="550" class="body-large">New choices revisit dependent plans; graph changes revisit all. Duplicate origins do not reprice.</text>
+<text x="42" y="566" class="body">Pool filter: observed sqrtRatioX96 = 0 only. Unknown and zero-liquidity pools stay eligible; limits are local.</text>
 <text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; pool_initialization; route_scheduler, route_work_slots; calculation-session.</text>
 </svg>
