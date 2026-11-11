@@ -4,6 +4,7 @@ import json
 
 from .route_work_slots import engine_work, required_state_wait
 from .search_observations import current_search_observations
+from .sdk_worker import SdkInputTooSmall
 
 
 async def simulate_sdk(engine, payload, on_state):
@@ -27,14 +28,23 @@ async def simulate_sdk(engine, payload, on_state):
         # The shared task owns its pricing capacity. It must not inherit a
         # subscriber's permit while that subscriber is parked or cancelled.
         async with engine_work(engine.semaphore):
-            value = await engine.sdk.request(payload, on_state=acquire)
+            try:
+                value = await engine.sdk.request(payload, on_state=acquire)
+            except SdkInputTooSmall:
+                # This exact mathematical no-quote is reusable, unlike failed
+                # observations/transport. Retain no exception or traceback.
+                return {'noQuote': 'input-too-small', 'demands': demands}
         return {'value': value, 'demands': demands}
 
     async with required_state_wait():
         result = await observations.read(identity, calculate)
         if not produced:
-            # V3 postState omits canonical coverage. Replaying the successful
-            # demands supplies each caller's isolated snapshot/candidate bank.
+            # Both a successful quote and a mathematical no-quote can have
+            # acquired coverage. Every follower owns those required effects.
             for requests in result['demands']:
                 await on_state(requests)
+        if result.get('noQuote') == 'input-too-small':
+            # Keep the ordinary failure path parked: no post-state is committed
+            # and no engine restoration is needed merely to raise this error.
+            raise SdkInputTooSmall('SDK quote unavailable')
     return result['value']

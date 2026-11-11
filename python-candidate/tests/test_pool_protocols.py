@@ -33,6 +33,10 @@ class Rpc(UniswapRpc):
         self.pairs = {('v2',A,B,3000):C, ('v3',A,B,500):C}
         self.v4_states = {}
         self.w3.provider.make_request = AsyncMock(side_effect=self.request)
+        self.w3.provider.make_batch_request = AsyncMock(side_effect=self.batch_request)
+
+    async def batch_request(self, requests):
+        return [await self.request(method, params) for method, params in requests]
 
     async def block(self, _hash):
         return deepcopy(self.current)

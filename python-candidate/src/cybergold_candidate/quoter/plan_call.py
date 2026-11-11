@@ -1,14 +1,33 @@
 """Pure preparation of a complete Helpers eth_call; no network or scheduling."""
+from collections import OrderedDict
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
+import json
 from ..exact_input_plan import compile_plan
 from ..helpers_execution import ABI, argument
 from ..market_fee import get_market_fee_rate, routed_sell_budget
+from ..quote_flow import stage
 from ..routing_encoding import ZERO
 from .simulation_funding import funding_overrides, SIMULATION_SENDER
 
 METHOD = next(row for row in ABI if row.get('name') == 'executeExactInput')
 EMPTY_PERMIT = {'value': 0, 'deadline': 0, 'v': 0, 'r': '0x'+'00'*32, 's': '0x'+'00'*32}
+MAX_PREPARATIONS = 4096  # Same completed-entry bound as search observation sharing.
+_preparations = ContextVar('plan_preparations', default=None)
+
+
+@contextmanager
+def preparation_scope():
+    """One search's immutable encodings; never retain caller plans or prices."""
+    cache = OrderedDict()
+    token = _preparations.set(cache)
+    try:
+        yield cache
+    finally:
+        cache.clear()
+        _preparations.reset(token)
 
 def funding_bundle(inputs):
     return {'authorizations': [{'kind': 0, 'permit': EMPTY_PERMIT} for _ in inputs],
@@ -75,8 +94,31 @@ def compile_call(request, selected, *, chain, helpers, core, contract, block=Non
             for row in branch['data']['expectedOutputs']) for branch in plan['body']['branches'])
         minimum = 0 if share_only else 1
     body = executable_body(plan['body'], accepted_core)
-    compiled = compile_plan({**request, 'recipient': recipient or SIMULATION_SENDER, 'deadline': '0'},
-                            body, minimum if request['intent'] != 3 else 0)
+    execution = {key: request[key] for key in ('intent', 'inputs', 'outputCurrency')}
+    execution.update(recipient=recipient or SIMULATION_SENDER, deadline='0')
+    minimum = minimum if request['intent'] != 3 else 0
+    tag = {'blockHash': block['hash'], 'requireCanonical': True} if block is not None else 'latest'
+    cache = _preparations.get()
+    if cache is not None:
+        # Fee policy is evaluated above before lookup. Only executable inputs
+        # belong here, never conversion origins, projected amounts or pool banks.
+        key = json.dumps((chain, helpers, core, id(contract), pricing, execution, body, minimum, tag),
+                         sort_keys=True, separators=(',', ':'))
+        if key in cache:
+            cache.move_to_end(key)
+            params = json.loads(cache[key])
+            return PreparedPlanCall(plan, params, params[1])
+    with stage('plan.encode', kind='cpu'):
+        params = _compile_params(execution, body, minimum, tag, helpers, core, contract)
+    if cache is not None:
+        cache[key] = json.dumps(params, separators=(',', ':'))
+        while len(cache) > MAX_PREPARATIONS:
+            cache.popitem(last=False)
+    return PreparedPlanCall(plan, params, params[1])
+
+
+def _compile_params(request, body, minimum, tag, helpers, core, contract):
+    compiled = compile_plan(request, body, minimum)
     args = [argument(value, parameter) for value, parameter in zip(
         (compiled, funding_bundle(request['inputs'])), METHOD['inputs'], strict=True)]
     transaction = {'from': SIMULATION_SENDER, 'to': helpers,
@@ -84,6 +126,4 @@ def compile_call(request, selected, *, chain, helpers, core, contract, block=Non
     native = sum(int(row['amount']) for row in request['inputs'] if row['currency'].lower() == ZERO)
     if native:
         transaction['value'] = hex(native)
-    tag = {'blockHash': block['hash'], 'requireCanonical': True} if block is not None else 'latest'
-    params = [transaction, tag, funding_overrides(request['inputs'], helpers, core)]
-    return PreparedPlanCall(plan, params, tag)
+    return [transaction, tag, funding_overrides(request['inputs'], helpers, core)]

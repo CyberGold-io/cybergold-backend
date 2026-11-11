@@ -212,6 +212,17 @@ graphs, retained results or work across engines. Existing errors, cancellation
 and timeouts can still end a search before every candidate is observed; no
 deadline, call limit, fee arithmetic or ranking change is introduced.
 
+Identical full SDK payloads share successful arithmetic within the search.
+They also share the specific mathematical result that the input cannot produce
+one raw output unit. Each follower still obtains the producer's required pool
+observations before receiving its own typed no-quote error; no partial private
+pool state is committed. Changed amounts or observed state calculate separately.
+Missing state, timeouts, cancellation and other SDK failures remain retryable.
+Already-known independent V3 price/liquidity getters use one JSON-RPC batch for
+their missing members. A single missing member uses one ordinary call. Successful
+members keep their existing read-cache identity; a failed member is not retained.
+No delay is introduced to collect a larger batch.
+
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
 observation owns a finite pass over its alternatives; derived results do not
@@ -231,6 +242,23 @@ engine permission or shares an identical call, then invokes Helpers through
 outputs, fees, retained charges and bounds. One unshared call normally measures
 all encoded market/Core actions in their actual order, including shared-pool
 effects; it is not one validation call per route leg.
+
+Within a search, identical executable preparation inputs reuse immutable call
+encoding, with at most 4,096 entries under the existing completed-entry budget.
+Each caller keeps its own mutable plan, origins and fee projection. The identity
+covers exact funding, ordered routes and splits, fee-bearing body, limits,
+recipient, pricing mode and chain/deployment/block context. Fee policy is applied
+before lookup. This reuses encoding, not a price; fresh transaction preparation
+still makes its ordinary unshared Helpers call.
+
+Search-flow diagnostics count post-sharing Helpers provider dispatches and repeated exact
+wire/error envelopes using digests. Up to 4,096 distinct failure pairs and 16
+repeated rows are retained; omitted observations are counted explicitly. Raw
+calldata, funding overrides and provider messages are not logged. Equal bytes
+at `latest` do not prove equal chain state. The diagnostics do not cache failures
+or change results, retries or cancellation.
+Lower transport sharing of overlapping hash-pinned calls can still reduce these
+dispatches to fewer HTTP requests; `rpc.http` measures that transport boundary.
 
 The projected executable routes must respect the same pool-direction rule.
 Receipt-proven zero residuals do not use their dormant routes; unknown amounts
@@ -384,6 +412,23 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Reuse equivalent quote work and batch independent getters
+
+- Reuse search-local immutable Helpers preparation while preserving private
+  plans, fee projection, exact execution identities and fresh paid simulation.
+  Measure actual encoding separately from logical preparation attempts.
+- Share only the SDK's typed input-too-small mathematical no-quote under its
+  existing full-payload identity; replay required observations for each follower
+  and raise a fresh error without committing partial candidate state.
+- Add bounded, diagnostic-only exact Helpers failure fingerprints and result
+  classifications. Keep RPC failures uncached and latest state unpinned.
+- Batch the already-known V3 price/liquidity getter pair with unchanged member
+  identities, typed errors, retention and cancellation. Successful siblings can
+  complete even when another member fails. Add no batch-fill timer, amount loop,
+  route filter, engine/SDK capacity or whole-plan Multicall.
+- Update the reference, affected diagrams and linked process PDF with these
+  owner-authorized four work-reduction changes.
 
 ### 2026-11-11 - Bound route evaluations and local optimizer callbacks
 

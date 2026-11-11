@@ -25,7 +25,7 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     discovery.owners.settle discovery.providers.settle discovery.providers.close discovery.clear
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
-    state.acquire state.clone topology.clone topology.enrich plan.compile helpers.shared
+    state.acquire state.clone topology.clone topology.enrich plan.compile plan.encode helpers.shared
     helpers.permit helpers.rpc rpc.session rpc.session.acquire rpc.session.executor
     rpc.session.lock rpc.session.resume rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
@@ -68,6 +68,7 @@ class Flow:
         self.finished_at = None
         self.outcome = None
         self.emitted = False
+        self.helpers_calls = None
 
     def row(self, name, kind):
         key = name, kind
@@ -135,6 +136,7 @@ class Flow:
                 'elapsedMs': round((now-self.started)*1000, 3),
                 'milestonesMs': dict(self.milestones),
                 'stages': sorted(rows, key=lambda row: (row['stage'], row['kind'])),
+                **({'helpersCalls': self.helpers_calls} if self.helpers_calls is not None else {}),
                 'sharedOwners': [{'flowId': owner, 'relation': relation, 'subscriptions': count}
                                  for (owner, relation), count in self.links.items()]}
 

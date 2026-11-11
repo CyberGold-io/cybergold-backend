@@ -376,6 +376,13 @@ requested minimum exceeds the available resource. These paths do not imply
 one generic reserve-error selector for every Helpers-routed redemption failure.
 
 Compilation, transport/sharing and result projection are separate modules.
+Pure call preparation has its own search-local 4,096-entry LRU of immutable
+encoded parameters; each caller still owns a fresh plan and parameter object.
+The key covers canonical compiler inputs, exact ordered funding/body/limits,
+recipient, chain/deployment, contract encoder context, pricing mode and block tag.
+Fee normalization runs before lookup, including the CYGLD sell fee that changes
+AMM input. No observed price or raw caller plan is retained there. A new search
+or an unscoped call compiles independently; failed preparation is not retained.
 Identical calls within the simulation scope can share a physical result.
 Consequently a subscriber can observe zero additional physical calls while
 still receiving a Helpers-validated observation. A new unshared complete plan
@@ -479,6 +486,30 @@ completed values directly to their original positions and gather only pending
 futures. An entirely completed multi-key read retains one cooperative checkpoint.
 These changes do not alter simulation inputs, the eight-slot capacity or
 shared-read subscriber ownership.
+
+The exact SDK-payload bank also retains the typed `SdkInputTooSmall` mathematical
+no-quote as a structured marker and acquired-state demand list, not an exception
+or traceback. Followers replay those demands into their own observation owners,
+then raise a fresh typed error while parked. The producer has already acquired
+its demands. No caller commits partial candidate post-state. Other exceptions,
+timeouts, cancellation and missing-state failures are not retained. The existing
+full-payload identity continues to include observed scalars and coverage; a
+changed amount, private state or coverage can require another calculation.
+
+`UniswapRpc.read_functions` groups only an already-known independent set. The V3
+scalar snapshot uses it for `slot0` and liquidity. Existing completed/pending
+per-getter identities are resolved before sending: multiple missing members use
+one authenticated provider JSON-RPC batch, one missing member uses an ordinary
+call, and no missing members require no HTTP. Hash/latest retention stays the
+same. The provider orders replies by request identity. Typed member failures
+resolve their own shared future as an exception and are not cached; valid sibling
+envelopes can still be retained. Other readers of the same raw bank receive the
+ordinary exception, never a synthetic RPC error containing an exception object.
+There is no fill delay or change to independent Helpers execution semantics.
+The existing eight-operation getter semaphore now counts a batch as one
+transport operation, not one RPC member. Eight two-member scalar batches can
+therefore carry sixteen getter members in flight. Total requested getter work
+is unchanged; this is not a global RPC-member concurrency or EVM-work limit.
 
 When an AlphaRoutes query closes, its identity is removed and retired before
 its owned callbacks are cancelled. That callback cancellation proceeds in the
@@ -643,6 +674,23 @@ was observed or prepared.
   gate or quote gate is added.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
+- `plan.compile` includes every logical preparation attempt, private copies and
+  memo lookup; `plan.encode` measures actual ABI/funding encoding on a memo miss.
+  Both use event-loop thread CPU, not whole-process or SDK child CPU.
+- The final search flow's `helpersCalls` records post-Helpers-sharing provider
+  dispatch count, closed
+  outcome categories and exact repeated error-envelope fingerprints. Identity
+  includes the provider object context, complete wire parameters, state-tag
+  class and sharing mode. Only digests are retained/logged, not transaction
+  fields, overrides or provider text. Its first 4,096 distinct failure pairs
+  remain countable; additional new pairs increment `untrackedFailureObservations`.
+  Up to 16 repeated rows are emitted, with omitted row count. Transport errors
+  and cancellation are categorized but never retained as exception objects.
+  Repetition at `latest` does not prove immutable state or enable error caching.
+  Optional diagnostic failures never replace the call's result/error.
+  `providerDispatches` is not an HTTP count: overlapping hash-pinned calls can
+  coalesce again in the lower provider, and a dispatch can fail before posting.
+  `rpc.http` retains the actual transport-stage count.
 - Proxy timings begin inside the Next handler, not at the browser input event.
 - The implemented Backend first-executable metric counts its first non-readonly
   `qualified`/`complete` observation, including a stored observation.
