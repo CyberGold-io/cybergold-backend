@@ -112,7 +112,7 @@ class ReadyFirstTests(ProgressiveFixture):
                         self.assertIn('uniroute-local', first[1])
                     finally:
                         feed.close()
-                await session._quick_pass(quick, session._ready_offers())
+                await session._arrival_pass(quick, None, session._ready_offers())
         finally:
             await session.close()
 

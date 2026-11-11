@@ -96,7 +96,7 @@ class QuickOfferCopyTests(unittest.IsolatedAsyncioTestCase):
         return [crossed(origin=f'provider-{index}') for index in range(count)]
 
     async def quick(self, offers, callback):
-        return await self.session._quick_pass(callback, {self.key: offers})
+        return await self.session._arrival_pass(callback, None, {self.key: offers})
 
     def iterator(self):
         return round_robin(self.session.offer_feeds(A, D, 100, 'local-block'))
@@ -144,7 +144,8 @@ class QuickOfferCopyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((offers, ordinary), original)
 
     async def test_late_batch_and_origins_are_seen_by_next_snapshot(self):
-        entry = {'offers': [], 'offer_revisions': []}
+        entry = {'offers': [], 'offer_revisions': [],
+                 'query': bootstrap.RouteQuery(*self.key, 'local-block')}
         attempt = {'batches': 0, 'candidates': 0, 'firstCandidateMs': None, 'provider': 'late-provider'}
         self.session._queries[self.key] = [entry]
         first, late = self.offers(2)
@@ -160,14 +161,14 @@ class QuickOfferCopyTests(unittest.IsolatedAsyncioTestCase):
                                  'A new arrival must not rewrite an existing quick snapshot')
             finally:
                 iterator.close()
-        await self.session._quick_pass(consume_old, snapshot)
+        await self.session._arrival_pass(consume_old, None, snapshot)
         async def consume_new():
             iterator = self.iterator()
             try:
                 return list(iterator)
             finally:
                 iterator.close()
-        values = await self.session._quick_pass(consume_new, self.session._ready_offers())
+        values = await self.session._arrival_pass(consume_new, None, self.session._ready_offers())
         self.assertEqual([row['branches'] for row in values], [late['branches'], first['branches']])
         self.assertEqual([row['origins'] for row in values],
                          [['late-provider'], ['late-provider', 'later-origin']])
