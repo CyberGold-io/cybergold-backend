@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO.</desc>
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -88,10 +88,10 @@
 <text x="248" y="507" class="body">Parallel history recovery</text>
 <text x="248" y="523" class="body">Cannot gate scalar L1</text>
 <rect x="627" y="466" width="173" height="66" rx="8" class="node"/>
-<text x="638" y="487" class="heading">Shared loop CPU</text>
-<text x="638" y="507" class="body">Copy offers on demand</text>
-<text x="638" y="523" class="body">Tasks can add contention</text>
+<text x="638" y="487" class="heading">Producer admission</text>
+<text x="638" y="507" class="body">8 live / scheduler</text>
+<text x="638" y="523" class="body">8 callbacks / driver</text>
 <text x="42" y="550" class="body-large">Before route/split expansion: skip only V3/V4 pools observed with sqrtRatioX96 = 0 in this search.</text>
-<text x="42" y="566" class="body">Unknown and initialized zero-liquidity pools remain eligible. Stored delivery and Helpers replay stay independent.</text>
-<text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; pool_initialization; quoter/search, discovery, bootstrap; route_work_slots.</text>
+<text x="42" y="566" class="body">Unknown and initialized zero-liquidity pools stay eligible. Producer limits are local counts, not a global memory bound.</text>
+<text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; pool_initialization; route_scheduler, route_work_slots; calculation-session.</text>
 </svg>

@@ -218,7 +218,7 @@ class SdkLockOwnershipTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(engine._priority)
         self.assertIsNone(work._current.get())
 
-    async def test_sdk_lock_waiters_leave_capacity_for_helpers_and_later_candidate(self):
+    async def test_sdk_lock_waiters_allow_independent_helpers_and_defer_ninth_candidate(self):
         engine, sdk = work.PricingSlots(8), SdkWorker()
         sdk.lock = ObservedLock()
         sdk.process = SimpleNamespace(returncode=None)
@@ -242,22 +242,24 @@ class SdkLockOwnershipTests(unittest.IsolatedAsyncioTestCase):
         params = [{'to': 'local-Helpers', 'data': 'unchanged-plan'}, 'latest']
         rpc_owner = SimpleNamespace(w3=SimpleNamespace(provider=SimpleNamespace(make_request=rpc)))
         async def evaluate(_index, value):
-            if value == 'Helpers':
+            async with work.engine_work(engine):
+                results[value] = await sdk.request({'operation': 'simulateRoute', 'mode': 'exactIn',
+                    'amount': str(value + 1), 'pools': [source]})
+        with captured_leases() as leases, patch.object(sdk_bridge, 'exchange', exchange):
+            task = asyncio.create_task(schedule_routes(
+                lambda _: [feed(range(9))], evaluate))
+            try:
+                await reached(entered)
+                await reached(sdk.lock.seven_waiters)
+                # The ninth candidate waits for this scheduler's lifetime
+                # place; separately owned known work must still obtain engine
+                # capacity while all eight evaluations are unfinished.
                 with work.bootstrap_priority():
                     response, counts = await execute_plan_call(rpc_owner, params, semaphore=engine,
                                                                now=lambda: 'local-time', shared=False)
                 self.assertEqual((response['result'], counts['issued']), ('local-Helpers-result', 1))
-            else:
-                async with work.engine_work(engine):
-                    results[value] = await sdk.request({'operation': 'simulateRoute', 'mode': 'exactIn',
-                        'amount': str(value + 1), 'pools': [source]})
-        with captured_leases() as leases, patch.object(sdk_bridge, 'exchange', exchange):
-            task = asyncio.create_task(schedule_routes(
-                lambda _: [feed([*range(8), 'Helpers'])], evaluate))
-            try:
-                await reached(entered)
-                await reached(sdk.lock.seven_waiters)
                 await reached(helped)
+                self.assertEqual(len(leases), 8)
                 self.assertFalse(release.is_set(), 'Helpers must run before the active exchange finishes')
                 self.assertEqual(len(exchanges), 1)
                 self.assertEqual(len(sdk.lock._waiters), 7)
@@ -266,9 +268,9 @@ class SdkLockOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(source, original)
                 release.set()
                 await asyncio.wait_for(task, 3)
-                self.assertEqual([results[index]['amountOut'] for index in range(8)],
-                                 [str(index + 2) for index in range(8)])
-                self.assertEqual(exchanges, [str(index + 1) for index in range(8)])
+                self.assertEqual([results[index]['amountOut'] for index in range(9)],
+                                 [str(index + 2) for index in range(9)])
+                self.assertEqual(exchanges, [str(index + 1) for index in range(9)])
                 self.assertEqual(calls, [('eth_call', params)])
                 self.assertEqual(engine._value, 8)
                 self.assertEqual(leases[0].slots._value, 8)

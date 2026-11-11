@@ -277,7 +277,7 @@ class RouteWorkSlotsTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(observed,[True,True])
         finally:loop.set_task_factory(previous)
 
-    async def test_eight_parked_allow_ninth_without_losing_any_candidate(self):
+    async def test_eight_parked_defer_ninth_without_holding_engine_or_losing_candidates(self):
         semaphore=asyncio.Semaphore(8);release=asyncio.Event();all_parked=asyncio.Event();fast=asyncio.Event()
         parked=set();done=[];peaks=[]
         async def evaluate(index,value):
@@ -293,11 +293,16 @@ class RouteWorkSlotsTests(unittest.IsolatedAsyncioTestCase):
         with leases() as rows:
             task=asyncio.create_task(schedule_routes(lambda _:[feed(range(9))],evaluate))
             try:
-                await until(lambda:all_parked.is_set() and fast.is_set())
-                self.assertEqual(done,[8]);self.assertEqual(len(parked),8)
-                self.assertEqual(len(rows),9)
+                await until(all_parked.is_set)
+                self.assertFalse(fast.is_set())
+                self.assertEqual(done,[]);self.assertEqual(len(parked),8)
+                self.assertEqual(len(rows),8)
+                async with work.engine_work(semaphore):
+                    self.assertEqual(semaphore._value,7)
                 release.set();await task
                 self.assertEqual(sorted(done),list(range(9)))
+                self.assertTrue(fast.is_set())
+                self.assertEqual(len(rows),9)
                 self.assertTrue(all(row.closed and not row.owned for row in rows))
                 self.assertEqual(rows[0].slots._value,8)
                 self.assertLessEqual(max(peaks),8)

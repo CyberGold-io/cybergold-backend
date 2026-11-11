@@ -12,6 +12,63 @@ from cybergold_candidate.quote_budget import QuoteBudget, budget_context
 
 
 class RouteScheduler(unittest.IsolatedAsyncioTestCase):
+    async def test_large_parked_feed_has_lifetime_bound_and_one_completion_admits_one(self):
+        for limit in (1, 3, 8):
+            with self.subTest(limit=limit):
+                pricing = PricingSlots(8)
+                release = [asyncio.Event() for _ in range(256)]
+                full, prefetched, replacement = (asyncio.Event() for _ in range(3))
+                admitted, finished = [], []
+                running = peak = 0
+                async def feed():
+                    for number in range(256):
+                        if number == limit:
+                            prefetched.set()
+                        yield number
+                async def price(_index, number):
+                    nonlocal running, peak
+                    admitted.append(number)
+                    running += 1
+                    peak = max(peak, running)
+                    try:
+                        async with engine_work(pricing):
+                            async with required_state_wait():
+                                if number == limit - 1:
+                                    full.set()
+                                if number == limit:
+                                    replacement.set()
+                                await release[number].wait()
+                            finished.append(number)
+                    finally:
+                        running -= 1
+                task = asyncio.create_task(schedule_routes(lambda _: [feed()], price, limit=limit))
+                try:
+                    await asyncio.wait_for(full.wait(), 1)
+                    await asyncio.wait_for(prefetched.wait(), 1)
+                    # Let buffered feed/capacity notifications settle. This is
+                    # event-loop progress, not a wall-clock speed assertion.
+                    for _ in range(32):
+                        await asyncio.sleep(0)
+                    self.assertEqual(admitted, list(range(limit)))
+                    self.assertEqual(pricing._value, 8)
+                    async with engine_work(pricing):
+                        self.assertEqual(pricing._value, 7)
+                    release[0].set()
+                    await asyncio.wait_for(replacement.wait(), 1)
+                    self.assertEqual(finished, [0])
+                    self.assertEqual(admitted, list(range(limit + 1)))
+                    for event in release:
+                        event.set()
+                    await asyncio.wait_for(task, 3)
+                    self.assertEqual(admitted, list(range(256)))
+                    self.assertCountEqual(finished, range(256))
+                    self.assertEqual(peak, limit)
+                    self.assertEqual(running, 0)
+                    self.assertEqual(pricing._value, 8)
+                finally:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
     async def test_slow_leg_iterator_and_discovery_do_not_hold_other_leg_result(self):
         release, completed, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
         closed = []
@@ -167,7 +224,7 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(SnapshotChanged, 'completed canonical disproof'):
             await schedule_routes(lambda _: [feed('ordinary'), feed('disproof')], price)
 
-    async def test_parked_work_keeps_all_candidates_without_repeated_wait_registration(self):
+    async def test_parked_work_bounds_live_candidates_and_preserves_all_results(self):
         release, parked = asyncio.Event(), asyncio.Event()
         pricing = PricingSlots(8)
         admitted, finished, closed = [], [], []
@@ -183,7 +240,7 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             admitted.append(row)
             async with engine_work(pricing):
                 async with required_state_wait():
-                    if len(admitted) == 48:
+                    if len(admitted) == 8:
                         parked.set()
                     await release.wait()
                 finished.append((index, row))
@@ -192,7 +249,7 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             try:
                 await asyncio.wait_for(parked.wait(), 1)
                 self.assertEqual(admitted[:3], [(0, 0), (1, 0), (2, 0)])
-                self.assertEqual(len(owned), 48)
+                self.assertEqual(len(owned), 8)
                 self.assertFalse(task.done())
                 self.assertEqual(finished, [])
                 self.assertEqual(pricing._value, 8)
@@ -208,6 +265,7 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             waiter_visits = sum(len(call.args[0]) for call in registrations.await_args_list)
             self.assertLessEqual(waiter_visits, 2 * len(owned) + len(closed))
         self.assertEqual(sorted(finished), [(index, (index, number)) for index in range(3) for number in range(16)])
+        self.assertEqual(len(owned), 48)
         self.assertCountEqual(closed, [0, 1, 2])
         self.assertTrue(all(task.done() for task in owned))
         self.assertEqual((pricing._value, len(pricing._ordinary), len(pricing._priority)), (8, 0, 0))
@@ -300,7 +358,7 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             try:
                 async with engine_work(pricing):
                     async with required_state_wait():
-                        if len(admitted) == 32:
+                        if len(admitted) == 8:
                             parked.set()
                         await asyncio.Event().wait()
             finally:
@@ -316,7 +374,8 @@ class RouteScheduler(unittest.IsolatedAsyncioTestCase):
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-        self.assertEqual(sorted(drained), list(range(32)))
+        self.assertEqual(admitted, list(range(8)))
+        self.assertEqual(sorted(drained), list(range(8)))
         self.assertEqual(closed, ['feed'])
         self.assertTrue(all(task.done() for task in owned))
         self.assertEqual((pricing._value, len(pricing._ordinary), len(pricing._priority)), (8, 0, 0))

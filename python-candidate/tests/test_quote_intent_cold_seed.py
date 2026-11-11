@@ -198,7 +198,7 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(state.registry.pending.pending, {})
                 self.assertEqual(state.engine.semaphore._value, 8)
 
-    async def test_cold_qualification_uses_completed_slots_before_more_than_eight_held_tails(self):
+    async def test_cold_qualification_precedes_held_exploration_under_lifetime_limit(self):
         state = self.fixture(saturated=True, hold_seed=True)
         active_sdk = 0
         sdk_request = state.engine.sdk.request
@@ -223,15 +223,12 @@ class ColdSeedQualification(unittest.IsolatedAsyncioTestCase):
             graph_count += sum([1 async for _ in candidate_branches(
                 list(state.registry.inventory.values()), asset, WETH, 'exactOut', 100)])
         self.assertGreater(6+graph_count, 8)
-        # Qualification used the completed slots first. Continuing exploration
-        # holds SDK jobs and initial state reads; parked reads do not consume
-        # pricing capacity. Count the actual held work, rather than requiring
-        # those RPC waits to fill all eight arithmetic permits.
+        # Qualification used the completed slots first. Exploration remains
+        # held on SDK/state work, but a lifetime-bounded scheduler no longer
+        # promises a growing backlog beyond eight unfinished evaluations.
         await self.ready(state.rpc.typed)
         await self.ready(state.rpc.tail)
-        async with asyncio.timeout(2):
-            while active_sdk + len(state.registry.pending.pending) <= 8:
-                await asyncio.sleep(0)
+        self.assertGreater(active_sdk + len(state.registry.pending.pending), 0)
         self.assertLessEqual(active_sdk, 8)
         self.assertFalse(state.task.done())
         self.assertTrue(state.budget.ready)
