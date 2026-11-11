@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame</desc>
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -72,7 +72,7 @@
 <path d="M713 333 V371" class="line"/><polygon points="713.00,371.00 710.00,364.00 716.00,364.00" fill="#3e596d"/><circle cx="713" cy="351" r="10" class="step"/><text x="713" y="351" class="step-text">2</text>
 <rect x="245" y="371" width="547" height="62" rx="8" class="node"/>
 <text x="259" y="396" class="heading">Helpers + SDK share eight engine permits</text>
-<text x="259" y="416" class="body">SDK-lock/state waits release permits; running work is not preempted.</text>
+<text x="259" y="416" class="body">Known SDK jobs first; priority engine restoration for the lock holder. No preemption.</text>
 <rect x="50" y="392" width="161" height="100" rx="8" class="fresh"/>
 <text x="61" y="416" class="heading">Selected stream</text>
 <text x="61" y="434" class="heading">frame</text>

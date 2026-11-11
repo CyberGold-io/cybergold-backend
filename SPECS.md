@@ -146,10 +146,13 @@ offers pure-Core funding before requesting fresh market paths. Backward
 exact-output pricing supplies both acquisition proposals; direct basket
 issuance uses the measured input vector without acquisition swaps.
 
-Those known proposals can then be combined with a market purchase using the
-remaining request budget, in either order. Their validation, both market
-compositions and fresh residual-route exploration progress independently;
-waiting for one does not serialize the others. Each alternative uses the
+For scalar purchases, those known proposals can be combined with a market
+purchase using the remaining request budget, in either order. The generator
+awaits known useful-residual sizing first when present, then pure-Core sizing,
+before fresh residual exploration. After each proposal is yielded, its validation
+and, for scalar purchases, both market composition orders are scheduled separately.
+A pending validation or composition is not awaited before the other jobs are
+scheduled, but they still share execution resources. Each alternative uses the
 same complete-plan evaluation and selection workflow.
 
 Core acquisition sizing uses exact-output SDK prices, including pool fees.
@@ -175,11 +178,20 @@ yielding a proposal or starting optional construction. SQL-neighbor priority
 also covers only the complete candidate call; its recovery and follow-up work
 does not inherit priority. Fresh routing and composition construction keep
 ordinary admission, and running work is not preempted.
+The serialized SDK worker also uses the existing two admission lanes for its
+single exchange slot. Work already marked as known bootstrap work precedes
+ordinary queued work after the current exchange. Each lane remains FIFO, and
+no running exchange is preempted. Priority does not cover every dependency or
+bound when an optional smaller-funding proposal will be produced or validated.
 Waiting for the serialized SDK worker releases owned engine and scheduler
 capacity. After obtaining the worker lock, the task reacquires that capacity
-before exchanging work with the child. Cancellation during reacquisition
-releases the worker lock. Required-state waiting keeps its existing release
-and reacquisition behavior; the shared engine capacity remains eight.
+before exchanging work with the child. The scheduler reservation is reacquired
+unchanged; only the lock holder's engine-permit restoration joins the existing
+priority lane, behind earlier priority waiters. That temporary scope ends before
+the exchange and does not promote the caller's later ordinary work. Cancellation
+during restoration releases the worker lock. Other required-state waits retain
+their existing admission behavior; engine capacity stays eight and SDK exchange
+capacity stays one.
 
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
@@ -231,6 +243,12 @@ its price worsens. A concrete Helpers disproof can remove that route. An ordinar
 transport/optional SDK failure, or another weaker route, does not by itself erase
 a valid remaining observation. If the selected winner changes, another complete
 tuple is published; if it disappears without a replacement, it is invalidated.
+
+A valid full-budget quote can therefore stay selected while optional smaller-
+funding construction or validation is pending or fails. Retained-charge
+disclosure does not itself reject that quote. The App does not deduct a proposed
+saving before a changed complete plan has its own Helpers observation and wins
+the comparison; an equal-output smaller-funded observation can replace it later.
 
 A useful limited-budget selection may arrive before a full-budget selection.
 Further observations can improve or replace either. There is no fixed 5 s/15 s
@@ -347,6 +365,34 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-11 - Prioritize known SDK exchanges and lock-holder permit restoration
+
+- Reuse the existing two FIFO admission lanes for the SDK worker's single
+  exchange slot. Already-marked known work precedes ordinary waiters after the
+  current exchange; running work remains nonpreemptive.
+- Give the SDK lock holder priority only while restoring engine permits, after
+  its unchanged scheduler reservation. Earlier priority waiters stay ahead.
+  Restore the caller's original lane before the exchange and later work.
+- Keep required-state ownership/cancellation, eight engine permits, one SDK
+  exchange, arithmetic, Helpers validation and whole-quote selection unchanged.
+- Preserve the earlier FIFO documentation correction as history, and identify
+  its live timing example as preceding this scheduling change. No measured live
+  improvement is claimed. Update the reference, diagrams and linked PDF.
+
+### 2026-11-11 - Clarify optional funding latency and admission boundaries
+
+- Describe the existing known useful-residual, pure-Core, then fresh-residual
+  sizing sequence, and separate scheduling after each proposal is yielded.
+- Distinguish engine-permit bootstrap priority from the SDK worker's FIFO lock.
+  Neither priority nor independent scheduling promises immediate refinement.
+- State that a valid full-budget incumbent remains available while optional
+  smaller-funding proposals are pending or fail; only completed observations
+  enter the existing output-first, lower-funding tie-break comparison.
+- Record the bounded live example and its clock/causal limits in the technical
+  reference. Update the search/funding diagrams and linked process PDF.
+- This is a documentation correction to existing runtime behavior. No scheduling,
+  selection, fee, timeout, SDK or deployment change is made.
 
 ### 2026-11-11 - Exclude observed-uninitialized pools before route expansion
 

@@ -1,7 +1,7 @@
 """Task-owned pricing permits, released only at required-state suspension."""
 import asyncio
 from collections import OrderedDict
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from .quote_flow import stage
 
@@ -23,10 +23,10 @@ def bootstrap_priority():
 class PricingSlots:
     """The same engine capacity, with FIFO queues inside two admission lanes.
 
-    Existing running work is never preempted. Only ready cached bootstrap work
-    precedes waiting ordinary work; neither lane reserves idle capacity or
-    waits for a cache supplier. Waiters unlink by identity in constant time;
-    cancelled grants return their permit.
+    Existing running work is never preempted. Ready finite known work and an
+    SDK lock holder's engine restoration precede waiting ordinary work; neither
+    lane reserves idle capacity or waits for a supplier. Waiters unlink by
+    identity in constant time; cancelled grants return their permit.
     """
     def __init__(self, value):
         self._value = value
@@ -35,6 +35,13 @@ class PricingSlots:
 
     def locked(self):
         return self._value == 0
+
+    async def __aenter__(self):
+        await self.acquire()
+        return self
+
+    async def __aexit__(self, *_error):
+        self.release()
 
     async def acquire(self, span=None):
         if self._value:
@@ -106,13 +113,17 @@ class _PricingWork:
                 self.slots.release()
                 self.changed.set()
 
-    async def acquire(self):
+    async def acquire(self, *, engine_priority=False):
         try:
             if self.slots is not None:
                 await self.slots.acquire()
             self.owned = True
-            for permit in self.engines:
-                await permit.acquire()
+            # A serialized SDK lock holder must be able to finish and release
+            # the worker. Promote only engine restoration, after the unchanged
+            # scheduler reservation, and restore the caller's lane immediately.
+            with bootstrap_priority() if engine_priority else nullcontext():
+                for permit in self.engines:
+                    await permit.acquire()
         except BaseException:
             self.release()
             # Semaphore restores a grant cancelled before acquire returns, even
@@ -179,7 +190,7 @@ async def engine_work(semaphore, *, stage_name='pricing.permit'):
 
 
 @asynccontextmanager
-async def required_state_wait():
+async def required_state_wait(*, engine_priority=False):
     lease = _owned()
     if lease is None or not lease.owned:
         yield
@@ -192,4 +203,4 @@ async def required_state_wait():
         # contexts release only permits actually held, and still drain normally.
         raise
     else:
-        await lease.acquire()
+        await lease.acquire(engine_priority=engine_priority)

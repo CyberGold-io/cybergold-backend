@@ -5,7 +5,7 @@ import shlex
 from copy import deepcopy
 from .pool_snapshot import copy_pool_snapshot
 from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
-from .route_work_slots import required_state_wait
+from .route_work_slots import PricingSlots, required_state_wait
 from .quote_flow import stage
 from . import sdk_bridge
 
@@ -30,7 +30,10 @@ class SdkWorker:
             'node src/uniswap-sdk/worker.ts'))
         self.timeout = timeout
         self.process = None
-        self.lock = asyncio.Lock()
+        # Reuse engine admission's two FIFO lanes for this one serialized
+        # exchange slot. Only callers already marked as known work overtake
+        # ordinary queued work; an active exchange is never preempted.
+        self.lock = PricingSlots(1)
         self.sequence = 0
 
     async def request(self, payload, on_state=None):

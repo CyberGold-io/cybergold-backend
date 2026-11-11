@@ -12,7 +12,7 @@ async def exchange_lock(lock):
     # Register lock cleanup before reacquiring leases: cancellation at that
     # boundary must release the lock just as cancellation during an exchange.
     async with AsyncExitStack() as stack:
-        async with required_state_wait():
+        async with required_state_wait(engine_priority=True):
             with stage('sdk.queue', kind='queue'):
                 entered = await stack.enter_async_context(lock)
         yield entered
