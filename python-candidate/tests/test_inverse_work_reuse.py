@@ -1,12 +1,13 @@
 """Exact inverse arithmetic shares only its actual worker request contract."""
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from cybergold_candidate.quoter.contracts import HopTrace
 from cybergold_candidate.quoter.inverse import inverse_hops
-from cybergold_candidate.route_work_slots import engine_work
+from cybergold_candidate.route_work_slots import PricingSlots, engine_work
 from cybergold_candidate.sdk_simulation import simulate_sdk
 from cybergold_candidate.sdk_worker import MissingPoolState
 from cybergold_candidate.search_observations import search_observation_scope
@@ -21,6 +22,50 @@ class InverseWorkReuseTests(unittest.IsolatedAsyncioTestCase):
         hop = {'pool': deepcopy(pool),
                'zeroForOne': pool['token0']['address'].lower() == WETH.lower()}
         return q, HopTrace(hop, 10000, 10000, 9969, deepcopy(pool))
+
+    async def test_legacy_single_argument_request_works_unshared_and_shared(self):
+        requests = []
+        async def request(payload):
+            requests.append(deepcopy(payload))
+            return {'amountIn': '4013'}
+        engine = SimpleNamespace(sdk=SimpleNamespace(request=request), semaphore=PricingSlots(8))
+        q = SimpleNamespace(engine=engine)
+        pool = synthetic_pool(WETH, PAXG, 9752, 'v2')
+        row = HopTrace({'zeroForOne': True}, 10000, 10000, 9969, pool)
+        for _ in range(2):
+            self.assertEqual(await inverse_hops(q, [row], 4000), 4013)
+        self.assertEqual(len(requests), 2)
+        async with search_observation_scope():
+            for _ in range(2):
+                self.assertEqual(await inverse_hops(q, [row], 4000), 4013)
+            self.assertEqual(len(requests), 3)
+        async with search_observation_scope():
+            self.assertEqual(await inverse_hops(q, [row], 4000), 4013)
+        self.assertEqual(len(requests), 4)
+        self.assertTrue(all(value == requests[0] for value in requests))
+        self.assertEqual(requests[0], {'operation': 'quote', 'pools': [pool], 'poolId': pool['id'],
+            'mode': 'exactOut', 'amount': '4000', 'zeroForOne': True})
+        self.assertEqual(engine.semaphore._value, 8)
+
+    async def test_request_type_error_is_not_retried_or_negative_cached(self):
+        calls = 0
+        expected = TypeError('ordinary custom SDK failure')
+        async def request(payload):
+            nonlocal calls
+            calls += 1
+            raise expected
+        engine = SimpleNamespace(sdk=SimpleNamespace(request=request), semaphore=PricingSlots(8))
+        payload = {'operation': 'quote'}
+        with self.assertRaises(TypeError) as raised:
+            await simulate_sdk(engine, payload)
+        self.assertIs(raised.exception, expected)
+        async with search_observation_scope():
+            for _ in range(2):
+                with self.assertRaises(TypeError) as raised:
+                    await simulate_sdk(engine, payload)
+                self.assertIs(raised.exception, expected)
+        self.assertEqual(calls, 3)
+        self.assertEqual(engine.semaphore._value, 8)
 
     async def test_identical_actual_inverse_is_shared_only_inside_one_search(self):
         q, row = self.setup_inverse()

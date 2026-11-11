@@ -7,10 +7,17 @@ from .search_observations import current_search_observations
 from .sdk_worker import SdkInputTooSmall
 
 
+async def _request(engine, payload, on_state):
+    # Direct inverse clients also support the original request(payload) shape.
+    if on_state is None:
+        return await engine.sdk.request(payload)
+    return await engine.sdk.request(payload, on_state=on_state)
+
+
 async def simulate_sdk(engine, payload, on_state=None):
     observations = current_search_observations()
     if observations is None:
-        return await engine.sdk.request(payload, on_state=on_state)
+        return await _request(engine, payload, on_state)
 
     # These are the actual observed/private scalars, coverage, allocation and
     # direction sent to the arithmetic worker, not just an executable path.
@@ -32,8 +39,7 @@ async def simulate_sdk(engine, payload, on_state=None):
         # subscriber's permit while that subscriber is parked or cancelled.
         async with engine_work(engine.semaphore):
             try:
-                value = await engine.sdk.request(payload,
-                    on_state=acquire if on_state is not None else None)
+                value = await _request(engine, payload, acquire if on_state is not None else None)
             except SdkInputTooSmall:
                 # This exact mathematical no-quote is reusable, unlike failed
                 # observations/transport. Retain no exception or traceback.
