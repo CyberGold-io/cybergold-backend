@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from ..routing_encoding import ZERO, weighted_routes
 from ..route_search import WETH
 from ..uniswap_routes import pool_identity, opposite
-from .cooperative import CHECKPOINT, finish, sort_steps
+from .cooperative import CHECKPOINT, finish, sort_steps, values
 
 
 def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
@@ -191,22 +191,40 @@ def path_steps(pools, source, target, weth=WETH, max_hops=3):
 
 
 def route_candidates(routes, amount, *, observed=True):
+    return values(route_candidate_steps(routes, amount, observed=observed))
+
+
+def route_candidate_steps(routes, amount, *, observed=True):
+    """The same ordered nominations, with checkpoints for rejected work too."""
     available = route_available if observed else lambda route: True
     for route in routes:
+        yield CHECKPOINT
         if available(route):
             yield [{'amountIn': str(amount), 'hops': route}]
+    # These allocations depend only on the raw query amount. Keep equal lots
+    # from distinct shares: the existing stream includes those duplicates.
+    splits = []
+    for share in (25, 50, 75):
+        first = amount * share // 100
+        if first and amount - first:
+            splits.append((str(first), str(amount - first)))
+    if not splits:
+        return
     # Recheck after the singles have been consumed, before the quadratic pair
     # walk. Existing lazy feeds may have learned new initialization facts.
-    routes = [route for route in routes if available(route)]
-    for left, right in combinations(routes, 2):
-        for share in (25, 50, 75):
+    eligible = []
+    for route in routes:
+        yield CHECKPOINT
+        if available(route):
+            eligible.append(route)
+    for left, right in combinations(eligible, 2):
+        yield CHECKPOINT
+        for first, second in splits:
             # A lazy feed can outlive the canonical observation that disproved
             # one of its paths. Do not expand its remaining allocations.
             if not available(left) or not available(right):
                 continue
-            first = amount * share // 100
-            if first and amount - first:
-                yield [{'amountIn': str(first), 'hops': left}, {'amountIn': str(amount - first), 'hops': right}]
+            yield [{'amountIn': first, 'hops': left}, {'amountIn': second, 'hops': right}]
 
 
 def route_identity(route):

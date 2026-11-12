@@ -138,6 +138,16 @@ with that cache. Without this scope the memo remains local to the hint iterator.
 Partially consumed enumeration does not replace the completed memo. No pool
 state, mutable plan or price is retained by this pattern reuse.
 
+Custom discovery, hosted route expansion and crossed-hint union recovery share
+one lazy single-path/split producer. It computes the existing 25/50/75 percent
+raw input allocations once per enumeration, preserving their order, remainder
+and repeated equal lots after rounding. If none funds both legs, no split can
+be emitted and the pair walk is unnecessary. Private work markers also cover
+rejected paths and pairs, so asynchronous consumers retain the existing
+64-item cooperative quantum even when no candidate is emitted. These markers
+are not route offers and do not change eligibility, adapter deduplication,
+fees or complete-plan validation. They add no route cutoff or RPC/API call.
+
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
 again. A pure-market plan does not depend on the Core basket basis. A rejected
@@ -442,6 +452,22 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-12 - Share split arithmetic and cooperate during rejected route work
+
+- With the owner's explicit acceptance of these two fixes and their coordinated
+  specification update, share the lazy candidate-step producer across custom
+  discovery, hosted route expansion and crossed-hint union reconstruction.
+- Compute the existing 25/50/75 percent allocations once per enumeration;
+  preserve ordered raw-unit results and rounded duplicate allocations. Omit
+  only the pair walk that cannot produce any two-positive-leg split.
+- Forward private work markers for rejected/filtered enumeration through the
+  existing 64-item asynchronous quantum. Keep the synchronous candidate view,
+  streaming prefixes, current pool facts and ordinary cancellation/closure.
+- Add no eligibility gate, route cutoff, deduplication policy, arithmetic solver
+  or RPC/API request. Metadata indexing and private-state copy behavior are not
+  part of this change.
+- Update the technical reference, affected process diagrams and linked PDF.
 
 ### 2026-11-11 - Remove redundant quote work and expose SDK round-trip timing
 

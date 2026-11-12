@@ -8,6 +8,7 @@ from unittest.mock import patch
 from cybergold_candidate.quoter.bootstrap import RouteBootstrap
 from cybergold_candidate.quoter import custom_routes
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
+from cybergold_candidate.quoter.cooperative import CHECKPOINT
 from cybergold_candidate.quoter.route_tools import (
     CandidateFeed, PendingRouteTool, RouteQuery, RouteTool, round_robin)
 
@@ -35,14 +36,15 @@ class RouteToolTests(unittest.IsolatedAsyncioTestCase):
         registry = SimpleNamespace(inventory={row['id']: row for row in rows})
         session = RouteBootstrap([CustomRoutes(registry)])
         enumerated = []
-        ordinary_candidates = custom_routes.route_candidates
+        ordinary_candidates = custom_routes.route_candidate_steps
         def counted(*args):
             for row in ordinary_candidates(*args):
-                enumerated.append(row)
+                if row is not CHECKPOINT:
+                    enumerated.append(row)
                 yield row
         def selected_edge(routes):
             return [route for route in routes if route[-1]['pool']['id'] == 'bc']
-        with patch.object(custom_routes, 'route_candidates', counted):
+        with patch.object(custom_routes, 'route_candidate_steps', counted):
             selected = list(session.offers('a', 'c', 100, BLOCK, path_projection=selected_edge))
             self.assertEqual(len(selected), 1)
             self.assertEqual(len(enumerated), 1)

@@ -18,7 +18,7 @@ from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
 from cybergold_candidate.quoter import candidate_hints
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
 from cybergold_candidate.quoter.discovery import (TopologyCache, topology_scope, paths,
-    route_candidates, route_available)
+    route_candidates, route_candidate_steps, route_available)
 from cybergold_candidate.rpc_block_context import LATEST_BLOCK
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.search_observations import search_observation_scope
@@ -215,6 +215,26 @@ class InitializationRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(remainder), 5)
         self.assertFalse(any(self.contains(rows, bad) for rows in remainder))
 
+    async def test_late_zero_between_split_allocations_keeps_all_valid_sibling_lots(self):
+        bad, first, second = pool(fee=100), pool(number=22), pool(number=23, fee=3000)
+        routes = [route(row, A) for row in (bad, first, second)]
+        original = deepcopy(routes)
+        with topology_scope(self.cache):
+            iterator = route_candidates(routes, 100)
+            try:
+                for _ in routes:
+                    next(iterator)
+                self.assertTrue(self.contains(next(iterator), bad))
+                self.record(bad)
+                remainder = list(iterator)
+            finally:
+                iterator.close()
+        expected = [[{'amountIn': str(left), 'hops': route(first, A)},
+                     {'amountIn': str(right), 'hops': route(second, A)}]
+                    for left, right in ((25, 75), (50, 50), (75, 25))]
+        self.assertEqual(remainder, expected)
+        self.assertEqual(routes, original)
+
     async def test_warmed_topology_walks_recheck_current_zero_observation(self):
         bad, good = pool(fee=100), pool(number=22)
         with topology_scope(self.cache):
@@ -304,8 +324,8 @@ class InitializationRoutingTests(unittest.IsolatedAsyncioTestCase):
                 hop['pool']['address'] = hop['pool']['id']
         expected = expected_union(offered)
         bad = offered['branches'][0]['hops'][1]['pool']
-        with topology_scope(self.cache), patch.object(candidate_hints, 'route_candidates',
-                                                     wraps=route_candidates) as expansion:
+        with topology_scope(self.cache), patch.object(candidate_hints, 'route_candidate_steps',
+                                                     wraps=route_candidate_steps) as expansion:
             iterator = iter(normalize_hints([offered], CROSS_SOURCE, CROSS_TARGET))
             try:
                 next(iterator)

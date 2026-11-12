@@ -20,7 +20,7 @@ from cybergold_candidate.route_scheduler import schedule_routes
 from cybergold_candidate.sdk_worker import SdkWorker
 from test_hint_union_reuse import crossed, expected_union, signature, A, D
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
-from cybergold_candidate.quoter.discovery import TopologyCache, topology_scope, route_candidates
+from cybergold_candidate.quoter.discovery import TopologyCache, topology_scope, route_candidate_steps
 from cybergold_candidate.routing_encoding import ZERO
 
 
@@ -479,8 +479,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
                           crossed((19, 81), origin='third')]
                 original = deepcopy(offers)
                 with topology_scope(TopologyCache()), patch(
-                        'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                        wraps=route_candidates) as expansion:
+                        'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                        wraps=route_candidate_steps) as expansion:
                     actual = self.normalize(offers, source)
                     self.assertEqual(expansion.call_count, 1)
                 for offered, values in zip(offers, actual, strict=True):
@@ -495,8 +495,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
         self.assertNotEqual(expected_union(first), expected_union(reordered))
         offers = [first, total, reordered]
         with topology_scope(TopologyCache()), patch(
-                'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                wraps=route_candidates) as expansion:
+                'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                wraps=route_candidate_steps) as expansion:
             actual = self.normalize(offers)
             self.assertEqual(expansion.call_count, 3)
         for offered, values in zip(offers, actual, strict=True):
@@ -505,8 +505,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
     def test_last_completed_entry_does_not_accumulate_a_b_a(self):
         offers = [crossed(origin='a'), crossed((34, 67), origin='b'), crossed(origin='a-again')]
         with topology_scope(TopologyCache()), patch(
-                'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                wraps=route_candidates) as expansion:
+                'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                wraps=route_candidate_steps) as expansion:
             actual = self.normalize(offers)
             self.assertEqual(expansion.call_count, 3)
         for offered, values in zip(offers, actual, strict=True):
@@ -516,8 +516,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
         first, current = crossed(), crossed((33, 67), origin='current', epoch='new')
         original = deepcopy((first, current))
         with topology_scope(TopologyCache()), patch(
-                'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                wraps=route_candidates) as expansion:
+                'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                wraps=route_candidate_steps) as expansion:
             previous = list(normalize_hints([first], A, D))
             expected = expected_union(current)
             for rows, origins in previous:
@@ -542,8 +542,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
     def test_closed_partial_expansion_is_not_reused_as_completed(self):
         first, second, third = crossed(origin='partial'), crossed(origin='full'), crossed(origin='reuse')
         with topology_scope(TopologyCache()), patch(
-                'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                wraps=route_candidates) as expansion:
+                'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                wraps=route_candidate_steps) as expansion:
             iterator = iter(normalize_hints([first], A, D))
             try:
                 self.assertEqual(signature(next(iterator)[0]), expected_union(first)[0])
@@ -558,8 +558,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
     def test_interleaved_misses_preserve_full_outputs_and_one_completed_entry(self):
         first, other = crossed(origin='slow-a'), crossed((34, 67), origin='full-b')
         with topology_scope(TopologyCache()), patch(
-                'cybergold_candidate.quoter.candidate_hints.route_candidates',
-                wraps=route_candidates) as expansion:
+                'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                wraps=route_candidate_steps) as expansion:
             iterator = iter(normalize_hints([first], A, D))
             try:
                 head = next(iterator)
@@ -576,8 +576,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
 
     def test_cache_clear_and_other_search_start_with_no_shared_pattern(self):
         offer, first, second = crossed(), TopologyCache(), TopologyCache()
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as expansion:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as expansion:
             for cache, count in ((first, 1), (first, 1), (second, 2)):
                 with topology_scope(cache):
                     self.assert_expected(list(normalize_hints([offer], A, D)), offer)
@@ -589,8 +589,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
 
     def test_without_search_scope_existing_iterator_local_reuse_is_unchanged(self):
         first, second = crossed(origin='first'), crossed((33, 67), origin='second')
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as expansion:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as expansion:
             same_iterator = list(normalize_hints([first, second], A, D))
             separate = list(normalize_hints([first], A, D))
             self.assertEqual(expansion.call_count, 2)

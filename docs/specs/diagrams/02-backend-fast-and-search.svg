@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Executable arrival changes wake dependent plan owners; duplicate origins do not reprice. Exact plan encoding and SDK results, including inverse and typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound.</desc>
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Executable arrival changes wake dependent plan owners; duplicate origins do not reprice. Exact plan encoding and SDK results, including inverse and typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound. Custom discovery, hosted expansion and hint-union recovery share lazy split arithmetic with the existing 64-item work quantum, including rejected work; no candidate gate or route cutoff is added.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -60,8 +60,9 @@
 <text x="451" y="292" class="heading">Complete proposal</text>
 <text x="451" y="313" class="body">Ordinary admission</text>
 <rect x="635" y="268" width="157" height="65" rx="8" class="node"/>
-<text x="646" y="292" class="heading">More proposals</text>
-<text x="646" y="313" class="body">Only affected plans</text>
+<text x="646" y="286" class="heading">More proposals</text>
+<text x="646" y="305" class="body">Shared split steps</text>
+<text x="646" y="323" class="body">64-item work quantum</text>
 <path d="M130 231 V268" class="line"/><polygon points="130.00,268.00 127.00,261.00 133.00,261.00" fill="#3e596d"/><circle cx="130" cy="249" r="10" class="step"/><text x="130" y="249" class="step-text">1</text>
 <path d="M325 231 V268" class="line"/><polygon points="325.00,268.00 322.00,261.00 328.00,261.00" fill="#3e596d"/><circle cx="325" cy="249" r="10" class="step"/><text x="325" y="249" class="step-text">1</text>
 <path d="M520 231 V268" class="line"/><polygon points="520.00,268.00 517.00,261.00 523.00,261.00" fill="#3e596d"/><circle cx="520" cy="249" r="10" class="step"/><text x="520" y="249" class="step-text">1</text>
