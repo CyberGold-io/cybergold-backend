@@ -1,18 +1,25 @@
 """Enumeration fairness without changing the full stream or no-route meaning."""
 import asyncio
+from copy import deepcopy
+from itertools import combinations
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
+from cybergold_candidate.pool_initialization import record_pool_initialization
 from cybergold_candidate.quote_errors import QuoteFailure
 from cybergold_candidate.quoter.amm_adapter import CyberGoldAmmAdapter
 from cybergold_candidate.quoter.bootstrap import RouteBootstrap, bootstrap_scope
-from cybergold_candidate.quoter.cooperative import async_finish, sort_steps
+from cybergold_candidate.quoter.cooperative import CHECKPOINT, async_finish, async_values, sort_steps
 from cybergold_candidate.quoter.custom_routes import CustomRoutes
-from cybergold_candidate.quoter.discovery import TopologyCache, path_steps, paths, topology_scope
+from cybergold_candidate.quoter import discovery
+from cybergold_candidate.quoter.discovery import (
+    TopologyCache, path_steps, paths, route_candidates, route_candidate_steps, topology_scope)
 from cybergold_candidate.quoter.route_tools import CandidateFeed, RouteTool
 from cybergold_candidate.routing_encoding import weighted_routes, split_runtime, ZERO
 from test_quoter_topology_reuse import A, B, C, D, BLOCK, pool
 from cybergold_candidate.route_search import WETH
+from cybergold_candidate.search_observations import search_observation_scope
 
 
 def graph(width=8):
@@ -32,6 +39,92 @@ def adapter(rows):
 
 
 class CooperativeEnumerationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_split_order_tiny_amount_duplicates_native_and_uint256_max(self):
+        large = 2**256 - 1
+        allocations = {0: [], 1: [], 2: [(1, 1), (1, 1)],
+                       3: [(1, 2), (2, 1)], 4: [(1, 3), (2, 2), (3, 1)],
+                       large: [(large//4, large-large//4),
+                               (large//2, large-large//2),
+                               (large*3//4, large-large*3//4)]}
+        for source, target in ((A, B), (ZERO, B), (B, ZERO)):
+            pools = [pool(A if source == A else WETH, B, index, 'v3', fee)
+                     for index, fee in enumerate((100, 500, 3000), 1)]
+            routes = paths(pools, source, target)
+            self.assertEqual(len(routes), 3)
+            original = deepcopy(routes)
+            for amount, lots in allocations.items():
+                with self.subTest(source=source, target=target, raw=amount):
+                    expected = [[{'amountIn': str(amount), 'hops': route}] for route in routes]
+                    expected.extend([{'amountIn': str(first), 'hops': left},
+                                     {'amountIn': str(second), 'hops': right}]
+                                    for left, right in combinations(routes, 2) for first, second in lots)
+                    self.assertEqual(list(route_candidates(routes, amount)), expected)
+                    self.assertEqual([row async for row in async_values(route_candidate_steps(routes, amount))],
+                                     expected)
+            self.assertEqual(routes, original)
+
+    async def test_zero_and_one_raw_unit_finish_after_singles_without_pair_work(self):
+        routes = paths([pool(A, B, index, 'v3', 100+index) for index in range(16)], A, B)
+        for amount in (0, 1):
+            with self.subTest(raw=amount), patch.object(discovery, 'route_available', return_value=True) as checks:
+                iterator = route_candidates(routes, amount)
+                for _ in routes:
+                    self.assertEqual(next(iterator)[0]['amountIn'], str(amount))
+                checks.reset_mock()
+                with patch.object(discovery, 'combinations', side_effect=AssertionError('No split can be emitted')):
+                    self.assertEqual(list(iterator), [])
+                self.assertEqual(checks.call_count, 0)
+
+    async def rejected_custom_feed(self):
+        await self.enterAsyncContext(search_observation_scope())
+        rows = [{**pool(A, B, index, 'v3', 100+index),
+                 'address': '0x'+format(index, '040x')} for index in range(1, 41)]
+        registry = SimpleNamespace(inventory={row['id']: row for row in rows},
+                                   chain=1, generation='captured-owner')
+        session = RouteBootstrap([CustomRoutes(registry)], catalog=registry, block=BLOCK)
+        self.addAsyncCleanup(session.close)
+        self.enterContext(bootstrap_scope(session))
+        feed = iter(session.offer_feeds(A, B, 1000, BLOCK, cooperative=True)[0])
+        self.addCleanup(feed.close)
+        singles = 0
+        while True:
+            row = next(feed)
+            if row is CHECKPOINT:
+                continue
+            if len(row['branches']) == 2:
+                break
+            singles += 1
+        self.assertEqual(singles, 40)
+        for row in rows:
+            record_pool_initialization(registry, {**row, 'sqrtRatioX96': '0'},
+                                       BLOCK, registry.generation)
+        return feed
+
+    async def test_actual_custom_feed_rejected_pair_tail_yields_to_ready_work(self):
+        feed = await self.rejected_custom_feed()
+        ready = []
+        asyncio.get_running_loop().call_soon(lambda: ready.append(True))
+        self.assertEqual([row async for row in async_values(feed)], [])
+        self.assertEqual(ready, [True], 'A rejected-only inner scan must not hide cooperative work')
+
+    async def test_cancel_actual_custom_rejected_tail_closes_suspended_steps(self):
+        closed = False
+        def tracked(*args, **kwargs):
+            nonlocal closed
+            try:
+                yield from route_candidate_steps(*args, **kwargs)
+            finally:
+                closed = True
+        with patch('cybergold_candidate.quoter.custom_routes.route_candidate_steps', tracked):
+            feed = await self.rejected_custom_feed()
+            async def drain():
+                return [row async for row in async_values(feed)]
+            pending = asyncio.create_task(drain())
+            asyncio.get_running_loop().call_soon(pending.cancel)
+            with self.assertRaises(asyncio.CancelledError):
+                await pending
+            self.assertTrue(closed)
+
     async def test_path_walk_order_native_transitions_and_cache_match_sync(self):
         rows = graph(3) + [pool(WETH, A, 9996, 'v3')]
         for source, target in ((A, C), (C, A), (A, D), (D, A), (ZERO, B), (B, ZERO)):

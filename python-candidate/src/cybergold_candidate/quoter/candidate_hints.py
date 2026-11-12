@@ -1,7 +1,7 @@
 """Interleave available topology hints with ordinary candidates; never wait."""
 from itertools import product
 
-from .discovery import current_topology, path_steps, route_candidates, route_identity, route_available
+from .discovery import current_topology, path_steps, route_candidate_steps, route_identity, route_available
 from .cooperative import CHECKPOINT, close, values
 from .pool_directions import branch_directions, conflicting_pool
 
@@ -14,8 +14,10 @@ def _union_patterns(routes, amount):
     positions = {id(route): index for index, route in enumerate(routes)}
     # Memoize structural integer patterns, independently of observations that
     # can change while this lazy expansion is consumed. Emission checks them.
-    for branches in route_candidates(routes, amount, observed=False):
-        yield CHECKPOINT
+    for branches in route_candidate_steps(routes, amount, observed=False):
+        if branches is CHECKPOINT:
+            yield CHECKPOINT
+            continue
         if conflicting_pool(branch_directions(branches)) is None:
             yield tuple((positions[id(row['hops'])], row['amountIn']) for row in branches)
 

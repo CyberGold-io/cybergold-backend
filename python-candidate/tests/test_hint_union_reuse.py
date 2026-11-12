@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from cybergold_candidate.quoter.amm_adapter import adapt_candidates
 from cybergold_candidate.quoter.candidate_hints import normalize_hints
-from cybergold_candidate.quoter.discovery import paths, route_candidates, route_identity
+from cybergold_candidate.quoter.discovery import paths, route_candidates, route_candidate_steps, route_identity
 from cybergold_candidate.quoter.pool_directions import branch_directions, conflicting_pool
 from cybergold_candidate.routing_encoding import ZERO
 from cybergold_candidate.route_search import WETH
@@ -57,8 +57,8 @@ class HintUnionReuseTests(unittest.TestCase):
                 first, second = crossed(), crossed((33, 67), origin='second')
                 original = deepcopy((first, second))
                 expected = expected_union(first, source)
-                with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                           wraps=route_candidates) as enumerate_candidates:
+                with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                           wraps=route_candidate_steps) as enumerate_candidates:
                     offered = list(normalize_hints([first, second], source, D))
                 self.assertEqual(enumerate_candidates.call_count, 1)
                 self.assertEqual([signature(rows) for rows, origins in offered if origins == ['first']], expected)
@@ -75,8 +75,8 @@ class HintUnionReuseTests(unittest.TestCase):
         changed_total = crossed((34, 67), origin='different-total')
         offers = [first, changed_union, changed_total]
         expected = {offer['origins'][0]: expected_union(offer) for offer in offers}
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             actual = list(normalize_hints(offers, A, D))
         self.assertEqual(enumerate_candidates.call_count, 3)
         for origin, nominations in expected.items():
@@ -85,8 +85,8 @@ class HintUnionReuseTests(unittest.TestCase):
     def test_late_metadata_and_state_bind_current_pool_representatives(self):
         first, current = crossed(), crossed((33, 67), origin='current', epoch='new')
         self.assertEqual(expected_union(first), expected_union(current))
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             actual = list(normalize_hints([first, current], A, D))
         self.assertEqual(enumerate_candidates.call_count, 1)
         for branches, origins in actual:
@@ -105,8 +105,8 @@ class HintUnionReuseTests(unittest.TestCase):
                 pool = hop['pool']
                 pool['id'] = '0x' + format(1000-int(pool['id'], 16), '040x')
         self.assertNotEqual(expected_union(first), expected_union(reordered))
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             actual = list(normalize_hints([first, reordered], A, D))
         self.assertEqual(enumerate_candidates.call_count, 2)
         self.assertEqual([signature(rows) for rows, origins in actual if origins == ['reordered']],
@@ -126,8 +126,8 @@ class HintUnionReuseTests(unittest.TestCase):
                 rows.append({'amountIn': str(amount), 'hops': hops})
             return {'branches': rows, 'origins': [origin]}
         good = [compatible((19, 81), 'nineteen'), compatible((61, 39), 'sixty-one')]
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             actual = list(normalize_hints([bad, *good, crossed((33, 67), origin='last')], A, D))
         self.assertEqual(enumerate_candidates.call_count, 1)
         for offered in good:
@@ -136,8 +136,8 @@ class HintUnionReuseTests(unittest.TestCase):
 
     def test_replayed_candidates_still_merge_origins_in_the_shared_adapter(self):
         first, second = crossed(origin='provider-a'), crossed((33, 67), origin='provider-b')
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             actual = list(adapt_candidates(normalize_hints([first, second], A, D), A, D))
         self.assertEqual(enumerate_candidates.call_count, 1)
         self.assertEqual([signature(rows) for rows, _ in actual], expected_union(first))
@@ -145,16 +145,16 @@ class HintUnionReuseTests(unittest.TestCase):
 
     def test_last_completed_memo_does_not_accumulate_earlier_union_keys(self):
         first, other = crossed(), crossed((34, 67), origin='different-total')
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             offered = list(normalize_hints([first, other, crossed(origin='again')], A, D))
         self.assertEqual(enumerate_candidates.call_count, 3)
         self.assertEqual([signature(rows) for rows, origins in offered if origins == ['again']], expected_union(first))
 
     def test_emitted_mutations_and_another_iterator_do_not_poison_reuse(self):
         original = crossed()
-        with patch('cybergold_candidate.quoter.candidate_hints.route_candidates',
-                   wraps=route_candidates) as enumerate_candidates:
+        with patch('cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
+                   wraps=route_candidate_steps) as enumerate_candidates:
             iterator = iter(normalize_hints([original, crossed((33, 67), origin='second')], A, D))
             branches, _ = next(iterator)
             branches[0]['amountIn'] = '999999'

@@ -153,22 +153,23 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(clients[0].is_closed)
 
     async def test_first_hosted_batch_precedes_split_tail_and_closing_drains_iterator(self):
-        from cybergold_candidate.quoter.discovery import route_candidates
+        from cybergold_candidate.quoter.discovery import route_candidate_steps
+        from cybergold_candidate.quoter.cooperative import CHECKPOINT
         source, target, document = self.many_paths()
         provider, registry, transport, clients = make_provider(document)
         made, closed = 0, False
         def counted(*args):
             nonlocal made, closed
             try:
-                for candidate in route_candidates(*args):
-                    made += 1
+                for candidate in route_candidate_steps(*args):
+                    made += candidate is not CHECKPOINT
                     yield candidate
             finally:
                 closed = True
         feed = provider.discover_batches(source, target, 10000, BLOCK)
         probe = asyncio.create_task(asyncio.sleep(0))
         try:
-            with patch('cybergold_candidate.quoter.hosted_routes.route_candidates', counted):
+            with patch('cybergold_candidate.quoter.hosted_routes.route_candidate_steps', counted):
                 first = await anext(feed)
                 self.assertTrue(probe.done(), 'cooperative graph work must let another ready task progress')
                 self.assertTrue(first)
@@ -181,6 +182,52 @@ class HostedRoutesTest(unittest.IsolatedAsyncioTestCase):
         finally:
             await feed.aclose()
             await probe
+            await provider.close()
+        self.assertTrue(clients[0].is_closed and transport.closed)
+
+    async def test_rejected_one_unit_split_tail_cooperates_without_extra_batches(self):
+        source, target, document = self.many_paths()
+        provider, registry, transport, _ = make_provider(document)
+        feed = provider.discover_batches(source, target, 1, BLOCK)
+        try:
+            first = await anext(feed)
+            self.assertEqual(len(first), 64)
+            ready = []
+            asyncio.get_running_loop().call_soon(lambda: ready.append(True))
+            tail = await anext(feed)
+            self.assertEqual(ready, [True], 'Rejected ordinary work must also cooperate')
+            self.assertEqual(len(tail), 21)  # One supplied nominee plus all84 ordinary singles.
+            with self.assertRaises(StopAsyncIteration):
+                await anext(feed)
+            self.assertEqual(len(transport.requests), 1)
+            self.assertEqual((registry.calls, registry.metadata_calls), ([], []))
+        finally:
+            await feed.aclose()
+            await provider.close()
+
+    async def test_cancellation_during_rejected_split_work_closes_inner_iterator(self):
+        from cybergold_candidate.quoter.discovery import route_candidate_steps
+        source, target, document = self.many_paths()
+        provider, _, transport, clients = make_provider(document)
+        closed = False
+        def tracked(*args):
+            nonlocal closed
+            try:
+                yield from route_candidate_steps(*args)
+            finally:
+                closed = True
+        feed = provider.discover_batches(source, target, 1, BLOCK)
+        try:
+            with patch('cybergold_candidate.quoter.hosted_routes.route_candidate_steps', tracked):
+                self.assertEqual(len(await anext(feed)), 64)
+                pending = asyncio.create_task(anext(feed))
+                asyncio.get_running_loop().call_soon(pending.cancel)
+                with self.assertRaises(asyncio.CancelledError):
+                    await pending
+                self.assertTrue(closed)
+            self.assertEqual(len(transport.requests), 1)
+        finally:
+            await feed.aclose()
             await provider.close()
         self.assertTrue(clients[0].is_closed and transport.closed)
 

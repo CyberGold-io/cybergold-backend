@@ -26,8 +26,8 @@ from ..uniswap_state import POOL_MANAGER
 from ..route_search import WETH
 from ..routing_encoding import ZERO
 from .bootstrap import ProviderUnavailable
-from .discovery import path_steps, route_candidates
-from .cooperative import QUANTUM, async_finish
+from .discovery import path_steps, route_candidate_steps
+from .cooperative import QUANTUM, async_finish, async_values
 
 
 QUOTE_URL = 'https://trade-api.gateway.uniswap.org/v1/quote'
@@ -360,24 +360,22 @@ class UniswapApiProvider:
         routes = await async_finish(path_steps(list(pools.values()), source, target,
             max_hops=3-len(prefix)-len(suffix)))
         attribution = observed_engine(document)
-        ordinary = route_candidates(routes, funding)
-        candidates = chained(nominees, ordinary)
+        ordinary = route_candidate_steps(routes, funding)
+        candidates = async_values(chained(nominees, ordinary))
         batch, emitted = [], False
         try:
-            for index, nominee in enumerate(candidates, 1):
+            async for nominee in candidates:
                 batch.append([{**branch, 'hops': deepcopy(prefix) + branch['hops'] + deepcopy(suffix)}
                               for branch in nominee])
                 if not emitted and len(batch) == QUANTUM:
                     yield HostedCandidates(batch, attribution)
                     emitted, batch = True, []
-                # Yield computation without announcing every split chunk as
-                # a new whole-plan search revision. One completed tail retains
-                # every remaining nomination after the first ready cohort.
-                if index % QUANTUM == 0:
-                    await asyncio.sleep(0)
+                # Computation checkpoints do not announce provider revisions.
+                # One completed tail retains all remaining nominations.
             if batch or not emitted:
                 yield HostedCandidates(batch, attribution)
         finally:
+            await candidates.aclose()
             ordinary.close()
 
     async def close(self):

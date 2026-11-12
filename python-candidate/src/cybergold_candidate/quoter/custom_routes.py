@@ -3,8 +3,8 @@
 Core anchoring, seed preference, private-state replay and funding compilation
 belong to the consuming CyberGold adapter, not this AMM path provider.
 """
-from .discovery import path_steps, route_candidates
-from .cooperative import CHECKPOINT, close, values
+from .discovery import path_steps, route_candidate_steps
+from .cooperative import values
 from .route_tools import CandidateFeed, RouteTool
 
 
@@ -27,13 +27,7 @@ class _AvailableRoutes:
             routes = yield from projection_steps(routes)
         elif self.projection is not None:
             routes = list(self.projection(routes))
-        candidates = route_candidates(routes, self.query.amount)
-        try:
-            for candidate in candidates:
-                yield CHECKPOINT
-                yield candidate
-        finally:
-            close(candidates)
+        yield from route_candidate_steps(routes, self.query.amount)
 
 
 class CustomRoutes(RouteTool):

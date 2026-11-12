@@ -283,6 +283,31 @@ the initial short-path prefix above does not await that walk. Both have
 cooperative checkpoints, while split enumeration remains lazy. Initial prefix
 duplicates are reconciled with the normal nominations by the same route identity.
 
+`discovery.route_candidate_steps` is the shared lazy producer for custom
+discovery's available feed, hosted `UniswapApiProvider` expansion and
+`candidate_hints` union allocation reconstruction. `route_candidates` remains
+its synchronous candidate-only view. This is separate from the standalone
+`uniswap_routes.candidate_branches` feed.
+
+After single-path nominations, the producer computes each of the existing
+25/50/75 percent allocations once from the raw query amount: the first leg
+uses integer floor division and the second receives the remainder. Shares
+that round to the same positive lots retain their original multiplicity.
+If all three fail the existing positive-leg test, the split stage returns
+without walking route pairs; it has no candidate to emit. Otherwise route
+pair order, per-allocation availability checks and ordinary output remain
+unchanged.
+
+The producer yields private `CHECKPOINT` markers while walking singles,
+filtering paths and visiting pairs, including work that emits no candidate.
+The union consumer forwards markers before its structural direction checks;
+the hosted consumer passes remote nominees and ordinary steps through the
+existing asynchronous consumer. Asynchronous consumption yields on its
+existing 64-item quantum, counting work markers as well as nominations.
+Synchronous consumers hide the markers. This adds no provider wait, route
+cap, eligibility predicate, deduplication change, RPC/API request or fee and
+rounding policy. It supplies scheduling checkpoints, not a latency deadline.
+
 ## Step 4: use route suppliers for the market legs
 
 The same AMM adapter serves pure market paths, Core basket acquisitions,
@@ -861,6 +886,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Backend ranking and publication | `quote_publication.py`, `quoter/quote_book.py`, `quoter/ranking.py` |
 | Retained families/reconstruction | `quoter/reuse_routes.py`, `quoter/path_families.py`, `quoter/reuse_estimate.py` |
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |
+| Shared lazy split work | `quoter/discovery.py`, `quoter/custom_routes.py`, `quoter/hosted_routes.py`, `quoter/candidate_hints.py`, `quoter/cooperative.py` |
 | Observed pool initialization | `pool_initialization.py`, `uniswap_state.py`, `quoter/discovery.py`, `quoter/alpha_routes.py` |
 | Shared funded-plan edits | `quoter/funding.py` |
 | Target-output inverse and partial-AMM recovery | `quoter/inverse.py`, `quoter/prefix.py`, `quoter/capacity_recovery.py` |
