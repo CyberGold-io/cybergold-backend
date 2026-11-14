@@ -92,8 +92,9 @@ def identity_template(currency):
 class Quoter:
     def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
                  exploration_seed=None, route_provider_factory=None, plan_simulator=None,
-                 core_state_cache=None):
+                 core_state_cache=None, discovery_cpu=None):
         self.settings, self.engine = settings, engine
+        self.discovery_cpu = discovery_cpu
         self.exploration_seed = exploration_seed
         self.route_provider_factory = route_provider_factory
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
@@ -960,7 +961,8 @@ class Quoter:
 
             tools = (self.route_provider_factory() if self.route_provider_factory is not None
                      else [CustomRoutes(registry)])
-            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True, block=block)
+            route_bootstrap = RouteBootstrap(tools, catalog=registry, nomination_only=True,
+                                             block=block, cpu=self.discovery_cpu)
             def merge_arrival_origins():
                 for value in family_best.values():
                     route_bootstrap.merge_quote_origins(value)

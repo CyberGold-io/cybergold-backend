@@ -502,13 +502,13 @@ class SiblingUnionReuseTests(unittest.TestCase):
         for offered, values in zip(offers, actual, strict=True):
             self.assert_expected(values, offered)
 
-    def test_last_completed_entry_does_not_accumulate_a_b_a(self):
+    def test_distinct_recipe_keys_reuse_a_after_b(self):
         offers = [crossed(origin='a'), crossed((34, 67), origin='b'), crossed(origin='a-again')]
         with topology_scope(TopologyCache()), patch(
                 'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
                 wraps=route_candidate_steps) as expansion:
             actual = self.normalize(offers)
-            self.assertEqual(expansion.call_count, 3)
+            self.assertEqual(expansion.call_count, 2)
         for offered, values in zip(offers, actual, strict=True):
             self.assert_expected(values, offered)
 
@@ -539,7 +539,7 @@ class SiblingUnionReuseTests(unittest.TestCase):
                     self.assertEqual(pool['liquidity'], '2000')
         self.assertEqual((first, current), original)
 
-    def test_closed_partial_expansion_is_not_reused_as_completed(self):
+    def test_closed_reader_leaves_partial_producer_for_full_sibling(self):
         first, second, third = crossed(origin='partial'), crossed(origin='full'), crossed(origin='reuse')
         with topology_scope(TopologyCache()), patch(
                 'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
@@ -551,11 +551,11 @@ class SiblingUnionReuseTests(unittest.TestCase):
             finally:
                 iterator.close()
             actual = self.normalize([second, third])
-            self.assertEqual(expansion.call_count, 2, 'Only the fully drained second feed may be reused')
+            self.assertEqual(expansion.call_count, 1, 'The second feed continues the shared producer')
         self.assert_expected(actual[0], second)
         self.assert_expected(actual[1], third)
 
-    def test_interleaved_misses_preserve_full_outputs_and_one_completed_entry(self):
+    def test_interleaved_keys_preserve_full_outputs_without_rebuilding(self):
         first, other = crossed(origin='slow-a'), crossed((34, 67), origin='full-b')
         with topology_scope(TopologyCache()), patch(
                 'cybergold_candidate.quoter.candidate_hints.route_candidate_steps',
@@ -566,8 +566,8 @@ class SiblingUnionReuseTests(unittest.TestCase):
                 second = list(normalize_hints([other], A, D))
                 completed_first = [head, *iterator]
                 again = list(normalize_hints([other], A, D))
-                self.assertEqual(expansion.call_count, 3,
-                                 'Completing A after B replaces the single completed entry')
+                self.assertEqual(expansion.call_count, 2,
+                                 'Completing A leaves the independent B recipe available')
             finally:
                 iterator.close()
         self.assert_expected(completed_first, first)

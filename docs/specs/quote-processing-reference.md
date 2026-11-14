@@ -153,10 +153,19 @@ conversions against already selected operations. Crossed supplier hints reuse
 their union graph through existing discovery to recover shorter alternatives.
 One memo retains the last completed compatible integer allocation patterns by
 total source amount and ordered physical-route identities. Sibling hint feeds
-share this single entry through the search's existing `TopologyCache.hint_union`;
-clearing the topology cache clears it. Without that scope, the same memo stays
-local to the iterator. Only fully consumed enumeration replaces the memo;
-partial consumption or cancellation does not publish an incomplete pattern set.
+share incremental recipes through the search's existing topology owner. Split
+indices, normalization direction combinations and compatible union patterns
+have distinct immutable keys and independently replayable cursors. Partial
+consumption retains a prefix and its suspended producer; a sibling advances
+that same producer rather than deriving the prefix again. Only the iterator's
+legacy `hint_union` completed memo is replaced on full consumption. Without the
+topology scope that memo remains local to the iterator. Session close shuts
+all suspended producers and clears both completed and incremental recipes.
+The adapter's round-robin input consists of iterator factories. It instantiates
+one on its first turn, preserving the same first and subsequent rounds while
+avoiding per-offer normalization wrappers for an unconsumed ready prefix.
+Work markers keep the current iterator's turn. Closing the consumer closes
+instantiated iterators; uncalled factories have not started computation.
 Repeated recoveries still walk/rebind current paths and bind current route/hop
 representatives and origins. Its pattern values retain only immutable route
 indices and integer amount strings, not pool state, mutable bodies or prices. Original
@@ -282,6 +291,37 @@ Ordinary custom discovery walks and sorts its reachable single-path graph;
 the initial short-path prefix above does not await that walk. Both have
 cooperative checkpoints, while split enumeration remains lazy. Initial prefix
 duplicates are reconciled with the normal nominations by the same route identity.
+
+`TopologyCache.path_steps` coalesces concurrent misses of the existing graph
+key into one computation. Each reader rebinds the resulting physical walk to
+its current pool representatives and retains the existing repr ordering; a
+completed cached walk contains no pool body or price. A reader's cancellation
+does not close the producer needed by a sibling.
+
+The configured API injects `CpuWorkers` into each discovery session. Its two
+pure Python child processes start with the API and persist across requests.
+The asynchronous cooperative driver suspends on an owned Future rather than
+busy-polling private markers. Pure graph walks, including those reconstructing
+supplier-hint connectivity, run in the children. Commands contain only graph
+fields; responses contain pool indices/directions and native transitions in
+batches of at most the existing64-item quantum. No batch-fill timer, network
+call, pricing, Core logic or private simulation bank moves into those workers.
+The parent still binds current metadata, availability and origins and performs
+economic evaluation. Independent misses can run on both children. Synchronous
+compatibility consumers execute the same pure walk locally.
+
+The discovery session owns submitted jobs. On session close it cancels queued
+jobs and terminates/reaps a process executing cancelled work; the next job
+replaces that process. The service owns worker reuse and final shutdown.
+Child failure follows the ordinary feed error path. No fallback provider or
+new quote acceptance condition is introduced.
+
+Before forward walking, a zero/one-cost reverse search computes a lower bound
+on remaining pool hops. Explicit native/WETH transitions have zero cost; a pool
+edge has cost one. A branch or outgoing edge that exceeds the existing remaining
+hop allowance is not sorted or explored. Ignoring visited restrictions makes
+the bound admissible; all eligible routes retain their existing final order.
+The short initial path remains independent of this full walk.
 
 `discovery.route_candidate_steps` is the shared lazy producer for custom
 discovery's available feed, hosted `UniswapApiProvider` expansion and

@@ -66,6 +66,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     async def lifespan(_app):
         observe(loop_monitor.start)
         try:
+            if universal_quotes is not None and getattr(universal_quotes, 'discovery_cpu', None) is not None:
+                await universal_quotes.discovery_cpu.start()
             if protocol_configuration and hasattr(protocol_configuration, 'start'):
                 await protocol_configuration.start()
             if core_quote_state:
@@ -78,6 +80,8 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 pass  # Observation cannot veto ordinary application shutdown.
             if economic_quotes:
                 await economic_quotes.close()
+            if universal_quotes is not None and getattr(universal_quotes, 'discovery_cpu', None) is not None:
+                await universal_quotes.discovery_cpu.close()
             if core_quote_state:
                 await core_quote_state.close()
             if faucet_service is not None:

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 842 595" role="img" aria-labelledby="title desc">
-<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Executable arrival changes wake dependent plan owners; duplicate origins do not reprice. Prepared ready-offer lists are reused per query until stored offers or origins change. Each quick pass captures a new all-query mapping; older passes retain their order and origins, and body copies remain lazy. Exact plan encoding and SDK results, including inverse and typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound. Custom discovery, hosted expansion and hint-union recovery share lazy split arithmetic with the existing 64-item work quantum, including rejected work; no candidate gate or route cutoff is added.</desc>
+<title id="title">Fast results and continued search run together</title><desc id="desc">Current scalar quotation · no supplier-completion wait is required before a selected frame. Executable arrival changes wake dependent plan owners; duplicate origins do not reprice. Prepared ready-offer lists are reused per query until stored offers or origins change. Each quick pass captures a new all-query mapping; older passes retain their order and origins, and body copies remain lazy. Exact plan encoding and SDK results, including inverse and typed mathematical no-quote, share within a search; caller observations and fees remain private. Known SDK work precedes ordinary queued work without preemption. The SDK lock holder restores engine permits in the existing priority lane; each lane remains FIFO. Each scheduler limits live evaluations to eight by default; each local optimizer driver limits response-outstanding callbacks to eight. These are not a global task or memory bound. Custom discovery, hosted expansion and hint-union recovery share lazy split arithmetic with the existing 64-item work quantum, including rejected work; no candidate gate or route cutoff is added. Concurrent graph misses share one producer on two persistent API-owned CPU processes. Compact route recipes return in batches of at most 64. Reverse minimum-hop distances prune only unreachable branches; current state and pricing stay with the parent. Owner cancellation reaps active CPU work.</desc>
 <defs>
   <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3e596d"/></marker>
   <style>
@@ -60,9 +60,9 @@
 <text x="451" y="292" class="heading">Complete proposal</text>
 <text x="451" y="313" class="body">Ordinary admission</text>
 <rect x="635" y="268" width="157" height="65" rx="8" class="node"/>
-<text x="646" y="286" class="heading">More proposals</text>
-<text x="646" y="305" class="body">Per-query ready lists</text>
-<text x="646" y="323" class="body">64-item work quantum</text>
+<text x="646" y="286" class="heading">Shared graph work</text>
+<text x="646" y="305" class="body">2 CPU workers + recipes</text>
+<text x="646" y="323" class="body">64-route result batches</text>
 <path d="M130 231 V268" class="line"/><polygon points="130.00,268.00 127.00,261.00 133.00,261.00" fill="#3e596d"/><circle cx="130" cy="249" r="10" class="step"/><text x="130" y="249" class="step-text">1</text>
 <path d="M325 231 V268" class="line"/><polygon points="325.00,268.00 322.00,261.00 328.00,261.00" fill="#3e596d"/><circle cx="325" cy="249" r="10" class="step"/><text x="325" y="249" class="step-text">1</text>
 <path d="M520 231 V268" class="line"/><polygon points="520.00,268.00 517.00,261.00 523.00,261.00" fill="#3e596d"/><circle cx="520" cy="249" r="10" class="step"/><text x="520" y="249" class="step-text">1</text>
@@ -92,7 +92,7 @@
 <text x="638" y="487" class="heading">Producer admission</text>
 <text x="638" y="507" class="body">8 live / scheduler</text>
 <text x="638" y="523" class="body">8 callbacks / driver</text>
-<text x="42" y="550" class="body-large">New choices revisit dependent plans; graph changes revisit all. Duplicate origins do not reprice.</text>
+<text x="42" y="550" class="body-large">Shared recipes; current state stays private. Reverse distances skip only unreachable branches.</text>
 <text x="42" y="566" class="body">Pool filter: observed sqrtRatioX96 = 0 only. Unknown and zero-liquidity pools stay eligible; limits are local.</text>
-<text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; bootstrap; pool_initialization; route_scheduler, route_work_slots; calculation-session.</text>
+<text x="42" y="585" class="source">Sources: progressive_quotes / quote_publication; bootstrap; pool_initialization; discovery, cpu, cpu_worker; route_scheduler, route_work_slots.</text>
 </svg>

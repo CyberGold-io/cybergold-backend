@@ -191,13 +191,15 @@ class InitializationRoutingTests(unittest.IsolatedAsyncioTestCase):
                 def pairs(offered, size):
                     selected = list(offered)
                     paired_inputs.append(selected)
-                    self.assertTrue(all(route_available(row) for row in selected))
+                    self.assertEqual(selected, [0, 1],
+                                     'Only the two eligible routes enter index-pair generation')
                     return combinations(selected, size)
                 with topology_scope(self.cache), patch(
                         'cybergold_candidate.quoter.discovery.combinations', side_effect=pairs):
                     values = list(route_candidates(routes, 100))
                 self.assertEqual(len(values), 5)  # Two singles and three quarter splits.
-                self.assertTrue(paired_inputs)
+                self.assertEqual(paired_inputs, [[0, 1]] if protocol == 'v3' else [],
+                                 'The second graph reuses indices and freshly binds its eligible routes')
                 self.assertFalse(any(self.contains(rows, bad) for rows in values))
                 self.assertTrue(all(sum(int(row['amountIn']) for row in rows) == 100 for rows in values))
                 self.assertEqual(routes, original)

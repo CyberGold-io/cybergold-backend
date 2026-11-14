@@ -34,6 +34,19 @@ def current_bootstrap():
     return _bootstrap.get()
 
 
+class _OfferFeeds:
+    """Indexable feed factories over one captured, read-only quick prefix."""
+    def __init__(self, prefix, regular):
+        self.prefix, self.regular = prefix, regular
+
+    def __len__(self):
+        return len(self.prefix) + len(self.regular)
+
+    def __getitem__(self, index):
+        return (map(deepcopy, (self.prefix[index],)) if index < len(self.prefix)
+                else self.regular[index-len(self.prefix)])
+
+
 @contextmanager
 def bootstrap_scope(session):
     token = _bootstrap.set(session)
@@ -49,7 +62,7 @@ class ProviderUnavailable(RuntimeError):
 
 
 class RouteBootstrap:
-    def __init__(self, providers, *, catalog=None, nomination_only=False, block=None):
+    def __init__(self, providers, *, catalog=None, nomination_only=False, block=None, cpu=None):
         self._loop = asyncio.get_running_loop()
         self._budget = current_budget()
         self._started_mono = self._loop.time()
@@ -63,7 +76,7 @@ class RouteBootstrap:
         self._queries, self._attempts, self._tasks = {}, [], set()
         self.topology = TopologyCache(pool_available=(
             lambda pool: not observed_uninitialized(catalog, pool, block))
-            if catalog is not None and block is not None else None)
+            if catalog is not None and block is not None else None, cpu=cpu)
         self._completed_offers = {}
         self._ready_offer_snapshots = {}
         self._known_offers, self._offer_origins = {}, {}
@@ -401,7 +414,7 @@ class RouteBootstrap:
             attempt['firstCandidateMs'] = self._elapsed_ms()
 
     def offer_feeds(self, source, target, amount, block, *, path_projection=None,
-                    cooperative=False, projection_steps=None):
+                    cooperative=False, projection_steps=None, deferred=False):
         """Start all pending tools now; return their separate lazy offer feeds."""
         self._raise_failure()
         if self._closed:
@@ -438,9 +451,10 @@ class RouteBootstrap:
         # Publication order belongs to this session, never to supplier metadata.
         # Keep one feed per offer for the same round-robin order, but copy a
         # private body only when its feed is consumed.
-        prefix = ([map(deepcopy, (offer,)) for offer in quick[1].get(key, ())]
-                  if quick is not None and quick[0] is self else [])
-        return prefix + regular
+        prefix = quick[1].get(key, ()) if quick is not None and quick[0] is self else ()
+        if deferred:
+            return _OfferFeeds(prefix, regular)
+        return [map(deepcopy, (offer,)) for offer in prefix] + regular
 
     def _ready_offers(self):
         result = {}
@@ -715,6 +729,8 @@ class RouteBootstrap:
                                                 return_exceptions=True))
         self._close_errors = [error for error in outcomes if isinstance(error, Exception)
                               and (self.nomination_only or not isinstance(error, SnapshotChanged))]
+        with stage('discovery.cpu.settle'):
+            await self.topology.settle()
         self._finished_ms = self._elapsed_ms()
         with stage('discovery.clear', kind='cpu'):
             try:

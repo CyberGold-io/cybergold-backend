@@ -1,6 +1,7 @@
 """Physical route enumeration; no pricing, deadlines, or mutable pool state."""
 from itertools import combinations
-from collections import defaultdict
+import asyncio
+from collections import defaultdict, deque
 from copy import deepcopy
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -8,7 +9,7 @@ from contextvars import ContextVar
 from ..routing_encoding import ZERO, weighted_routes
 from ..route_search import WETH
 from ..uniswap_routes import pool_identity, opposite
-from .cooperative import CHECKPOINT, finish, sort_steps, values
+from .cooperative import CHECKPOINT, finish, sort_steps, values, asynchronous, await_steps, close
 
 
 def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
@@ -16,9 +17,7 @@ def _enumerate_paths(pools, source, target, weth=WETH, max_hops=3):
 
 
 def _enumerate_path_steps(pools, source, target, weth=WETH, max_hops=3):
-    """Selected pool graph plus explicit lossless native/WETH transitions."""
-    graph = {}
-    unique = {}
+    graph, unique = {}, {}
     for pool in pools:
         yield CHECKPOINT
         if not pool_available(pool):
@@ -32,23 +31,52 @@ def _enumerate_path_steps(pools, source, target, weth=WETH, max_hops=3):
             continue
         for token in (pool['token0'], pool['token1']):
             graph.setdefault(token['address'].lower(), []).append(pool)
+
+    # A lower bound ignores already-visited currencies. Pool hops cost one;
+    # the existing ZERO/WETH transitions cost zero. It never overestimates.
+    distances = {target.lower(): 0}
+    queue = deque([target.lower()])
+    native = (ZERO, weth.lower())
+    while queue:
+        current = queue.popleft()
+        yield CHECKPOINT
+        if current in native:
+            following = native[1] if current == native[0] else native[0]
+            if following not in distances or distances[following] > distances[current]:
+                distances[following] = distances[current]
+                queue.appendleft(following)
+        for pool in graph.get(current, ()):
+            yield CHECKPOINT
+            following = opposite(pool, current)
+            distance = distances[current] + 1
+            if following not in distances or distances[following] > distance:
+                distances[following] = distance
+                queue.append(following)
+
     found = []
     def walk(current, route, visited, hops):
         yield CHECKPOINT
+        if distances.get(current, max(0, max_hops) + 1) > max(0, max_hops) - hops:
+            return
         if current == target.lower():
             if route:
                 found.append(route)
             return
         if hops < max_hops:
-            edges = yield from sort_steps(graph.get(current, []), key=lambda row: (row['protocol'], row['id']))
-            for pool in edges:
+            edges = []
+            for pool in graph.get(current, ()):
                 yield CHECKPOINT
                 following = opposite(pool, current)
-                if following not in visited:
-                    yield from walk(following, route + [{'pool': pool, 'zeroForOne': current == pool['token0']['address'].lower()}],
-                         visited | {following}, hops + 1)
-        if current in (ZERO, weth.lower()):
-            following = weth.lower() if current == ZERO else ZERO
+                if following not in visited and distances.get(following, max_hops + 1) <= max_hops - hops - 1:
+                    edges.append((pool, following))
+            edges = yield from sort_steps(edges, key=lambda row: (row[0]['protocol'], row[0]['id']))
+            for pool, following in edges:
+                yield CHECKPOINT
+                yield from walk(following, route + [{'pool': pool,
+                    'zeroForOne': current == pool['token0']['address'].lower()}],
+                    visited | {following}, hops + 1)
+        if current in native:
+            following = native[1] if current == native[0] else native[0]
             if following not in visited:
                 yield from walk(following, route + [{'kind': 'wrap' if current == ZERO else 'unwrap',
                     'currencyOut': following}], visited | {following}, hops)
@@ -82,20 +110,72 @@ def route_available(route):
     return all(pool_available(hop['pool']) for hop in route if 'pool' in hop)
 
 
+class _Computation:
+    """Consumers advance one producer instead of rebuilding concurrent misses."""
+    def __init__(self, steps, remote=False):
+        self.steps, self.remote = steps, remote
+        self.done, self.error = False, None
+
+    def advance(self):
+        if self.error is not None:
+            raise self.error
+        if not self.done:
+            try:
+                next(self.steps)
+            except StopIteration:
+                self.done = True
+            except BaseException as error:
+                self.error = error
+                raise
+
+
+class _Patterns:
+    """Incremental immutable index/allocation recipes, never pool bodies."""
+    def __init__(self, steps):
+        self.steps, self.rows, self.done = steps, [], False
+        self.error = None
+
+    def read(self):
+        index = 0
+        while True:
+            if self.error is not None:
+                raise self.error
+            if index < len(self.rows):
+                yield CHECKPOINT
+                yield self.rows[index]
+                index += 1
+            elif self.done:
+                return
+            else:
+                try:
+                    row = next(self.steps)
+                except StopIteration:
+                    self.done = True
+                    return
+                except Exception as error:
+                    self.error = error
+                    raise
+                if row is CHECKPOINT:
+                    yield CHECKPOINT
+                else:
+                    self.rows.append(row)
+
+
 class TopologyCache:
     """One discovery owner's immutable walks and rendered-route identities.
 
     Mutable pool, observation and origin objects and prices are never cached.
     Current representatives are bound on every read; metadata still owns the
-    existing repr-based ordering. One completed integer allocation-pattern set
-    can be reused while split nominations remain lazy and freshly bound.
+    existing repr-based ordering. Incremental integer recipes are shared while
+    split nominations remain lazy and freshly bound.
     """
-    def __init__(self, pool_available=None):
+    def __init__(self, pool_available=None, cpu=None):
         self.pool_available = pool_available or (lambda pool: True)
         self.walks, self.validated = {}, {}
         self.hint_union = None, ()
         self.graph_builds = self.path_hits = self.route_validations = self.validation_hits = 0
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
+        self.cpu, self.pending, self.tasks, self.patterns = cpu, {}, set(), {}
 
     def catalog_changed(self, pools):
         """Reuse the catalog owner's graph key between its existing changes."""
@@ -120,10 +200,60 @@ class TopologyCache:
             for identity, pool in unique.items()), key=repr))
 
     def clear(self):
+        for computation in self.pending.values():
+            close(computation.steps)
+        for patterns in self.patterns.values():
+            close(patterns.steps)
+        self.pending.clear()
+        self.patterns.clear()
         self.walks.clear()
         self.validated.clear()
         self.hint_union = None, ()
         self._catalog_objects, self._catalog_unique, self._catalog_graph = (), {}, ()
+
+    async def settle(self):
+        tasks = tuple(self.tasks)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self.tasks.clear()
+
+    async def close(self):
+        await self.settle()
+        self.clear()
+
+    def shared_patterns(self, key, produce):
+        if key not in self.patterns:
+            self.patterns[key] = _Patterns(produce())
+        yield from self.patterns[key].read()
+
+    def _build_walks(self, key, pools, source, target, weth, max_hops, remote):
+        if remote:
+            identities = [pool_identity(pool) for pool in pools]
+            task = asyncio.create_task(self.cpu.paths(pools, source, target, weth, max_hops))
+            self.tasks.add(task)
+            computation = self.pending.get(key)
+            def retired(done):
+                self.tasks.discard(done)
+                failed = done.cancelled() or done.exception() is not None
+                if failed and self.pending.get(key) is computation:
+                    self.pending.pop(key)
+            task.add_done_callback(retired)
+            recipes = yield from await_steps(task)
+            walks = []
+            for route in recipes:
+                walks.append(tuple((identities[step[0]], step[1])
+                                   if isinstance(step[0], int) else tuple(step) for step in route))
+                yield CHECKPOINT
+        else:
+            routes = yield from _enumerate_path_steps(pools, source, target, weth, max_hops)
+            walks = []
+            for route in routes:
+                walks.append(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
+                    if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route))
+                yield CHECKPOINT
+        self.walks[key] = tuple(walks)
+        self.graph_builds += 1
 
     def paths(self, pools, source, target, weth, max_hops):
         return finish(self.path_steps(pools, source, target, weth, max_hops))
@@ -137,16 +267,25 @@ class TopologyCache:
             graph = self._graph(unique)
         key = source.lower(), target.lower(), weth.lower(), max_hops, graph
         if key not in self.walks:
-            routes = yield from _enumerate_path_steps(list(unique.values()), source, target, weth, max_hops)
-            walks = []
-            for route in routes:
-                walks.append(tuple((pool_identity(hop['pool']), hop['zeroForOne'])
-                    if 'pool' in hop else (hop['kind'], hop['currencyOut']) for hop in route))
-                yield CHECKPOINT
-            self.walks[key] = tuple(walks)
-            self.graph_builds += 1
-            return routes
-        self.path_hits += 1
+            remote = self.cpu is not None and asynchronous()
+            if key not in self.pending:
+                self.pending[key] = _Computation(self._build_walks(
+                    key, list(unique.values()), source, target, weth, max_hops, remote), remote)
+            computation = self.pending[key]
+            if computation.remote and not asynchronous():
+                # Synchronous compatibility calls cannot await an async job.
+                yield from self._build_walks(key, list(unique.values()), source, target, weth, max_hops, False)
+            else:
+                while key not in self.walks:
+                    try:
+                        computation.advance()
+                    except BaseException:
+                        if self.pending.get(key) is computation:
+                            self.pending.pop(key)
+                        raise
+                    yield CHECKPOINT
+        else:
+            self.path_hits += 1
         routes = []
         for route in self.walks[key]:
             routes.append([{'pool': unique[step[0]], 'zeroForOne': step[1]}
@@ -217,9 +356,21 @@ def route_candidate_steps(routes, amount, *, observed=True):
         yield CHECKPOINT
         if available(route):
             eligible.append(route)
-    for left, right in combinations(eligible, 2):
-        yield CHECKPOINT
-        for first, second in splits:
+    route_count, lots = len(eligible), tuple(splits)
+    def patterns():
+        for left, right in combinations(range(route_count), 2):
+            yield CHECKPOINT
+            for first, second in lots:
+                yield left, right, first, second
+    topology = current_topology()
+    steps = (topology.shared_patterns(('splits', len(eligible), tuple(splits)), patterns)
+             if topology is not None else patterns())
+    for pattern in steps:
+        if pattern is CHECKPOINT:
+            yield CHECKPOINT
+        else:
+            left_index, right_index, first, second = pattern
+            left, right = eligible[left_index], eligible[right_index]
             # A lazy feed can outlive the canonical observation that disproved
             # one of its paths. Do not expand its remaining allocations.
             if not available(left) or not available(right):

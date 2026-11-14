@@ -100,6 +100,9 @@ takes a new shallow mapping of all queries to their prepared lists; older passes
 keep their captured order and origins. Offer bodies are still copied only when
 their feeds are consumed, so taking the first offer does not copy the unused
 tail. Closing the discovery session clears its prepared-list cache.
+Normalization iterators for that prefix are created on their first round-robin
+turn, rather than all at once. Private checkpoints retain the current feed's
+turn; later rounds retain the same source order and all remaining candidates.
 
 Market legs can draw on six demand-started suppliers: CyberGold discovery,
 AlphaRouter, UniRoute local, regular Trading API FASTEST and BEST_PRICE, and
@@ -136,13 +139,15 @@ use within that trade is excluded. Crossed supplier hints can supply a union
 of pools from which existing discovery finds shorter compatible paths. No
 additional API request is needed for that reconstruction.
 Successive recovery of the same ordered union routes at the same total input
-reuses the last completed compatible allocation patterns. Current pool metadata
+shares incremental compatible allocation recipes. Current pool metadata
 and supplier origins are rebound on every offer, with fresh branch/hop containers.
 Original compatible hint weights remain unchanged; ordinary adapter deduplication
-still merges origins before pricing. During a search, sibling hint feeds share
-one last-completed pattern set through its existing topology cache, cleared
-with that cache. Without this scope the memo remains local to the hint iterator.
-Partially consumed enumeration does not replace the completed memo. No pool
+still merges origins before pricing. During a search, sibling feeds share one
+producer and independent cursors per structural recipe key. Unchanged split
+indices and funded direction combinations are derived once, including partially
+consumed prefixes; each consumer rechecks current availability. Closing the
+session closes suspended producers and clears their recipes. Without this scope
+the completed union memo remains local to its hint iterator. No pool
 state, mutable plan or price is retained by this pattern reuse.
 
 Custom discovery, hosted route expansion and crossed-hint union recovery share
@@ -154,6 +159,26 @@ rejected paths and pairs, so asynchronous consumers retain the existing
 64-item cooperative quantum even when no candidate is emitted. These markers
 are not route offers and do not change eligibility, adapter deduplication,
 fees or complete-plan validation. They add no route cutoff or RPC/API call.
+
+Concurrent graph-cache misses share one computation. The API owns two persistent
+CPU worker processes, started during application startup and reused across
+requests. Asynchronous custom walks and the path reconstruction used by hint
+normalization send connectivity descriptors to those processes; results return
+as compact route-index batches of at most 64. The event loop awaits owned work
+instead of polling or doing the walk. Current pool representatives, metadata
+ordering, availability, origins, prices and private replay stay with the request.
+Independent jobs can run on both processes; no batch-fill timer is introduced.
+One cancelled reader leaves a shared computation available to its siblings.
+Closing its discovery owner cancels outstanding jobs, terminates/reaps active
+worker computations and clears recipes; a subsequent job replaces a terminated
+worker. Application shutdown closes both processes. Synchronous consumers use
+the same pure algorithm locally.
+
+Graph enumeration first computes a minimum remaining pool-hop distance from
+the destination. Native/WETH transitions cost zero and pool edges cost one.
+Branches that cannot reach the destination within the existing hop allowance
+are not walked or sorted. This lower bound ignores visited restrictions, so
+it does not exclude a possible route or introduce a new hop allowance.
 
 A newly constructed Core operation needs its actual basket construction fields.
 An already encoded retained Core plan can proceed without fetching those fields
@@ -459,6 +484,23 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-14 - Share structural discovery and isolate graph CPU work
+
+- Owner-authorized coordinated implementation/specification update: coalesce
+  concurrent graph misses, retain incremental immutable split/direction/union
+  recipes, and bind current state and origins separately for every consumer.
+- Create ready-prefix normalization iterators lazily on their first turn,
+  preserving complete round-robin order without eager unused-prefix setup.
+- Run asynchronous graph enumeration and hint path reconstruction on two
+  application-owned persistent processes with compact 64-route result batches.
+  Keep reader cancellation separate from producer ownership, and terminate and
+  reap active computation on owner close. Retain synchronous local consumers.
+- Prune provably unreachable branches using reverse minimum pool-hop distances,
+  including zero-cost native transitions, without changing valid candidates.
+- Update the technical reference, affected process diagram and linked PDF.
+  Performance experiments and targets remain in the Ops work record; this does
+  not establish a 99% live quote improvement or add a quote cutoff.
 
 ### 2026-11-14 - Reuse prepared ready-offer lists per query
 
