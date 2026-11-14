@@ -18,7 +18,7 @@ from .candidate_hints import normalize_steps
 from .custom_routes import CustomRoutes
 from .contracts import path_nomination, capture_paths
 from .discovery import current_topology, route_identity, seeded_path_steps
-from .route_tools import RouteQuery, round_robin
+from .route_tools import RouteQuery, round_robin, lazy_round_robin
 from .cooperative import CHECKPOINT, close, values, async_values, async_finish, finish, sort_steps
 from .amm import PartialPath
 from .prefix import backward_input
@@ -155,7 +155,7 @@ class CyberGoldAmmAdapter:
             return routes
         if bootstrap is not None:
             feeds = bootstrap.offer_feeds(source, target, amount, block, path_projection=project_paths,
-                cooperative=True, projection_steps=project_steps)
+                cooperative=True, projection_steps=project_steps, deferred=True)
         else:
             feed = CustomRoutes(registry).discover(query)
             def offers():
@@ -167,12 +167,12 @@ class CyberGoldAmmAdapter:
                 finally:
                     close(candidates)
             feeds = [offers()]
-        feeds = [normalize_steps(offers, source, target) for offers in feeds]
-        if first:
-            feeds = [prioritize_steps(feed, registry) for feed in feeds]
-        if linear_only:
-            feeds = [linear_prefix(feed) for feed in feeds]
-        ordinary = round_robin(feeds)
+        def feed_at(index):
+            feed = normalize_steps(feeds[index], source, target)
+            if first:
+                feed = prioritize_steps(feed, registry)
+            return linear_prefix(feed) if linear_only else feed
+        ordinary = lazy_round_robin((lambda index=index: feed_at(index)) for index in range(len(feeds)))
         initial_provider = (next((provider for _, provider in bootstrap.providers
                                   if isinstance(provider, CustomRoutes)), None)
                             if initial_custom and bootstrap is not None else None)

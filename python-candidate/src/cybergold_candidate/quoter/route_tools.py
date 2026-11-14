@@ -157,3 +157,37 @@ def round_robin(feeds):
             close = getattr(feed, 'close', None)
             if close is not None:
                 close()
+
+
+def lazy_round_robin(factories):
+    """Same rounds, creating an owned iterator only on its first turn.
+
+    Uncalled factories own no running iterator. This avoids building an entire
+    ready-offer prefix just to consume its first few nominations.
+    """
+    initial, pending, current = iter(factories), deque(), None
+    try:
+        while initial is not None or pending or current is not None:
+            if current is None:
+                if initial is not None:
+                    try:
+                        current = iter(next(initial)())
+                    except StopIteration:
+                        initial = None
+                        continue
+                else:
+                    current = pending.popleft()
+            try:
+                value = next(current)
+            except StopIteration:
+                current = None
+                continue
+            if value is not CHECKPOINT:
+                pending.append(current)
+                current = None
+            yield value
+    finally:
+        for iterator in (current, initial, *pending):
+            close = getattr(iterator, 'close', None)
+            if close is not None:
+                close()

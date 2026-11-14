@@ -4,6 +4,7 @@ from itertools import product
 from .discovery import current_topology, path_steps, route_candidate_steps, route_identity, route_available
 from .cooperative import CHECKPOINT, close, values
 from .pool_directions import branch_directions, conflicting_pool
+from ..routing_encoding import weighted_shares, split_runtime
 
 
 def normalize_hints(hints, source, target):
@@ -20,6 +21,34 @@ def _union_patterns(routes, amount):
             continue
         if conflicting_pool(branch_directions(branches)) is None:
             yield tuple((positions[id(row['hops'])], row['amountIn']) for row in branches)
+
+
+def _directions(alternatives):
+    return tuple(tuple(tuple(branch_directions([{'hops': route}])) for route in routes)
+                 for routes in alternatives)
+
+
+def _direction_patterns(directions, amounts):
+    total = sum(map(int, amounts))
+    funded = (split_runtime(total, [{'sharePpm': share} for share in weighted_shares(
+        [{'amountIn': amount} for amount in amounts])]) if total else [0]*len(amounts))
+    for indices in product(*(range(len(routes)) for routes in directions)):
+        yield CHECKPOINT
+        projected = (pair for routes, index, amount in zip(directions, indices, funded, strict=True)
+                     if amount for pair in routes[index])
+        yield indices, conflicting_pool(projected) is not None
+
+
+def _structural_routes(routes):
+    """Freeze only connectivity for a suspended union-pattern producer."""
+    def hop_recipe(hop):
+        if 'pool' not in hop:
+            return {'kind': hop['kind'], 'currencyOut': hop['currencyOut']}
+        pool = hop['pool']
+        recipe = {key: pool[key] for key in ('protocol', 'feePips', 'tickSpacing', 'hooks') if key in pool}
+        recipe.update({key: {'address': pool[key]['address']} for key in ('token0', 'token1')})
+        return {'pool': recipe, 'zeroForOne': hop['zeroForOne']}
+    return [[hop_recipe(hop) for hop in route] for route in routes]
 
 
 def normalize_steps(hints, source, target):
@@ -47,14 +76,25 @@ def normalize_steps(hints, source, target):
                 # Cooperative walks may have learned a zero-price leg while
                 # building alternatives, including an empty later path set.
                 opposed = opposed or any(not route_available(row['hops']) for row in candidate)
-                for routes in product(*alternatives) if alternatives else ():
+                amounts = tuple(row['amountIn'] for row in candidate)
+                directions = _directions(alternatives)
+                patterns = (_direction_patterns(directions, amounts) if alternatives else ())
+                if topology is not None and alternatives:
+                    key = 'normalized', amounts, directions
+                    patterns = topology.shared_patterns(key,
+                        lambda: _direction_patterns(directions, amounts))
+                for pattern in patterns:
                     yield CHECKPOINT
+                    if pattern is CHECKPOINT:
+                        continue
+                    indices, crossed = pattern
+                    routes = [rows[index] for rows, index in zip(alternatives, indices, strict=True)]
                     if any(not route_available(route) for route in routes):
                         opposed = True
                         continue
                     branches = [{'amountIn': row['amountIn'], 'hops': route}
                                 for row, route in zip(candidate, routes, strict=True)]
-                    if conflicting_pool(branch_directions(branches)) is not None:
+                    if crossed:
                         opposed = True
                         continue
                     yield branches, list(offer.get('origins', []))
@@ -67,8 +107,10 @@ def normalize_steps(hints, source, target):
                     key = amount, tuple(route_identity(route) for route in routes)
                     if topology is not None:
                         previous_key, previous_patterns = topology.hint_union
-                    steps = ((value for pattern in previous_patterns for value in (CHECKPOINT, pattern))
-                             if key == previous_key else _union_patterns(routes, amount))
+                    steps = (topology.shared_patterns(('hint-union', key),
+                                 lambda: _union_patterns(_structural_routes(routes), amount)) if topology is not None else
+                             ((value for pattern in previous_patterns for value in (CHECKPOINT, pattern))
+                              if key == previous_key else _union_patterns(routes, amount)))
                     patterns = []
                     for pattern in steps:
                         if pattern is CHECKPOINT:
@@ -84,9 +126,8 @@ def normalize_steps(hints, source, target):
                                for index, funded in pattern], list(offer.get('origins', []))
                     previous_key, previous_patterns = key, tuple(patterns)
                     if topology is not None:
-                        # Sibling feeds share only the last fully consumed
-                        # integer pattern set. Bind current paths/origins above;
-                        # no pool state, mutable body or price is retained.
+                        # Keep the synchronous iterator's completed memo as
+                        # well as the session's shared incremental recipes.
                         topology.hint_union = previous_key, previous_patterns
             except Exception:
                 # Ordinary malformed topology does not discard a sibling.

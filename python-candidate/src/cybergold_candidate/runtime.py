@@ -129,8 +129,10 @@ def create_configured_app(settings=None, database=None, client=None):
     core_quotes = QuoteIntent(settings, routes, basket_math=BasketMath(), seeds=VerifiedGrossSeed(), history=history,
         correction=delayed_local_step, retain_plans=True, early_issue_probe=chain == 31338)
     from .quoter.providers import route_providers
+    from .quoter.cpu import CpuWorkers
     universal_quotes = UniversalQuotes(settings, market_quotes,
-        route_provider_factory=lambda: route_providers(settings, market_quotes))
+        route_provider_factory=lambda: route_providers(settings, market_quotes),
+        discovery_cpu=CpuWorkers())
     core_quote_state = universal_quotes.core_state_cache
     async def quote_generation_observed(generation):
         for observer in (history.observe_generation, market_quotes.observe_generation,
