@@ -526,9 +526,17 @@ coverage is replaced before one owned snapshot copy, preserving the baseline
 scalars and independent metadata and coverage rows.
 Quick-prefix feeds retain one feed per ready offer and their existing round-robin
 order. Each feed copies its topology descriptor only when consumed, so reading
-one offer does not first copy every unconsumed ready descriptor. The ready-list
-snapshot still separately copies mutable origins. A retained single shared
-read returns directly without scheduling a timer task. Multi-key reads carry
+one offer does not first copy every unconsumed ready descriptor. Prepared ready
+lists are cached per query. Nonempty provider batches, including duplicates,
+completed-prefix insertions and added prefix origins invalidate only that
+query's list, independently of economic arrival revisions. The next snapshot
+rebuilds the affected list with the same descending publication order, stable
+ties and duplicates, copying its current origins. Each quick pass captures a
+new shallow all-query mapping to these lists; later changes replace lists
+without rewriting older passes. Session close clears the prepared-list cache.
+
+A retained single shared read returns directly without scheduling a timer task.
+Multi-key reads carry
 completed values directly to their original positions and gather only pending
 futures. An entirely completed multi-key read retains one cooperative checkpoint.
 These changes do not alter simulation inputs, the eight-slot capacity or

@@ -65,6 +65,7 @@ class RouteBootstrap:
             lambda pool: not observed_uninitialized(catalog, pool, block))
             if catalog is not None and block is not None else None)
         self._completed_offers = {}
+        self._ready_offer_snapshots = {}
         self._known_offers, self._offer_origins = {}, {}
         self._family_queries = {}
         self._query_revisions, self._catalog_changed_revision = {}, 0
@@ -368,12 +369,16 @@ class RouteBootstrap:
         identity, names = route_identity(topology), origin_names(origins)
         if identity in rows:
             offer = rows[identity][1]
+            previous_origins = len(offer['origins'])
             offer['origins'].extend(name for name in names if name not in offer['origins'])
+            if len(offer['origins']) != previous_origins:
+                self._ready_offer_snapshots.pop(key, None)
             self._remember_offer(key, offer)
             return False
         offer = {'branches': [{'amountIn': str(query.amount), 'hops': topology}], 'origins': names}
         self._publication_sequence += 1
         rows[identity] = self._publication_sequence, offer
+        self._ready_offer_snapshots.pop(key, None)
         fresh = self._remember_offer(key, offer)
         # Future consumers read this ready hint when they first ask. Only a
         # query already consumed by this search has an older choice to revisit.
@@ -440,15 +445,18 @@ class RouteBootstrap:
     def _ready_offers(self):
         result = {}
         for key in dict.fromkeys((*self._queries, *self._completed_offers)):
-            entries = self._queries.get(key, ())
-            rows = [(revision, offer) for entry in entries
-                    for revision, offer in zip(entry['offer_revisions'], entry['offers'], strict=True)]
-            rows.extend(self._completed_offers.get(key, {}).values())
-            # Stored branch descriptors are read-only here and copied by each
-            # offer feed before yielding. Snapshot the independently mutable
-            # origins now, avoiding a second eager topology copy per quick pass.
-            result[key] = [{**offer, 'origins': list(offer['origins'])}
-                           for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
+            if key not in self._ready_offer_snapshots:
+                entries = self._queries.get(key, ())
+                rows = [(revision, offer) for entry in entries
+                        for revision, offer in zip(entry['offer_revisions'], entry['offers'], strict=True)]
+                rows.extend(self._completed_offers.get(key, {}).values())
+                # Consumers copy bodies lazily. Freeze origins only when this
+                # query's stored offers change; older quick passes retain
+                # their own read-only view when the cache entry is replaced.
+                self._ready_offer_snapshots[key] = [
+                    {**offer, 'origins': list(offer['origins'])}
+                    for _, offer in sorted(rows, key=lambda row: row[0], reverse=True)]
+            result[key] = self._ready_offer_snapshots[key]
         return result
 
     async def _arrival_pass(self, callback, queries, offers=None):
@@ -557,6 +565,7 @@ class RouteBootstrap:
             fresh = [self._remember_offer(key, offer) for offer in offers]
             entry['offers'].extend(offers)
             entry['offer_revisions'].extend([self._publication_sequence] * len(rows))
+            self._ready_offer_snapshots.pop(key, None)
             if any(fresh):
                 self._query_changed(key)
 
@@ -719,6 +728,7 @@ class RouteBootstrap:
                 self._offer_origins.clear()
                 self._query_revisions.clear()
                 self._family_queries.clear()
+                self._ready_offer_snapshots.clear()
             self.topology.clear()
         disproof = next((error for error in outcomes if isinstance(error, SnapshotChanged)), None)
         if disproof is not None and not self.nomination_only:

@@ -90,9 +90,16 @@ rediscovering its pools. An initial short topology can also construct a complete
 plan before detailed SDK amount pricing. Continued exploration supplies other
 paths, allocations, splits and residual handling. Each is still a proposal until
 the whole plan has an economic observation.
-Ready quick-pass offers keep their existing order and private copies. Each
-offer is copied only when its feed is consumed; taking the first offer does
-not copy the unconsumed tail. The ready snapshot still copies mutable origins.
+
+Ready-offer lists are prepared per query and reused while that query's stored
+offers and origins stay unchanged. A nonempty provider batch, including
+duplicates, a completed-prefix insertion or added prefix origins invalidates
+that query's list. The next quick-pass snapshot rebuilds it with the same
+publication order and duplicates, freezing its current origins. Each quick pass
+takes a new shallow mapping of all queries to their prepared lists; older passes
+keep their captured order and origins. Offer bodies are still copied only when
+their feeds are consumed, so taking the first offer does not copy the unused
+tail. Closing the discovery session clears its prepared-list cache.
 
 Market legs can draw on six demand-started suppliers: CyberGold discovery,
 AlphaRouter, UniRoute local, regular Trading API FASTEST and BEST_PRICE, and
@@ -452,6 +459,19 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-14 - Reuse prepared ready-offer lists per query
+
+- With the owner's explicit acceptance and coordinated specification update,
+  retain each query's prepared ready-offer list until its stored offers or
+  origins change. Rebuild after every nonempty provider batch, including
+  duplicates, a completed-prefix insertion or added prefix origins.
+- Capture a new shallow all-query mapping for each quick pass. Keep older
+  passes' ordering and origins unchanged, preserve duplicates and lazy private
+  body copies, and clear the prepared-list cache on discovery-session close.
+- Reuse proposal preparation without changing price freshness, economic
+  arrival revisions or complete-plan selection and validation.
+- Update the technical reference, affected process diagram and linked PDF.
 
 ### 2026-11-12 - Share split arithmetic and cooperate during rejected route work
 

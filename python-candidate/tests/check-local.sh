@@ -62,6 +62,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_universal_quote.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_foundation.py
 python-candidate/.venv/bin/python python-candidate/tests/test_parallel_route_discovery.py
 python-candidate/.venv/bin/python python-candidate/tests/test_completed_route_hints.py
+python-candidate/.venv/bin/python python-candidate/tests/test_ready_offer_snapshots.py
 python-candidate/.venv/bin/python python-candidate/tests/test_route_tools.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quoter_topology_reuse.py
 python-candidate/.venv/bin/python python-candidate/tests/test_cooperative_enumeration.py
