@@ -121,6 +121,19 @@ def create_configured_app(settings=None, database=None, client=None):
     configuration = ProtocolConfiguration(settings, configuration_store,
         generation_reader=configuration_generation if chain == 31338 and settings.DATABASE_URL else None)
     uniswap_registry = PoolRegistry(settings, store=uniswap_store, pool_reads=pool_reads)
+    fork_bitmaps = None
+    if chain == 31338 and getattr(settings, 'FORK_BITMAP_PREFETCH_URL', None):
+        from .fork_bitmaps import ForkBitmapPrefetch
+        async def bitmap_anchor():
+            from .fork_recovery import read_generation
+            if not settings.DATABASE_URL:
+                return None
+            async with database.connection() as connection:
+                stored = await read_generation(connection, core.lower())
+            return stored['anchor']['forkBlockHash'] if stored else None
+        fork_bitmaps = ForkBitmapPrefetch(settings.FORK_BITMAP_PREFETCH_URL,
+            settings.FORK_BITMAP_PREFETCH_AUTHORIZATION, bitmap_anchor)
+        uniswap_registry.fork_bitmaps = fork_bitmaps
     pools.registry = uniswap_registry
     market_recipient = DailyRecipientCache(uniswap_store, settings.NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS)
     market_quotes = MarketQuotes(settings, uniswap_registry, recipient_cache=market_recipient,
@@ -166,6 +179,8 @@ def create_configured_app(settings=None, database=None, client=None):
     shared_core_quotes.universal_quotes = universal_quotes
 
     async def close_runtime():
+        if fork_bitmaps is not None:
+            await fork_bitmaps.close()
         await pool_reads.close()
         await database.close()
 

@@ -648,6 +648,9 @@ class PoolRegistry:
         ticks.update({int(row['index']): row for row in snapshot.get('ticks', [])})
         requested_words = {int(word) for request in requests for word in request.get('wordPositions', [])}
         missing_words = sorted(requested_words-words.keys())
+        prefetch = getattr(self, 'fork_bitmaps', None)
+        if prefetch is not None:
+            prefetch.schedule(pool, missing_words, rpc)
         async def read_word(word):
             if pool['protocol'] == 'v4':
                 value, = await read_state_view(rpc.read_function, rpc.state_view, 'getTickBitmap', block,
@@ -659,6 +662,8 @@ class PoolRegistry:
             words[word] = {'wordPosition': word, 'bitmap': str(bitmap)}
         if pool['protocol'] in ('v3', 'v4'):
             positions = empty_traversal_words(snapshot, requests, words)
+            if prefetch is not None:
+                prefetch.schedule(pool, positions, rpc)
             if positions and begin_tick_prefetch(pool, block, window=tuple(positions)):
                 try:
                     if pool['protocol'] == 'v4':

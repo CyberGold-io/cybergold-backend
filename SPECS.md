@@ -287,6 +287,21 @@ their missing members. A single missing member uses one ordinary call. Successfu
 members keep their existing read-cache identity; a failed member is not retained.
 No delay is introduced to collect a larger batch.
 
+Sandbox can optionally prefetch V3/V4 bitmap words through its private broker.
+Demanded SDK words and pools in actual compiled Helpers plans start owned,
+advisory fills; compiled plans cover those pools' protocol-bounded bitmap ranges,
+not the full pool catalog. The broker reads bulk getters at the recorded fork
+block hash and caches raw base-storage slots by provider and upstream assignment.
+Only the configured canonical V3 factory identity/layout and V4 PoolManager
+layout can populate that cache. Unsupported layouts retain ordinary reads.
+After a complete fill, up to eight workers read the slots through stock Anvil
+using the existing state-read semaphore. Native local writes and per-call
+overrides keep precedence. Search cancellation drains owned prefetch work;
+identical pending fills can share between searches. Prefetch failure never
+becomes a quote prerequisite. A dedicated broker consumer token is mapped to
+Anvil's upstream assignment; Backend receives neither Anvil's token nor its HEG
+key. With the option absent, ordinary quoting is unchanged.
+
 These amounts are proposals, including their split-path and rounding results.
 Each changed complete body returns to Helpers before selection. One root
 observation owns a finite pass over its alternatives; derived results do not
@@ -484,6 +499,16 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-14 - Optional stock-Anvil bitmap prefetch
+
+- Owner-authorized coordinated Backend/Broker/Ops change: prefetch demanded SDK
+  words and pools in compiled Helpers bodies at the exact fork hash, then warm
+  stock Anvil through ordinary storage reads. Keep local/call state precedence.
+- Own cancellation, share pending work, use the existing state-read semaphore,
+  and leave ordinary quoting available after optional failures.
+- Document the accepted layout-specific cache-write condition and dedicated
+  consumer assignment. Update the technical reference and process diagram/PDF.
 
 ### 2026-11-14 - Share structural discovery and isolate graph CPU work
 

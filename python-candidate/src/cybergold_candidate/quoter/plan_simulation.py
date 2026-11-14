@@ -217,6 +217,9 @@ class HelpersPlanSimulation:
                 core=self.core, contract=self.contract, block=block, pricing=pricing,
                 minimum=minimum, accepted_core=accepted_core, recipient=recipient)
         rpc = self.registry.get_rpc()
+        prefetch = getattr(self.registry, 'fork_bitmaps', None)
+        if prefetch is not None:
+            prefetch.schedule_body(call.plan['body'], rpc)
         response, counts = await execute_plan_call(rpc, call.params, semaphore=self.semaphore,
             now=self.now, shared=block is None and pricing)
         with stage('observation.project', kind='cpu'):

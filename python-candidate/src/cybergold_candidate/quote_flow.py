@@ -25,7 +25,7 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     discovery.owners.settle discovery.providers.settle discovery.providers.close discovery.clear
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
-    state.acquire state.clone topology.clone topology.enrich plan.compile plan.encode helpers.shared
+    state.acquire state.clone bitmap.prefetch bitmap.native-warm topology.clone topology.enrich plan.compile plan.encode helpers.shared
     helpers.permit helpers.rpc rpc.session rpc.session.acquire rpc.session.executor
     rpc.session.lock rpc.session.resume rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
