@@ -113,6 +113,14 @@ async def read_pool_state(read_function, state_view, pool_id, block):
             'lpFee': slot[3], 'liquidity': str(liquidity[0])}
 
 
+def bitmap_slots(pool_id, positions):
+    codec = Web3().codec
+    state_slot = int.from_bytes(Web3.keccak(codec.encode(
+        ['bytes32', 'uint256'], [bytes.fromhex(pool_id[2:]), 6])), 'big')
+    return [Web3.keccak(codec.encode(['int256', 'uint256'], [position, state_slot+5]))
+            for position in positions]
+
+
 async def read_tick_bitmap_words(read_function, manager, pool_id, positions, block):
     """Read the same StateLibrary bitmap slots in bounded transport batches.
 
@@ -120,12 +128,8 @@ async def read_tick_bitmap_words(read_function, manager, pool_id, positions, blo
     acquisition only: the SDK still traverses and prices every initialized tick.
     https://github.com/Uniswap/v4-core/blob/main/src/libraries/StateLibrary.sol
     """
-    codec = Web3().codec
-    state_slot = int.from_bytes(Web3.keccak(codec.encode(
-        ['bytes32', 'uint256'], [bytes.fromhex(pool_id[2:]), 6])), 'big')
     async def read_batch(batch):
-        slots = [Web3.keccak(codec.encode(['int256', 'uint256'], [position, state_slot+5]))
-                 for position in batch]
+        slots = bitmap_slots(pool_id, batch)
         values, = await read_function(manager, 'extsload(bytes32[])', ['bytes32[]'], [slots], ['bytes32[]'], block)
         return [(position, int.from_bytes(value, 'big')) for position, value in zip(batch, values, strict=True)]
     # Batches only bound calldata, not coverage: every requested word is read.

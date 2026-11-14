@@ -317,4 +317,5 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quote_experiments.
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_history.py
 python-candidate/.venv/bin/python python-candidate/tests/test_core_quote_latest.py
 python-candidate/.venv/bin/python python-candidate/tests/test_shared_reads.py
+python-candidate/.venv/bin/python python-candidate/tests/test_fork_bitmaps.py
 python-candidate/.venv/bin/python python-candidate/tests/test_market_freshness.py

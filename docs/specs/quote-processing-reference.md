@@ -513,6 +513,27 @@ for a lease therefore releases the already acquired lock. The `sdk.queue` span
 ends at lock acquisition and excludes lease restoration. SDK exchange capacity
 remains one, engine capacity remains eight, and cancellation ownership is
 unchanged. Other required-state waits retain their existing admission behavior.
+Optional Sandbox `fork_bitmaps.ForkBitmapPrefetch` starts advisory work from
+`PoolRegistry._extend_ticks` and `HelpersPlanSimulation`'s compiled body. It uses
+the existing search observation scope, shares only pending fills, and chunks
+selected bitmap ranges into 512-word upstream operations. V3 getters use
+Multicall3; V4 uses the existing PoolManager `extsload` slot derivation. Backend
+sends its dedicated consumer credential and the durable fork generation's block
+hash to the broker. The broker applies ordinary provider selection and checks
+the accepted canonical factory/PoolManager layouts before mapping getter results
+into raw base-storage slots. Cache identity includes provider, upstream header
+assignment, block hash, account and slot, including zero words. Mutable selectors
+and `requireCanonical: true` retain ordinary forwarding.
+
+After a complete chunk acknowledgement, at most eight workers issue ordinary
+native `eth_getStorageAt` calls under the existing `UniswapRpc.semaphore`. These
+warm stock Anvil's base cache without `anvil_setStorageAt`, state loading or
+value injection. Its local writes and private call overrides keep precedence.
+Neither compiled-plan execution nor ordinary SDK reads await successful
+prefetch. Unsupported layouts and supplier failures leave those paths available;
+owned tasks are cancelled/drained when their search ends. This optimizes storage
+acquisition, without changing route eligibility, amounts, fees or Helpers pricing.
+
 Independent missing pools/tick requests
 are acquired concurrently; a later bitmap continuation can depend on the
 preceding simulation result.

@@ -7,6 +7,24 @@ from web3 import Web3
 
 from .finalized_multicall import ADDRESS
 
+V3_TICK_SPACING = {100: 1, 500: 10, 3000: 60, 10000: 200}
+V3_INIT_HASH = bytes.fromhex('e34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54')
+
+
+def canonical_pool_address(factory, token0, token1, fee):
+    a, b = sorted((token0, token1), key=str.lower)
+    salt = Web3.keccak(Web3().codec.encode(['address', 'address', 'uint24'], [a, b, fee]))
+    return '0x'+Web3.keccak(b'\xff'+bytes.fromhex(factory[2:])+salt+V3_INIT_HASH)[-20:].hex()
+
+
+def bitmap_slots(positions):
+    codec = Web3().codec
+    return [Web3.keccak(codec.encode(['int16', 'uint256'], [position, 6])) for position in positions]
+
+
+def bitmap_word_positions(spacing):
+    return range((-887272 // spacing) >> 8, ((887272 // spacing) >> 8)+1)
+
 
 def empty_traversal_words(snapshot, requests, words):
     spacing = int(snapshot['tickSpacing'])

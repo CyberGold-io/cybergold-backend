@@ -55,6 +55,16 @@
     "required": false
   },
   {
+    "name": "FORK_BITMAP_PREFETCH_URL",
+    "kind": "url",
+    "required": false
+  },
+  {
+    "name": "FORK_BITMAP_PREFETCH_AUTHORIZATION",
+    "kind": "text",
+    "required": false
+  },
+  {
     "name": "FORK_FAUCET_GENERATION_FILE",
     "kind": "text",
     "required": false

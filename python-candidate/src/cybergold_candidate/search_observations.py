@@ -2,6 +2,7 @@
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+import asyncio
 
 from .shared_reads import SharedReads
 
@@ -14,6 +15,8 @@ class SearchObservations:
         self.reads = SharedReads()
         self.pool_states = {}
         self.pool_initializations = {}
+        self.bitmap_prefetches = {}
+        self.bitmap_full_pools = set()
 
     async def read(self, key, produce):
         """Share pending work and own successful decoded values for this search."""
@@ -23,6 +26,12 @@ class SearchObservations:
         return deepcopy(values[0]['value'])
 
     async def close(self):
+        for task in self.bitmap_prefetches.values():
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*self.bitmap_prefetches.values(), return_exceptions=True)
+        self.bitmap_prefetches.clear()
+        self.bitmap_full_pools.clear()
         await self.reads.close()
         self.pool_states.clear()
         self.pool_initializations.clear()
