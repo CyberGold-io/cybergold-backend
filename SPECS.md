@@ -94,8 +94,14 @@ the whole plan has an economic observation.
 Supplier batches are captured before asynchronous preparation can yield, so
 later supplier mutation cannot alter queued work. The existing two CPU workers
 prepare owned routes and exact lot/proportion identities, reusing captured
-immutable pool metadata. Results transfer in chunks of at most 64 with a
-job-owned object memo; parent registration cooperates at the same quantum.
+immutable pool metadata. Within one job, byte-identical full pool captures also
+reuse one immutable value when suppliers supplied distinct copies. The key
+retains all pool metadata, scalar types and dictionary order; it does not merge
+mutable route/hop containers, amounts or candidate multiplicity. Unavailable
+optional reuse keeps ordinary freezing and nomination errors. This pool-value
+table ends with the job; it caches neither prices nor mutable supplier objects.
+Results transfer in chunks of at most 64 with a job-owned object memo; parent
+registration cooperates at the same quantum.
 The whole batch becomes visible in one final publication, with its original
 order, duplicate nominations, origins and publication revision. If a sibling
 arrival changes the origin/identity inputs during staging, registration uses
@@ -563,6 +569,19 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Reuse exact copied pool observations during route preparation
+
+- Complete the previously authorized route-batch/immutable-observation correction
+  by sharing byte-identical pool captures within a preparation job, including
+  separate supplier copies of the same value. Retain the existing by-value
+  capture, two discovery workers and 64-item transfer memo.
+- Include full metadata, scalar types and dictionary order in the reuse key.
+  Preserve every nomination, amount, order, origin and atomic publication;
+  keep independent mutable caller exports and job-owned cancellation. A failed
+  optional key retains ordinary preparation rather than rejecting a nominee.
+- Mirror the technical reference and current-process diagrams/PDF. No provider,
+  RPC, admission, cutoff, deadline or quote-success condition changes.
 
 ### 2026-11-15 - Isolate ABI worker capacity from discovery
 

@@ -631,7 +631,14 @@ without rewriting older passes. Session close clears the prepared-list cache.
 
 Supplier batch ingestion captures private input before its first await. The
 existing two pure-CPU processes prepare routes and their exact funded/origin
-identities; captured pool metadata is immutable and reused. Internal parent-child
+identities; captured pool metadata is immutable and reused. A job also interns
+separate pool copies by their full protocol-5 capture bytes, not just execution
+identity. Matching bytes share a frozen value through the existing transfer
+memo; different metadata, scalar types or key order retain distinct values.
+Mutable row/hop containers and funded/proportion identities are not merged.
+An unavailable optional key falls back to ordinary freezing. The value table
+is discarded with that preparation job, with no mutable-object or price cache.
+Internal parent-child
 framing uses parent-generated snapshots and job-owned transfer memos, never
 network pickle input. Transfer and parent staging cooperate every 64 items.
 Staged offers remain invisible until a single final commit preserves the whole
