@@ -484,7 +484,9 @@ reader leaves the producer for its siblings; last-reader cancellation and scope
 close drain it and reap its active process. Queued cancellation leaves other
 jobs alone. The existing two-process queue also serves discovery; process reuse,
 replacement and application shutdown remain service-owned. Encoding errors
-retain their original exception type/arguments across the internal trusted pipe.
+retain their original type, arguments and domain attributes across the internal
+trusted pipe, without invoking their presentation constructor again. This
+includes the unsupported-funding currency and its ordinary error message.
 There is no fallback RPC or retained failed preparation. Synchronous consumers
 without configured CPU workers keep local compilation.
 Identical calls within the simulation scope can share a physical result.
