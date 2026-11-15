@@ -3,7 +3,8 @@ import asyncio
 import os
 import shlex
 from copy import deepcopy
-from .pool_snapshot import copy_pool_snapshot
+from .pool_snapshot import private_pool_snapshot
+from .prepared_values import freeze
 from .rpc_diagnostics import quote_sdk_request, quote_sdk_session, freeze_quote_work
 from .route_work_slots import PricingSlots, required_state_wait
 from .quote_flow import stage
@@ -42,7 +43,7 @@ class SdkWorker:
         pools = payload.get('pools')
         payload = deepcopy({key: value for key, value in payload.items() if key != 'pools'})
         if pools is not None:
-            payload['pools'] = [copy_pool_snapshot(pool) for pool in pools]
+            payload['pools'] = [private_pool_snapshot(pool) for pool in pools]
         observation = quote_sdk_session(payload)
         process = request_id = None
         terminal, coverage = False, None
@@ -118,7 +119,7 @@ class SdkWorker:
                         added_ticks = [row for row in pool['ticks'] if int(row['index']) not in ticks]
                         words.update({int(row['wordPosition']): row for row in added_words})
                         ticks.update({int(row['index']): row for row in added_ticks})
-                        original['bitmapWords'], original['ticks'] = list(words.values()), list(ticks.values())
+                        original['bitmapWords'], original['ticks'] = freeze(list(words.values())), freeze(list(ticks.values()))
                         coverage.append({'id': pool['id'], 'bitmapWords': added_words, 'ticks': added_ticks})
                     observation.call('observed', coverage)
                     continue

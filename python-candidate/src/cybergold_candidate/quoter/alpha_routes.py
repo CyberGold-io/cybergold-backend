@@ -10,6 +10,7 @@ from contextvars import copy_context
 import json
 import time
 
+from ..pool_snapshot import PrivatePoolBank
 from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import engine_work
 from ..search_observations import current_search_observations
@@ -254,7 +255,7 @@ class AlphaRoutes:
                     counts['workerQueries'] += 1
                 identity = str(self.sequence)
                 entry = {'process': process, 'queue': asyncio.Queue(), 'callbacks': set(),
-                         'canonical': {}, 'block': block, 'terminal': False,
+                         'canonical': PrivatePoolBank(), 'block': block, 'terminal': False,
                          'context': copy_context(), 'counts': counts}
                 self.requests[identity] = entry
                 fields = ('id', 'protocol', 'token0', 'token1', 'feePips', 'lpFee',

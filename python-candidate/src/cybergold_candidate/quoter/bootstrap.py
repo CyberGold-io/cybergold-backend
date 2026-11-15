@@ -6,10 +6,11 @@ No supplier quote, private pool bank, selection clock or ranking lives here.
 """
 import asyncio
 from collections.abc import Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, aclosing
 from contextvars import ContextVar
 from copy import deepcopy
 from inspect import isawaitable, iscoroutine
+import pickle
 
 from ..quote_budget import SearchStopped, current_budget
 from ..quote_flow import stage
@@ -17,11 +18,11 @@ from ..recovery_rpc import SnapshotChanged
 from ..route_observations import origin_scope
 from ..uniswap_routes import pool_identity
 from ..pool_initialization import observed_uninitialized
-from ..routing_encoding import ZERO, weighted_shares
 from .route_tools import PendingRouteTool, RouteQuery, RouteTool, async_batches, round_robin
 from .discovery import route_identity, TopologyCache, topology_scope
 from .provenance import origin_names
-from .cooperative import CHECKPOINT
+from .cooperative import CHECKPOINT, QUANTUM
+from .prepared_nomination import nomination_identity, prepare_rows
 
 
 _bootstrap = ContextVar('route_discovery_bootstrap', default=None)
@@ -80,6 +81,8 @@ class RouteBootstrap:
         self._completed_offers = {}
         self._ready_offer_snapshots = {}
         self._known_offers, self._offer_origins = {}, {}
+        self._origin_revisions = {}
+        self._cpu = cpu
         self._family_queries = {}
         self._query_revisions, self._catalog_changed_revision = {}, 0
         self._publication_sequence = 0
@@ -137,26 +140,7 @@ class RouteBootstrap:
 
     @staticmethod
     def _nomination_identity(branches, *, lots=True, shares=None):
-        # Canonical path/ppm identities, including explicit native transitions.
-        # Resolved authority and token precision can affect SDK construction;
-        # supplier prices/coverage are not authoritative observations here.
-        paths = []
-        leading = [row['hops'][0].get('kind') for row in branches if row['hops']]
-        strip = (not lots and len(leading) == len(branches) and leading
-                 and leading[0] in ('wrap', 'unwrap') and all(kind == leading[0] for kind in leading))
-        for row in branches:
-            hops = row['hops'][1:] if strip else row['hops']
-            extras = tuple(((hop['pool'].get('address') or '').lower(),
-                            (hop['pool'].get('poolManager') or '').lower(),
-                            int(hop['pool'].get('tickSpacing') or 0), (hop['pool'].get('hooks') or ZERO).lower(),
-                            tuple((hop['pool'][name]['address'].lower(), hop['pool'][name].get('chainId'),
-                                   hop['pool'][name].get('decimals'))
-                                  for name in ('token0', 'token1')))
-                           for hop in hops if 'pool' in hop)
-            paths.append((route_identity(hops), extras))
-        weights = (tuple(int(row['amountIn']) for row in branches) if lots else
-                   weighted_shares(branches) if shares is None else shares)
-        return tuple(zip(weights, paths, strict=True))
+        return nomination_identity(branches, lots=lots, shares=shares)
 
     def _remember_offer(self, key, offer):
         try:
@@ -167,7 +151,11 @@ class RouteBootstrap:
         known = self._known_offers.setdefault(key, set())
         fresh = identity not in known
         known.add(identity)
-        self._offer_origins.setdefault(key[:2], {}).setdefault(origin_key, set()).update(offer['origins'])
+        origins = self._offer_origins.setdefault(key[:2], {}).setdefault(origin_key, set())
+        before = len(origins)
+        origins.update(offer['origins'])
+        if fresh or len(origins) != before:
+            self._origin_revisions[key[:2]] = self._origin_revisions.get(key[:2], 0) + 1
         return fresh
 
     def merge_quote_origins(self, value):
@@ -583,11 +571,83 @@ class RouteBootstrap:
             if any(fresh):
                 self._query_changed(key)
 
+    async def _prepare_and_publish(self, response, entry, attempt):
+        """Prepare privately in chunks; one final commit exposes the whole batch."""
+        self.refresh_catalog()
+        attribution = deepcopy(getattr(response, 'engine_attribution', None))
+        if self._cpu is not None:
+            chunks = self._cpu.prepare(response)  # captures before its first await
+        else:
+            captured = pickle.loads(pickle.dumps(list(response), protocol=5))
+            async def local():
+                chunk = []
+                for prepared in prepare_rows(captured):
+                    chunk.append(prepared)
+                    if len(chunk) == QUANTUM:
+                        yield chunk
+                        chunk = []
+                        await asyncio.sleep(0)
+                if chunk:
+                    yield chunk
+            chunks = local()
+        prepared = []
+        async with aclosing(chunks):
+            async for chunk in chunks:
+                prepared.extend(chunk)
+                await asyncio.sleep(0)
+        query = entry['query']
+        key = query.source, query.target, query.amount
+        # A sibling can publish while preparation yields. Stage from its latest
+        # committed identities; retry only this cheap registration if it changes.
+        while True:
+            revision = self._origin_revisions.get(key[:2], 0)
+            known = self._known_offers.get(key, set()).copy()
+            known_count = len(known)
+            origins = self._offer_origins.get(key[:2], {}).copy()
+            owned_origins, offers, fresh, origins_changed = set(), [], False, False
+            for index in range(0, len(prepared), QUANTUM):
+                for row, identities in prepared[index:index+QUANTUM]:
+                    offers.append({'branches': row, 'origins': [attempt['provider']]})
+                    if identities is None:
+                        fresh = True
+                        continue
+                    identity, origin_key = identities
+                    fresh |= identity not in known
+                    known.add(identity)
+                    if origin_key not in owned_origins:
+                        origins[origin_key] = origins.get(origin_key, set()).copy()
+                        owned_origins.add(origin_key)
+                    origins_changed |= attempt['provider'] not in origins[origin_key]
+                    origins[origin_key].add(attempt['provider'])
+                await asyncio.sleep(0)
+            if revision == self._origin_revisions.get(key[:2], 0):
+                break
+        if isinstance(attribution, dict):
+            attempt['engineAttribution'] = {
+                'engine': attribution.get('engine') if attribution.get('engine') in (
+                    'uniroute', 'guidestar', 'unverified') else 'unverified',
+                'evidence': attribution.get('evidence') if attribution.get('evidence') in (
+                    'route-candidates', 'swap-steps', 'not-disclosed', 'ambiguous') else 'not-disclosed'}
+        attempt['batches'] += 1
+        attempt['candidates'] += len(offers)
+        if offers:
+            self._known_offers[key] = known
+            self._offer_origins[key[:2]] = origins
+            self._origin_revisions[key[:2]] = revision + (origins_changed or len(known) != known_count)
+            if attempt['firstCandidateMs'] is None:
+                attempt['firstCandidateMs'] = self._elapsed_ms()
+            self._publication_sequence += 1
+            entry['offers'].extend(offers)
+            entry['offer_revisions'].extend([self._publication_sequence] * len(offers))
+            self._ready_offer_snapshots.pop(key, None)
+            if fresh:
+                self._query_changed(key)
+
     async def _discover(self, feed, entry, attempt):
         try:
             with origin_scope(attempt['provider']):
                 async for response in async_batches(feed):
-                    self._publish_batch(response, entry, attempt)
+                    await self._prepare_and_publish(response, entry, attempt)
             attempt['status'] = 'completed' if attempt['candidates'] else 'empty'
         except ProviderUnavailable:
             attempt['status'] = 'unavailable'
@@ -742,6 +802,7 @@ class RouteBootstrap:
                 self._merge_origins = None
                 self._known_offers.clear()
                 self._offer_origins.clear()
+                self._origin_revisions.clear()
                 self._query_revisions.clear()
                 self._family_queries.clear()
                 self._ready_offer_snapshots.clear()

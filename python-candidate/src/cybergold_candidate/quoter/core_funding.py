@@ -6,6 +6,7 @@ its root observation's alternatives; derived quotes do not recurse here.
 """
 from copy import deepcopy
 
+from ..pool_snapshot import PrivatePoolBank
 from ..recovery_rpc import SnapshotChanged
 from ..route_work_slots import bootstrap_priority
 from ..uniswap_routes import pool_identity
@@ -44,7 +45,7 @@ async def _replay(quoter, chosen, source, target, amount, block, bank, canonical
 async def _acquisition_bank(quoter, value, block, canonical):
     """Replay the explicit operations preceding Core's residual conversions."""
     request, plan = value['request'], value['plan']
-    bank = {}
+    bank = PrivatePoolBank()
     if request['intent'] == 2:
         return bank
     source, core = request['inputs'][0]['currency'], request['outputCurrency']
@@ -68,7 +69,7 @@ async def _acquisition_bank(quoter, value, block, canonical):
 async def _sized(quoter, value, measured, residuals, block, canonical):
     request, original = value['request'], value['plan']
     source, core = request['inputs'][0]['currency'], request['outputCurrency']
-    amounts, conversions, bank = {}, {}, {}
+    amounts, conversions, bank = {}, {}, PrivatePoolBank()
     rows = {(row['branch'], row['index']): row for row in measured}
     if request['intent'] == 2:
         inputs = []
@@ -236,7 +237,7 @@ async def core_funding_alternatives(quoter, value, block, observations, *, core_
     measured = project_core_inputs(value, quoter.engine.registry.chain)
     if not measured:
         return
-    canonical = observations if observations is not None else {}
+    canonical = observations if observations is not None else PrivatePoolBank()
     seen = {proposal_identity({'inputs': value['inputs'], 'plan': value['plan']})}
     errors = []
     async def offer(proposal, phase):

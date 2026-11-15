@@ -10,6 +10,7 @@ import json
 from ..basket_preview import InvalidPreview
 from ..uniswap_routes import PoolRef, pool_identity
 from .provenance import origin_names
+from ..prepared_values import FrozenDict, FrozenList, freeze, exact_key
 
 
 def funded_route_identity(value):
@@ -31,17 +32,31 @@ def funded_route_identity(value):
 def proposal_identity(proposal):
     """One resized execution topology, independent of diagnostic enrichment."""
     from .plan_call import executable_body
-    proposal = {**proposal, 'plan': {**proposal['plan'],
-        'body': executable_body(proposal['plan']['body'])}}
+    body = proposal['plan']['body']
+    if isinstance(body, FrozenDict):
+        if 'executable-body' not in body.derived:
+            body.derived['executable-body'] = freeze(executable_body(body))
+        body = body.derived['executable-body']
+    else:
+        body = executable_body(body)
+    proposal = {**proposal, 'plan': {**proposal['plan'], 'body': body}}
     def execution(value):
+        immutable = isinstance(value, (FrozenDict, FrozenList))
+        if immutable and 'proposal-execution' in value.derived:
+            return value.derived['proposal-execution']
         if isinstance(value, dict):
-            return {key: pool_identity(item) if key == 'pool' else execution(item)
+            result = {key: pool_identity(item) if key == 'pool' else execution(item)
                     for key, item in value.items()
                     if key not in ('discoveryOrigins', 'topologyOrigin')}
-        if isinstance(value, (list, tuple)):
-            return [execution(item) for item in value]
-        return value.lower() if isinstance(value, str) and value.startswith('0x') else value
-    return json.dumps(execution(proposal), sort_keys=True, separators=(',', ':'))
+        elif isinstance(value, (list, tuple)):
+            result = [execution(item) for item in value]
+        else:
+            return value.lower() if isinstance(value, str) and value.startswith('0x') else value
+        if immutable:
+            result = freeze(result)
+            value.derived['proposal-execution'] = result
+        return result
+    return exact_key(execution(proposal))
 
 
 def _conversion(value):

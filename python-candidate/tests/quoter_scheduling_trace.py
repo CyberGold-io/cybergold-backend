@@ -97,7 +97,7 @@ class SchedulingTrace:
     def observe(self, quoter):
         trace = self
         self.slots = quoter.engine.semaphore
-        old_publish, old_run = RouteBootstrap._publish_batch, RouteBootstrap.run
+        old_publish, old_run = RouteBootstrap._prepare_and_publish, RouteBootstrap.run
         old_completed = getattr(RouteBootstrap, 'publish_completed', None)
         old_nominations, old_candidate = CyberGoldAmmAdapter.nominations, Quoter.candidate
         old_async_nominations = getattr(CyberGoldAmmAdapter, 'async_nominations', None)
@@ -107,9 +107,9 @@ class SchedulingTrace:
         old_qualified, old_stop = QuoteBudget.qualified, QuoteBudget.finish_selection
         old_lock = quoter.engine.sdk.lock
 
-        def published(session, response, entry, attempt):
+        async def published(session, response, entry, attempt):
             count = len(entry['offers'])
-            result = old_publish(session, response, entry, attempt)
+            result = await old_publish(session, response, entry, attempt)
             offers = entry['offers'][count:]
             trace.emit('source-batch', source=entry['name'], revision=session.revision,
                 sourceAsset=asset(entry['query'].source), targetAsset=asset(entry['query'].target),
@@ -274,7 +274,7 @@ class SchedulingTrace:
                 stack.enter_context(patch.object(CyberGoldAmmAdapter, 'async_nominations', async_nominations))
             if old_completed is not None:
                 stack.enter_context(patch.object(RouteBootstrap, 'publish_completed', completed))
-            for target, name, operation in ((RouteBootstrap, '_publish_batch', published),
+            for target, name, operation in ((RouteBootstrap, '_prepare_and_publish', published),
                 (RouteBootstrap, 'run', running), (CyberGoldAmmAdapter, 'nominations', nominations),
                 (quoter, 'candidate', candidate.__get__(quoter, Quoter)), (PricingSlots, 'acquire', acquire),
                 (PricingSlots, 'release', release), (QuoteBudget, 'qualified', qualified),

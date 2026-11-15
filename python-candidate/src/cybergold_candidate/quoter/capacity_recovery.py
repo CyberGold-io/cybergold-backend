@@ -6,6 +6,7 @@ complete repaired plan independently before it can become a quote.
 """
 from copy import deepcopy
 
+from ..pool_snapshot import PrivatePoolBank
 from ..market_fee import get_market_fee_rate, quoted_fee, routed_sell_budget
 from .amm import PartialPath
 from .contracts import HopTrace, capture_paths, path_nomination, path_operation
@@ -56,7 +57,7 @@ async def recover_selected(quoter, request, selected, block, observations, *, un
     exclude the original plan or any other search work.
     """
     plan = deepcopy(selected)
-    bank, canonical = {}, observations if observations is not None else {}
+    bank, canonical = PrivatePoolBank(), observations if observations is not None else PrivatePoolBank()
     source = request['inputs'][0]['currency']
     remainder_hop = _remainder_hop(plan, unsettled)
 

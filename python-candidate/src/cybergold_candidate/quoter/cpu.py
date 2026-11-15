@@ -1,7 +1,12 @@
 """Persistent pure-topology processes; the API retains RPC and mutable state."""
 import asyncio
+import base64
+from contextlib import aclosing
+import io
 import json
+import pickle
 import sys
+from ..quote_flow import stage
 
 from .cooperative import QUANTUM
 
@@ -54,6 +59,40 @@ class _Worker:
                     pass
             await process.communicate()
 
+    async def prepare(self, captured):
+        """Private parent-generated snapshot; one job owns this pipe/memo."""
+        try:
+            await self.start()
+            packet = {'operation': 'prepare', 'captured': base64.b64encode(captured).decode()}
+            self.process.stdin.write((json.dumps(packet)+'\n').encode())
+            await self.process.stdin.drain()
+            buffer = io.BytesIO()
+            decoder = pickle.Unpickler(buffer)
+            while True:
+                parts = []
+                while True:
+                    try:
+                        parts.append(await self.process.stdout.readuntil(b'\n'))
+                        break
+                    except asyncio.LimitOverrunError as error:
+                        parts.append(await self.process.stdout.readexactly(error.consumed))
+                line = b''.join(parts)
+                if not line:
+                    raise RuntimeError('CPU worker exited during batch preparation')
+                packet = json.loads(line)
+                if 'error' in packet:
+                    raise ValueError(packet['error'])
+                if packet.get('done'):
+                    return
+                buffer.seek(0)
+                buffer.truncate()
+                buffer.write(base64.b64decode(packet['prepared']))
+                buffer.seek(0)
+                yield decoder.load()
+        except BaseException:
+            await self.close()
+            raise
+
 
 class CpuWorkers:
     """Two independent jobs can run in parallel without the parent's GIL.
@@ -87,6 +126,28 @@ class CpuWorkers:
                   if key in pool} | {key: {'address': pool[key]['address']}
                                     for key in ('token0', 'token1')} for pool in pools]
         return self._paths(graph, source, target, weth, max_hops)
+
+    def prepare(self, rows):
+        # C-level capture runs before the first await. Later supplier mutation
+        # cannot change a queued job. Pickle is internal parent/child framing,
+        # never an accepted network payload or a persisted untrusted artifact.
+        with stage('discovery.capture', kind='cpu'):
+            captured = pickle.dumps(list(rows), protocol=5)
+        return self._prepare(captured)
+
+    async def _prepare(self, captured):
+        task = asyncio.current_task()
+        self.jobs.add(task)
+        worker = None
+        try:
+            worker = await self.available.get()
+            async with aclosing(worker.prepare(captured)) as chunks:
+                async for chunk in chunks:
+                    yield chunk
+        finally:
+            self.jobs.discard(task)
+            if worker is not None:
+                self.available.put_nowait(worker)
 
     async def _paths(self, *args):
         task = asyncio.current_task()

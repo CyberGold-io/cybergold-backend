@@ -602,6 +602,34 @@ ties and duplicates, copying its current origins. Each quick pass captures a
 new shallow all-query mapping to these lists; later changes replace lists
 without rewriting older passes. Session close clears the prepared-list cache.
 
+Supplier batch ingestion captures private input before its first await. The
+existing two pure-CPU processes prepare routes and their exact funded/origin
+identities; captured pool metadata is immutable and reused. Internal parent-child
+framing uses parent-generated snapshots and job-owned transfer memos, never
+network pickle input. Transfer and parent staging cooperate every 64 items.
+Staged offers remain invisible until a single final commit preserves the whole
+batch order, duplicates, provider attribution and revision sequence. An origin
+change during staging causes registration against the current committed inputs;
+cancellation closes only the owned job and exposes no partial batch.
+
+Internal `PrivatePoolBank` values own scalar dictionaries over immutable nested
+observation values. Replaying alternatives shares unchanged bitmap/tick rows.
+Equal already-prepared coverage can be reused without rebuilding its rows;
+changed coverage has a new captured value. Public snapshot/tick-fill functions,
+ordinary caller dictionary banks, deepcopy and persistence exports retain their
+independent mutable values. Immutable internal objects are never cached by an
+unversioned mutable object's identity. Latest observation acquisition and failed
+read retry behavior remain unchanged.
+
+Exact content keys traverse mutable roots each time and reuse prepared keys only
+for immutable children. They preserve canonical JSON object/array/value
+semantics, including amount, mode, direction, private scalars, coverage, context
+and required-state callback capability. SDK memo lookup and in-flight tick-fill
+sharing no longer serialize unchanged coverage for their keys. Actual SDK wire
+requests still serialize their complete required inputs. Core market-recovery
+proposals capture one selected blueprint and replace only changed containers;
+the proposal identity reuses unchanged immutable execution projections.
+
 A retained single shared read returns directly without scheduling a timer task.
 Multi-key reads carry
 completed values directly to their original positions and gather only pending
@@ -977,7 +1005,8 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Shared pool-direction rule | `quoter/pool_directions.py`, `quoter/amm_adapter.py`, `quoter/plan_simulation.py`, `quoter/quote_book.py` |
 | Core consumption and useful residual funding | `quoter/core_funding.py`, `quoter/plan_simulation.py`, `quoter/search.py` |
 | Core residual-retention alternative | `quoter/residual_retention.py`, `quoter/search.py` |
-| Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |
+| Supplier orchestration/AMM boundary | `quoter/bootstrap.py`, `quoter/prepared_nomination.py`, `quoter/cpu.py`, `quoter/cpu_worker.py`, `quoter/providers.py`, `quoter/amm_adapter.py` |
+| Immutable observations/private overlays and exact keys | `prepared_values.py`, `pool_snapshot.py`, `sdk_simulation.py`, `uniswap_state.py` |
 | Local/hosted workers and API pacing | `quoter/alpha_routes.py`, `quoter/hosted_routes.py`, `sdk_worker.py`, `uniswap_api_queue.py` |
 | Complete Helpers evaluation | `quoter/plan_call.py`, `quoter/plan_transport.py`, `quoter/plan_simulation.py` |
 | Capacity and sharing | `route_scheduler.py`, `route_work_slots.py`, `shared_reads.py`, `route_quote_engine.py` |

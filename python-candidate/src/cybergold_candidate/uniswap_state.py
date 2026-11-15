@@ -5,6 +5,7 @@ published here. Optional persistence or discovery failure does not veto quotes.
 """
 import asyncio
 from copy import deepcopy
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import json
 import os
@@ -25,7 +26,8 @@ from .quote_errors import QuoteFailure, rpc_failure
 from .recovery_rpc import RecoveryApiError, SnapshotChanged
 from .rpc_block_context import is_latest, rpc_block_parameter
 from .pool_activity import baseline, checkpoint, append_range, pool_identity
-from .pool_snapshot import copy_pool_descriptor, copy_pool_snapshot, copy_pool_state
+from .pool_snapshot import copy_pool_descriptor, copy_pool_snapshot, copy_pool_state, private_pool_snapshot
+from .prepared_values import exact_key
 from .pool_initialization import record_pool_initialization
 from .quote_flow import stage
 from .rpc_diagnostics import rpc_call
@@ -34,6 +36,7 @@ from .telemetry import rpc_exchange
 ZERO = '0x'+'00'*20
 V2_FACTORY = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'
 PAXG = dict(TOKENS)['paxg']
+_private_tick_result = ContextVar('private_tick_result', default=False)
 
 # Inclusive Mainnet deployment receipts, also inherited by the existing
 # Mainnet-backed Sandbox (31338). These are acquisition defaults, not pool
@@ -617,7 +620,19 @@ class PoolRegistry:
         return state
 
     async def extend_ticks(self, snapshot, requests, block):
-        snapshot, requests = copy_pool_snapshot(snapshot), deepcopy(requests)
+        result = await self._tick_fill(snapshot, requests, block)
+        return result if _private_tick_result.get() else copy_pool_snapshot(result)
+
+    async def private_ticks(self, snapshot, requests, block):
+        """Keep the ordinary extension hook while opting into a private overlay."""
+        token = _private_tick_result.set(True)
+        try:
+            return private_pool_snapshot(await self.extend_ticks(snapshot, requests, block))
+        finally:
+            _private_tick_result.reset(token)
+
+    async def _tick_fill(self, snapshot, requests, block):
+        snapshot, requests = private_pool_snapshot(snapshot), deepcopy(requests)
         generation = self.generation
         # Share only an identical fill that is still acquiring its coverage.
         # Completed Sandbox observations remain fresh on the next call, even
@@ -626,11 +641,11 @@ class PoolRegistry:
         normalized_requests = [{**row, **{name: identity for name in ('poolId', 'id') if name in row}}
                                for row in requests]
         key = ('tick-fill', generation, block['hash'],
-               json.dumps({**snapshot, 'id': identity}, sort_keys=True),
-               json.dumps(normalized_requests, sort_keys=True))
+               exact_key({**snapshot, 'id': identity}),
+               exact_key(normalized_requests))
         async def produce():
-            return await self._extend_ticks(snapshot, requests, block, generation)
-        result = copy_pool_snapshot(await self.pending.one(key, produce))
+            return private_pool_snapshot(await self._extend_ticks(snapshot, requests, block, generation))
+        result = private_pool_snapshot(await self.pending.one(key, produce))
         result['id'] = snapshot['id']
         return result
 

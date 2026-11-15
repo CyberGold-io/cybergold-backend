@@ -6,7 +6,7 @@ pricing methods are implementation details of a canonical forward route.
 import asyncio
 from .route_work_slots import engine_work, PricingSlots, required_state_wait
 from copy import deepcopy
-from .pool_snapshot import copy_pool_snapshot
+from .pool_snapshot import private_pool_snapshot, PrivatePoolBank, bank_snapshot
 from .pool_initialization import observed_uninitialized
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -38,7 +38,7 @@ _quote_snapshots = ContextVar('route_quote_snapshots', default=None)
 @contextmanager
 def route_snapshot_scope():
     """Reuse immutable observations across one route's SDK funding probes."""
-    snapshots = {}
+    snapshots = PrivatePoolBank()
     token = _quote_snapshots.set(snapshots)
     try:
         yield snapshots
@@ -302,7 +302,7 @@ class RouteQuoteEngine:
         if canonical is None:
             canonical = _quote_snapshots.get()
         if canonical is None:
-            canonical = {}
+            canonical = PrivatePoolBank()
         snapshots = {}
         pools = {}
         for branch in branches:
@@ -325,18 +325,18 @@ class RouteQuoteEngine:
                 if identity not in canonical:
                     previous = bank_state(canonical, pool)
                     if previous is not None:
-                        canonical[identity] = {**copy_pool_snapshot(previous), 'id': identity}
+                        canonical[identity] = bank_snapshot(canonical, {**previous, 'id': identity})
                     else:
                         # Initial observations suspend arithmetic just like
                         # later SDK tick requests. Keep their subscriptions
                         # owned, and reacquire before entering the SDK.
                         async with required_state_wait():
-                            canonical[identity] = (await reads[identity] if reads
-                                else await self.registry.snapshot(pool, block))
+                            canonical[identity] = bank_snapshot(canonical, (await reads[identity] if reads
+                                else await self.registry.snapshot(pool, block)))
                 if observed_uninitialized(self.registry, pool, block):
                     raise InvalidPreview('Observed pool is uninitialized (sqrtRatioX96=0).')
                 private = bank_state(candidate, pool)
-                snapshots[identity] = {**copy_pool_snapshot(private if private is not None else canonical[identity]), 'id': identity}
+                snapshots[identity] = {**private_pool_snapshot(private if private is not None else canonical[identity]), 'id': identity}
         finally:
             # These subscriptions are owned here; SharedReads preserves other
             # subscribers and cancels a producer only when nobody still needs it.
@@ -351,18 +351,19 @@ class RouteQuoteEngine:
                     'zeroForOne': hop['zeroForOne']} for hop in branch['hops']]} for branch in branches]}}
         async def acquire(requests):
             observations = []
-            reads = {identity: asyncio.create_task(self.registry.extend_ticks(canonical[identity], needed, block))
+            extend = getattr(self.registry, 'private_ticks', self.registry.extend_ticks)
+            reads = {identity: asyncio.create_task(extend(canonical[identity], needed, block))
                 for identity in snapshots
                 if (needed := [row for row in requests if row.get('poolId', row.get('id')) == identity])}
             try:
                 for identity, task in reads.items():
                     snapshot = snapshots[identity]
-                    observed = await task
-                    canonical[identity] = observed
+                    observed = private_pool_snapshot(await task)
+                    canonical[identity] = bank_snapshot(canonical, observed)
                     for alias, state in list(canonical.items()):
                         if alias != identity and same_observed_pool(state, observed):
-                            canonical[alias] = {**state, 'ticks': deepcopy(observed['ticks']),
-                                'bitmapWords': deepcopy(observed['bitmapWords'])}
+                            canonical[alias] = bank_snapshot(canonical, {**state, 'ticks': observed['ticks'],
+                                'bitmapWords': observed['bitmapWords']})
                     snapshots[identity] = {**snapshot, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']}
                     observations.append({'id': identity, 'ticks': observed['ticks'], 'bitmapWords': observed['bitmapWords']})
                 return observations
@@ -383,7 +384,7 @@ class RouteQuoteEngine:
                         for alias, state in list(candidate.items()):
                             if alias != post['id'] and same_observed_pool(state, snapshots[post['id']]):
                                 candidate.pop(alias)
-                        candidate[post['id']] = {**snapshots[post['id']], **post}
+                        candidate[post['id']] = bank_snapshot(candidate, {**snapshots[post['id']], **post})
                 return value
             except MissingPoolState as missing:
                 # Direct/legacy SDK clients retain their ordinary state request.
@@ -443,7 +444,7 @@ class RouteQuoteEngine:
         order = {asset.lower(): index for index, asset in enumerate(ordered_assets or [])}
         prepared.sort(key=lambda item: order.get(rows[item[0]]['target']['outputAsset' if issue else 'inputAsset'].lower(), item[0]))
         result = deepcopy(rows)
-        candidate, canonical = {}, {}
+        candidate, canonical = PrivatePoolBank(), PrivatePoolBank()
         for index, branches in prepared:
             target = rows[index]['target']
             value = await self.quote_sdk_branches(branches, mode, int(target['amount']), block,

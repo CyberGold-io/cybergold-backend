@@ -16,6 +16,7 @@ from secrets import randbits
 
 from web3 import Web3
 
+from ..pool_snapshot import PrivatePoolBank
 from ..quote_flow import flow_entry, stage
 from ..basket_preview import BasketPreviewRpc, InvalidPreview
 from .types import EconomicRequest
@@ -363,7 +364,7 @@ class Quoter:
         weights = []
         route_bootstrap = None
         direct_funding, default_funding = None, None
-        best, first_failure, observations = None, None, {}
+        best, first_failure, observations = None, None, PrivatePoolBank()
         family_best = {}
         def remember_failure(error):
             nonlocal first_failure

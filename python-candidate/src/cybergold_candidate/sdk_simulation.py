@@ -1,6 +1,6 @@
 """Share exact SDK arithmetic inside one search, including acquired coverage."""
 from copy import deepcopy
-import json
+from .prepared_values import exact_key
 
 from .route_work_slots import engine_work, required_state_wait
 from .search_observations import current_search_observations
@@ -24,7 +24,7 @@ async def simulate_sdk(engine, payload, on_state=None):
     # Callback capability changes the wire request (continueState) and whether
     # missing coverage is returned as an ordinary MissingPoolState error.
     identity = ('exact-sdk-payload', id(engine.sdk),
-                json.dumps(payload, sort_keys=True, separators=(',', ':')),
+                exact_key(payload),
                 on_state is not None)
     produced = False
 
