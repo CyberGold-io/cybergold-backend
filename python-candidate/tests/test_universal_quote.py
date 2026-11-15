@@ -49,6 +49,7 @@ class Engine:
         self.registry.snapshot=self.snapshot
         self.calls=[]
         self.semaphore=asyncio.Semaphore(8)
+        self.helpers_semaphore=asyncio.Semaphore(8)
         self.cap=None
         self.supply=10**24
     async def snapshot(self,pool,_block): return deepcopy(pool)

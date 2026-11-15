@@ -72,7 +72,7 @@ class Harness:
         async def basis(_block):
             return deepcopy(FIXTURE['assets']), deepcopy(FIXTURE['weights'])
 
-        self.q = Quoter(settings, SimpleNamespace(registry=registry, semaphore=self.slots), basis_reader=basis)
+        self.q = Quoter(settings, SimpleNamespace(registry=registry, semaphore=PricingSlots(8), helpers_semaphore=self.slots), basis_reader=basis)
 
         async def discover(*_):
             self.sessions.append(current_bootstrap())

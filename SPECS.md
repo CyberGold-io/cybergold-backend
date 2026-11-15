@@ -229,7 +229,7 @@ routes and unpriced metadata stay intact; resizing does not require a priced
 conversion template for a route that is not being replaced.
 
 The known Core-plus-residual and pure-Core sizing work uses the existing
-bootstrap priority within the shared eight engine permits. Complete funding
+bootstrap priority within the eight SDK-pricing engine permits. Complete funding
 proposals, including measured unused-input reductions, use that priority for
 their Helpers call. These scopes end before
 yielding a proposal or starting optional construction. SQL-neighbor priority
@@ -248,8 +248,16 @@ unchanged; only the lock holder's engine-permit restoration joins the existing
 priority lane, behind earlier priority waiters. That temporary scope ends before
 the exchange and does not promote the caller's later ordinary work. Cancellation
 during restoration releases the worker lock. Other required-state waits retain
-their existing admission behavior; engine capacity stays eight and SDK exchange
+their existing admission behavior; SDK-pricing capacity stays eight and SDK exchange
 capacity stays one.
+
+Complete whole-plan Helpers simulations use a separate eight-permit pool owned
+by the same route engine and shared by every Quoter using that engine. A native
+Helpers call does not occupy SDK-pricing capacity, and SDK pricing does not
+occupy Helpers capacity. Each pool retains the existing two FIFO admission lanes,
+known-work priority, task ownership and cancellation cleanup. The eight-place
+limits apply separately, rather than as one combined bound. The SDK exchange
+lock remains one; ordinary state reads retain their separate existing capacity.
 
 Route scheduling separately limits unfinished candidate evaluations, including
 parked work, to its existing `limit` (eight by default) per scheduler invocation.
@@ -508,6 +516,15 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Separate whole-plan Helpers and SDK-pricing admission
+
+- With the owner's explicit coordinated approval, give each route engine one
+  shared eight-place Helpers pool independent of its eight SDK-pricing places.
+- Bind every ordinary Quoter's complete Helpers simulator to that pool. Retain
+  existing known-work lanes, live-candidate limits and the single SDK exchange.
+- Preserve task ownership, required-state suspension/restoration, sharing and
+  cancellation. Update the technical reference and current process diagram/PDF.
 
 ### 2026-11-15 - Reuse open HTTP sessions before native cache acquisition
 

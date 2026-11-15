@@ -60,7 +60,7 @@ class CygldPartialFundingTests(unittest.IsolatedAsyncioTestCase):
             provider=SimpleNamespace(make_request=recorded_request)))
         registry = SimpleNamespace(chain=31338, core=settings.NEXT_PUBLIC_CORE_DIAMOND_ADDRESS,
                                    seed=None, get_rpc=lambda: rpc)
-        engine = SimpleNamespace(registry=registry, semaphore=asyncio.Semaphore(8),
+        engine = SimpleNamespace(registry=registry, semaphore=asyncio.Semaphore(8), helpers_semaphore=asyncio.Semaphore(8),
             quote_sdk_branches=AsyncMock(side_effect=AssertionError('A complete Helpers body needs no SDK repricing')))
         q = Quoter(settings, engine, now=lambda: case['observedAt'])
         self.addAsyncCleanup(q.close)
