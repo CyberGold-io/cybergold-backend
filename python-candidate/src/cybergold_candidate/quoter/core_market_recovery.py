@@ -10,6 +10,7 @@ from copy import deepcopy
 from .evaluate import encode_nomination
 from .reuse_routes import proposal_identity
 from ..recovery_rpc import SnapshotChanged
+from ..prepared_values import freeze
 
 
 def implicated_core_market_operations(selected, unsettled):
@@ -27,6 +28,7 @@ def implicated_core_market_operations(selected, unsettled):
 
 
 async def core_market_proposals(quoter, request, selected, block, *, unsettled):
+    selected = freeze(selected)
     for operation in implicated_core_market_operations(selected, unsettled):
         chosen = selected['conversions'][operation]
         branch, role, index = operation.split(':')
@@ -37,20 +39,29 @@ async def core_market_proposals(quoter, request, selected, block, *, unsettled):
                 source, target, 1, block, market=role == 'residual')) as candidates:
             async for candidate in candidates:
                 route, replacement = encode_nomination(source, target, candidate)
-                plan = deepcopy(selected)
-                plan['conversions'][operation] = replacement
+                plan = {**selected, 'conversions': {**selected['conversions'], operation: freeze(replacement)}}
+                plan['body'] = dict(selected['body'])
                 position = int(index)
                 if request['intent'] == 2:
-                    plan['body']['continuations'][position]['route'] = deepcopy(route)
+                    rows = list(selected['body']['continuations'])
+                    rows[position] = {**rows[position], 'route': freeze(route)}
+                    plan['body']['continuations'] = rows
                 else:
-                    data = plan['body']['branches'][int(branch)]['data']
+                    rows = list(selected['body']['branches'])
+                    rows[int(branch)] = {**rows[int(branch)], 'data': dict(rows[int(branch)]['data'])}
+                    plan['body']['branches'] = rows
+                    data = rows[int(branch)]['data']
                     if role == 'redeem':
-                        data['conversions'][position] = deepcopy(route)
+                        data['conversions'] = list(data['conversions'])
+                        data['conversions'][position] = freeze(route)
                         aliases = plan.get('assetConversions', {}).get(branch)
                         if aliases is not None:
-                            aliases[source.lower()] = deepcopy(replacement)
+                            plan['assetConversions'] = {**plan['assetConversions'],
+                                branch: {**aliases, source.lower(): freeze(replacement)}}
                     else:
-                        data['continuations'][position]['route'] = deepcopy(route)
+                        rows = list(data['continuations'])
+                        rows[position] = {**rows[position], 'route': freeze(route)}
+                        data['continuations'] = rows
                 yield {'inputs': deepcopy(request['inputs']), 'plan': plan}
 
 

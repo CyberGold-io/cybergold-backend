@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 from cybergold_candidate.uniswap_state import (PoolRegistry, canonical_observation,
     copy_pool_snapshot, merge_pool_coverage)
+from cybergold_candidate.prepared_values import exact_key
 from test_uniswap_market import A, BLOCK, POOL, TickFillRpc
 
 
@@ -76,9 +77,9 @@ class SnapshotPersistenceTests(unittest.IsolatedAsyncioTestCase):
                                 await asyncio.sleep(0)
                         key, = registry.pending.pending
                         self.assertEqual(key, ('tick-fill', registry.generation, BLOCK['hash'],
-                            json.dumps(canonical, sort_keys=True), json.dumps([
+                            exact_key(canonical), exact_key([
                                 {'poolId':canonical['id'], 'id':canonical['id'],
-                                 'wordPositions':[0], 'ticks':[0]}], sort_keys=True)))
+                                 'wordPositions':[0], 'ticks':[0]}])))
                         # Both metadata and coverage remain part of equivalence;
                         # neither may accidentally join this in-flight producer.
                         metadata, coverage = deepcopy(alias), deepcopy(alias)

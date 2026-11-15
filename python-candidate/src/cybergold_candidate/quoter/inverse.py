@@ -1,7 +1,7 @@
 """Advisory target-output pricing over the existing ordered SDK path kernel."""
 from copy import deepcopy
 
-from ..pool_snapshot import copy_pool_bank
+from ..pool_snapshot import fork_pool_bank
 from ..route_work_slots import engine_work
 from ..routing_encoding import exact_output_routes, split_runtime
 from ..sdk_simulation import simulate_sdk
@@ -38,7 +38,7 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
     selected = deepcopy(chosen)
     if not desired or source.lower() == target.lower():
         return int(desired), selected
-    preceding = copy_pool_bank(bank)
+    preceding = fork_pool_bank(bank)
     physical = [hop['pool'] for branch in selected['branches']
                 for hop in branch['hops'] if 'pool' in hop]
     if (len(selected['branches']) == 1 and physical
@@ -49,10 +49,10 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
         branches = [{**deepcopy(selected['branches'][0]), 'amountIn': str(desired)}]
         async with engine_work(quoter.engine.semaphore):
             quoted = await quoter.engine.quote_sdk_branches(branches, 'exactOut', int(desired), block,
-                candidate=copy_pool_bank(preceding), canonical=canonical)
+                candidate=fork_pool_bank(preceding), canonical=canonical)
         amount = int(quoted['amountIn'])
         selected['branches'][0]['amountIn'] = str(amount)
-        advanced = copy_pool_bank(preceding)
+        advanced = fork_pool_bank(preceding)
         await replay_conversion(quoter, selected, source, target, amount, block, advanced, canonical)
         selected.pop('_observation', None)
         selected.pop('_funding', None)
@@ -61,7 +61,7 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
         return amount, selected
     with capture_paths() as traces:
         await replay_conversion(quoter, selected, source, target, int(funded), block,
-                                copy_pool_bank(preceding), canonical)
+                                fork_pool_bank(preceding), canonical)
     targets = _amounts(int(desired), [trace.output for trace in traces])
     amounts = [await inverse_hops(quoter, trace.hops, amount)
                for trace, amount in zip(traces, targets, strict=True)]
@@ -69,7 +69,7 @@ async def inverse_conversion(quoter, chosen, source, target, funded, desired, bl
                 for branch, amount in zip(selected['branches'], amounts, strict=True)]
     amount, selected['template']['routes'] = exact_output_routes(branches)
     selected['branches'] = branches
-    advanced = copy_pool_bank(preceding)
+    advanced = fork_pool_bank(preceding)
     await replay_conversion(quoter, selected, source, target, amount, block, advanced, canonical)
     for branch, funded in zip(selected['branches'], split_runtime(amount, selected['template']['routes']), strict=True):
         branch['amountIn'] = str(funded)

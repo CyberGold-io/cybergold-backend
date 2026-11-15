@@ -2,6 +2,7 @@
 from copy import deepcopy
 from contextlib import aclosing
 
+from ..pool_snapshot import PrivatePoolBank
 from ..market_fee import get_market_fee_rate, routed_sell_budget, quoted_fee
 from ..quote_budget import current_budget
 from ..quote_errors import QuoteFailure
@@ -91,7 +92,7 @@ async def evaluate_candidate(self, request, share, order, block, assets, weights
     if selected is not None:
         plan = deepcopy(selected)
     else:
-        bank, canonical, recorded = {}, observations if observations is not None else {}, {}
+        bank, canonical, recorded = PrivatePoolBank(), observations if observations is not None else PrivatePoolBank(), {}
         directions = []
         conversion_funding = {}
         input_limit_observed = False

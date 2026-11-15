@@ -11,6 +11,8 @@ from ..route_work_slots import engine_work, required_state_wait
 from ..uniswap_routes import pool_identity
 from ..uniswap_state import same_observed_pool
 from ..pool_initialization import observed_uninitialized
+from ..pool_snapshot import private_pool_snapshot, merge_private_coverage, bank_snapshot, PrivatePoolBank
+from ..prepared_values import freeze
 from .contracts import HopTrace, new_path_trace, current_nomination
 from .bootstrap import current_bootstrap
 from .route_tools import RouteQuery
@@ -53,7 +55,8 @@ async def initial_snapshots(engine, route, block, canonical, candidate):
             try:
                 word = ((int(state['tick']) // int(state['tickSpacing']))
                         + (0 if zero_for_one else 1)) >> 8
-                state = await engine.registry.extend_ticks(state,
+                extend = getattr(engine.registry, 'private_ticks', engine.registry.extend_ticks)
+                state = await extend(state,
                     [{'poolId': state['id'], 'wordPositions': [word], 'ticks': []}], block)
             except SnapshotChanged:
                 raise
@@ -62,13 +65,6 @@ async def initial_snapshots(engine, route, block, canonical, candidate):
                 # continuation still owns exact required reads and their errors.
                 pass
         return state
-
-    def merge_coverage(target, state):
-        for field, key in (('bitmapWords', 'wordPosition'), ('ticks', 'index')):
-            if field in state:
-                rows = {int(row[key]): row for row in state[field]}
-                rows.update({int(row[key]): row for row in target.get(field, [])})
-                target[field] = deepcopy(list(rows.values()))
 
     async def acquire(pool):
         pool = pools[id(pool)]
@@ -79,13 +75,18 @@ async def initial_snapshots(engine, route, block, canonical, candidate):
             # A sibling may have filled canonical coverage while this read was
             # pending. Never replace that chosen observation with older coverage.
             if observed(pool) is None:
-                canonical[pool['id']] = {**state, 'id': pool['id']}
+                canonical[pool['id']] = bank_snapshot(canonical, {**state, 'id': pool['id']})
             for bank in (canonical, candidate):
                 for previous in bank.values():
                     if same_observed_pool(previous, pool):
                         # Immutable coverage can fill a repeated pool without
                         # replacing its advanced private price/tick/liquidity.
-                        merge_coverage(previous, state)
+                        if isinstance(bank, PrivatePoolBank):
+                            merge_private_coverage(previous, state)
+                        else:
+                            merged = private_pool_snapshot(previous)
+                            merge_private_coverage(merged, state)
+                            previous.update(bank_snapshot(bank, merged))
 
     try:
         for original, resolved in zip(physical, enriched, strict=True):
@@ -125,7 +126,8 @@ async def price_path(engine, route, amount, block, bank, canonical):
             if 'kind' in hop:
                 continue
             await acquire(hop['pool'])
-            before = deepcopy(pool_state(bank, hop['pool'])) if trace is not None else None
+            previous = pool_state(bank, hop['pool'])
+            before = private_pool_snapshot(previous) if trace is not None and previous is not None else None
             async with engine_work(engine.semaphore):
                 value = await engine.quote_sdk_branches([{'amountIn': str(current), 'hops': [hop]}],
                     'exactIn', current, block, candidate=bank, canonical=canonical)
@@ -135,13 +137,13 @@ async def price_path(engine, route, amount, block, bank, canonical):
                 # Prefer a preceding operation's actual private state when present.
                 observed = pool_state(canonical, hop['pool'])
                 if before is None:
-                    before = deepcopy(observed)
+                    before = private_pool_snapshot(observed) if observed is not None else None
                 elif observed is not None:
                     # Missing-state continuation may have filled more immutable
                     # coverage during this hop. Keep private pre-swap scalars.
                     for field in ('ticks', 'bitmapWords'):
                         if field in observed:
-                            before[field] = deepcopy(observed[field])
+                            before[field] = freeze(observed[field])
                 trace.hops.append(HopTrace(deepcopy(hop), current, debit, output, before))
             # Native transitions preserve raw units. The first physical pool
             # can retain source funding even when a wrap/unwrap precedes it.

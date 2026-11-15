@@ -12,7 +12,7 @@ from ..quote_errors import QuoteFailure, public_quote_error
 from ..recovery_rpc import SnapshotChanged
 from ..routing_encoding import weighted_routes, split_runtime
 from ..uniswap_routes import pool_identity
-from ..pool_snapshot import copy_pool_bank
+from ..pool_snapshot import fork_pool_bank
 from .bootstrap import current_bootstrap
 from .candidate_hints import normalize_steps
 from .custom_routes import CustomRoutes
@@ -266,7 +266,7 @@ class CyberGoldAmmAdapter:
                         if conflicting_pool((*directions, *_route_directions(
                                 template, None if unknown else funding))) is not None:
                             raise QuoteFailure('quote-no-route')
-                        trial = copy_pool_bank(bank)
+                        trial = fork_pool_bank(bank)
                         output, consumed, retained = 0, 0, []
                         for row, funded in zip(normalized, split_runtime(funding, routes), strict=True):
                             row['amountIn'] = str(funded)

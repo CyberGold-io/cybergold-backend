@@ -91,6 +91,18 @@ plan before detailed SDK amount pricing. Continued exploration supplies other
 paths, allocations, splits and residual handling. Each is still a proposal until
 the whole plan has an economic observation.
 
+Supplier batches are captured before asynchronous preparation can yield, so
+later supplier mutation cannot alter queued work. The existing two CPU workers
+prepare owned routes and exact lot/proportion identities, reusing captured
+immutable pool metadata. Results transfer in chunks of at most 64 with a
+job-owned object memo; parent registration cooperates at the same quantum.
+The whole batch becomes visible in one final publication, with its original
+order, duplicate nominations, origins and publication revision. If a sibling
+arrival changes the origin/identity inputs during staging, registration uses
+the latest committed inputs before publishing. Cancellation discards staged
+offers and reaps only that job's active worker. Synchronous consumers retain
+the same identity semantics locally.
+
 Ready-offer lists are prepared per query and reused while that query's stored
 offers and origins stay unchanged. A nonempty provider batch, including
 duplicates, a completed-prefix insertion or added prefix origins invalidates
@@ -277,6 +289,22 @@ take these callback credits. These counts do not bound total memory, route
 graphs, retained results or work across engines. Existing errors, cancellation
 and timeouts can still end a search before every candidate is observed; no
 deadline, call limit, fee arithmetic or ranking change is introduced.
+
+Internal pool banks own scalar overlays and share captured immutable nested
+observations, including bitmap/tick coverage. Advancing one simulation replaces
+its private scalars without copying unchanged coverage into every alternative.
+Coverage merges publish another immutable value when content changes. Public
+snapshot/tick-fill results and ordinary caller-supplied banks retain independent
+mutable exports. New acquisitions still follow their existing freshness rules,
+including Sandbox latest reads at an unchanged header.
+
+Exact SDK, tick-fill and proposal identities reuse prepared content keys for
+unchanged immutable children. Mutable roots and changed inputs are inspected
+afresh. Pool state, amount, allocation, direction, context, authority and
+callback capability retain their existing distinctions; a retained SDK hit no
+longer JSON-encodes all unchanged coverage. Real worker exchanges still encode
+their required wire payload. Core market-recovery alternatives copy only the
+changed plan containers and share their captured unchanged blueprint internally.
 
 Identical full SDK payloads share successful arithmetic within the search.
 This includes per-hop inverse calculations, with the worker and required-state
@@ -516,6 +544,21 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Prepare route arrivals and share immutable observation coverage
+
+- Owner-authorized coordinated implementation and specification update: capture
+  supplier input before queuing, prepare exact identities on the existing CPU
+  workers, transfer/consume cooperative chunks, and publish batches atomically.
+- Preserve all nominations, order, origins, economic revisions, ordinary source
+  failures and job-owned cancellation; a cancelled preparation publishes nothing.
+- Use internal private scalar overlays over immutable nested observations;
+  retain independent mutable public exports and unchanged acquisition freshness.
+- Reuse exact prepared content identities for SDK/tick fills and plan proposals;
+  retain changing-state, amount, context and continuation distinctions. Share
+  unchanged Core-recovery blueprint branches rather than copying the whole plan.
+- Update the technical reference, implementation map, diagrams 02/03 and their
+  linked process PDF. No candidate cutoff, admission rule or latency promise.
 
 ### 2026-11-15 - Separate whole-plan Helpers and SDK-pricing admission
 
