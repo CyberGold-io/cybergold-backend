@@ -18,6 +18,7 @@ from cybergold_candidate.pool_snapshot import (PrivatePoolBank, fork_pool_bank,
 from cybergold_candidate.quoter.bootstrap import RouteBootstrap
 from cybergold_candidate.quoter.cpu import CpuWorkers
 from cybergold_candidate.quoter.prepared_nomination import prepare_rows
+from cybergold_candidate.quoter import prepared_nomination
 from cybergold_candidate.quoter.route_tools import RouteTool, CandidateFeed
 from cybergold_candidate.route_work_slots import PricingSlots
 from cybergold_candidate.sdk_simulation import simulate_sdk
@@ -43,6 +44,68 @@ class EmptyTool(RouteTool):
 
 
 class PreparedValueTests(unittest.TestCase):
+    def test_equal_already_frozen_pools_are_reused_without_reconstruction(self):
+        source = rows(3)
+        for row in source:
+            row[0]['hops'][0]['pool'] = freeze(deepcopy(row[0]['hops'][0]['pool']))
+        first = source[0][0]['hops'][0]['pool']
+        prepared = list(prepare_rows(source))
+        self.assertTrue(all(row[0]['hops'][0]['pool'] is first for row, _ in prepared))
+        self.assertTrue(all(identities is not None for _, identities in prepared))
+
+    def test_unavailable_reuse_key_keeps_ordinary_nomination_preparation(self):
+        source = rows(3)
+        expected = deepcopy(source)
+        with patch.object(prepared_nomination.pickle, 'dumps', side_effect=ValueError('fixture key unavailable')):
+            prepared = list(prepare_rows(source))
+        self.assertEqual([row for row, _ in prepared], expected)
+        self.assertTrue(all(identities is not None for _, identities in prepared))
+
+    def test_separately_copied_equal_pool_values_share_immutable_preparation(self):
+        source = rows(3)
+        for index, row in enumerate(source):
+            row[0]['hops'][0]['pool'] = deepcopy(row[0]['hops'][0]['pool'])
+            row[0]['hops'][0]['pool']['ticks'] = [{'index': 1, 'liquidityNet': '7'}]
+        expected = deepcopy(source)
+        prepared = list(prepare_rows(source))
+        first = prepared[0][0][0]['hops'][0]['pool']
+        self.assertTrue(all(row[0]['hops'][0]['pool'] is first for row, _ in prepared))
+        self.assertEqual([row for row, _ in prepared], expected)
+        with self.assertRaises(TypeError):
+            first['ticks'][0]['liquidityNet'] = 'mutation'
+        left, right = deepcopy(prepared[0][0]), deepcopy(prepared[1][0])
+        left[0]['hops'][0]['pool']['ticks'][0]['liquidityNet'] = 'private'
+        self.assertEqual(right[0]['hops'][0]['pool']['ticks'][0]['liquidityNet'], '7')
+        self.assertEqual(first['ticks'][0]['liquidityNet'], '7')
+
+    def test_full_pool_values_and_scalar_types_keep_distinct_preparations(self):
+        source = rows(6)
+        for index, row in enumerate(source):
+            pool = deepcopy(row[0]['hops'][0]['pool'])
+            pool['observed'] = [True, 1, 1.0, '1', {'block': 1}, {'block': 2}][index]
+            row[0]['hops'][0]['pool'] = pool
+        prepared = list(prepare_rows(deepcopy(source)))
+        pools = [row[0]['hops'][0]['pool'] for row, _ in prepared]
+        self.assertEqual(len({id(pool) for pool in pools}), len(source))
+        self.assertEqual([type(pool['observed']) for pool in pools],
+                         [bool, int, float, str, type(freeze({})), type(freeze({}))])
+        self.assertEqual([row for row, _ in prepared], source)
+
+    def test_pool_key_order_and_malformed_nominations_keep_ordinary_values(self):
+        source = rows(3)
+        original = deepcopy(source[0][0]['hops'][0]['pool'])
+        source[0][0]['hops'][0]['pool'] = original
+        source[1][0]['hops'][0]['pool'] = dict(reversed(list(original.items())))
+        source[2][0]['hops'][0]['pool'] = {'ordinaryMalformedPool': True}
+        expected = deepcopy(source)
+        prepared = list(prepare_rows(source))
+        self.assertEqual([row for row, _ in prepared], expected)
+        left, right = (prepared[index][0][0]['hops'][0]['pool'] for index in (0, 1))
+        self.assertIsNot(left, right)
+        self.assertEqual(list(left), list(expected[0][0]['hops'][0]['pool']))
+        self.assertEqual(list(right), list(expected[1][0]['hops'][0]['pool']))
+        self.assertIsNone(prepared[2][1])
+
     def test_capture_and_exports_retain_independent_mutation(self):
         source = {'ticks': [{'index': 1, 'liquidityNet': '7'}], 'nested': {'a': [1]}}
         prepared = freeze(source)
@@ -114,6 +177,32 @@ class PreparedAsyncTests(unittest.IsolatedAsyncioTestCase):
                 result.extend(chunk)
         self.assertEqual([value for value, _ in result], expected)
         self.assertIs(result[0][0][0]['hops'][0]['pool'], result[-1][0][0]['hops'][0]['pool'])
+        self.assertEqual(workers.available.qsize(), 2)
+
+    async def test_worker_interns_copied_pool_values_across_chunks_without_sharing_exports(self):
+        workers = CpuWorkers()
+        self.addAsyncCleanup(workers.close)
+        await workers.start()
+        source = rows(130)
+        seed = source[0][0]['hops'][0]['pool']
+        seed['ticks'] = [{'index': n, 'liquidityNet': str(n+7)} for n in range(400)]
+        for row in source:
+            row[0]['hops'][0]['pool'] = deepcopy(seed)
+        expected = deepcopy(source)
+        result = []
+        stream = workers.prepare(source)
+        source[0][0]['hops'][0]['pool']['ticks'][0]['liquidityNet'] = 'later source'
+        async with aclosing(stream):
+            async for chunk in stream:
+                self.assertLessEqual(len(chunk), 64)
+                result.extend(chunk)
+        self.assertEqual([row for row, _ in result], expected)
+        first = result[0][0][0]['hops'][0]['pool']
+        self.assertTrue(all(row[0]['hops'][0]['pool'] is first for row, _ in result))
+        left, right = deepcopy(result[0][0]), deepcopy(result[-1][0])
+        left[0]['hops'][0]['pool']['ticks'][0]['liquidityNet'] = 'private export'
+        self.assertEqual(right[0]['hops'][0]['pool']['ticks'][0]['liquidityNet'], '7')
+        self.assertEqual(first['ticks'][0]['liquidityNet'], '7')
         self.assertEqual(workers.available.qsize(), 2)
 
     async def test_internal_tick_results_keep_public_hook_and_private_exports(self):
