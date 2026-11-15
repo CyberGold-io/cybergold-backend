@@ -287,6 +287,15 @@ their missing members. A single missing member uses one ordinary call. Successfu
 members keep their existing read-cache identity; a failed member is not retained.
 No delay is introduced to collect a larger batch.
 
+RPC transport reuses an already-open HTTP session for the same endpoint and
+event loop directly, without submitting a thread-pool cache-lock acquisition.
+Cache misses, an evicted entry, closed sessions/loops and explicit-session calls
+retain Web3's native cache handling under the manager-owned lock, with shielded
+lookup ownership and pending-lookup drain before disconnect. HTTP headers,
+request/cancellation behavior and deadlines remain unchanged. The inclusive
+`rpc.session` span covers both paths; four-boundary acquisition observations
+exist only when a native acquisition actually runs.
+
 Sandbox can optionally prefetch V3/V4 bitmap words through its private broker.
 Demanded SDK words and pools in actual compiled Helpers plans start owned,
 advisory fills; compiled plans cover those pools' protocol-bounded bitmap ranges,
@@ -499,6 +508,16 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Reuse open HTTP sessions before native cache acquisition
+
+- With the owner's explicit coordinated approval, return an existing open
+  same-endpoint/event-loop session without an executor task or blocking acquire.
+- Preserve native miss/replacement/explicit-session handling, cancellation-safe
+  lookup ownership, cache eviction and disconnect drain. Preserve actual HTTP
+  requests, headers, deadlines and provider selection; add no retry or result cache.
+- Keep inclusive session timing and native-acquisition-only detailed observations.
+  Update the technical reference and current process diagram/PDF together.
 
 ### 2026-11-14 - Optional stock-Anvil bitmap prefetch
 
