@@ -868,6 +868,14 @@ was observed or prepared.
   First useful validation can still be a limited stored offer. The full-frame
   milestones use the same Backend-local clock and ASGI sent boundary above;
   absence does not establish zero waiting or client receipt.
+- An already-open HTTP session for the same endpoint and event loop is returned
+  directly from the existing cache, without an executor task or lock acquisition.
+  A concurrent eviction during that read falls back to the native cache path.
+  Missing/closed sessions, closed loops and explicit-session calls use the existing
+  shielded native cache path. HTTP requests, headers, timeouts, retries and
+  disconnect drain are unchanged; no RPC response is cached by this reuse.
+  `rpc.session` remains inclusive of either path. A warm reuse does not manufacture
+  a four-boundary acquisition sample or retain another diagnostic producer.
 - Alongside the caller's inclusive `rpc.session` await, completed native
   cache-lock acquisitions retain `rpc.session.acquire`, `rpc.session.executor`, `rpc.session.lock` and
   `rpc.session.resume` queue-kind aggregates. Four readings of the owning flow's
@@ -892,11 +900,12 @@ was observed or prepared.
   time. Diagnostic producer retention can postpone
   the flow record until an already-owned shielded lookup settles, preserving
   caller elapsed and the separate owned-work tail without extending caller waits.
-  The native Web3 cache method and per-manager executor/cache remain. Each
+  The native Web3 cache method and per-manager executor/cache remain for misses,
+  replacement and explicit-session calls. Each
   cancellation-safe manager owns a native thread lock shared by its inherited
   synchronous and asynchronous cache methods; unrelated manager caches do not
-  serialize through Web3's class-level lock. Native acquire/release, shielded
-  ownership and disconnect drain remain. No additional
+  serialize through Web3's class-level lock. Native acquire/release and shielded
+  ownership apply to those native lookups; disconnect drain remains. No additional
   acquire, task, timer, retry, capacity limit, deadline or readiness gate is
   introduced. Optional observation failures preserve native results/errors;
   extra observation allocations and scheduling can affect timing, and overhead

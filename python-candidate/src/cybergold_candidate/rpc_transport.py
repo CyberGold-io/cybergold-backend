@@ -4,6 +4,7 @@ import threading
 from contextvars import ContextVar
 from aiohttp import ClientTimeout
 from web3 import AsyncHTTPProvider
+from web3._utils.caching import generate_cache_key
 from web3._utils.http_session_manager import DEFAULT_HTTP_TIMEOUT, HTTPSessionManager
 import json
 
@@ -90,14 +91,23 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
         self.session_pool = _SessionPoolObservation(self.session_pool)
         self.session_cache = _SessionCacheObservation(self.session_cache)
 
-    async def async_cache_and_return_session(self, *args, **kwargs):
+    async def async_cache_and_return_session(self, endpoint_uri, session=None, request_timeout=None):
+        if session is None:
+            key = generate_cache_key(f'{id(asyncio.get_running_loop())}:{endpoint_uri}')
+            try:
+                cached = self.session_cache.get_cache_entry(key)
+            except KeyError:
+                # Another loop can evict between the native cache's two dict reads.
+                cached = None
+            if cached is not None and not cached.closed and not cached._loop.is_closed():
+                return cached
         # Web3's async_lock awaits a blocking thread acquire. Cancelling that
         # await can leave the acquire running after its release path has exited.
         # Only session/cache work is shielded; the subsequent HTTP request is
         # still awaited directly and retains ordinary cancellation/deadlines.
         flow = current_flow()
         if flow is None:
-            operation = super().async_cache_and_return_session(*args, **kwargs)
+            operation = super().async_cache_and_return_session(endpoint_uri, session, request_timeout)
             owner = None
         else:
             owner = retain_shared_producer()
@@ -109,7 +119,8 @@ class _CancellationSafeSessionManager(HTTPSessionManager):
                         token = _session_acquisition.set(probe)
                     except Exception:
                         pass
-                    return await super(_CancellationSafeSessionManager, self).async_cache_and_return_session(*args, **kwargs)
+                    return await super(_CancellationSafeSessionManager, self).async_cache_and_return_session(
+                        endpoint_uri, session, request_timeout)
                 finally:
                     # The native cache method's finally released the lock first.
                     if probe is not None:

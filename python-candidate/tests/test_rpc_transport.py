@@ -173,6 +173,73 @@ class TransportParity(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(lookup.result().closed)
             self.assertFalse(manager._lock.locked())
 
+    async def test_warm_http_request_bypasses_held_cache_lock_and_preserves_observations(self):
+        flow = Flow('quote')
+        with flow_scope(flow):
+            await self.provider.make_request('eth_chainId', [])
+            async with self.held_session_lock() as (manager, started, _release):
+                session, = [value for _, value in manager.session_cache.items()]
+                response = await asyncio.wait_for(self.provider.make_request('eth_chainId', []), 1)
+                self.assertEqual(response['result'], '0x01')
+                self.assertTrue(manager._lock.locked())
+                self.assertFalse(started.is_set(), 'warm reads never submit a blocking acquire')
+                self.assertFalse(manager.pending)
+                self.assertIs(await manager.async_cache_and_return_session(self.provider.endpoint_uri), session)
+        self.assertEqual(len(self.requests), 2)
+        self.assertTrue(all(auth == 'Bearer local-fixture' for _, auth in self.requests))
+        stages = {row['stage']: row for row in flow.snapshot()['stages']}
+        self.assertEqual(stages['rpc.session']['completed'], 2)
+        self.assertEqual(stages['rpc.http']['completed'], 2)
+        self.assertEqual(stages['rpc.session.acquire']['completed'], 1)
+        self.assertEqual(flow.shared_producers, 0)
+
+    async def test_closed_warm_session_uses_native_replacement(self):
+        manager = self.provider._request_session_manager
+        first = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+        await first.close()
+        flow = Flow('quote')
+        with flow_scope(flow):
+            response = await self.provider.make_request('eth_chainId', [])
+        second = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+        self.assertEqual(response['result'], '0x01')
+        self.assertIsNot(first, second)
+        self.assertFalse(second.closed)
+        stages = {row['stage']: row for row in flow.snapshot()['stages']}
+        self.assertEqual(stages['rpc.session.acquire']['completed'], 1)
+
+    async def test_session_reuse_is_isolated_by_endpoint_and_event_loop(self):
+        manager = self.provider._request_session_manager
+        endpoint = self.provider.endpoint_uri
+        first = await manager.async_cache_and_return_session(endpoint)
+        other_endpoint = await manager.async_cache_and_return_session(endpoint+'other')
+        self.assertIsNot(first, other_endpoint)
+        async def another_loop():
+            value = await manager.async_cache_and_return_session(endpoint)
+            self.assertIs(value._loop, asyncio.get_running_loop())
+            self.assertIs(await manager.async_cache_and_return_session(endpoint), value)
+            return value
+        other_loop = await asyncio.to_thread(lambda: asyncio.run(another_loop()))
+        self.assertIsNot(first, other_loop)
+        self.assertIs(await manager.async_cache_and_return_session(endpoint), first)
+
+    async def test_concurrent_eviction_during_hot_lookup_falls_back_to_native_cache(self):
+        manager = self.provider._request_session_manager
+        session = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+        with patch.object(manager.session_cache, 'get_cache_entry', side_effect=[KeyError('evicted'), session]):
+            response = await self.provider.make_request('eth_chainId', [])
+        self.assertEqual(response['result'], '0x01')
+        self.assertEqual(len(self.requests), 1)
+        self.assertIs(await manager.async_cache_and_return_session(self.provider.endpoint_uri), session)
+
+    async def test_explicit_session_keeps_native_cache_handling(self):
+        manager = self.provider._request_session_manager
+        session = await manager.async_cache_and_return_session(self.provider.endpoint_uri)
+        flow = Flow('quote')
+        with flow_scope(flow):
+            self.assertIs(await manager.async_cache_and_return_session(self.provider.endpoint_uri, session), session)
+        stages = {row['stage']: row for row in flow.snapshot()['stages']}
+        self.assertEqual(stages['rpc.session.acquire']['completed'], 1)
+
     async def test_block_hash_and_canonicality_are_preserved_without_cache(self):
         params = [{'to': '0x' + '1' * 40, 'data': '0x1234'},
                   {'blockHash': '0x' + '2' * 64, 'requireCanonical': True}]
