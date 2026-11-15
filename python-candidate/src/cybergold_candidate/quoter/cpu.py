@@ -1,4 +1,4 @@
-"""Persistent pure-topology processes; the API retains RPC and mutable state."""
+"""Persistent pure-CPU processes; the API retains policy, RPC and mutable state."""
 import asyncio
 import base64
 from contextlib import aclosing
@@ -6,7 +6,7 @@ import io
 import json
 import pickle
 import sys
-from ..quote_flow import stage
+from ..quote_flow import stage, worker_stage
 
 from .cooperative import QUANTUM
 
@@ -69,17 +69,7 @@ class _Worker:
             buffer = io.BytesIO()
             decoder = pickle.Unpickler(buffer)
             while True:
-                parts = []
-                while True:
-                    try:
-                        parts.append(await self.process.stdout.readuntil(b'\n'))
-                        break
-                    except asyncio.LimitOverrunError as error:
-                        parts.append(await self.process.stdout.readexactly(error.consumed))
-                line = b''.join(parts)
-                if not line:
-                    raise RuntimeError('CPU worker exited during batch preparation')
-                packet = json.loads(line)
+                packet = await self.packet()
                 if 'error' in packet:
                     raise ValueError(packet['error'])
                 if packet.get('done'):
@@ -89,6 +79,37 @@ class _Worker:
                 buffer.write(base64.b64decode(packet['prepared']))
                 buffer.seek(0)
                 yield decoder.load()
+        except BaseException:
+            await self.close()
+            raise
+
+    async def packet(self):
+        parts = []
+        while True:
+            try:
+                parts.append(await self.process.stdout.readuntil(b'\n'))
+                break
+            except asyncio.LimitOverrunError as error:
+                parts.append(await self.process.stdout.readexactly(error.consumed))
+        return json.loads(b''.join(parts))
+
+    async def encode_plan(self, captured):
+        try:
+            await self.start()
+            packet = {'operation': 'encode-plan', 'captured': base64.b64encode(captured).decode()}
+            self.process.stdin.write((json.dumps(packet)+'\n').encode())
+            await self.process.stdin.drain()
+            packet = await self.packet()
+            if 'error' in packet:
+                raise ValueError(packet['error'])
+            failed = 'encodingError' in packet
+            worker_stage('plan.worker', packet['wallMs'], packet['threadCpuMs'], failed=failed)
+            if failed:
+                # Only the matching internal process writes this pipe. Preserve
+                # ordinary ABI exception types/arguments instead of recategorizing
+                # a malformed plan as a worker transport error.
+                raise pickle.loads(base64.b64decode(packet['encodingError']))
+            return packet['encoded']
         except BaseException:
             await self.close()
             raise
@@ -134,6 +155,23 @@ class CpuWorkers:
         with stage('discovery.capture', kind='cpu'):
             captured = pickle.dumps(list(rows), protocol=5)
         return self._prepare(captured)
+
+    def capture_plan(self, arguments, abi):
+        with stage('plan.capture', kind='cpu'):
+            return pickle.dumps((arguments, abi), protocol=5)
+
+    async def encode_plan(self, captured):
+        task = asyncio.current_task()
+        self.jobs.add(task)
+        worker = None
+        try:
+            with stage('plan.queue', kind='queue'):
+                worker = await self.available.get()
+            return await worker.encode_plan(captured)
+        finally:
+            self.jobs.discard(task)
+            if worker is not None:
+                self.available.put_nowait(worker)
 
     async def _prepare(self, captured):
         task = asyncio.current_task()

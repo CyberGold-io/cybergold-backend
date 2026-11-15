@@ -304,8 +304,10 @@ The asynchronous cooperative driver suspends on an owned Future rather than
 busy-polling private markers. Pure graph walks, including those reconstructing
 supplier-hint connectivity, run in the children. Commands contain only graph
 fields; responses contain pool indices/directions and native transitions in
-batches of at most the existing64-item quantum. No batch-fill timer, network
-call, pricing, Core logic or private simulation bank moves into those workers.
+batches of at most the existing 64-item quantum. The same two processes also
+prepare captured route batches and pure Helpers ABI parameters. No batch-fill
+timer, network call, pricing policy, Core economic decision or private simulation
+bank moves into those workers.
 The parent still binds current metadata, availability and origins and performs
 economic evaluation. Independent misses can run on both children. Synchronous
 compatibility consumers execute the same pure walk locally.
@@ -470,6 +472,21 @@ recipient, chain/deployment, contract encoder context, pricing mode and block ta
 Fee normalization runs before lookup, including the CYGLD sell fee that changes
 AMM input. No observed price or raw caller plan is retained there. A new search
 or an unscoped call compiles independently; failed preparation is not retained.
+The configured Quoter passes its existing `CpuWorkers` to Helpers simulation.
+On a miss, the parent evaluates fee policy, builds the executable body/key and
+captures arguments plus the contract ABI by value before yielding. An owned
+child constructs the same Web3 encoder and returns immutable encoded parameters.
+The parent materializes a private parameter object for each caller. No request,
+policy hook, provider, pool state or observed price is executed in the child.
+Identical concurrent misses use the existing `SharedReads` pending ownership
+inside that preparation scope, without another admission lock. One cancelled
+reader leaves the producer for its siblings; last-reader cancellation and scope
+close drain it and reap its active process. Queued cancellation leaves other
+jobs alone. The existing two-process queue also serves discovery; process reuse,
+replacement and application shutdown remain service-owned. Encoding errors
+retain their original exception type/arguments across the internal trusted pipe.
+There is no fallback RPC or retained failed preparation. Synchronous consumers
+without configured CPU workers keep local compilation.
 Identical calls within the simulation scope can share a physical result.
 Consequently a subscriber can observe zero additional physical calls while
 still receiving a Helpers-validated observation. A new unshared complete plan
@@ -842,9 +859,15 @@ was observed or prepared.
   gate or quote gate is added.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
-- `plan.compile` includes every logical preparation attempt, private copies and
-  memo lookup; `plan.encode` measures actual ABI/funding encoding on a memo miss.
-  Both use event-loop thread CPU, not whole-process or SDK child CPU.
+- With configured CPU workers, `plan.compile` is inclusive preparation wall
+  time. `plan.prepare` and `plan.capture` measure synchronous parent thread CPU;
+  `plan.queue` measures the existing worker-availability wait. `plan.encode`
+  measures a miss's queue/transfer/worker-response wall interval and samples no
+  parent CPU across its await. `plan.worker`, kind `worker-cpu`, records returned
+  job-local child wall/thread-CPU durations, including pure parameter encoding
+  and serialization. Those durations have no cross-process start/end alignment;
+  an interrupted job may return no child timing. Synchronous consumers retain
+  `plan.compile`/`plan.encode` CPU spans. Nested wall totals must not be added.
 - `sdkRoundTrips` adds optional bounded rows for SDK operation, amount mode and
   start/resume phase to the owning flow. Counters distinguish completed,
   failed/cancelled, missing legacy and invalid diagnostic frames.

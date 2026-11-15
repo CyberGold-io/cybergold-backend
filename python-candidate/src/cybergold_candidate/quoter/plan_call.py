@@ -1,6 +1,6 @@
-"""Pure preparation of a complete Helpers eth_call; no network or scheduling."""
+"""Pure call parameters and search-owned worker preparation; no network."""
 from collections import OrderedDict
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
@@ -9,6 +9,7 @@ from ..exact_input_plan import compile_plan
 from ..helpers_execution import ABI, argument
 from ..market_fee import get_market_fee_rate, routed_sell_budget
 from ..quote_flow import stage
+from ..shared_reads import SharedReads
 from ..routing_encoding import ZERO
 from .simulation_funding import funding_overrides, SIMULATION_SENDER
 
@@ -16,6 +17,7 @@ METHOD = next(row for row in ABI if row.get('name') == 'executeExactInput')
 EMPTY_PERMIT = {'value': 0, 'deadline': 0, 'v': 0, 'r': '0x'+'00'*32, 's': '0x'+'00'*32}
 MAX_PREPARATIONS = 4096  # Same completed-entry bound as search observation sharing.
 _preparations = ContextVar('plan_preparations', default=None)
+_pending_preparations = ContextVar('pending_plan_preparations', default=None)
 
 
 @contextmanager
@@ -28,6 +30,22 @@ def preparation_scope():
     finally:
         cache.clear()
         _preparations.reset(token)
+
+
+@asynccontextmanager
+async def async_preparation_scope():
+    """The existing search owns both completed encodings and pending work."""
+    pending = SharedReads()
+    with preparation_scope() as cache:
+        token = _pending_preparations.set((cache, pending))
+        try:
+            yield cache
+        finally:
+            try:
+                await pending.close()
+            finally:
+                _pending_preparations.reset(token)
+
 
 def funding_bundle(inputs):
     return {'authorizations': [{'kind': 0, 'permit': EMPTY_PERMIT} for _ in inputs],
@@ -80,8 +98,8 @@ class PreparedPlanCall:
     block_tag: object
 
 
-def compile_call(request, selected, *, chain, helpers, core, contract, block=None,
-                 pricing=True, minimum=None, accepted_core=None, recipient=None):
+def _prepare_call(request, selected, *, chain, helpers, core, contract, block=None,
+                  pricing=True, minimum=None, accepted_core=None, recipient=None):
     plan = deepcopy(selected)
     if pricing:
         neutralize_buy_fees(request, plan['body'], chain)
@@ -99,6 +117,7 @@ def compile_call(request, selected, *, chain, helpers, core, contract, block=Non
     minimum = minimum if request['intent'] != 3 else 0
     tag = {'blockHash': block['hash'], 'requireCanonical': True} if block is not None else 'latest'
     cache = _preparations.get()
+    key = None
     if cache is not None:
         # Fee policy is evaluated above before lookup. Only executable inputs
         # belong here, never conversion origins, projected amounts or pool banks.
@@ -106,15 +125,54 @@ def compile_call(request, selected, *, chain, helpers, core, contract, block=Non
                          sort_keys=True, separators=(',', ':'))
         if key in cache:
             cache.move_to_end(key)
-            params = json.loads(cache[key])
-            return PreparedPlanCall(plan, params, params[1])
-    with stage('plan.encode', kind='cpu'):
-        params = _compile_params(execution, body, minimum, tag, helpers, core, contract)
+            return plan, cache, key, None
+    return plan, cache, key, (execution, body, minimum, tag, helpers, core)
+
+
+def _retain(cache, key, encoded):
     if cache is not None:
-        cache[key] = json.dumps(params, separators=(',', ':'))
+        cache[key] = encoded
+        cache.move_to_end(key)
         while len(cache) > MAX_PREPARATIONS:
             cache.popitem(last=False)
+
+
+def _result(plan, encoded):
+    params = json.loads(encoded)
     return PreparedPlanCall(plan, params, params[1])
+
+
+def compile_call(request, selected, **options):
+    """Synchronous consumers retain their existing encoder and error path."""
+    plan, cache, key, arguments = _prepare_call(request, selected, **options)
+    if arguments is None:
+        return _result(plan, cache[key])
+    with stage('plan.encode', kind='cpu'):
+        params = _compile_params(*arguments, options['contract'])
+    if cache is not None:
+        _retain(cache, key, json.dumps(params, separators=(',', ':')))
+    return PreparedPlanCall(plan, params, params[1])
+
+
+async def compile_call_async(request, selected, *, cpu, **options):
+    # Evaluate the replaceable fee hook and capture caller-owned executable
+    # inputs before yielding. Workers receive no policy hook, RPC or price.
+    with stage('plan.prepare', kind='cpu'):
+        plan, cache, key, arguments = _prepare_call(request, selected, **options)
+    if arguments is None:
+        return _result(plan, cache[key])
+    captured = cpu.capture_plan(arguments, options['contract'].abi)
+
+    async def produce():
+        with stage('plan.encode'):
+            encoded = await cpu.encode_plan(captured)
+        _retain(cache, key, encoded)
+        return encoded
+
+    scope = _pending_preparations.get()
+    pending = scope[1] if scope is not None and scope[0] is cache else None
+    encoded = await produce() if pending is None else await pending.one(key, produce)
+    return _result(plan, encoded)
 
 
 def _compile_params(request, body, minimum, tag, helpers, core, contract):

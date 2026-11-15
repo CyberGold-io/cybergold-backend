@@ -4,6 +4,8 @@ Await stages measure inclusive wall time, never CPU. CPU stages surround only
 synchronous code and measure this thread's CPU. Concurrent stage totals overlap;
 they are not a critical path. A recorder holds aggregates rather than one row
 per SDK callback, and shared owners retain their own flow identity and clock.
+Returned worker-cpu rows describe completed job-local child durations; they do
+not align a child's timestamps to this recorder's clock.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -25,7 +27,8 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     discovery.owners.settle discovery.providers.settle discovery.providers.close discovery.clear
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
-    state.acquire state.clone bitmap.prefetch bitmap.native-warm topology.clone topology.enrich plan.compile plan.encode helpers.shared
+    state.acquire state.clone bitmap.prefetch bitmap.native-warm topology.clone topology.enrich
+    plan.compile plan.prepare plan.capture plan.queue plan.encode plan.worker helpers.shared
     helpers.permit helpers.rpc rpc.session rpc.session.acquire rpc.session.executor
     rpc.session.lock rpc.session.resume rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
@@ -288,6 +291,20 @@ class Span:
 
 def stage(name, *, kind='await'):
     return Span(current_flow(), name if name in STAGES else 'other', kind)
+
+
+def worker_stage(name, wall_ms, cpu_ms, *, failed=False):
+    """Returned job-local wall/thread CPU; no cross-process clock alignment."""
+    flow = current_flow()
+    if flow is not None:
+        def record():
+            row = flow.row(name if name in STAGES else 'other', 'worker-cpu')
+            row['started'] += 1
+            row['failed' if failed else 'completed'] += 1
+            row['summedWallMs'] += wall_ms
+            row['summedCpuMs'] += cpu_ms
+            row['maxWallMs'] = max(row['maxWallMs'], wall_ms)
+        _safe(record)
 
 
 def link_owner(owner, relation):

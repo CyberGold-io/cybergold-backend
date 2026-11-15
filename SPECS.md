@@ -383,6 +383,19 @@ recipient, pricing mode and chain/deployment/block context. Fee policy is applie
 before lookup. This reuses encoding, not a price; fresh transaction preparation
 still makes its ordinary unshared Helpers call.
 
+The configured API uses the existing two CPU workers for pure Helpers plan/ABI
+encoding on a preparation miss. Fee policy and executable-input lookup remain
+parent-owned and run before yielding; the queued job captures its arguments and
+ABI by value. The child receives no RPC, pricing callback or live pool bank.
+Identical pending encodings share the existing search-owned read mechanism;
+each caller still receives private mutable parameters and its own plan. A
+cancelled subscriber leaves needed work running; the last cancellation or scope
+close drains the job and reaps only its active worker. Failed encoding retains
+its ordinary exception type/arguments and is not cached. Worker reuse and the
+two-job capacity also serve discovery. Synchronous consumers keep their local
+encoding path. Queue/transfer wall time, parent CPU preparation and returned
+worker thread CPU are distinct diagnostics; no CPU span includes an await.
+
 Search-flow diagnostics count post-sharing Helpers provider dispatches and repeated exact
 wire/error envelopes using digests. Up to 4,096 distinct failure pairs and 16
 repeated rows are retained; omitted observations are counted explicitly. Raw
@@ -544,6 +557,21 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Isolate pure Helpers ABI preparation on owned CPU workers
+
+- With explicit owner authorization, send pure plan/ABI encoding misses to the
+  existing two persistent CPU workers, sharing their established job capacity
+  and cancellation ownership with discovery.
+- Evaluate fee policy and capture executable arguments/ABI before yielding;
+  preserve exact preparation reuse, funding, ordering, recipient/block context,
+  ordinary encoding errors and private caller plans/parameters.
+- Coalesce identical pending encodings inside the existing search scope; last
+  subscriber cancellation or owner close drains/reaps the owned job. Retain the
+  local synchronous path and fresh unshared transaction-preparation RPC.
+- Distinguish parent preparation CPU, worker queue/transport wall time and
+  returned child thread CPU. Update the reference, diagrams 02/03 and PDF.
+- No provider, pricing-permit, candidate, deadline or acceptance-rule change.
 
 ### 2026-11-15 - Prepare route arrivals and share immutable observation coverage
 

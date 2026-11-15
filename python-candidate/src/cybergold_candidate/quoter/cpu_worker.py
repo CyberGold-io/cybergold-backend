@@ -1,9 +1,10 @@
-"""Internal pipe worker: pure graph recipes only, never network or pricing."""
+"""Internal pipe worker: pure recipes and ABI parameters, never RPC or pricing."""
 import json
 import base64
 import io
 import pickle
 import sys
+import time
 
 from .cooperative import finish, QUANTUM
 from .cpu import batch_routes
@@ -27,9 +28,28 @@ def enumerate_recipes(value):
 
 def main():
     print('{"ready":true}', flush=True)
+    contract, contract_abi = None, None
     for line in sys.stdin:
         try:
             value = json.loads(line)
+            if value.get('operation') == 'encode-plan':
+                from web3 import Web3
+                from .plan_call import _compile_params
+                arguments, abi = pickle.loads(base64.b64decode(value['captured']))
+                started, cpu_started = time.perf_counter(), time.thread_time()
+                try:
+                    if contract is None or contract_abi != abi:
+                        contract = Web3().eth.contract(abi=abi)
+                        contract_abi = abi
+                    params = _compile_params(*arguments, contract)
+                except Exception as error:
+                    result = {'encodingError': base64.b64encode(pickle.dumps(error, protocol=5)).decode()}
+                else:
+                    result = {'encoded': json.dumps(params, separators=(',', ':'))}
+                result.update(wallMs=(time.perf_counter()-started)*1000,
+                              threadCpuMs=(time.thread_time()-cpu_started)*1000)
+                print(json.dumps(result, separators=(',', ':')), flush=True)
+                continue
             if value.get('operation') == 'prepare':
                 # The matching parent is the only writer of this internal pipe.
                 rows = pickle.loads(base64.b64decode(value['captured']))
