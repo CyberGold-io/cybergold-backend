@@ -52,6 +52,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_integration.py
 python-candidate/.venv/bin/python python-candidate/tests/test_plan_call_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_plan_preparation_reuse.py
+python-candidate/.venv/bin/python python-candidate/tests/test_plan_preparation_cpu.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_telemetry.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_scheduling.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_latency.py

@@ -1,6 +1,6 @@
 """Whole-plan scheduling, search-local sharing and one actual Helpers RPC.
 
-Compilation and result projection are separate synchronous modules. A sharing
+Compilation and result projection are separate modules. A sharing
 wait is not another physical call and retains the issuing owner's flow clock.
 """
 from contextlib import asynccontextmanager
@@ -10,7 +10,7 @@ import json
 from ..quote_flow import current_flow, stage
 from ..route_work_slots import engine_work
 from ..shared_reads import SharedReads
-from .plan_call import preparation_scope
+from .plan_call import async_preparation_scope
 from .plan_call_diagnostics import PlanCallCensus, observe
 
 
@@ -26,7 +26,7 @@ async def simulation_scope():
     census = PlanCallCensus(reads.max_completed) if flow is not None else None
     census_token = _census.set(census)
     try:
-        with preparation_scope():
+        async with async_preparation_scope():
             yield
     finally:
         try:

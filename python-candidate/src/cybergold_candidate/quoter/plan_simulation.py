@@ -15,7 +15,7 @@ from ..preview_errors import KnownPreviewError, preview_error
 from ..quote_errors import rpc_failure
 from ..recovery_rpc import abi_value
 from ..quote_flow import stage
-from .plan_call import METHOD, compile_call
+from .plan_call import METHOD, compile_call, compile_call_async
 from .plan_transport import execute_plan_call
 from .pool_directions import conflicting_pool, quote_directions
 
@@ -204,18 +204,24 @@ def project_sell_results(request, body, measured):
 
 
 class HelpersPlanSimulation:
-    def __init__(self, settings, registry, *, helpers, adapter, core, now, semaphore=None):
+    def __init__(self, settings, registry, *, helpers, adapter, core, now, semaphore=None, cpu=None):
         self.settings, self.registry = settings, registry
         self.helpers, self.adapter, self.core, self.now = helpers, adapter, core, now
         self.semaphore = semaphore
+        self.cpu = cpu
         self.contract = Web3().eth.contract(abi=ABI)
 
     async def __call__(self, request, selected, *, block=None, pricing=True, minimum=None,
                        accepted_core=None, recipient=None, candidate=None):
-        with stage('plan.compile', kind='cpu'):
-            call = compile_call(request, selected, chain=self.registry.chain, helpers=self.helpers,
-                core=self.core, contract=self.contract, block=block, pricing=pricing,
-                minimum=minimum, accepted_core=accepted_core, recipient=recipient)
+        options = dict(chain=self.registry.chain, helpers=self.helpers, core=self.core,
+            contract=self.contract, block=block, pricing=pricing, minimum=minimum,
+            accepted_core=accepted_core, recipient=recipient)
+        if self.cpu is None:
+            with stage('plan.compile', kind='cpu'):
+                call = compile_call(request, selected, **options)
+        else:
+            with stage('plan.compile'):
+                call = await compile_call_async(request, selected, cpu=self.cpu, **options)
         rpc = self.registry.get_rpc()
         prefetch = getattr(self.registry, 'fork_bitmaps', None)
         if prefetch is not None:
