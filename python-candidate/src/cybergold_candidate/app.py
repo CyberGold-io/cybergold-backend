@@ -1,5 +1,5 @@
 """Product API with configured providers and fixed operations."""
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
 import json
 import logging
@@ -65,9 +65,14 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
     @asynccontextmanager
     async def lifespan(_app):
         observe(loop_monitor.start)
+        cpu_workers = []
+        for name in ('discovery_cpu', 'plan_cpu'):
+            worker = getattr(universal_quotes, name, None)
+            if worker is not None and all(worker is not owned for owned in cpu_workers):
+                cpu_workers.append(worker)
         try:
-            if universal_quotes is not None and getattr(universal_quotes, 'discovery_cpu', None) is not None:
-                await universal_quotes.discovery_cpu.start()
+            for worker in cpu_workers:
+                await worker.start()
             if protocol_configuration and hasattr(protocol_configuration, 'start'):
                 await protocol_configuration.start()
             if core_quote_state:
@@ -80,8 +85,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                 pass  # Observation cannot veto ordinary application shutdown.
             if economic_quotes:
                 await economic_quotes.close()
-            if universal_quotes is not None and getattr(universal_quotes, 'discovery_cpu', None) is not None:
-                await universal_quotes.discovery_cpu.close()
+            # Every owned pool closes even if a sibling cleanup raises. Aliased
+            # pools in explicit compatibility consumers are owned only once.
+            async with AsyncExitStack() as closing:
+                for worker in cpu_workers:
+                    closing.push_async_callback(worker.close)
             if core_quote_state:
                 await core_quote_state.close()
             if faucet_service is not None:

@@ -383,8 +383,11 @@ recipient, pricing mode and chain/deployment/block context. Fee policy is applie
 before lookup. This reuses encoding, not a price; fresh transaction preparation
 still makes its ordinary unshared Helpers call.
 
-The configured API uses the existing two CPU workers for pure Helpers plan/ABI
-encoding on a preparation miss. Fee policy and executable-input lookup remain
+The configured API uses a dedicated pair of owned CPU workers for pure Helpers
+plan/ABI encoding on a preparation miss, separate from the two discovery
+workers. Both pairs use the existing worker implementation, two-job capacity
+and cancellation ownership; the API starts and closes four children in total.
+Fee policy and executable-input lookup remain
 parent-owned and run before yielding; the queued job captures its arguments and
 ABI by value. The child receives no RPC, pricing callback or live pool bank.
 Identical pending encodings share the existing search-owned read mechanism;
@@ -392,8 +395,10 @@ each caller still receives private mutable parameters and its own plan. A
 cancelled subscriber leaves needed work running; the last cancellation or scope
 close drains the job and reaps only its active worker. Failed encoding retains
 its ordinary exception type, arguments and domain attributes without rerunning
-the presentation constructor, and is not cached. Worker reuse and the
-two-job capacity also serve discovery. Synchronous consumers keep their local
+the presentation constructor, and is not cached. Discovery work cannot occupy
+the ABI pair's capacity. Explicit compatibility consumers can still share one
+provided pool; aliased pool ownership starts/closes it only once. A CPU-pool
+startup or close failure still closes the sibling pool. Synchronous consumers keep their local
 encoding path. Queue/transfer wall time, parent CPU preparation and returned
 worker thread CPU are distinct diagnostics; no CPU span includes an await.
 
@@ -558,6 +563,19 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-15 - Isolate ABI worker capacity from discovery
+
+- Within the owner-authorized ABI preparation correction, give pure encoding
+  its own two-worker instance while retaining discovery's existing two workers.
+  The API owns four child processes, with the same per-job cancellation and
+  two-job capacity in each pool; no candidate/rate/deadline predicate changes.
+- Route Helpers compilation to the dedicated pair. Start/close both at the
+  existing application lifecycle boundary; close siblings after startup or
+  shutdown failure and deduplicate explicitly aliased compatibility pools.
+- Preserve all encoded bytes, current fees, completed/pending reuse, ordinary
+  errors and fresh latest transaction preparation. Mirror the reference,
+  diagrams and PDF; worker availability and encoding wall/CPU stay distinct.
 
 ### 2026-11-15 - Isolate pure Helpers ABI preparation on owned CPU workers
 

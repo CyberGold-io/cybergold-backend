@@ -304,8 +304,9 @@ The asynchronous cooperative driver suspends on an owned Future rather than
 busy-polling private markers. Pure graph walks, including those reconstructing
 supplier-hint connectivity, run in the children. Commands contain only graph
 fields; responses contain pool indices/directions and native transitions in
-batches of at most the existing 64-item quantum. The same two processes also
-prepare captured route batches and pure Helpers ABI parameters. No batch-fill
+batches of at most the existing 64-item quantum. The same two discovery processes
+also prepare captured route batches. A separate owned two-process instance
+handles pure Helpers ABI parameters, so graph work cannot occupy ABI capacity. No batch-fill
 timer, network call, pricing policy, Core economic decision or private simulation
 bank moves into those workers.
 The parent still binds current metadata, availability and origins and performs
@@ -472,7 +473,13 @@ recipient, chain/deployment, contract encoder context, pricing mode and block ta
 Fee normalization runs before lookup, including the CYGLD sell fee that changes
 AMM input. No observed price or raw caller plan is retained there. A new search
 or an unscoped call compiles independently; failed preparation is not retained.
-The configured Quoter passes its existing `CpuWorkers` to Helpers simulation.
+The configured runtime creates separate discovery and plan `CpuWorkers`
+instances; each retains two owned jobs/processes. The Quoter passes `plan_cpu`
+to Helpers simulation. Both pairs start at application startup and close at
+shutdown, four children in total. Startup/close failure still closes the sibling
+pool; an explicit compatibility consumer supplying the same pool twice starts
+and closes it once. Supplying only a discovery pool retains that explicit
+consumer's shared-pool behavior; ordinary synchronous consumers remain local.
 On a miss, the parent evaluates fee policy, builds the executable body/key and
 captures arguments plus the contract ABI by value before yielding. An owned
 child constructs the same Web3 encoder and returns immutable encoded parameters.
@@ -482,8 +489,9 @@ Identical concurrent misses use the existing `SharedReads` pending ownership
 inside that preparation scope, without another admission lock. One cancelled
 reader leaves the producer for its siblings; last-reader cancellation and scope
 close drain it and reap its active process. Queued cancellation leaves other
-jobs alone. The existing two-process queue also serves discovery; process reuse,
-replacement and application shutdown remain service-owned. Encoding errors
+jobs alone. The plan pair has its own availability queue, separate from graph
+enumeration/route-batch preparation. Process reuse, replacement and application
+shutdown remain service-owned. Encoding errors
 retain their original type, arguments and domain attributes across the internal
 trusted pipe, without invoking their presentation constructor again. This
 includes the unsupported-funding currency and its ordinary error message.

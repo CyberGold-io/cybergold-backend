@@ -51,11 +51,18 @@ async def run(path):
             assert services['trade_quotes'].core is core
             assert services['route_search'] is core.routes
             assert core.retain_plans is True and core.qualification is True
+            quotes = services['universal_quotes']
+            assert quotes.plan_cpu is not quotes.discovery_cpu
+            assert quotes.plan_simulator.cpu is quotes.plan_cpu
             async with app.router.lifespan_context(app):
+                processes = [worker.process for pool in (quotes.discovery_cpu, quotes.plan_cpu)
+                             for worker in pool.workers]
+                assert len(processes) == 4 and all(process.returncode is None for process in processes)
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app),base_url='http://fixture') as api:
                     assert (await api.get('/api/activity/core')).json()=={'enabled':False,'events':[]}
                     assert (await api.get('/api/activity/safe')).json()=={'enabled':False,'events':[]}
                     assert (await api.get('/api/dashboard/onchain-summary')).json()['enabled'] is False
+            assert all(process.returncode is not None for process in processes)
             assert database.closed
     # Serving always selects native funding. Legacy service/script settings
     # cannot send a configured API back to the retired funding process.
