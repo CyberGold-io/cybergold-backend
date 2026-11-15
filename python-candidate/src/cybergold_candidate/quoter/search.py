@@ -93,9 +93,10 @@ def identity_template(currency):
 class Quoter:
     def __init__(self, settings, engine, *, preview=None, basis_reader=None, now=None,
                  exploration_seed=None, route_provider_factory=None, plan_simulator=None,
-                 core_state_cache=None, discovery_cpu=None):
+                 core_state_cache=None, discovery_cpu=None, plan_cpu=None):
         self.settings, self.engine = settings, engine
         self.discovery_cpu = discovery_cpu
+        self.plan_cpu = plan_cpu if plan_cpu is not None else discovery_cpu
         self.exploration_seed = exploration_seed
         self.route_provider_factory = route_provider_factory
         self.adapter = configured_address(settings, 'CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS')
@@ -109,7 +110,7 @@ class Quoter:
         from .plan_simulation import HelpersPlanSimulation
         self.plan_simulator = plan_simulator or HelpersPlanSimulation(settings, engine.registry,
             helpers=self.helpers, adapter=self.adapter, core=self.core, now=self.now,
-            semaphore=engine.helpers_semaphore if plan_simulator is None else None, cpu=discovery_cpu)
+            semaphore=engine.helpers_semaphore if plan_simulator is None else None, cpu=self.plan_cpu)
 
     async def basis(self, block):
         if self.basis_reader:

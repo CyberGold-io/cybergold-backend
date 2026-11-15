@@ -2,6 +2,7 @@
 import asyncio
 from copy import deepcopy
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from web3 import Web3
@@ -11,9 +12,10 @@ from cybergold_candidate.quote_flow import Flow, flow_scope
 from cybergold_candidate.quoter import plan_call
 from cybergold_candidate.quoter.cpu import CpuWorkers
 from cybergold_candidate.quoter.plan_transport import simulation_scope
+from cybergold_candidate.quoter.search import Quoter
 from test_quoter_plan_simulation import (
     BLOCK, CORE, HELPERS, OTHER, PAXG, USER, WETH, ZERO,
-    encoded, fixture, market, measured, route, stage,
+    encoded, fixture, market, measured, route, stage, settings,
 )
 from test_quoter_topology_reuse import pool
 
@@ -263,6 +265,74 @@ class PlanPreparationCpuTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(provider.calls), 2)
         self.assertEqual([params[1] for _, params in provider.calls], ['latest', 'latest'])
         self.assertEqual((rpc.heads, rpc.verifications), ([], []))
+
+    async def test_configured_quoter_abi_finishes_while_discovery_capacity_is_occupied(self):
+        plan_cpu = CpuWorkers()
+        self.addAsyncCleanup(plan_cpu.close)
+        await plan_cpu.start()
+        request, plan = market()
+        response = encoded(measured(100000, stages=[stage(0, WETH, CORE, 10000, 100000)]))
+        _, original, rpc, provider = fixture(response)
+        q = Quoter(settings(), original.engine, discovery_cpu=self.cpu, plan_cpu=plan_cpu)
+        self.assertIs(q.plan_simulator.cpu, plan_cpu)
+        held = [await self.cpu.available.get() for _ in range(2)]
+        try:
+            value = await asyncio.wait_for(q.plan_simulator(request, plan), 10)
+            self.assertEqual(value['quotedOutput'], '99900')
+            self.assertEqual(len(provider.calls), 1)
+            self.assertEqual(self.cpu.available.qsize(), 0)
+            self.assertEqual(plan_cpu.available.qsize(), 2)
+            self.assertTrue(all(worker.process.returncode is None for worker in held))
+            self.assertEqual((rpc.heads, rpc.verifications), ([], []))
+        finally:
+            for worker in held:
+                self.cpu.available.put_nowait(worker)
+
+
+class CpuPoolLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def exercise(self, *, alias=False, start_failure=False, close_failure=False):
+        from cybergold_candidate.app import create_app
+        events = []
+        class Pool:
+            def __init__(self, name):
+                self.name = name
+            async def start(self):
+                events.append((self.name, 'start'))
+                if start_failure and self.name == 'abi':
+                    raise RuntimeError('fixture startup failure')
+            async def close(self):
+                events.append((self.name, 'close'))
+                if close_failure and self.name == 'abi':
+                    raise ValueError('fixture close failure')
+        discovery = Pool('discovery')
+        quotes = SimpleNamespace(discovery_cpu=discovery, plan_cpu=discovery if alias else Pool('abi'))
+        app = create_app(universal_quotes=quotes)
+        try:
+            async with app.router.lifespan_context(app):
+                events.append(('app', 'ready'))
+        finally:
+            self.events = events
+        return events
+
+    async def test_distinct_pool_start_and_shutdown_ownership(self):
+        events = await self.exercise()
+        self.assertEqual(events, [('discovery', 'start'), ('abi', 'start'), ('app', 'ready'),
+                                  ('abi', 'close'), ('discovery', 'close')])
+
+    async def test_explicit_shared_pool_is_started_and_closed_once(self):
+        self.assertEqual(await self.exercise(alias=True),
+                         [('discovery', 'start'), ('app', 'ready'), ('discovery', 'close')])
+
+    async def test_startup_failure_closes_both_owned_pools(self):
+        with self.assertRaisesRegex(RuntimeError, 'fixture startup failure'):
+            await self.exercise(start_failure=True)
+        self.assertEqual(self.events, [('discovery', 'start'), ('abi', 'start'),
+                                       ('abi', 'close'), ('discovery', 'close')])
+
+    async def test_one_close_failure_still_closes_the_sibling_pool(self):
+        with self.assertRaisesRegex(ValueError, 'fixture close failure'):
+            await self.exercise(close_failure=True)
+        self.assertEqual(self.events[-2:], [('abi', 'close'), ('discovery', 'close')])
 
 
 if __name__ == '__main__':
