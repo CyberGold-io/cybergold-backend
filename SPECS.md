@@ -391,7 +391,8 @@ Identical pending encodings share the existing search-owned read mechanism;
 each caller still receives private mutable parameters and its own plan. A
 cancelled subscriber leaves needed work running; the last cancellation or scope
 close drains the job and reaps only its active worker. Failed encoding retains
-its ordinary exception type/arguments and is not cached. Worker reuse and the
+its ordinary exception type, arguments and domain attributes without rerunning
+the presentation constructor, and is not cached. Worker reuse and the
 two-job capacity also serve discovery. Synchronous consumers keep their local
 encoding path. Queue/transfer wall time, parent CPU preparation and returned
 worker thread CPU are distinct diagnostics; no CPU span includes an await.
@@ -571,6 +572,8 @@ preserves the full existing test contract.
   local synchronous path and fresh unshared transaction-preparation RPC.
 - Distinguish parent preparation CPU, worker queue/transport wall time and
   returned child thread CPU. Update the reference, diagrams 02/03 and PDF.
+- Transfer exception type/arguments/domain attributes without invoking a custom
+  presentation constructor again; retain the unsupported-funding currency/error.
 - No provider, pricing-permit, candidate, deadline or acceptance-rule change.
 
 ### 2026-11-15 - Prepare route arrivals and share immutable observation coverage

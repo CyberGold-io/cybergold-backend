@@ -108,7 +108,11 @@ class _Worker:
                 # Only the matching internal process writes this pipe. Preserve
                 # ordinary ABI exception types/arguments instead of recategorizing
                 # a malformed plan as a worker transport error.
-                raise pickle.loads(base64.b64decode(packet['encodingError']))
+                error_type, arguments, state = pickle.loads(base64.b64decode(packet['encodingError']))
+                error = error_type.__new__(error_type, *arguments)
+                error.args = arguments
+                error.__dict__.update(state)
+                raise error
             return packet['encoded']
         except BaseException:
             await self.close()

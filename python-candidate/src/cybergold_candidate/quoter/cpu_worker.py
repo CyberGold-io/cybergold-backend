@@ -43,7 +43,11 @@ def main():
                         contract_abi = abi
                     params = _compile_params(*arguments, contract)
                 except Exception as error:
-                    result = {'encodingError': base64.b64encode(pickle.dumps(error, protocol=5)).decode()}
+                    # Exception constructors can derive args from domain inputs
+                    # (e.g. a currency). Pickling the exception itself would call
+                    # that constructor with its already-formatted message.
+                    state = (type(error), error.args, error.__dict__)
+                    result = {'encodingError': base64.b64encode(pickle.dumps(state, protocol=5)).decode()}
                 else:
                     result = {'encoded': json.dumps(params, separators=(',', ':'))}
                 result.update(wallMs=(time.perf_counter()-started)*1000,

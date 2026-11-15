@@ -217,19 +217,24 @@ class PlanPreparationCpuTests(unittest.IsolatedAsyncioTestCase):
         request, plan = market()
         broken = deepcopy(plan)
         del broken['body']['branches'][0]['data']['route']['routes']
-        for candidate, options in ((plan, {'minimum': -1}), (broken, {})):
+        unsupported_request = deepcopy(request)
+        unsupported_request['inputs'][0]['currency'] = OTHER
+        for candidate_request, candidate, options in ((request, plan, {'minimum': -1}),
+                (request, broken, {}), (unsupported_request, plan, {})):
             with self.subTest(options=options):
                 try:
-                    self.sync(request, candidate, **options)
+                    self.sync(candidate_request, candidate, **options)
                 except Exception as expected:
                     expected_type, expected_args = type(expected), expected.args
+                    expected_state = expected.__dict__
                 else:
                     self.fail('Fixture must produce an ordinary ABI error')
                 async with plan_call.async_preparation_scope() as cache:
                     for _ in range(2):
                         with self.assertRaises(expected_type) as caught:
-                            await self.compile(request, candidate, **options)
+                            await self.compile(candidate_request, candidate, **options)
                         self.assertEqual(caught.exception.args, expected_args)
+                        self.assertEqual(caught.exception.__dict__, expected_state)
                     self.assertFalse(cache)
         self.assertEqual(await self.compile(request, plan), self.sync(request, plan))
 
