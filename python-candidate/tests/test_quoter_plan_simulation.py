@@ -125,7 +125,7 @@ def fixture(*responses):
                                ensure_loaded=AsyncMock())
     simulation = HelpersPlanSimulation(settings(), registry, helpers=HELPERS, adapter=ADAPTER, core=CORE,
                                        now=lambda: NOW)
-    engine = SimpleNamespace(registry=registry, semaphore=PricingSlots(8), quote_sdk_branches=AsyncMock(
+    engine = SimpleNamespace(registry=registry, semaphore=PricingSlots(8), helpers_semaphore=PricingSlots(8), quote_sdk_branches=AsyncMock(
         side_effect=AssertionError('Helpers simulation must not invoke SDK pricing')))
     q = Quoter(settings(), engine, now=lambda: NOW)
     return simulation, q, rpc, provider

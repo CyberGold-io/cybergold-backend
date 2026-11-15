@@ -44,7 +44,7 @@ class InitialTopologyConsumersTests(unittest.IsolatedAsyncioTestCase):
 
                 rpc = SimpleNamespace(w3=SimpleNamespace(codec=Web3().codec, provider=Provider()))
                 registry = SimpleNamespace(chain=31338, inventory=pools, seed=seed, get_rpc=lambda: rpc)
-                engine = SimpleNamespace(registry=registry, semaphore=PricingSlots(8))
+                engine = SimpleNamespace(registry=registry, semaphore=PricingSlots(8), helpers_semaphore=PricingSlots(8))
                 settings = SimpleNamespace(NEXT_PUBLIC_CHAIN_ID='31338', NEXT_PUBLIC_CORE_DIAMOND_ADDRESS=CORE,
                     NEXT_PUBLIC_HELPERS_DIAMOND_ADDRESS=FIXTURE['params'][0]['to'],
                     CYBERGOLD_UNISWAP_ROUTING_ADAPTER_ADDRESS=FIXTURE['adapter'])

@@ -108,7 +108,7 @@ class Quoter:
         from .plan_simulation import HelpersPlanSimulation
         self.plan_simulator = plan_simulator or HelpersPlanSimulation(settings, engine.registry,
             helpers=self.helpers, adapter=self.adapter, core=self.core, now=self.now,
-            semaphore=engine.semaphore if plan_simulator is None else None)
+            semaphore=engine.helpers_semaphore if plan_simulator is None else None)
 
     async def basis(self, block):
         if self.basis_reader:

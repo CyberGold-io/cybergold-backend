@@ -482,8 +482,12 @@ state acquisition and missing Core construction fields are separate work;
 they can still incur RPCs while other proposals are measured. The economic
 quoter does not actively call the retained amount-dependent Core-preview methods.
 
-SDK jobs and Helpers evaluation currently share eight engine work slots and
-the Python event loop. Retained-body replay, SQL-neighbor candidate calls,
+SDK pricing has eight engine work slots. Complete whole-plan Helpers evaluation
+has its own eight slots, owned by `RouteQuoteEngine` and shared by every Quoter
+using that engine. A slow native Helpers call does not hold an SDK-pricing slot;
+SDK pricing does not hold a Helpers slot. The limits apply independently rather
+than as one combined eight-place bound. Both still use the Python event loop.
+Retained-body replay, SQL-neighbor candidate calls,
 known measured Core-plus-residual and pure-Core sizing, and Helpers calls for
 complete funding proposals (including measured unused-input reductions) use
 the existing bootstrap priority lane.
@@ -511,8 +515,10 @@ before the SDK exchange, restoring the caller's original lane for later work.
 The lock's cleanup is registered before restoration; cancellation while waiting
 for a lease therefore releases the already acquired lock. The `sdk.queue` span
 ends at lock acquisition and excludes lease restoration. SDK exchange capacity
-remains one, engine capacity remains eight, and cancellation ownership is
+remains one, SDK-pricing capacity remains eight, and cancellation ownership is
 unchanged. Other required-state waits retain their existing admission behavior.
+Whole-plan Helpers calls use the same task-owned permit machinery and known-work
+lanes against their separate pool. Ordinary state-read capacity is unchanged.
 Optional Sandbox `fork_bitmaps.ForkBitmapPrefetch` starts advisory work from
 `PoolRegistry._extend_ticks` and `HelpersPlanSimulation`'s compiled body. It uses
 the existing search observation scope, shares only pending fills, and chunks

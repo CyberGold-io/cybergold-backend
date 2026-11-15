@@ -60,7 +60,7 @@ class ZeroBranchFundingTests(unittest.IsolatedAsyncioTestCase):
         rpc = SimpleNamespace(w3=SimpleNamespace(codec=Web3().codec,
             provider=SimpleNamespace(make_request=recorded_request)))
         engine = SimpleNamespace(registry=SimpleNamespace(chain=31338, seed=None, get_rpc=lambda: rpc),
-            semaphore=asyncio.Semaphore(8),
+            semaphore=asyncio.Semaphore(8), helpers_semaphore=asyncio.Semaphore(8),
             quote_sdk_branches=AsyncMock(side_effect=AssertionError('Complete wire controls need no SDK repricing')))
         q = Quoter(settings, engine, now=lambda: fixture['finishedAt'])
         self.addAsyncCleanup(q.close)

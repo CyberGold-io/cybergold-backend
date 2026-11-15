@@ -37,9 +37,9 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
                          (8, 0, 0, 0))
         self.assertFalse(work._bootstrap.get())
 
-    async def test_service_replay_follows_earlier_priority_and_precedes_queued_sdk_work(self):
+    async def test_service_replay_follows_earlier_priority_and_precedes_queued_helpers_work(self):
         quoter, rpc, provider, payload = await self.setup_preparation()
-        slots, order = quoter.engine.semaphore, []
+        slots, order = quoter.engine.helpers_semaphore, []
         for _ in range(8):
             await slots.acquire()
         held = 8
@@ -51,9 +51,9 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
             contexts.append(('scope', work._bootstrap.get()))
             scope_entered.set()
             await scope_release.wait()
-        async def sdk(index):
+        async def ordinary_helpers(index):
             async with engine_work(slots):
-                order.append('sdk-'+str(index))
+                order.append('ordinary-helpers-'+str(index))
         async def earlier_priority():
             with bootstrap_priority():
                 async with engine_work(slots):
@@ -69,7 +69,7 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
             contexts.append(('compile', work._bootstrap.get()))
             return original_compile(*args, **kwargs)
         provider.make_request = make_request
-        competitors = [asyncio.create_task(sdk(index)) for index in range(8)]
+        competitors = [asyncio.create_task(ordinary_helpers(index)) for index in range(8)]
         older = asyncio.create_task(earlier_priority())
         preparation = asyncio.create_task(TransactionPreparation(quoter, now=lambda: 1000,
             observe_scope=observe_scope).prepare(payload))
@@ -116,7 +116,7 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancellation_before_grant_removes_only_preparations_waiter(self):
         quoter, _, provider, payload = await self.setup_preparation()
-        slots = quoter.engine.semaphore
+        slots = quoter.engine.helpers_semaphore
         for _ in range(8):
             await slots.acquire()
         async def ordinary():
@@ -150,14 +150,14 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
                 contexts.append(work._bootstrap.get())
         task = asyncio.create_task(prepare())
         await provider.entered.wait()
-        self.assertEqual(quoter.engine.semaphore._value, 7)
+        self.assertEqual(quoter.engine.helpers_semaphore._value, 7)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertTrue(provider.drained.is_set())
         self.assertEqual(contexts, [False])
         self.assertEqual((len(provider.calls), rpc.heads, rpc.verifications), (1, [], []))
-        self.assert_released(quoter.engine.semaphore)
+        self.assert_released(quoter.engine.helpers_semaphore)
 
     async def test_rpc_failure_preserves_error_and_restores_capacity_and_context(self):
         quoter, _, provider, payload = await self.setup_preparation()
@@ -166,7 +166,7 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, 'fixture Helpers transport failed'):
             await TransactionPreparation(quoter).prepare(payload)
         self.assertEqual(len(provider.calls), 1)
-        self.assert_released(quoter.engine.semaphore)
+        self.assert_released(quoter.engine.helpers_semaphore)
 
     async def test_current_output_cannot_relax_captured_minimum_and_priority_does_not_leak(self):
         quoter, _, provider, payload = await self.setup_preparation()
@@ -175,7 +175,7 @@ class PreparationReplayPriorityTests(unittest.IsolatedAsyncioTestCase):
             await TransactionPreparation(quoter).prepare(payload)
         self.assertEqual(decode(provider)[-1]['plan']['minimumOutput'], 19800)
         self.assertEqual(len(provider.calls), 1)
-        self.assert_released(quoter.engine.semaphore)
+        self.assert_released(quoter.engine.helpers_semaphore)
 
 
 if __name__ == '__main__':

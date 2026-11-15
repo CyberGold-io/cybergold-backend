@@ -52,6 +52,9 @@ class RouteQuoteEngine:
         self.sdk = sdk or SdkWorker()
         self.shared = registry.pending.__class__()
         self.semaphore = PricingSlots(8)
+        # A slow native whole-plan call must not consume SDK pricing capacity.
+        # All Quoters using this engine share the existing eight-call ceiling.
+        self.helpers_semaphore = PricingSlots(8)
         self._route_optimizers = {}
         self.uniswap_api_queue = UniswapApiQueue(
             int(getattr(settings, 'CYBERGOLD_UNISWAP_API_RPS', None) or 6))

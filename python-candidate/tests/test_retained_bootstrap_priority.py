@@ -58,12 +58,12 @@ class RetainedBootstrapPriorityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_l1_original_and_budget_body_own_priority_before_sql_coalesces(self):
         request, quoter, rpc, provider, historical, selected, ordinary, order = await self.setup_quote()
-        slots = quoter.engine.semaphore
+        slots = quoter.engine.helpers_semaphore
         for _ in range(8):
             await slots.acquire()
         async def competitor(index):
             async with engine_work(slots):
-                order.append('sdk-'+str(index))
+                order.append('ordinary-helpers-'+str(index))
         competitors = [asyncio.create_task(competitor(index)) for index in range(8)]
         await until(lambda: len(slots._ordinary) == 8)
         sql_release = asyncio.Event()
@@ -114,7 +114,7 @@ class RetainedBootstrapPriorityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancelled_l1_body_owners_leave_no_waiter_or_rpc(self):
         request, quoter, rpc, provider, historical, selected, ordinary, order = await self.setup_quote()
-        slots = quoter.engine.semaphore
+        slots = quoter.engine.helpers_semaphore
         for _ in range(8):
             await slots.acquire()
         task = asyncio.create_task(quoter.quote(request, route_seeds=[historical]))
@@ -155,7 +155,7 @@ class RetainedBootstrapPriorityTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
-        self.assertEqual(quoter.engine.semaphore._value, 8)
+        self.assertEqual(quoter.engine.helpers_semaphore._value, 8)
 
 
 if __name__ == '__main__':

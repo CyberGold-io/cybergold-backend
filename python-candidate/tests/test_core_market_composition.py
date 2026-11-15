@@ -131,7 +131,7 @@ def fixture(test, *, asymmetric=False, shared=False, all_fail=False, duplicates=
         control.rpc, control.provider = Rpc(provider), provider
         quoter.engine.registry.get_rpc = lambda: control.rpc
         leaf = HelpersPlanSimulation(settings(), quoter.engine.registry, helpers=HELPERS, adapter=ADAPTER,
-            core=CORE, now=lambda: NOW, semaphore=quoter.engine.semaphore)
+            core=CORE, now=lambda: NOW, semaphore=quoter.engine.helpers_semaphore)
 
     async def simulate(request, selected, **options):
         compile_plan({**request, 'recipient': USER, 'deadline': '1'}, executable_body(selected['body']), 0)

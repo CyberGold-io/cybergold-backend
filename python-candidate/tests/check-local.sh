@@ -107,6 +107,7 @@ python-candidate/.venv/bin/python python-candidate/tests/test_pool_alias_identit
 python-candidate/.venv/bin/python python-candidate/tests/test_market_model_refresh.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_quote_context.py
 python-candidate/.venv/bin/python python-candidate/tests/test_sdk_simulation.py
+python-candidate/.venv/bin/python python-candidate/tests/test_helpers_sdk_admission.py
 python-candidate/.venv/bin/python python-candidate/tests/test_latest_uniswap_state.py
 python-candidate/.venv/bin/python python-candidate/tests/test_uniswap_getter_batch.py
 python-candidate/.venv/bin/python python-candidate/tests/test_economic_quote_store.py

@@ -580,7 +580,7 @@ class FundingWorkflowTests(unittest.IsolatedAsyncioTestCase):
         registry.get_rpc = lambda: Rpc(RecordedProvider())
         simulator = HelpersPlanSimulation(q.settings, registry, helpers=q.helpers,
             adapter=q.adapter, core=q.core, now=lambda: root['context']['observedAt'],
-            semaphore=q.engine.semaphore)
+            semaphore=q.engine.helpers_semaphore)
         async def simulate(funded, plan, **options):
             if pinned is not None:
                 options['block'] = pinned
