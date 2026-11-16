@@ -2,10 +2,13 @@
 import asyncio
 import base64
 from contextlib import aclosing
+from contextvars import Context
 import io
 import json
+import logging
 import pickle
 import sys
+import time
 from ..quote_flow import stage, worker_stage
 
 from .cooperative import QUANTUM
@@ -17,12 +20,26 @@ class _Worker:
 
     async def start(self):
         if self.process is None or self.process.returncode is not None:
-            self.process = await asyncio.create_subprocess_exec(
-                sys.executable, '-m', 'cybergold_candidate.quoter.cpu_worker',
-                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL)
-            if not await self.process.stdout.readline():
-                raise RuntimeError('Topology worker exited during startup')
+            try:
+                with stage('cpu.startup'):
+                    launch = asyncio.create_task(asyncio.create_subprocess_exec(
+                        sys.executable, '-m', 'cybergold_candidate.quoter.cpu_worker',
+                        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL))
+                    try:
+                        self.process = await asyncio.shield(launch)
+                    except BaseException:
+                        # Creation can finish after cancellation. Recover its
+                        # handle before the outer finalizer terminates/reaps it.
+                        result, = await asyncio.gather(launch, return_exceptions=True)
+                        if not isinstance(result, BaseException):
+                            self.process = result
+                        raise
+                    if not await self.process.stdout.readline():
+                        raise RuntimeError('Topology worker exited during startup')
+            except BaseException:
+                await self.close()
+                raise
 
     async def paths(self, pools, source, target, weth, max_hops):
         try:
@@ -44,8 +61,8 @@ class _Worker:
                     return result
                 await asyncio.sleep(0)
         except BaseException:
-            # This worker has one active job. Stop that computation before
-            # returning it to the pool; a later job starts a fresh process.
+            # This worker has one active job. Reap its computation before
+            # the pool can transfer ready replacement capacity into the slot.
             await self.close()
             raise
 
@@ -99,7 +116,8 @@ class _Worker:
             packet = {'operation': 'encode-plan', 'captured': base64.b64encode(captured).decode()}
             self.process.stdin.write((json.dumps(packet)+'\n').encode())
             await self.process.stdin.drain()
-            packet = await self.packet()
+            with stage('plan.worker_read'):
+                packet = await self.packet()
             if 'error' in packet:
                 raise ValueError(packet['error'])
             failed = 'encodingError' in packet
@@ -124,21 +142,121 @@ class CpuWorkers:
 
     Workers persist across requests. Each session owns its submitted tasks;
     cancellation terminates only the process executing that task, not siblings.
+    An explicitly started pool owns one ready standby and background repairs;
+    it still admits only the same two jobs. Unstarted script consumers retain
+    their ordinary lazy process startup.
     """
-    def __init__(self):
+    def __init__(self, *, name='cpu'):
         self.workers = [_Worker(), _Worker()]
         self.available = asyncio.Queue()
         for worker in self.workers:
             self.available.put_nowait(worker)
         self.jobs = set()
+        self.name = name
+        self._maintaining = False
+        self._spare = None
+        self._spare_task = None
+        self._maintenance = set()
+
+    @staticmethod
+    def _alive(worker):
+        return worker is not None and worker.process is not None and worker.process.returncode is None
+
+    def _launch(self, coroutine):
+        # Pool maintenance belongs to the API lifetime, not the query whose
+        # cancelled job freed this slot. Do not retain its flow/budget/context.
+        task = asyncio.create_task(coroutine, context=Context())
+        self._maintenance.add(task)
+        def finished(done):
+            self._maintenance.discard(done)
+            if not done.cancelled():
+                done.exception()
+        task.add_done_callback(finished)
+        return task
+
+    def _report(self, action, started, error=None):
+        try:
+            record = {'event': 'cpu_worker_maintenance', 'component': 'api',
+                      'pool': self.name, 'action': action,
+                      'wallMs': round((time.perf_counter()-started)*1000, 3)}
+            if error is not None:
+                record['errorType'] = type(error).__name__
+            logging.getLogger('cybergold.candidate').info(json.dumps(record))
+        except Exception:
+            pass
+
+    def _ensure_spare(self):
+        if self._maintaining and not self._alive(self._spare) and self._spare_task is None:
+            self._spare_task = self._launch(self._warm_spare())
+        return self._spare_task
+
+    async def _warm_spare(self):
+        started, worker = time.perf_counter(), None
+        try:
+            previous, self._spare = self._spare, None
+            if previous is not None:
+                await previous.close()
+            worker = _Worker()
+            await worker.start()
+            if self._maintaining:
+                self._spare, worker = worker, None
+                self._report('standby-ready', started)
+        except Exception as error:
+            # Optional spare failure does not reject startup or a query. A
+            # subsequent ordinary release can try warming the standby again.
+            self._report('standby-failed', started, error)
+        finally:
+            if worker is not None:
+                await worker.close()
+            self._spare_task = None
+
+    def _adopt_spare(self, worker):
+        if worker.process is None and self._alive(self._spare):
+            standby, self._spare = self._spare, None
+            worker.process, standby.process = standby.process, None
+            self._ensure_spare()
+            return True
+        return False
+
+    async def _make_ready(self, worker):
+        if not self._alive(worker):
+            await worker.close()
+            if not self._adopt_spare(worker):
+                await worker.start()
+
+    def _release(self, worker):
+        if self._maintaining and not self._alive(worker):
+            if self._adopt_spare(worker):
+                self.available.put_nowait(worker)
+            else:
+                self._launch(self._repair(worker))
+        else:
+            self.available.put_nowait(worker)
+        self._ensure_spare()
+
+    async def _repair(self, worker):
+        started = time.perf_counter()
+        try:
+            await self._make_ready(worker)
+            self._report('slot-ready', started)
+        except Exception as error:
+            await worker.close()
+            self._report('slot-failed', started, error)
+        finally:
+            if not self._maintaining:
+                await worker.close()
+            self.available.put_nowait(worker)
 
     async def start(self):
-        tasks = [asyncio.create_task(worker.start()) for worker in self.workers]
+        self._maintaining = True
+        tasks = [self._launch(worker.start()) for worker in self.workers]
+        self._ensure_spare()
         try:
             await asyncio.gather(*tasks)
         except BaseException:
             for task in tasks:
-                task.cancel()
+                if not task.done() and not task.cancelling():
+                    task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await self.close()
             raise
@@ -171,11 +289,12 @@ class CpuWorkers:
         try:
             with stage('plan.queue', kind='queue'):
                 worker = await self.available.get()
+            await self._make_ready(worker)
             return await worker.encode_plan(captured)
         finally:
             self.jobs.discard(task)
             if worker is not None:
-                self.available.put_nowait(worker)
+                self._release(worker)
 
     async def _prepare(self, captured):
         task = asyncio.current_task()
@@ -183,13 +302,14 @@ class CpuWorkers:
         worker = None
         try:
             worker = await self.available.get()
+            await self._make_ready(worker)
             async with aclosing(worker.prepare(captured)) as chunks:
                 async for chunk in chunks:
                     yield chunk
         finally:
             self.jobs.discard(task)
             if worker is not None:
-                self.available.put_nowait(worker)
+                self._release(worker)
 
     async def _paths(self, *args):
         task = asyncio.current_task()
@@ -197,18 +317,32 @@ class CpuWorkers:
         worker = None
         try:
             worker = await self.available.get()
+            await self._make_ready(worker)
             return await worker.paths(*args)
         finally:
             self.jobs.discard(task)
             if worker is not None:
-                self.available.put_nowait(worker)
+                self._release(worker)
 
     async def close(self):
+        self._maintaining = False
         jobs = tuple(self.jobs)
         for task in jobs:
-            task.cancel()
+            if not task.done() and not task.cancelling():
+                task.cancel()
         await asyncio.gather(*jobs, return_exceptions=True)
-        await asyncio.gather(*(worker.close() for worker in self.workers))
+        maintenance = tuple(self._maintenance)
+        for task in maintenance:
+            if not task.done() and not task.cancelling():
+                task.cancel()
+        await asyncio.gather(*maintenance, return_exceptions=True)
+        self._spare_task = None
+        standby, self._spare = self._spare, None
+        outcomes = await asyncio.gather(*(worker.close() for worker in self.workers),
+            *([standby.close()] if standby is not None else []), return_exceptions=True)
+        error = next((value for value in outcomes if isinstance(value, BaseException)), None)
+        if error is not None:
+            raise error
 
 
 def batch_routes(routes):

@@ -474,9 +474,12 @@ Fee normalization runs before lookup, including the CYGLD sell fee that changes
 AMM input. No observed price or raw caller plan is retained there. A new search
 or an unscoped call compiles independently; failed preparation is not retained.
 The configured runtime creates separate discovery and plan `CpuWorkers`
-instances; each retains two owned jobs/processes. The Quoter passes `plan_cpu`
+instances; each retains two execution slots. The Quoter passes `plan_cpu`
 to Helpers simulation. Both pairs start at application startup and close at
-shutdown, four children in total. Startup/close failure still closes the sibling
+shutdown. Each explicitly started pool also owns one ready standby, for six
+resident children when fully warm, while retaining two active jobs per pool.
+Only the primary pair is awaited for API startup; standby warming/failure does
+not add a request-success prerequisite. Startup/close failure still closes the sibling
 pool; an explicit compatibility consumer supplying the same pool twice starts
 and closes it once. Supplying only a discovery pool retains that explicit
 consumer's shared-pool behavior; ordinary synchronous consumers remain local.
@@ -914,11 +917,27 @@ Existing loop-lag GC spans remain process-scoped and non-exclusive.
   is added.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
+- Started CPU pools keep replacement work under API ownership. A reaped active
+  slot adopts the ready standby without waiting for its replacement startup.
+  Empty capacity after reserve exhaustion is warmed in the background; its
+  availability remains finite and ordinary failures/startup remain observable.
+  There is no automatic infinite retry loop. Maintenance tasks use an empty
+  context, inherit no query flow/budget, and finish or are cancelled/drained at
+  API close. A cancelled subprocess launch is retained through handle creation,
+  then terminated/reaped. Closing every owned child drains before propagating a
+  sibling close failure. Unstarted standalone pools retain lazy behavior.
+  `cpu_worker_maintenance` logs fixed ready/failure actions, pool name, wall time
+  and exception class only; observer failure cannot veto work.
 - With configured CPU workers, `plan.compile` is inclusive preparation wall
   time. `plan.prepare` and `plan.capture` measure synchronous parent thread CPU;
   `plan.queue` measures the existing worker-availability wait. `plan.encode`
   measures a miss's queue/transfer/worker-response wall interval and samples no
-  parent CPU across its await. `plan.worker`, kind `worker-cpu`, records returned
+  parent CPU across its await. `cpu.startup` separates request-owned spawning/
+  ready-handshake time; `plan.worker_read` separates waiting for an encoding
+  response/parent consumption. Completed spans retain first-completed start,
+  end and wall duration, independently of first-start order. These additions
+  are diagnostic, not admission or scheduling conditions.
+  `plan.worker`, kind `worker-cpu`, records returned
   job-local child wall/thread-CPU durations, including pure parameter encoding
   and serialization. Those durations have no cross-process start/end alignment;
   an interrupted job may return no child timing. Synchronous consumers retain

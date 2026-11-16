@@ -29,7 +29,7 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
     state.acquire state.clone bitmap.prefetch bitmap.native-warm topology.clone topology.enrich
-    plan.compile plan.prepare plan.capture plan.queue plan.encode plan.worker helpers.shared
+    cpu.startup plan.compile plan.prepare plan.capture plan.queue plan.encode plan.worker_read plan.worker helpers.shared
     helpers.permit helpers.rpc rpc.session rpc.session.acquire rpc.session.executor
     rpc.session.lock rpc.session.resume rpc.http observation.project publication.queue publication.reconcile
     publication.publish other'''.split())
@@ -279,6 +279,10 @@ class Span:
                 row = self.flow.row(self.name, self.kind)
                 outcome = ('cancelled' if isinstance(error, asyncio.CancelledError)
                            else 'failed' if error_type is not None else 'completed')
+                if outcome == 'completed' and not row['completed']:
+                    row.update(firstCompletedStartMs=(self.started-self.flow.started)*1000,
+                        firstCompletedEndMs=(ended-self.flow.started)*1000,
+                        firstCompletedWallMs=elapsed)
                 row[outcome] += 1
                 row['summedWallMs'] += elapsed
                 if self.cpu_started is not None:

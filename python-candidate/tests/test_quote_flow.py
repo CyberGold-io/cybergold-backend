@@ -58,6 +58,30 @@ class FlowClocks(unittest.TestCase):
         self.assertEqual(self.flow.snapshot()['elapsedMs'], 4000)
         self.assertNotIn('activePeriodMs', row)
 
+    def test_first_completed_interval_is_bound_even_when_calls_finish_out_of_order(self):
+        first, second = Span(self.flow, 'plan.queue', 'queue'), Span(self.flow, 'plan.queue', 'queue')
+        first.__enter__()
+        self.wall = 1
+        second.__enter__()
+        self.wall = 2
+        second.__exit__(None, None, None)
+        self.wall = 4
+        first.__exit__(None, None, None)
+        row = self.rows()['plan.queue']
+        self.assertEqual((row['firstCompletedStartMs'], row['firstCompletedEndMs'],
+                          row['firstCompletedWallMs']), (1000, 2000, 1000))
+        self.assertEqual(row['maxWallMs'], 4000)
+
+    def test_failed_first_call_does_not_claim_a_completed_interval(self):
+        with flow_scope(self.flow):
+            with self.assertRaises(ValueError), stage('cpu.startup'):
+                self.wall = 1
+                raise ValueError('fixture')
+            self.assertNotIn('firstCompletedWallMs', self.rows()['cpu.startup'])
+            with stage('cpu.startup'):
+                self.wall = 3
+        self.assertEqual(self.rows()['cpu.startup']['firstCompletedWallMs'], 2000)
+
     def test_stage_aggregation_is_bounded_even_with_many_callbacks(self):
         with flow_scope(self.flow):
             for index in range(1000):
