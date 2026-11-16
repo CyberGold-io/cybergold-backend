@@ -393,27 +393,15 @@ still makes its ordinary unshared Helpers call.
 
 The configured API uses a dedicated pair of owned CPU workers for pure Helpers
 plan/ABI encoding on a preparation miss, separate from the two discovery
-workers. Each explicitly started pool keeps its two-job capacity and one
-ready standby, for six resident children across both pools when fully warm.
-The standby never admits a third job. API startup still awaits only the two
-primary workers in each pool; standby warm-up runs alongside them and its
-failure does not veto startup or ordinary quoting.
+workers. Both pairs use the existing worker implementation, two-job capacity
+and cancellation ownership; the API starts and closes four children in total.
 Fee policy and executable-input lookup remain
 parent-owned and run before yielding; the queued job captures its arguments and
 ABI by value. The child receives no RPC, pricing callback or live pool bank.
 Identical pending encodings share the existing search-owned read mechanism;
 each caller still receives private mutable parameters and its own plan. A
 cancelled subscriber leaves needed work running; the last cancellation or scope
-close drains the job and reaps only its active worker. A ready standby takes
-that empty slot immediately; API-owned background work replenishes the standby.
-Without a ready standby, missing capacity is restarted in the background and
-returned when ready; failures leave ordinary startup/errors available. A burst
-can exhaust this finite reserve, so startup/queue waits remain possible.
-Maintenance tasks inherit no query flow/budget context and are drained at API
-shutdown. Cancellation during process creation retains the eventual handle
-until termination/reap, avoiding an unowned child. All owned child closes drain
-even if a sibling close fails. Unstarted script consumers keep lazy startup.
-Failed encoding retains
+close drains the job and reaps only its active worker. Failed encoding retains
 its ordinary exception type, arguments and domain attributes without rerunning
 the presentation constructor, and is not cached. Discovery work cannot occupy
 the ABI pair's capacity. Explicit compatibility consumers can still share one
@@ -421,12 +409,6 @@ provided pool; aliased pool ownership starts/closes it only once. A CPU-pool
 startup or close failure still closes the sibling pool. Synchronous consumers keep their local
 encoding path. Queue/transfer wall time, parent CPU preparation and returned
 worker thread CPU are distinct diagnostics; no CPU span includes an await.
-`cpu.startup` exposes request-owned process/ready-handshake waits;
-`plan.worker_read` exposes response/parent-read waits separately from availability
-queueing. Each span also records its first completed interval, without assuming
-that concurrent calls finish in their start order. Returned child timing remains
-job-local. Fixed `cpu_worker_maintenance` records describe background readiness
-and ordinary startup failures without payloads or query context.
 
 Search-flow diagnostics count post-sharing Helpers provider dispatches and repeated exact
 wire/error envelopes using digests. Up to 4,096 distinct failure pairs and 16
@@ -616,21 +598,17 @@ preserves the full existing test contract.
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
 
-### 2026-11-16 - Keep ready CPU replacements outside the next query
+### 2026-11-16 - Revert ready CPU replacements
 
-- Preserve two active jobs per discovery/ABI pool and add one ready standby to
-  each explicitly started pool. Cancellation still reaps the owned job, then
-  transfers ready standby capacity while the API replenishes it independently.
-  Fully warm API ownership is six children, with no third job in either pool.
-- Keep standby startup optional for API readiness and quote success. Repair
-  exhausted capacity in the background, preserve ordinary failures/lazy script
-  consumers, and drain replacement creation and every owned child at shutdown.
-- Prevent query context retention by API maintenance. Separate process startup,
-  availability and worker-response waits; record the first completed span
-  interval and retain independent child timing. Mirror the reference and process
-  diagrams/PDF with cancellation, burst, context and shutdown regressions.
-- No provider, RPC rate, candidate cutoff, funding/encoding semantics or deadline
-  changes. Local warm-replacement measurements are component controls only.
+- At the owner's request, revert the ready-worker change from PR #128 and
+  restore the GC/registration release's two discovery and two ABI workers.
+  Cancelled/failed children are reaped; later jobs retain ordinary lazy repair.
+  Remove the additional standbys, API-owned replenishment and their diagnostics.
+- Preserve query-completion GC maintenance, lossless atomic registration,
+  prepared state/ABI reuse, cancellation ownership and existing execution limits.
+- Restore the matching process reference, diagram and PDF. The Sandbox profile
+  comparison did not demonstrate a general median latency improvement; the
+  separate warm-validation observation does not establish a profile-wide gain.
 
 ### 2026-11-16 - Merge registrations once and clean after completed queries
 

@@ -145,7 +145,7 @@ def create_configured_app(settings=None, database=None, client=None):
     from .quoter.cpu import CpuWorkers
     universal_quotes = UniversalQuotes(settings, market_quotes,
         route_provider_factory=lambda: route_providers(settings, market_quotes),
-        discovery_cpu=CpuWorkers(name='discovery'), plan_cpu=CpuWorkers(name='abi'))
+        discovery_cpu=CpuWorkers(), plan_cpu=CpuWorkers())
     core_quote_state = universal_quotes.core_state_cache
     async def quote_generation_observed(generation):
         for observer in (history.observe_generation, market_quotes.observe_generation,
