@@ -49,6 +49,8 @@ node --import tsx python-candidate/tests/node-indexer-event-codec-reference.ts >
 node --import tsx python-candidate/tests/node-worker-engine-reference.ts > "$candidate_reference_dir/worker-engine.json"
 export PYTHONPATH=python-candidate/src
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow.py
+python-candidate/.venv/bin/python python-candidate/tests/test_gc_maintenance.py
+python-candidate/.venv/bin/python python-candidate/tests/test_registration_merge.py
 python-candidate/.venv/bin/python python-candidate/tests/test_quote_flow_integration.py
 python-candidate/.venv/bin/python python-candidate/tests/test_plan_call_diagnostics.py
 python-candidate/.venv/bin/python python-candidate/tests/test_plan_preparation_reuse.py

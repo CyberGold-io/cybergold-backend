@@ -29,8 +29,11 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
                wallet_balances=None,helpers_router_facts=None,governance_safe_principal=None,token_preview=None,uniswap_quote=None,core_permit=None,permit2_context=None,core_recovery_assets=None,transaction_fees=None,transaction_nonce=None,transaction_receipt=None,safe_transaction=None,governance_roles=None,governance_authority=None,recovery_redemption=None,permit2_approval_gas=None,safe_execution=None,helpers_execution=None,receipt_wait=None,recovery_share_precision=None,governance_target_code=None,native_balance=None,ens_records=None,transaction_revert=None,route_search=None,quote_intent=None,token_balance=None,token_observations=None,token_approval_gas=None,market_quotes=None,uniswap_registry=None,trade_quotes=None,universal_quotes=None,economic_quotes=None,transaction_preparation=None,core_quote_state=None):
     from .telemetry import Metrics, TelemetryMiddleware, observe
     from .quote_flow_monitor import LoopMonitor
+    from .gc_maintenance import GcMaintenance
     metrics=Metrics()
     loop_monitor=LoopMonitor(metrics)
+    gc_maintenance=GcMaintenance()
+    metrics.gc_maintenance=gc_maintenance
     owned_client = client is None
     # HTTPX does not retry by default. Follow provider redirects like fetch().
     client = client or httpx.AsyncClient(timeout=10, follow_redirects=True)
@@ -64,125 +67,129 @@ def create_app(client=None, now=timestamp, safe_activity=None, core_activity=Non
 
     @asynccontextmanager
     async def lifespan(_app):
-        observe(loop_monitor.start)
-        cpu_workers = []
-        for name in ('discovery_cpu', 'plan_cpu'):
-            worker = getattr(universal_quotes, name, None)
-            if worker is not None and all(worker is not owned for owned in cpu_workers):
-                cpu_workers.append(worker)
+        observe(gc_maintenance.start)
         try:
-            for worker in cpu_workers:
-                await worker.start()
-            if protocol_configuration and hasattr(protocol_configuration, 'start'):
-                await protocol_configuration.start()
-            if core_quote_state:
-                await core_quote_state.start()
-            yield
-        finally:
+            observe(loop_monitor.start)
+            cpu_workers = []
+            for name in ('discovery_cpu', 'plan_cpu'):
+                worker = getattr(universal_quotes, name, None)
+                if worker is not None and all(worker is not owned for owned in cpu_workers):
+                    cpu_workers.append(worker)
             try:
-                await loop_monitor.close()
-            except Exception:
-                pass  # Observation cannot veto ordinary application shutdown.
-            if economic_quotes:
-                await economic_quotes.close()
-            # Every owned pool closes even if a sibling cleanup raises. Aliased
-            # pools in explicit compatibility consumers are owned only once.
-            async with AsyncExitStack() as closing:
                 for worker in cpu_workers:
-                    closing.push_async_callback(worker.close)
-            if core_quote_state:
-                await core_quote_state.close()
-            if faucet_service is not None:
-                await faucet_service.close()
-            if protocol_configuration:
-                await protocol_configuration.close()
-            for feed in feeds.values():
-                await feed.close()
-            if shared_market:
-                await shared_market.close()
-            rpc.close()
-            if owned_client:
-                await client.aclose()
-            if recovery:
-                await recovery.close()
-            if protocol_facts:
-                await protocol_facts.close()
-            if pool_producer:
-                await pool_producer.close()
-            if market_quotes:
-                await market_quotes.close()
-            if uniswap_registry:
-                await uniswap_registry.close()
-            if basket_preview:
-                await basket_preview.close()
-            if basket_max:
-                await basket_max.close()
-            if token_preview:
-                await token_preview.close()
-            if trade_quotes:
-                await trade_quotes.close()
-            if quote_intent and hasattr(quote_intent, 'close'):
-                await quote_intent.close()
-            if route_search:
-                await route_search.close()
-            if uniswap_quote:
-                await uniswap_quote.close()
-            if governance_core_facts:
-                await governance_core_facts.close()
-            if wallet_balances:
-                await wallet_balances.close()
-            if token_balance:
-                await token_balance.close()
-            if liquidity_positions:
-                await liquidity_positions.close()
-            if helpers_router_facts:
-                await helpers_router_facts.close()
-            if transaction_fees:
-                await transaction_fees.close()
-            if transaction_nonce:
-                await transaction_nonce.close()
-            if governance_roles:
-                await governance_roles.close()
-            if governance_authority:
-                await governance_authority.close()
-            if recovery_redemption:
-                await recovery_redemption.close()
-            if permit2_approval_gas:
-                await permit2_approval_gas.close()
-            if safe_transaction:
-                await safe_transaction.close()
-            if safe_execution:
-                await safe_execution.close()
-            if helpers_execution:
-                await helpers_execution.close()
-            if transaction_receipt:
-                await transaction_receipt.close()
-            if receipt_wait:
-                await receipt_wait.close()
-            if recovery_share_precision:
-                await recovery_share_precision.close()
-            if core_recovery_assets:
-                await core_recovery_assets.close()
-            if permit2_context:
-                await permit2_context.close()
-            if token_observations:
-                await token_observations.close()
-            if token_approval_gas:
-                await token_approval_gas.close()
-            if core_permit:
-                await core_permit.close()
-            if transaction_revert:
-                await transaction_revert.close()
-            if ens_records:
-                await ens_records.close()
-            if native_balance:
-                await native_balance.close()
-            if governance_target_code:
-                await governance_target_code.close()
-            if governance_safe_principal:
-                await governance_safe_principal.close()
-            if on_shutdown:
-                await on_shutdown()
+                    await worker.start()
+                if protocol_configuration and hasattr(protocol_configuration, 'start'):
+                    await protocol_configuration.start()
+                if core_quote_state:
+                    await core_quote_state.start()
+                yield
+            finally:
+                try:
+                    await loop_monitor.close()
+                except Exception:
+                    pass  # Observation cannot veto ordinary application shutdown.
+                if economic_quotes:
+                    await economic_quotes.close()
+                # Every owned pool closes even if a sibling cleanup raises. Aliased
+                # pools in explicit compatibility consumers are owned only once.
+                async with AsyncExitStack() as closing:
+                    for worker in cpu_workers:
+                        closing.push_async_callback(worker.close)
+                if core_quote_state:
+                    await core_quote_state.close()
+                if faucet_service is not None:
+                    await faucet_service.close()
+                if protocol_configuration:
+                    await protocol_configuration.close()
+                for feed in feeds.values():
+                    await feed.close()
+                if shared_market:
+                    await shared_market.close()
+                rpc.close()
+                if owned_client:
+                    await client.aclose()
+                if recovery:
+                    await recovery.close()
+                if protocol_facts:
+                    await protocol_facts.close()
+                if pool_producer:
+                    await pool_producer.close()
+                if market_quotes:
+                    await market_quotes.close()
+                if uniswap_registry:
+                    await uniswap_registry.close()
+                if basket_preview:
+                    await basket_preview.close()
+                if basket_max:
+                    await basket_max.close()
+                if token_preview:
+                    await token_preview.close()
+                if trade_quotes:
+                    await trade_quotes.close()
+                if quote_intent and hasattr(quote_intent, 'close'):
+                    await quote_intent.close()
+                if route_search:
+                    await route_search.close()
+                if uniswap_quote:
+                    await uniswap_quote.close()
+                if governance_core_facts:
+                    await governance_core_facts.close()
+                if wallet_balances:
+                    await wallet_balances.close()
+                if token_balance:
+                    await token_balance.close()
+                if liquidity_positions:
+                    await liquidity_positions.close()
+                if helpers_router_facts:
+                    await helpers_router_facts.close()
+                if transaction_fees:
+                    await transaction_fees.close()
+                if transaction_nonce:
+                    await transaction_nonce.close()
+                if governance_roles:
+                    await governance_roles.close()
+                if governance_authority:
+                    await governance_authority.close()
+                if recovery_redemption:
+                    await recovery_redemption.close()
+                if permit2_approval_gas:
+                    await permit2_approval_gas.close()
+                if safe_transaction:
+                    await safe_transaction.close()
+                if safe_execution:
+                    await safe_execution.close()
+                if helpers_execution:
+                    await helpers_execution.close()
+                if transaction_receipt:
+                    await transaction_receipt.close()
+                if receipt_wait:
+                    await receipt_wait.close()
+                if recovery_share_precision:
+                    await recovery_share_precision.close()
+                if core_recovery_assets:
+                    await core_recovery_assets.close()
+                if permit2_context:
+                    await permit2_context.close()
+                if token_observations:
+                    await token_observations.close()
+                if token_approval_gas:
+                    await token_approval_gas.close()
+                if core_permit:
+                    await core_permit.close()
+                if transaction_revert:
+                    await transaction_revert.close()
+                if ens_records:
+                    await ens_records.close()
+                if native_balance:
+                    await native_balance.close()
+                if governance_target_code:
+                    await governance_target_code.close()
+                if governance_safe_principal:
+                    await governance_safe_principal.close()
+                if on_shutdown:
+                    await on_shutdown()
+        finally:
+            observe(gc_maintenance.close)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.metrics=metrics

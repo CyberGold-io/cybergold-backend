@@ -101,11 +101,13 @@ mutable route/hop containers, amounts or candidate multiplicity. Unavailable
 optional reuse keeps ordinary freezing and nomination errors. This pool-value
 table ends with the job; it caches neither prices nor mutable supplier objects.
 Results transfer in chunks of at most 64 with a job-owned object memo; parent
-registration cooperates at the same quantum.
+registration builds private identity/origin deltas at the same quantum.
 The whole batch becomes visible in one final publication, with its original
-order, duplicate nominations, origins and publication revision. If a sibling
-arrival changes the origin/identity inputs during staging, registration uses
-the latest committed inputs before publishing. Cancellation discards staged
+order, duplicate nominations, origins and publication revision. One atomic
+merge unions its private deltas with the latest committed identities and
+origins. Sibling arrivals never restart whole-batch registration. Both replacement
+registries are constructed before publication; their previous values remain
+untouched if preparation or merging fails. Cancellation discards staged
 offers and reaps only that job's active worker. Synchronous consumers retain
 the same identity semantics locally.
 
@@ -508,6 +510,32 @@ the event loop or shared resources, so a long tail is not automatically harmless
 or an unconditional barrier. Requesting cancellation does not prove physical
 work has stopped; ownership and error details remain in the reference.
 
+The API postpones automatic oldest-generation cyclic GC while ordinary HTTP
+work or an owned quote/producer flow is active. Reference counting and the
+configured generation-0/1 thresholds continue normally. Completion of a whole
+quote search, including cancellation/error cleanup and retained shared producers,
+requests one full generation-2 cleanup after the last foreground owner releases.
+Overlapping quotes coalesce that cleanup; a new owner before its scheduled loop
+turn postpones it. The first streamed result does not finish the search, and an
+ordinary small API request does not request a full sweep.
+
+Continuous overlap cannot suppress oldest-generation selection indefinitely.
+Once its original generation-2 counter threshold is exceeded, one further
+counter interval of `max(1, originalThreshold2 + 1)` generation-1 collections
+restores the original automatic thresholds. Brief ownership gaps before the
+scheduled cleanup do not restart that interval. CPython then retains its normal
+full-collection selection, including its long-lived-object heuristic; foreground
+full-GC pauses therefore remain possible under sustained allocation. A completed
+full sweep rearms deferral for active work. This bounds the additional collection
+cadence, not elapsed time, retained memory or all finalizer costs.
+
+The application lifecycle owns the coordinator and its GC callback. Existing
+disabled/zero-threshold policies stay disabled; shutdown restores the original
+thresholds and removes only its own callback. Optional logging/observation errors
+do not reject work. Cleanup itself is synchronous and can delay work arriving
+during that sweep; it is moved to an observed idle boundary, not made concurrent.
+No request admission, candidate cutoff or deadline is introduced.
+
 **Timing coverage:** this read-only cohort did not measure preparation, signing
 or settlement. It did show later full quotes sent before earlier cleanup finished.
 
@@ -569,6 +597,22 @@ preserves the full existing test contract.
 
 <details>
 <summary>Dated specification and mirrored implementation changes</summary>
+
+### 2026-11-16 - Merge registrations once and clean after completed queries
+
+- Build private nomination/origin deltas cooperatively and merge once against
+  current committed state. Preserve candidate multiplicity, funded identity,
+  order, provenance, invalidation and atomic whole-batch publication without
+  sibling-driven restarts. Cancellation/failure publishes no private partials.
+- Coalesce full cyclic-GC cleanup after whole-search/owned-tail completion and
+  the last foreground owner. Keep ordinary small API completions sweep-free;
+  retain automatic young GC, reference counting and disabled policies.
+- Restore ordinary oldest-generation selection after one additional existing
+  counter interval under continuous allocation, preserving debt across brief
+  ownership gaps. Restore process settings on shutdown. No time/memory bound,
+  admission gate, provider choice, price/funding semantics or deadline changes.
+- Mirror the technical reference, process diagrams and PDF. Add registration,
+  GC cadence, HTTP/shared-tail and cancellation regressions plus local controls.
 
 ### 2026-11-15 - Reuse exact copied pool observations during route preparation
 

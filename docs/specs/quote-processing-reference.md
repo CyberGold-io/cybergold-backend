@@ -642,9 +642,13 @@ Internal parent-child
 framing uses parent-generated snapshots and job-owned transfer memos, never
 network pickle input. Transfer and parent staging cooperate every 64 items.
 Staged offers remain invisible until a single final commit preserves the whole
-batch order, duplicates, provider attribution and revision sequence. An origin
-change during staging causes registration against the current committed inputs;
+batch order, duplicates, provider attribution and revision sequence. Parent
+staging accumulates private identity/origin deltas, then unions them once with
+the latest committed registries without an await. Both replacement registries
+are built before any publication. Sibling arrivals do not restart registration;
 cancellation closes only the owned job and exposes no partial batch.
+`discovery.register` measures cooperative staging; `discovery.merge` measures
+the final registry construction. These CPU spans exclude worker queue/transfer.
 
 Internal `PrivatePoolBank` values own scalar dictionaries over immutable nested
 observation values. Replaying alternatives shares unchanged bitmap/tick rows.
@@ -838,6 +842,40 @@ balances and authorization, later market/Core state, output minima and
 transaction settlement can fail through their ordinary errors after a quote
 was observed or prepared.
 
+## Query-completion GC maintenance
+
+`GcMaintenance` is application-owned. All ordinary HTTP work except the existing
+metrics bypass owns a foreground lease; non-request quote flows inherit the same
+coordinator. A search marks cleanup due only when its flow emits after terminal
+completion and all retained shared producers have drained. Successful, failed
+and cancelled searches use the same boundary. Non-search flows protect their
+owned tail without each requesting a full sweep. Returning a stream frame is not
+search completion.
+
+While owned work is active, only threshold 2 is raised to its supported integer
+maximum; generation-0/1 thresholds and the enabled state remain unchanged. One
+`call_soon` cleanup is scheduled after the final lease. New work cancels that
+callback and keeps accumulated deferral. If a quote completed, the callback runs
+one synchronous `gc.collect(2)`, then restores the original thresholds. Ordinary
+API-only busy periods restore thresholds without a forced sweep. Overlapping
+quotes share one completion sweep. Work that arrives during a sweep can still
+wait behind it; no concurrent or incremental full collector is claimed.
+
+For sustained activity, the first generation-1 stop whose generation-2 counter
+exceeds the original threshold records debt. After another
+`max(1, originalThreshold2 + 1)` generation-1 stops, original thresholds resume
+so CPython retains its own oldest-generation and long-lived-object selection.
+A full collection clears debt and rearms active-work deferral. This is a bound
+on additional generational cadence, not time, RSS or all cyclic retention.
+Initially disabled/threshold-zero GC is neither enabled nor forced. Shutdown
+cancels queued maintenance, removes only the coordinator's callback and restores
+the original thresholds; observation failures cannot veto ordinary work.
+
+`quote_gc_maintenance` logs the fixed actions `quote-completed`,
+`automatic-resumed` or `cleanup-failed`; completion includes collected-object
+count and measured wall/process CPU during the span, without object values.
+Existing loop-lag GC spans remain process-scoped and non-exclusive.
+
 ## Diagnostics describe their own clocks
 
 - Request and producer IDs link shared work without merging subscriber clocks.
@@ -870,10 +908,10 @@ was observed or prepared.
   No collected-object references or values are retained. The monitor registers
   one owned callback and removes that exact callback on close; ordinary
   observation failures do not replace quote, startup or shutdown behavior.
-  GC policy, thresholds, enabled state and scheduling controls remain unchanged;
-  no collection is manually triggered. Extra observation allocations may affect
-  automatic collection timing, and overhead is unmeasured. No extra timer, log
-  gate or quote gate is added.
+  This monitor does not alter GC policy. The separate application-owned
+  coordinator below schedules oldest-generation maintenance; observation
+  allocations can still affect automatic timing. No log gate or quote gate
+  is added.
 - `Server-Timing` describes completed work before those response headers. A
   stream header does not include later whole-search work.
 - With configured CPU workers, `plan.compile` is inclusive preparation wall
@@ -1035,6 +1073,7 @@ Paths below are relative to `python-candidate/src/cybergold_candidate/`.
 | Progressive stream/cache handoff | `progressive_quotes.py`, `economic_quote_cache.py` |
 | Cached arithmetic estimates | `economic_estimate.py`, `quoter/reuse_estimate.py` |
 | Scope/generation recovery | `protocol_config.py`, `runtime.py`, `database.py` |
+| Query-completion GC scheduling | `gc_maintenance.py`, `app.py`, `telemetry.py`, `quote_flow.py` |
 | Backend ranking and publication | `quote_publication.py`, `quoter/quote_book.py`, `quoter/ranking.py` |
 | Retained families/reconstruction | `quoter/reuse_routes.py`, `quoter/path_families.py`, `quoter/reuse_estimate.py` |
 | Search/initial topology | `quoter/search.py`, `quoter/evaluate.py`, `quoter/discovery.py` |

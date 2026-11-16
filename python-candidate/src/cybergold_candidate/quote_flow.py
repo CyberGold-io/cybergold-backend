@@ -24,6 +24,7 @@ STAGES = frozenset('''http.parse http.operation http.await_result http.cleanup h
     estimate.scope estimate.read estimate.calculate preparation.scope preparation.bounds
     preparation.replay preparation.compile search.run search.context search.enumerate
     search.cleanup search.reconstruction.settle search.preparation.settle discovery.run
+    discovery.capture discovery.register discovery.merge
     discovery.owners.settle discovery.providers.settle discovery.providers.close discovery.clear
     sharing.settle sharing.clear optimizer.callback optimizer.decode sdk.queue sdk.exchange
     sdk.start sdk.write sdk.read sdk.cleanup sdk.encode sdk.decode pricing.permit
@@ -73,6 +74,9 @@ class Flow:
         self.emitted = False
         self.helpers_calls = None
         self.sdk_roundtrips = None
+        maintenance = getattr(self.metrics, 'gc_maintenance', None)
+        self._gc_owner = (_safe(lambda: maintenance.acquire(quote=kind == 'search'))
+                          if maintenance is not None and kind != 'request' else None)
 
     def row(self, name, kind):
         key = name, kind
@@ -182,7 +186,11 @@ class Flow:
                 logging.getLogger('cybergold.candidate').info(json.dumps(record))
             if self.metrics is not None:
                 self.metrics.observe_quote_flow(record)
-        _safe(emit)
+        try:
+            _safe(emit)
+        finally:
+            if self._gc_owner is not None:
+                _safe(self._gc_owner.release)
 
     def server_timing(self):
         # Headers describe pre-header work only. Complete stream/cleanup

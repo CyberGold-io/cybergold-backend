@@ -590,38 +590,40 @@ class RouteBootstrap:
                 if chunk:
                     yield chunk
             chunks = local()
-        prepared = []
+        incoming, origin_delta, offers, malformed = set(), {}, [], False
         async with aclosing(chunks):
             async for chunk in chunks:
-                prepared.extend(chunk)
+                with stage('discovery.register', kind='cpu'):
+                    for row, identities in chunk:
+                        offers.append({'branches': row, 'origins': [attempt['provider']]})
+                        if identities is None:
+                            malformed = True
+                            continue
+                        identity, origin_key = identities
+                        incoming.add(identity)
+                        origin_delta.setdefault(origin_key, set()).add(attempt['provider'])
                 await asyncio.sleep(0)
         query = entry['query']
         key = query.source, query.target, query.amount
-        # A sibling can publish while preparation yields. Stage from its latest
-        # committed identities; retry only this cheap registration if it changes.
-        while True:
-            revision = self._origin_revisions.get(key[:2], 0)
-            known = self._known_offers.get(key, set()).copy()
-            known_count = len(known)
+        # Merge once against the latest committed state. Construct both
+        # replacements before publication, with no await in this atomic step.
+        # Sibling arrivals cannot force re-registration of the whole batch.
+        with stage('discovery.merge', kind='cpu'):
+            previous_known = self._known_offers.get(key, set())
+            known_count = len(previous_known)
+            known = previous_known | incoming
+            fresh = malformed or len(known) != known_count
             origins = self._offer_origins.get(key[:2], {}).copy()
-            owned_origins, offers, fresh, origins_changed = set(), [], False, False
-            for index in range(0, len(prepared), QUANTUM):
-                for row, identities in prepared[index:index+QUANTUM]:
-                    offers.append({'branches': row, 'origins': [attempt['provider']]})
-                    if identities is None:
-                        fresh = True
-                        continue
-                    identity, origin_key = identities
-                    fresh |= identity not in known
-                    known.add(identity)
-                    if origin_key not in owned_origins:
-                        origins[origin_key] = origins.get(origin_key, set()).copy()
-                        owned_origins.add(origin_key)
-                    origins_changed |= attempt['provider'] not in origins[origin_key]
-                    origins[origin_key].add(attempt['provider'])
-                await asyncio.sleep(0)
-            if revision == self._origin_revisions.get(key[:2], 0):
-                break
+            origins_changed = False
+            for origin_key, names in origin_delta.items():
+                previous = origins.get(origin_key)
+                if previous is None:
+                    origins[origin_key] = names
+                    origins_changed = True
+                elif not names <= previous:
+                    origins[origin_key] = previous | names
+                    origins_changed = True
+            revision = self._origin_revisions.get(key[:2], 0)
         if isinstance(attribution, dict):
             attempt['engineAttribution'] = {
                 'engine': attribution.get('engine') if attribution.get('engine') in (
