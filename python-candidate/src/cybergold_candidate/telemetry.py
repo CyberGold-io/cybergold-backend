@@ -148,6 +148,7 @@ def configure_logging(stream=None):
 
 class Metrics:
     def __init__(self):
+        self.gc_maintenance = None
         self.registry=CollectorRegistry()
         def counter(suffix,help,labels=()):
             return Counter('cybergold_backend_'+suffix,help,labels,registry=self.registry)
@@ -325,6 +326,13 @@ class TelemetryMiddleware:
                 await send(message)
             for marker in markers:
                 milestone(marker+'.sent')
+        maintenance = getattr(self.metrics, 'gc_maintenance', None)
+        gc_owner = None
+        if maintenance is not None:
+            def acquire_gc_owner():
+                nonlocal gc_owner
+                gc_owner = maintenance.acquire()
+            observe(acquire_gc_owner)
         outcome='failed'
         with flow_scope(flow):
             try:
@@ -352,3 +360,5 @@ class TelemetryMiddleware:
                     observe(lambda:logging.getLogger('cybergold.candidate').info(json.dumps(record)))
                 if flow is not None:
                     observe(lambda:flow.finish(outcome))
+                if gc_owner is not None:
+                    observe(gc_owner.release)
